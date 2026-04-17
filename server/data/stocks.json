@@ -1,0 +1,14 @@
+[
+  {"ProductId": 1, "WarehouseId": 1, "quantity": 120},
+  {"ProductId": 2, "WarehouseId": 1, "quantity": 80},
+  {"ProductId": 3, "WarehouseId": 1, "quantity": 200},
+  {"ProductId": 4, "WarehouseId": 1, "quantity": 140},
+  {"ProductId": 5, "WarehouseId": 2, "quantity": 90},
+  {"ProductId": 6, "WarehouseId": 2, "quantity": 70},
+  {"ProductId": 7, "WarehouseId": 1, "quantity": 110},
+  {"ProductId": 8, "WarehouseId": 2, "quantity": 60},
+  {"ProductId": 9, "WarehouseId": 2, "quantity": 50},
+  {"ProductId": 10, "WarehouseId": 1, "quantity": 160},
+  {"ProductId": 11, "WarehouseId": 1, "quantity": 130},
+  {"ProductId": 12, "WarehouseId": 2, "quantity": 40}
+]

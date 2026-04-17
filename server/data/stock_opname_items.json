@@ -1,0 +1,6 @@
+[
+  {"SessionId": 1, "ProductId": 1, "scanned_qty": 118, "system_qty": 120, "difference": -2},
+  {"SessionId": 1, "ProductId": 3, "scanned_qty": 200, "system_qty": 200, "difference": 0},
+  {"SessionId": 2, "ProductId": 9, "scanned_qty": 48, "system_qty": 50, "difference": -2},
+  {"SessionId": 2, "ProductId": 11, "scanned_qty": 130, "system_qty": 130, "difference": 0}
+]

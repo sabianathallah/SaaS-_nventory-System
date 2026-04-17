@@ -1,0 +1,4 @@
+[
+  {"warehouseId": 1, "started_at": "2026-04-14T00:00:00.000Z", "finished_at": "2026-04-14T06:00:00.000Z", "status": "closed", "createdBy": 2, "notes": "Cycle count for tops and bottoms"},
+  {"warehouseId": 2, "started_at": "2026-04-17T00:00:00.000Z", "finished_at": null, "status": "open", "createdBy": 2, "notes": "Cycle count for outerwear and accessories"}
+]

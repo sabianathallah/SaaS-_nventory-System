@@ -1,0 +1,14 @@
+[
+  {"name": "Classic Oxford Shirt - White - M", "sku": "TP-0001-WH-M", "barcode": "899100000011", "qrString": "TP-0001-WH-M", "CategoryId": 1, "unit": "pcs"},
+  {"name": "Classic Oxford Shirt - Blue - L", "sku": "TP-0001-BL-L", "barcode": "899100000012", "qrString": "TP-0001-BL-L", "CategoryId": 1, "unit": "pcs"},
+  {"name": "Crew Neck T-Shirt - Black - M", "sku": "TP-0002-BK-M", "barcode": "899100000013", "qrString": "TP-0002-BK-M", "CategoryId": 1, "unit": "pcs"},
+  {"name": "Crew Neck T-Shirt - Sand - S", "sku": "TP-0002-SD-S", "barcode": "899100000014", "qrString": "TP-0002-SD-S", "CategoryId": 1, "unit": "pcs"},
+  {"name": "Slim Fit Chinos - Khaki - 32", "sku": "BT-0001-KH-32", "barcode": "899100000015", "qrString": "BT-0001-KH-32", "CategoryId": 2, "unit": "pcs"},
+  {"name": "Slim Fit Chinos - Black - 30", "sku": "BT-0001-BK-30", "barcode": "899100000016", "qrString": "BT-0001-BK-30", "CategoryId": 2, "unit": "pcs"},
+  {"name": "Denim Jeans - Indigo - 32", "sku": "BT-0002-IN-32", "barcode": "899100000017", "qrString": "BT-0002-IN-32", "CategoryId": 2, "unit": "pcs"},
+  {"name": "Denim Jeans - Black - 30", "sku": "BT-0002-BK-30", "barcode": "899100000018", "qrString": "BT-0002-BK-30", "CategoryId": 2, "unit": "pcs"},
+  {"name": "Lightweight Bomber Jacket - Olive - M", "sku": "OW-0001-OL-M", "barcode": "899100000019", "qrString": "OW-0001-OL-M", "CategoryId": 3, "unit": "pcs"},
+  {"name": "Canvas Tote Bag - Natural", "sku": "AC-0001-NT-OS", "barcode": "899100000020", "qrString": "AC-0001-NT-OS", "CategoryId": 4, "unit": "pcs"},
+  {"name": "Beanie Knit - Black", "sku": "AC-0002-BK-OS", "barcode": "899100000021", "qrString": "AC-0002-BK-OS", "CategoryId": 4, "unit": "pcs"},
+  {"name": "Leather Belt - Brown", "sku": "AC-0003-BR-OS", "barcode": "899100000022", "qrString": "AC-0003-BR-OS", "CategoryId": 4, "unit": "pcs"}
+]
