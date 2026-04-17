@@ -10,14 +10,39 @@ module.exports = (sequelize, DataTypes) => {
      * The `models/index` file will call this method automatically.
      */
     static associate(models) {
-      // define association here
+      Stock_Movement.belongsTo(models.Product, {
+        foreignKey: { name: 'ProductId', allowNull: false },
+        onDelete: 'CASCADE',
+        onUpdate: 'CASCADE'
+      });
+      Stock_Movement.belongsTo(models.Warehouse, {
+        foreignKey: { name: 'WearhouseId', allowNull: false },
+        onDelete: 'CASCADE',
+        onUpdate: 'CASCADE'
+      });
     }
   }
   Stock_Movement.init({
-    ProductId: DataTypes.INTEGER,
-    WearhouseId: DataTypes.INTEGER,
-    type: DataTypes.STRING,
-    quantity: DataTypes.INTEGER,
+    ProductId: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      validate: { notEmpty: { msg: 'Product is required' } }
+    },
+    WearhouseId: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      validate: { notEmpty: { msg: 'Warehouse is required' } }
+    },
+    type: {
+      type: DataTypes.STRING,
+      allowNull: false,
+      validate: { notEmpty: { msg: 'Type is required' } }
+    },
+    quantity: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      validate: { min: 0 }
+    },
     ReferenceId: DataTypes.BIGINT,
     note: DataTypes.TEXT
   }, {

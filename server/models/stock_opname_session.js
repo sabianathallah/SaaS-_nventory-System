@@ -10,15 +10,45 @@ module.exports = (sequelize, DataTypes) => {
      * The `models/index` file will call this method automatically.
      */
     static associate(models) {
-      // define association here
+      Stock_Opname_Session.belongsTo(models.Warehouse, {
+        foreignKey: { name: 'warehouseId', allowNull: false },
+        onDelete: 'CASCADE',
+        onUpdate: 'CASCADE'
+      });
+      Stock_Opname_Session.belongsTo(models.User, {
+        foreignKey: { name: 'createdBy', allowNull: false },
+        onDelete: 'CASCADE',
+        onUpdate: 'CASCADE'
+      });
+      Stock_Opname_Session.hasMany(models.Stock_Opname_Item, {
+        foreignKey: { name: 'SessionId', allowNull: false },
+        onDelete: 'CASCADE',
+        onUpdate: 'CASCADE'
+      });
     }
   }
   Stock_Opname_Session.init({
-    warehouseId: DataTypes.INTEGER,
-    started_at: DataTypes.DATE,
+    warehouseId: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      validate: { notEmpty: { msg: 'Warehouse is required' } }
+    },
+    started_at: {
+      type: DataTypes.DATE,
+      allowNull: false,
+      validate: { notEmpty: { msg: 'Started at is required' } }
+    },
     finished_at: DataTypes.DATE,
-    status: DataTypes.STRING,
-    createdBy: DataTypes.INTEGER,
+    status: {
+      type: DataTypes.STRING,
+      allowNull: false,
+      validate: { notEmpty: { msg: 'Status is required' } }
+    },
+    createdBy: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      validate: { notEmpty: { msg: 'Creator is required' } }
+    },
     notes: DataTypes.TEXT
   }, {
     sequelize,

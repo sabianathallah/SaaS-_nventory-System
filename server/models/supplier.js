@@ -10,11 +10,19 @@ module.exports = (sequelize, DataTypes) => {
      * The `models/index` file will call this method automatically.
      */
     static associate(models) {
-      // define association here
+      Supplier.hasMany(models.Stock_In_Header, {
+        foreignKey: { name: 'SupplierId', allowNull: false },
+        onDelete: 'CASCADE',
+        onUpdate: 'CASCADE'
+      });
     }
   }
   Supplier.init({
-    name: DataTypes.STRING,
+    name: {
+      type: DataTypes.STRING,
+      allowNull: false,
+      validate: { notEmpty: { msg: 'Name is required' } }
+    },
     contact: DataTypes.STRING
   }, {
     sequelize,

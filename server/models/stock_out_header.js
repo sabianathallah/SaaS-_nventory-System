@@ -10,14 +10,30 @@ module.exports = (sequelize, DataTypes) => {
      * The `models/index` file will call this method automatically.
      */
     static associate(models) {
-      // define association here
+      Stock_Out_Header.belongsTo(models.User, {
+        foreignKey: { name: 'createdBy', allowNull: false },
+        onDelete: 'CASCADE',
+        onUpdate: 'CASCADE'
+      });
     }
   }
   Stock_Out_Header.init({
-    destination: DataTypes.STRING,
-    date: DataTypes.DATE,
+    destination: {
+      type: DataTypes.STRING,
+      allowNull: false,
+      validate: { notEmpty: { msg: 'Destination is required' } }
+    },
+    date: {
+      type: DataTypes.DATE,
+      allowNull: false,
+      validate: { notEmpty: { msg: 'Date is required' } }
+    },
     notes: DataTypes.STRING,
-    createdBy: DataTypes.INTEGER
+    createdBy: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      validate: { notEmpty: { msg: 'Creator is required' } }
+    }
   }, {
     sequelize,
     modelName: 'Stock_Out_Header',

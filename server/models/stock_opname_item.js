@@ -10,14 +10,37 @@ module.exports = (sequelize, DataTypes) => {
      * The `models/index` file will call this method automatically.
      */
     static associate(models) {
-      // define association here
+      Stock_Opname_Item.belongsTo(models.Stock_Opname_Session, {
+        foreignKey: { name: 'SessionId', allowNull: false },
+        onDelete: 'CASCADE',
+        onUpdate: 'CASCADE'
+      });
+      Stock_Opname_Item.belongsTo(models.Product, {
+        foreignKey: { name: 'ProductId', allowNull: false },
+        onDelete: 'CASCADE',
+        onUpdate: 'CASCADE'
+      });
     }
   }
   Stock_Opname_Item.init({
-    SessionId: DataTypes.INTEGER,
-    ProductId: DataTypes.INTEGER,
-    scanned_qty: DataTypes.INTEGER,
-    system_qty: DataTypes.INTEGER,
+    SessionId: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      validate: { notEmpty: { msg: 'Session is required' } }
+    },
+    ProductId: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      validate: { notEmpty: { msg: 'Product is required' } }
+    },
+    scanned_qty: {
+      type: DataTypes.INTEGER,
+      validate: { min: 0 }
+    },
+    system_qty: {
+      type: DataTypes.INTEGER,
+      validate: { min: 0 }
+    },
     difference: DataTypes.INTEGER
   }, {
     sequelize,
