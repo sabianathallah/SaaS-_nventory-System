@@ -10,13 +10,22 @@ module.exports = {
         type: Sequelize.INTEGER
       },
       SupplierId: {
-        type: Sequelize.INTEGER
+        type: Sequelize.INTEGER,
+        allowNull: false,
+        references: {
+          model: 'Suppliers',
+          key: 'id'
+        },
+        onUpdate: 'CASCADE',
+        onDelete: 'CASCADE'
       },
       date: {
-        type: Sequelize.DATE
+        type: Sequelize.DATE,
+        allowNull: false
       },
       note: {
-        type: Sequelize.STRING
+        type: Sequelize.STRING,
+          allowNull: true
       },
       createdAt: {
         allowNull: false,
