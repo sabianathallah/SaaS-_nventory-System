@@ -1,9 +1,9 @@
 [
-  {"ProductId": 1, "WearhouseId": 1, "type": "IN", "quantity": 120, "ReferenceId": 1, "note": "Inbound batch A"},
-  {"ProductId": 2, "WearhouseId": 1, "type": "IN", "quantity": 80, "ReferenceId": 1, "note": "Inbound batch A"},
-  {"ProductId": 5, "WearhouseId": 2, "type": "IN", "quantity": 90, "ReferenceId": 2, "note": "Inbound batch B"},
-  {"ProductId": 9, "WearhouseId": 2, "type": "IN", "quantity": 50, "ReferenceId": 2, "note": "Inbound batch B"},
-  {"ProductId": 1, "WearhouseId": 1, "type": "OUT", "quantity": 12, "ReferenceId": 1, "note": "Outbound to flagship"},
-  {"ProductId": 3, "WearhouseId": 1, "type": "OUT", "quantity": 18, "ReferenceId": 1, "note": "Outbound to flagship"},
-  {"ProductId": 10, "WearhouseId": 1, "type": "OUT", "quantity": 8, "ReferenceId": 2, "note": "Outbound to pop-up"}
+  {"ProductId": 1, "WarehouseId": 1, "type": "IN", "quantity": 120, "ReferenceId": 1, "note": "Inbound batch A"},
+  {"ProductId": 2, "WarehouseId": 1, "type": "IN", "quantity": 80, "ReferenceId": 1, "note": "Inbound batch A"},
+  {"ProductId": 5, "WarehouseId": 2, "type": "IN", "quantity": 90, "ReferenceId": 2, "note": "Inbound batch B"},
+  {"ProductId": 9, "WarehouseId": 2, "type": "IN", "quantity": 50, "ReferenceId": 2, "note": "Inbound batch B"},
+  {"ProductId": 1, "WarehouseId": 1, "type": "OUT", "quantity": 12, "ReferenceId": 1, "note": "Outbound to flagship"},
+  {"ProductId": 3, "WarehouseId": 1, "type": "OUT", "quantity": 18, "ReferenceId": 1, "note": "Outbound to flagship"},
+  {"ProductId": 10, "WarehouseId": 1, "type": "OUT", "quantity": 8, "ReferenceId": 2, "note": "Outbound to pop-up"}
 ]

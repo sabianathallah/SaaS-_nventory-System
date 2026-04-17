@@ -16,7 +16,7 @@ module.exports = (sequelize, DataTypes) => {
         onUpdate: 'CASCADE'
       });
       Warehouse.hasMany(models.Stock_Movement, {
-        foreignKey: { name: 'WearhouseId', allowNull: false },
+        foreignKey: { name: 'WarehouseId', allowNull: false },
         onDelete: 'CASCADE',
         onUpdate: 'CASCADE'
       });

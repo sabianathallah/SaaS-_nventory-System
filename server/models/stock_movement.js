@@ -16,7 +16,7 @@ module.exports = (sequelize, DataTypes) => {
         onUpdate: 'CASCADE'
       });
       Stock_Movement.belongsTo(models.Warehouse, {
-        foreignKey: { name: 'WearhouseId', allowNull: false },
+        foreignKey: { name: 'WarehouseId', allowNull: false },
         onDelete: 'CASCADE',
         onUpdate: 'CASCADE'
       });
@@ -31,7 +31,7 @@ module.exports = (sequelize, DataTypes) => {
         notEmpty: { msg: 'Product is required' }
       }
     },
-    WearhouseId: {
+    WarehouseId: {
       type: DataTypes.INTEGER,
       allowNull: false,
       validate: {

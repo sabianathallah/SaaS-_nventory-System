@@ -19,7 +19,7 @@ module.exports = {
         onUpdate: 'CASCADE',
         onDelete: 'CASCADE'
       },
-      WearhouseId: {
+      WarehouseId: {
         type: Sequelize.INTEGER,
         allowNull: false,
         references: {
