@@ -1,6 +1,6 @@
 'use strict';
-const bcrypt = require('bcryptjs');
 const { Model } = require('sequelize');
+const { hashPassword } = require('../helpers/bcrypt');
 module.exports = (sequelize, DataTypes) => {
   class User extends Model {
     /**
@@ -25,17 +25,25 @@ module.exports = (sequelize, DataTypes) => {
     name: {
       type: DataTypes.STRING,
       allowNull: false,
-      validate: { notEmpty: { msg: 'Name is required' } }
+      validate: {
+        notNull: { msg: 'Name is required' },
+        notEmpty: { msg: 'Name is required' }
+      }
     },
     role: {
       type: DataTypes.STRING,
       allowNull: false,
-      validate: { notEmpty: { msg: 'Role is required' } }
+      validate: {
+        notNull: { msg: 'Role is required' },
+        notEmpty: { msg: 'Role is required' }
+      }
     },
     email: {
       type: DataTypes.STRING,
       allowNull: false,
+      unique: { msg: 'Email already exists' },
       validate: {
+        notNull: { msg: 'Email is required' },
         notEmpty: { msg: 'Email is required' },
         isEmail: { msg: 'Invalid email format' }
       }
@@ -43,7 +51,10 @@ module.exports = (sequelize, DataTypes) => {
     password: {
       type: DataTypes.STRING,
       allowNull: false,
-      validate: { notEmpty: { msg: 'Password is required' } }
+      validate: {
+        notNull: { msg: 'Password is required' },
+        notEmpty: { msg: 'Password is required' }
+      }
     }
   }, {
     sequelize,
@@ -51,12 +62,12 @@ module.exports = (sequelize, DataTypes) => {
     hooks: {
       beforeCreate: (user) => {
         if (user.password) {
-          user.password = bcrypt.hashSync(user.password, 10);
+          user.password = hashPassword(user.password);
         }
       },
       beforeUpdate: (user) => {
         if (user.changed('password')) {
-          user.password = bcrypt.hashSync(user.password, 10);
+          user.password = hashPassword(user.password);
         }
       }
     }

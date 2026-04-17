@@ -21,18 +21,27 @@ module.exports = (sequelize, DataTypes) => {
     destination: {
       type: DataTypes.STRING,
       allowNull: false,
-      validate: { notEmpty: { msg: 'Destination is required' } }
+      validate: {
+        notNull: { msg: 'Destination is required' },
+        notEmpty: { msg: 'Destination is required' }
+      }
     },
     date: {
       type: DataTypes.DATE,
       allowNull: false,
-      validate: { notEmpty: { msg: 'Date is required' } }
+      validate: {
+        notNull: { msg: 'Date is required' },
+        notEmpty: { msg: 'Date is required' }
+      }
     },
     notes: DataTypes.STRING,
     createdBy: {
       type: DataTypes.INTEGER,
       allowNull: false,
-      validate: { notEmpty: { msg: 'Creator is required' } }
+      validate: {
+        notNull: { msg: 'Creator is required' },
+        notEmpty: { msg: 'Creator is required' }
+      }
     }
   }, {
     sequelize,

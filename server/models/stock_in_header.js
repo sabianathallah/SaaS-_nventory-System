@@ -21,12 +21,18 @@ module.exports = (sequelize, DataTypes) => {
     SupplierId: {
       type: DataTypes.INTEGER,
       allowNull: false,
-      validate: { notEmpty: { msg: 'Supplier is required' } }
+      validate: {
+        notNull: { msg: 'Supplier is required' },
+        notEmpty: { msg: 'Supplier is required' }
+      }
     },
     date: {
       type: DataTypes.DATE,
       allowNull: false,
-      validate: { notEmpty: { msg: 'Date is required' } }
+      validate: {
+        notNull: { msg: 'Date is required' },
+        notEmpty: { msg: 'Date is required' }
+      }
     },
     note: DataTypes.STRING
   }, {

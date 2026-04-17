@@ -31,23 +31,35 @@ module.exports = (sequelize, DataTypes) => {
     warehouseId: {
       type: DataTypes.INTEGER,
       allowNull: false,
-      validate: { notEmpty: { msg: 'Warehouse is required' } }
+      validate: {
+        notNull: { msg: 'Warehouse is required' },
+        notEmpty: { msg: 'Warehouse is required' }
+      }
     },
     started_at: {
       type: DataTypes.DATE,
       allowNull: false,
-      validate: { notEmpty: { msg: 'Started at is required' } }
+      validate: {
+        notNull: { msg: 'Started at is required' },
+        notEmpty: { msg: 'Started at is required' }
+      }
     },
     finished_at: DataTypes.DATE,
     status: {
       type: DataTypes.STRING,
       allowNull: false,
-      validate: { notEmpty: { msg: 'Status is required' } }
+      validate: {
+        notNull: { msg: 'Status is required' },
+        notEmpty: { msg: 'Status is required' }
+      }
     },
     createdBy: {
       type: DataTypes.INTEGER,
       allowNull: false,
-      validate: { notEmpty: { msg: 'Creator is required' } }
+      validate: {
+        notNull: { msg: 'Creator is required' },
+        notEmpty: { msg: 'Creator is required' }
+      }
     },
     notes: DataTypes.TEXT
   }, {

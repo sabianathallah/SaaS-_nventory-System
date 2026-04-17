@@ -36,32 +36,53 @@ module.exports = (sequelize, DataTypes) => {
     name: {
       type: DataTypes.STRING,
       allowNull: false,
-      validate: { notEmpty: { msg: 'Name is required' } }
+      validate: {
+        notNull: { msg: 'Name is required' },
+        notEmpty: { msg: 'Name is required' }
+      }
     },
     sku: {
       type: DataTypes.STRING,
       allowNull: false,
-      validate: { notEmpty: { msg: 'SKU is required' } }
+      unique: { msg: 'SKU already exists' },
+      validate: {
+        notNull: { msg: 'SKU is required' },
+        notEmpty: { msg: 'SKU is required' }
+      }
     },
     barcode: {
       type: DataTypes.STRING,
       allowNull: false,
-      validate: { notEmpty: { msg: 'Barcode is required' } }
+      unique: { msg: 'Barcode already exists' },
+      validate: {
+        notNull: { msg: 'Barcode is required' },
+        notEmpty: { msg: 'Barcode is required' }
+      }
     },
     qrString: {
       type: DataTypes.STRING,
       allowNull: false,
-      validate: { notEmpty: { msg: 'QR string is required' } }
+      unique: { msg: 'QR string already exists' },
+      validate: {
+        notNull: { msg: 'QR string is required' },
+        notEmpty: { msg: 'QR string is required' }
+      }
     },
     CategoryId: {
       type: DataTypes.INTEGER,
       allowNull: false,
-      validate: { notEmpty: { msg: 'Category is required' } }
+      validate: {
+        notNull: { msg: 'Category is required' },
+        notEmpty: { msg: 'Category is required' }
+      }
     },
     unit: {
       type: DataTypes.STRING,
       allowNull: false,
-      validate: { notEmpty: { msg: 'Unit is required' } }
+      validate: {
+        notNull: { msg: 'Unit is required' },
+        notEmpty: { msg: 'Unit is required' }
+      }
     }
   }, {
     sequelize,

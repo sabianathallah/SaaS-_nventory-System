@@ -26,17 +26,26 @@ module.exports = (sequelize, DataTypes) => {
     ProductId: {
       type: DataTypes.INTEGER,
       allowNull: false,
-      validate: { notEmpty: { msg: 'Product is required' } }
+      validate: {
+        notNull: { msg: 'Product is required' },
+        notEmpty: { msg: 'Product is required' }
+      }
     },
     WearhouseId: {
       type: DataTypes.INTEGER,
       allowNull: false,
-      validate: { notEmpty: { msg: 'Warehouse is required' } }
+      validate: {
+        notNull: { msg: 'Warehouse is required' },
+        notEmpty: { msg: 'Warehouse is required' }
+      }
     },
     type: {
       type: DataTypes.STRING,
       allowNull: false,
-      validate: { notEmpty: { msg: 'Type is required' } }
+      validate: {
+        notNull: { msg: 'Type is required' },
+        notEmpty: { msg: 'Type is required' }
+      }
     },
     quantity: {
       type: DataTypes.INTEGER,
