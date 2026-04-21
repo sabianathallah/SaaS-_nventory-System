@@ -43,7 +43,8 @@ module.exports = (sequelize, DataTypes) => {
         notNull: { msg: 'Location is required' },
         notEmpty: { msg: 'Location is required' }
       }
-    }
+    },
+    companyId: { type: DataTypes.INTEGER, allowNull: true }
   }, {
     sequelize,
     modelName: 'Warehouse',

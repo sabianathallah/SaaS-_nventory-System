@@ -1,4 +1,5 @@
 [
-  {"name": "Admin", "role": "admin", "email": "admin@fashion-warehouse.local", "password": "password123"},
-  {"name": "Warehouse Staff", "role": "staff", "email": "staff@fashion-warehouse.local", "password": "password123"}
+  {"name": "Super Admin", "role": "SUPER_ADMIN", "email": "superadmin@inventory.local", "password": "password123", "isActive": true},
+  {"name": "Admin", "role": "ADMIN", "email": "admin@inventory.local", "password": "password123", "isActive": true},
+  {"name": "Warehouse Staff", "role": "STAFF", "email": "staff@inventory.local", "password": "password123", "isActive": true}
 ]

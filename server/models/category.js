@@ -25,7 +25,8 @@ module.exports = (sequelize, DataTypes) => {
         notNull: { msg: 'Name is required' },
         notEmpty: { msg: 'Name is required' }
       }
-    }
+    },
+    companyId: { type: DataTypes.INTEGER, allowNull: true }
   }, {
     sequelize,
     modelName: 'Category',

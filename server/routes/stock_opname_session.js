@@ -1,9 +1,12 @@
-const express = require("express");
-
+'use strict';
+const express = require('express');
 const router = express.Router();
+const StockOpnameSessionController = require('../controllers/stockOpnameSessionController');
 
-router.get("/", (req, res) => {
-  res.status(200).json({ resource: "stock_opname_sessions" });
-});
+router.get('/', StockOpnameSessionController.getAll);
+router.get('/:id', StockOpnameSessionController.getById);
+router.post('/', StockOpnameSessionController.create);
+router.put('/:id', StockOpnameSessionController.update);
+router.delete('/:id', StockOpnameSessionController.delete);
 
 module.exports = router;

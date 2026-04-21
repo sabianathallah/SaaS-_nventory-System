@@ -1,9 +1,12 @@
-const express = require("express");
-
+'use strict';
+const express = require('express');
 const router = express.Router();
+const StockController = require('../controllers/stockController');
 
-router.get("/", (req, res) => {
-  res.status(200).json({ resource: "stocks" });
-});
+router.get('/', StockController.getAll);
+router.get('/:id', StockController.getById);
+router.post('/', StockController.create);
+router.put('/:id', StockController.update);
+router.delete('/:id', StockController.delete);
 
 module.exports = router;

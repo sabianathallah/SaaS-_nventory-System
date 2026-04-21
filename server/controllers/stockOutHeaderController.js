@@ -1,0 +1,100 @@
+'use strict';
+const { sequelize, Stock_Out_Header, Stock_Movement, Stock, User, Product, Warehouse } = require('../models');
+const { companyFilter, companyId } = require('../helpers/tenancy');
+const { paginate, buildFilter, paginatedResponse } = require('../helpers/queryHelper');
+
+class StockOutHeaderController {
+    static async getAll(req, res, next) {
+        try {
+            const { page, limit, offset } = paginate(req.query);
+            const filter = buildFilter(req.query, {
+                destination: 'like',
+                dateFrom:    { field: 'date', type: 'gte' },
+                dateTo:      { field: 'date', type: 'lte' },
+            });
+            const { rows, count } = await Stock_Out_Header.findAndCountAll({
+                where: { ...companyFilter(req), ...filter },
+                include: [{ model: User, foreignKey: 'createdBy', attributes: ['id', 'name'] }],
+                order: [['date', 'DESC']],
+                limit, offset,
+                distinct: true
+            });
+            res.status(200).json(paginatedResponse(rows, count, page, limit));
+        } catch (err) { next(err); }
+    }
+
+    static async getById(req, res, next) {
+        try {
+            const header = await Stock_Out_Header.findOne({
+                where: { id: req.params.id, ...companyFilter(req) },
+                include: [{ model: User, foreignKey: 'createdBy', attributes: ['id', 'name'] }]
+            });
+            if (!header) throw { name: 'NotFound', message: 'Stock out header not found' };
+            const movements = await Stock_Movement.findAll({
+                where: { ReferenceId: header.id, type: 'OUT', ...companyFilter(req) },
+                include: [
+                    { model: Product,   attributes: ['id', 'name', 'sku', 'unit'] },
+                    { model: Warehouse, attributes: ['id', 'name'] }
+                ]
+            });
+            res.status(200).json({ ...header.toJSON(), movements });
+        } catch (err) { next(err); }
+    }
+
+    static async create(req, res, next) {
+        const t = await sequelize.transaction();
+        try {
+            const { items = [], ...headerData } = req.body;
+            const cid = companyId(req);
+            if (!items.length) { await t.rollback(); return res.status(400).json({ message: 'Items tidak boleh kosong' }); }
+
+            for (const item of items) {
+                const { ProductId, WarehouseId, quantity } = item;
+                if (!ProductId || !WarehouseId || !quantity || quantity <= 0) {
+                    await t.rollback();
+                    return res.status(400).json({ message: 'Setiap item harus memiliki ProductId, WarehouseId, dan quantity > 0' });
+                }
+                const stock = await Stock.findOne({ where: { ProductId, WarehouseId }, transaction: t });
+                if (!stock) { await t.rollback(); return res.status(400).json({ message: `Stok tidak ditemukan untuk ProductId=${ProductId} di WarehouseId=${WarehouseId}` }); }
+                if (stock.quantity < quantity) { await t.rollback(); return res.status(400).json({ message: `Stok tidak cukup untuk ProductId=${ProductId}. Tersedia: ${stock.quantity}, diminta: ${quantity}` }); }
+            }
+
+            const header = await Stock_Out_Header.create(
+                { ...headerData, createdBy: req.user.id, companyId: cid },
+                { transaction: t }
+            );
+            const movements = [];
+            for (const item of items) {
+                const { ProductId, WarehouseId, quantity, note } = item;
+                const stock = await Stock.findOne({ where: { ProductId, WarehouseId }, transaction: t });
+                await stock.decrement('quantity', { by: quantity, transaction: t });
+                movements.push(await Stock_Movement.create({
+                    ProductId, WarehouseId, type: 'OUT', quantity,
+                    ReferenceId: header.id, note: note || null, companyId: cid
+                }, { transaction: t }));
+            }
+            await t.commit();
+            res.status(201).json({ ...header.toJSON(), movements });
+        } catch (err) { await t.rollback(); next(err); }
+    }
+
+    static async update(req, res, next) {
+        try {
+            const header = await Stock_Out_Header.findOne({ where: { id: req.params.id, ...companyFilter(req) } });
+            if (!header) throw { name: 'NotFound', message: 'Stock out header not found' };
+            await header.update(req.body);
+            res.status(200).json(header);
+        } catch (err) { next(err); }
+    }
+
+    static async delete(req, res, next) {
+        try {
+            const header = await Stock_Out_Header.findOne({ where: { id: req.params.id, ...companyFilter(req) } });
+            if (!header) throw { name: 'NotFound', message: 'Stock out header not found' };
+            await header.destroy();
+            res.status(200).json({ message: 'Stock out header deleted successfully' });
+        } catch (err) { next(err); }
+    }
+}
+
+module.exports = StockOutHeaderController;

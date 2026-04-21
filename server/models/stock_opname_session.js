@@ -61,7 +61,8 @@ module.exports = (sequelize, DataTypes) => {
         notEmpty: { msg: 'Creator is required' }
       }
     },
-    notes: DataTypes.TEXT
+    notes: DataTypes.TEXT,
+    companyId: { type: DataTypes.INTEGER, allowNull: true }
   }, {
     sequelize,
     modelName: 'Stock_Opname_Session',

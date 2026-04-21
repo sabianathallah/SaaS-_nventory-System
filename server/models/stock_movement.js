@@ -53,7 +53,8 @@ module.exports = (sequelize, DataTypes) => {
       validate: { min: 0 }
     },
     ReferenceId: DataTypes.BIGINT,
-    note: DataTypes.TEXT
+    note: DataTypes.TEXT,
+    companyId: { type: DataTypes.INTEGER, allowNull: true }
   }, {
     sequelize,
     modelName: 'Stock_Movement',

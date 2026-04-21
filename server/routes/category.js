@@ -1,9 +1,12 @@
-const express = require("express");
-
+'use strict';
+const express = require('express');
 const router = express.Router();
+const CategoryController = require('../controllers/categoryController');
 
-router.get("/", (req, res) => {
-  res.status(200).json({ resource: "categories" });
-});
+router.get('/', CategoryController.getAll);
+router.get('/:id', CategoryController.getById);
+router.post('/', CategoryController.create);
+router.put('/:id', CategoryController.update);
+router.delete('/:id', CategoryController.delete);
 
 module.exports = router;

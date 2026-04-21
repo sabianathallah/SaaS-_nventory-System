@@ -47,7 +47,8 @@ module.exports = (sequelize, DataTypes) => {
         notEmpty: { msg: 'Quantity is required' },
         min: 0
       }
-    }
+    },
+    companyId: { type: DataTypes.INTEGER, allowNull: true }
   }, {
     sequelize,
     modelName: 'Stock',

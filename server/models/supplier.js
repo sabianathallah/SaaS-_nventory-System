@@ -26,7 +26,8 @@ module.exports = (sequelize, DataTypes) => {
         notEmpty: { msg: 'Name is required' }
       }
     },
-    contact: DataTypes.STRING
+    contact: DataTypes.STRING,
+    companyId: { type: DataTypes.INTEGER, allowNull: true }
   }, {
     sequelize,
     modelName: 'Supplier',

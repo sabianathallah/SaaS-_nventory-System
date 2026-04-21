@@ -34,7 +34,8 @@ module.exports = (sequelize, DataTypes) => {
         notEmpty: { msg: 'Date is required' }
       }
     },
-    note: DataTypes.STRING
+    note: DataTypes.STRING,
+    companyId: { type: DataTypes.INTEGER, allowNull: true }
   }, {
     sequelize,
     modelName: 'Stock_In_Header',

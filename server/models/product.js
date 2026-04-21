@@ -83,7 +83,8 @@ module.exports = (sequelize, DataTypes) => {
         notNull: { msg: 'Unit is required' },
         notEmpty: { msg: 'Unit is required' }
       }
-    }
+    },
+    companyId: { type: DataTypes.INTEGER, allowNull: true }
   }, {
     sequelize,
     modelName: 'Product',

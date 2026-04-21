@@ -35,6 +35,7 @@ module.exports = (sequelize, DataTypes) => {
       }
     },
     notes: DataTypes.STRING,
+    companyId: { type: DataTypes.INTEGER, allowNull: true },
     createdBy: {
       type: DataTypes.INTEGER,
       allowNull: false,

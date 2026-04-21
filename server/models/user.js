@@ -9,6 +9,12 @@ module.exports = (sequelize, DataTypes) => {
      * The `models/index` file will call this method automatically.
      */
     static associate(models) {
+      User.belongsTo(models.Company, {
+        foreignKey: { name: 'companyId', allowNull: true },
+        as: 'company',
+        onDelete: 'SET NULL',
+        onUpdate: 'CASCADE'
+      });
       User.hasMany(models.Stock_Out_Header, {
         foreignKey: { name: 'createdBy', allowNull: false },
         onDelete: 'CASCADE',
@@ -55,6 +61,15 @@ module.exports = (sequelize, DataTypes) => {
         notNull: { msg: 'Password is required' },
         notEmpty: { msg: 'Password is required' }
       }
+    },
+    companyId: {
+      type: DataTypes.INTEGER,
+      allowNull: true
+    },
+    isActive: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: true
     }
   }, {
     sequelize,
