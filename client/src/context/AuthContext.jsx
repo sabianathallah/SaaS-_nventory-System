@@ -23,10 +23,15 @@ export function AuthProvider({ children }) {
   }, [])
 
   const isSuperAdmin  = user?.role === 'SUPER_ADMIN'
-  const isAdmin       = ['SUPER_ADMIN', 'ADMIN'].includes(user?.role)
+  const isAdmin       = ['SUPER_ADMIN', 'ADMIN', 'COMPANY_ADMIN'].includes(user?.role)
+  const isOperasional = ['SUPER_ADMIN', 'ADMIN', 'COMPANY_ADMIN', 'OPERASIONAL'].includes(user?.role)
+  const isHeadPacking = ['SUPER_ADMIN', 'ADMIN', 'COMPANY_ADMIN', 'HEAD_PACKING'].includes(user?.role)
+  const isTimPacking  = ['SUPER_ADMIN', 'ADMIN', 'COMPANY_ADMIN', 'TIM_PACKING'].includes(user?.role)
+  const isHR          = ['SUPER_ADMIN', 'ADMIN', 'COMPANY_ADMIN', 'HR'].includes(user?.role)
+  const canViewPacking = ['SUPER_ADMIN','ADMIN','COMPANY_ADMIN','OPERASIONAL','HEAD_PACKING','TIM_PACKING','HR','CEO'].includes(user?.role)
 
   return (
-    <AuthContext.Provider value={{ user, signIn, signOut, isSuperAdmin, isAdmin }}>
+    <AuthContext.Provider value={{ user, signIn, signOut, isSuperAdmin, isAdmin, isOperasional, isHeadPacking, isTimPacking, isHR, canViewPacking }}>
       {children}
     </AuthContext.Provider>
   )

@@ -11,11 +11,14 @@
   },
   "dependencies": {
     "@tanstack/react-query": "^5.99.2",
+    "@zxing/browser": "^0.1.5",
+    "@zxing/library": "^0.21.3",
     "axios": "^1.15.1",
     "lucide-react": "^1.8.0",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
     "react-hot-toast": "^2.6.0",
+    "react-qr-code": "^2.0.18",
     "react-router-dom": "^6.30.3",
     "recharts": "^3.8.1"
   },

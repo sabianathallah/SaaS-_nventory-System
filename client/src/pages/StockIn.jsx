@@ -4,18 +4,20 @@ import { stockInApi, productsApi, warehousesApi, suppliersApi } from '../api'
 import PageHeader from '../components/PageHeader'
 import { Table, Pagination } from '../components/Table'
 import Modal from '../components/Modal'
+import QRScanner from '../components/QRScanner'
 import toast from 'react-hot-toast'
-import { Plus, Trash2, PackagePlus, Eye } from 'lucide-react'
+import { Plus, Trash2, PackagePlus, Eye, ScanLine } from 'lucide-react'
 
 const EMPTY_FORM = { supplierId: '', warehouseId: '', note: '', items: [] }
 const EMPTY_ITEM = { productId: '', quantity: '', price: '' }
 
 export default function StockIn() {
   const qc = useQueryClient()
-  const [page, setPage]   = useState(1)
-  const [modal, setModal] = useState(null)
-  const [form, setForm]   = useState(EMPTY_FORM)
-  const [item, setItem]   = useState(EMPTY_ITEM)
+  const [page, setPage]         = useState(1)
+  const [modal, setModal]       = useState(null)
+  const [form, setForm]         = useState(EMPTY_FORM)
+  const [item, setItem]         = useState(EMPTY_ITEM)
+  const [showScanner, setShowScanner] = useState(false)
 
   const { data, isLoading } = useQuery({
     queryKey: ['stock-in', { page }],
@@ -39,6 +41,13 @@ export default function StockIn() {
     const prod = products?.data?.find(p => String(p.id) === String(item.productId))
     setForm(f => ({ ...f, items: [...f.items, { ...item, quantity: Number(item.quantity), price: Number(item.price) || 0, productName: prod?.name }] }))
     setItem(EMPTY_ITEM)
+  }
+
+  const handleQRScan = (code) => {
+    const prod = products?.data?.find(p => p.sku === code || p.qrString === code || String(p.id) === code)
+    if (!prod) return toast.error(`Produk dengan kode "${code}" tidak ditemukan`)
+    setItem(prev => ({ ...prev, productId: String(prod.id) }))
+    toast.success(`Produk dipilih: ${prod.name}`)
   }
 
   const handleSubmit = (e) => {
@@ -105,6 +114,14 @@ export default function StockIn() {
               <span className="text-xs font-bold text-slate-600 uppercase tracking-wide">Items</span>
             </div>
             <div className="p-3 bg-white flex gap-2 border-b border-slate-100">
+              <button
+                type="button"
+                onClick={() => setShowScanner(true)}
+                className="px-3 rounded-lg border border-slate-200 text-slate-400 hover:text-brand hover:border-brand/40 hover:bg-brand/5 transition-colors flex-shrink-0"
+                title="Scan QR produk"
+              >
+                <ScanLine size={15} />
+              </button>
               <select className="select flex-1" value={item.productId} onChange={e => setItem(i => ({ ...i, productId: e.target.value }))}>
                 <option value="">Select product…</option>
                 {products?.data?.map(p => <option key={p.id} value={p.id}>{p.name} ({p.sku})</option>)}
@@ -140,6 +157,14 @@ export default function StockIn() {
           </div>
         </form>
       </Modal>
+
+      {showScanner && (
+        <QRScanner
+          onScan={handleQRScan}
+          onClose={() => setShowScanner(false)}
+          hint="Scan QR / barcode produk untuk auto-pilih"
+        />
+      )}
 
       {/* View */}
       <Modal open={modal?.mode === 'view'} onClose={() => setModal(null)} title={`Stock IN #${modal?.data?.id}`} size="sm">

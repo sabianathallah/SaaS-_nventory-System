@@ -14,6 +14,11 @@ import Movements from './pages/Movements'
 import Opname from './pages/Opname'
 import Users from './pages/Users'
 import Companies from './pages/Companies'
+import Vendors from './pages/Vendors'
+import IncomingGoods from './pages/IncomingGoods'
+import SuratJalan from './pages/SuratJalan'
+import PackingJobs from './pages/PackingJobs'
+import FormAnakPacking from './pages/FormAnakPacking'
 
 function PrivateRoute({ children }) {
   const { user } = useAuth()
@@ -45,6 +50,11 @@ function AppRoutes() {
               <Route path="/opname"     element={<Opname />} />
               <Route path="/users"      element={<Users />} />
               <Route path="/companies"  element={<Companies />} />
+              <Route path="/vendors"          element={<Vendors />} />
+              <Route path="/incoming-goods"   element={<IncomingGoods />} />
+              <Route path="/surat-jalan"      element={<SuratJalan />} />
+              <Route path="/packing-jobs"     element={<PackingJobs />} />
+              <Route path="/form-anak-packing" element={<FormAnakPacking />} />
             </Routes>
           </Layout>
         </PrivateRoute>

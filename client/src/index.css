@@ -113,3 +113,56 @@
     background: var(--brand-tint);
   }
 }
+
+/* ── QR Label Print ─────────────────────────────────────────── */
+.qr-label-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 50mm);
+  gap: 4mm;
+  padding: 8mm;
+  background: white;
+}
+
+.qr-label-item {
+  width: 50mm;
+  border: 0.5pt solid #d1d5db;
+  border-radius: 2mm;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 3mm 2mm 2mm;
+  page-break-inside: avoid;
+  gap: 1.5mm;
+}
+
+.qr-label-name {
+  font-size: 7.5pt;
+  font-weight: 600;
+  text-align: center;
+  color: #1e293b;
+  line-height: 1.2;
+  max-width: 46mm;
+  word-break: break-word;
+  margin: 0;
+}
+
+.qr-label-sku {
+  font-size: 6.5pt;
+  font-family: 'JetBrains Mono', monospace;
+  color: #64748b;
+  margin: 0;
+  letter-spacing: 0.3px;
+}
+
+@media print {
+  body * { visibility: hidden !important; }
+  .qr-print-content,
+  .qr-print-content * { visibility: visible !important; }
+  .qr-print-content {
+    position: fixed !important;
+    inset: 0 !important;
+    overflow: visible !important;
+    background: white;
+  }
+  @page { margin: 0; size: A4; }
+}

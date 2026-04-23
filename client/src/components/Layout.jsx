@@ -1,9 +1,11 @@
+import { useState } from 'react'
 import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import {
   LayoutDashboard, Package, Tags, Warehouse, Truck,
   ArrowDownToLine, ArrowUpFromLine, ArrowLeftRight,
   ClipboardList, Users, Building2, BoxesIcon, LogOut, Bell,
+  PackageOpen, FileText, Layers, ClipboardCheck, Menu, X,
 } from 'lucide-react'
 import logoPreface from '../assets/logo-preface.jpeg'
 
@@ -35,6 +37,17 @@ const NAV_GROUPS = [
     ],
   },
   {
+    label: 'Packing',
+    packingOnly: true,
+    items: [
+      { to: '/vendors',           icon: Truck,          label: 'Vendors',         adminOnly: true },
+      { to: '/incoming-goods',    icon: PackageOpen,    label: 'Barang Masuk',    operasionalOnly: true },
+      { to: '/surat-jalan',       icon: FileText,       label: 'Surat Jalan',     operasionalOnly: true },
+      { to: '/packing-jobs',      icon: Layers,         label: 'Packing Jobs' },
+      { to: '/form-anak-packing', icon: ClipboardCheck, label: 'Form Anak Packing' },
+    ],
+  },
+  {
     label: 'Administration',
     adminOnly: true,
     items: [
@@ -49,22 +62,39 @@ const PAGE_TITLES = {
   '/warehouses': 'Warehouses', '/suppliers': 'Suppliers', '/stocks': 'Stock Levels',
   '/stock-in': 'Stock In', '/stock-out': 'Stock Out', '/movements': 'Movements',
   '/opname': 'Stock Opname', '/users': 'Users', '/companies': 'Companies',
+  '/vendors': 'Vendors', '/incoming-goods': 'Barang Masuk', '/surat-jalan': 'Surat Jalan',
+  '/packing-jobs': 'Packing Jobs', '/form-anak-packing': 'Form Anak Packing',
 }
 
 export default function Layout({ children }) {
-  const { user, signOut, isAdmin, isSuperAdmin } = useAuth()
+  const { user, signOut, isAdmin, isSuperAdmin, isOperasional, isHeadPacking, canViewPacking } = useAuth()
   const navigate  = useNavigate()
   const location  = useLocation()
+  const [sidebarOpen, setSidebarOpen] = useState(false)
 
   const handleSignOut = () => { signOut(); navigate('/login') }
+  const closeSidebar  = () => setSidebarOpen(false)
   const pageTitle = PAGE_TITLES[location.pathname] ?? 'Preface Inventory System'
 
   return (
     <div className="flex h-screen overflow-hidden bg-canvas">
 
+      {/* ── Mobile backdrop ────────────────────────────────── */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 z-20 bg-black/40 md:hidden"
+          onClick={closeSidebar}
+        />
+      )}
+
       {/* ── Sidebar — broken white ─────────────────────────── */}
       <aside
-        className="w-60 flex-shrink-0 flex flex-col"
+        className={`
+          fixed md:relative inset-y-0 left-0 z-30
+          w-60 flex-shrink-0 flex flex-col
+          transition-transform duration-250 ease-out
+          ${sidebarOpen ? 'translate-x-0 animate-slide-in-left' : '-translate-x-full md:translate-x-0'}
+        `}
         style={{ background: '#F5F3EF', borderRight: '1px solid #E0DDD7', boxShadow: '2px 0 8px rgba(0,0,0,0.04)' }}
       >
         {/* Logo */}
@@ -80,9 +110,12 @@ export default function Layout({ children }) {
         <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-5">
           {NAV_GROUPS.map((group) => {
             if (group.adminOnly && !isAdmin) return null
+            if (group.packingOnly && !canViewPacking) return null
             const visibleItems = group.items.filter(item => {
               if (item.adminOnly && !isAdmin) return false
               if (item.superOnly && !isSuperAdmin) return false
+              if (item.operasionalOnly && !isOperasional) return false
+              if (item.headPackingOnly && !isHeadPacking) return false
               return true
             })
             if (!visibleItems.length) return null
@@ -99,6 +132,7 @@ export default function Layout({ children }) {
                         key={item.to}
                         to={item.to}
                         end={item.to === '/'}
+                        onClick={closeSidebar}
                         style={({ isActive }) => isActive
                           ? { background: BRAND, color: '#fff', borderRadius: '6px' }
                           : { borderRadius: '6px' }
@@ -135,7 +169,9 @@ export default function Layout({ children }) {
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-xs font-semibold text-slate-800 truncate">{user?.name}</p>
-              <p className="text-[10px] text-slate-400 truncate">{user?.role}</p>
+              <p className="text-[10px] text-slate-400 truncate">
+                {user?.company?.name ?? user?.role}
+              </p>
             </div>
             <button
               onClick={handleSignOut}
@@ -151,9 +187,16 @@ export default function Layout({ children }) {
       {/* ── Main ─────────────────────────────────────────────── */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Top bar — putih */}
-        <header className="h-14 bg-white border-b border-slate-200 flex items-center px-6 gap-4 flex-shrink-0 shadow-sm">
-          <div className="flex-1">
-            <h1 className="text-sm font-bold text-slate-800">{pageTitle}</h1>
+        <header className="h-14 bg-white border-b border-slate-200 flex items-center px-4 md:px-6 gap-3 flex-shrink-0 shadow-sm">
+          {/* Hamburger — mobile only */}
+          <button
+            className="md:hidden w-8 h-8 flex items-center justify-center text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-md transition-colors flex-shrink-0"
+            onClick={() => setSidebarOpen(v => !v)}
+          >
+            {sidebarOpen ? <X size={18} /> : <Menu size={18} />}
+          </button>
+          <div className="flex-1 min-w-0">
+            <h1 className="text-sm font-bold text-slate-800 truncate">{pageTitle}</h1>
           </div>
           <div className="flex items-center gap-2">
             <button className="w-8 h-8 rounded-md flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors">
@@ -161,12 +204,17 @@ export default function Layout({ children }) {
             </button>
             <div className="flex items-center gap-2 pl-2 border-l border-slate-200">
               <div
-                className="w-7 h-7 rounded-full flex items-center justify-center"
+                className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0"
                 style={{ background: BRAND }}
               >
                 <span className="text-xs font-bold text-white">{user?.name?.[0]?.toUpperCase()}</span>
               </div>
-              <span className="text-xs font-semibold text-slate-700">{user?.name}</span>
+              <div className="hidden sm:block min-w-0">
+                <p className="text-xs font-semibold text-slate-700 truncate leading-tight">{user?.name}</p>
+                {user?.company?.name && (
+                  <p className="text-[10px] text-slate-400 truncate leading-tight">{user.company.name}</p>
+                )}
+              </div>
             </div>
           </div>
         </header>

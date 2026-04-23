@@ -1,137 +1,134 @@
 const errorHandler = (err, req, res, next) => {
-    let status = err.statusCode || 500
-    let message = err.message || 'Internal Server Error'
+    let status  = err.statusCode || 500;
+    let message = err.message    || 'Internal Server Error';
+    let errors  = undefined;
 
-    // Log error for debugging (skip in test environment to reduce noise)
     if (process.env.NODE_ENV !== 'test') {
         console.error('Error:', err.name, err.message);
     }
 
-    // Sequelize Validation Errors
-    if (err.name == 'SequelizeValidationError') {
-        status = 400
-        message = err.errors[0].message
+    // ── Sequelize ──────────────────────────────────────────────────────────────
+
+    if (err.name === 'SequelizeValidationError') {
+        status  = 400;
+        message = err.errors[0].message;
+        errors  = err.errors.map(e => ({ field: e.path, message: e.message }));
     }
 
-    if (err.name == 'SequelizeUniqueConstraintError') {
-        status = 400
-        message = err.errors[0].message
+    if (err.name === 'SequelizeUniqueConstraintError') {
+        status = 409;
+        const constraint = err.parent?.constraint || '';
+        const CONSTRAINT_MESSAGES = {
+            unique_incoming_goods_product:  'Produk yang sama tidak boleh diinput dua kali dalam satu dokumen',
+            unique_packing_result_per_item: 'Item ini sudah punya hasil packing dalam job ini',
+        };
+        message = CONSTRAINT_MESSAGES[constraint]
+            || err.errors?.[0]?.message
+            || 'Data sudah ada';
     }
 
-    if (err.name == 'SequelizeDatabaseError' || err.name == 'SequelizeForeignKeyConstraintError') {
-        status = 400
-        message = 'Invalid input'
+    if (err.name === 'SequelizeForeignKeyConstraintError') {
+        status  = 400;
+        // Extract table/field context from the parent error if available
+        const detail = err.parent?.detail || '';
+        message = detail
+            ? `Referensi tidak valid: ${detail}`
+            : 'Data referensi tidak ditemukan atau masih digunakan data lain';
     }
 
-    // Custom Application Errors
-    if (err.name == 'BadRequest') {
-        message = err.message || 'Please input email or password'
-        status = 400
-    }
-
-    if (err.name == 'LoginError') {
-        message = 'Invalid email or password'
-        status = 401
-    }
-
-    // JWT Errors
-    if (err.name == 'Unauthorized' || err.name == 'JsonWebTokenError') {
-        message = 'Please login first'
-        status = 401
-    }
-
-    if (err.name == 'TokenExpiredError') {
-        message = 'Token has expired, please login again'
-        status = 401
-    }
-
-    if (err.name == 'Forbidden') {
-        message = 'You dont have any access'
-        status = 403
-    }
-
-    if (err.name == 'NotFound') {
-        status = 404
-        message = err.message || 'Data not found'
-    }
-
-    // Multer Errors (File Upload)
-    if (err.name == 'MulterError') {
-        status = 400
-        if (err.code === 'LIMIT_FILE_SIZE') {
-            message = 'File size is too large'
-        } else if (err.code === 'LIMIT_FILE_COUNT') {
-            message = 'Too many files uploaded'
-        } else if (err.code === 'LIMIT_UNEXPECTED_FILE') {
-            message = 'Unexpected field name in file upload'
+    if (err.name === 'SequelizeDatabaseError') {
+        const msg = err.parent?.message || '';
+        if (msg.includes('invalid input value for enum')) {
+            status  = 400;
+            message = 'Nilai tidak valid untuk field status';
         } else {
-            message = 'File upload error'
+            status  = 400;
+            message = process.env.NODE_ENV === 'production' ? 'Database error' : msg || 'Database error';
         }
     }
 
-    // Payload Too Large Error
+    // ── Custom Application Errors ──────────────────────────────────────────────
+
+    if (err.name === 'BadRequest') {
+        status  = 400;
+        message = err.message || 'Bad request';
+    }
+
+    if (err.name === 'LoginError') {
+        status  = 401;
+        message = 'Email atau password salah';
+    }
+
+    if (err.name === 'Unauthorized' || err.name === 'JsonWebTokenError') {
+        status  = 401;
+        message = 'Silakan login terlebih dahulu';
+    }
+
+    if (err.name === 'TokenExpiredError') {
+        status  = 401;
+        message = 'Token sudah kadaluarsa, silakan login ulang';
+    }
+
+    if (err.name === 'Forbidden') {
+        status  = 403;
+        message = 'Akses ditolak';
+    }
+
+    if (err.name === 'NotFound') {
+        status  = 404;
+        message = err.message || 'Data tidak ditemukan';
+    }
+
+    // ── File Upload ────────────────────────────────────────────────────────────
+
+    if (err.name === 'MulterError') {
+        status = 400;
+        const MULTER_MESSAGES = {
+            LIMIT_FILE_SIZE:       'Ukuran file terlalu besar',
+            LIMIT_FILE_COUNT:      'Terlalu banyak file yang diupload',
+            LIMIT_UNEXPECTED_FILE: 'Field file tidak dikenali',
+        };
+        message = MULTER_MESSAGES[err.code] || 'Error saat upload file';
+    }
+
     if (err.type === 'entity.too.large' || err.name === 'PayloadTooLargeError') {
-        status = 413
-        message = 'Request body is too large'
+        status  = 413;
+        message = 'Request body terlalu besar';
     }
 
-    // Midtrans API Errors
+    // ── Third-party ────────────────────────────────────────────────────────────
+
     if (err.httpStatusCode || err.ApiResponse) {
-        status = err.httpStatusCode || 400
-        message = err.message || err.ApiResponse?.status_message || 'Payment gateway error'
+        status  = err.httpStatusCode || 400;
+        message = err.message || err.ApiResponse?.status_message || 'Payment gateway error';
     }
 
-    // Handle Google OAuth errors
     if (err.name === 'GoogleAuthError') {
-        status = 401
-        message = 'Invalid or expired Google token'
+        status  = 401;
+        message = 'Google token tidak valid atau sudah kadaluarsa';
     }
 
-    // Handle generic Error objects from models/helpers (only if not already handled)
-    if (err instanceof Error && status === 500 && !err.name.includes('Sequelize') && !err.statusCode) {
-        const errorMessage = err.message.toLowerCase();
-        
-        // Map common error messages to appropriate status codes
-        if (errorMessage.includes('not found')) {
-            status = 404;
-            message = err.message;
-        } else if (
-            errorMessage.includes('required') ||
-            errorMessage.includes('invalid') ||
-            errorMessage.includes('must be') ||
-            errorMessage.includes('cannot') ||
-            errorMessage.includes('should')
-        ) {
-            status = 400;
-            message = err.message;
-        } else if (
-            errorMessage.includes('unauthorized') ||
-            errorMessage.includes('unauthenticated')
-        ) {
-            status = 401;
-            message = err.message;
-        } else if (
-            errorMessage.includes('forbidden') ||
-            errorMessage.includes('access denied')
-        ) {
-            status = 403;
-            message = err.message;
-        } else {
-            // Keep as 500 for truly unknown errors
-            message = process.env.NODE_ENV === 'production' 
-                ? 'Internal Server Error' 
-                : err.message;
-        }
+    // ── Fallback ───────────────────────────────────────────────────────────────
+
+    // Generic Error objects not caught above
+    if (status === 500 && err instanceof Error && !err.name.startsWith('Sequelize')) {
+        const lower = err.message.toLowerCase();
+        if      (lower.includes('not found'))                                       { status = 404; }
+        else if (lower.includes('required') || lower.includes('invalid') ||
+                 lower.includes('must be')  || lower.includes('cannot')  ||
+                 lower.includes('should'))                                          { status = 400; }
+        else if (lower.includes('unauthorized') || lower.includes('unauthenticated')) { status = 401; }
+        else if (lower.includes('forbidden')    || lower.includes('access denied'))  { status = 403; }
+
+        message = (status === 500 && process.env.NODE_ENV === 'production')
+            ? 'Internal Server Error'
+            : err.message;
     }
 
-    // Handle errors with custom message
-    if (err.message && status === 500 && !message.includes('Internal')) {
-        message = err.message
-    }
+    const body = { message };
+    if (errors) body.errors = errors;
 
-    res.status(status).json({
-        message
-    })
-}
+    res.status(status).json(body);
+};
 
-module.exports = errorHandler
+module.exports = errorHandler;

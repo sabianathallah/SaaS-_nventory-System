@@ -24,3 +24,35 @@ export const opnameSessionsApi = crud('/stock-opname-sessions')
 export const opnameItemsApi    = crud('/stock-opname-items')
 export const usersApi          = crud('/users')
 export const companiesApi      = crud('/companies')
+
+// ── Packing Module ────────────────────────────────────────────────────────────
+export const vendorsApi = crud('/vendors')
+
+export const incomingGoodsApi = {
+  ...crud('/incoming-goods'),
+  confirmVendor:    (id, data) => api.post(`/incoming-goods/${id}/confirm-vendor`, data).then(r => r.data),
+  notifyProduction: (id, data) => api.post(`/incoming-goods/${id}/notify-production`, data).then(r => r.data),
+  complete:         (id)       => api.post(`/incoming-goods/${id}/complete`).then(r => r.data),
+  updateItem:       (id, itemId, data) => api.put(`/incoming-goods/${id}/items/${itemId}`, data).then(r => r.data),
+}
+
+export const suratJalanApi = {
+  list:        (params) => api.get('/surat-jalan', { params }).then(r => r.data),
+  get:         (id)     => api.get(`/surat-jalan/${id}`).then(r => r.data),
+  markPrinted: (id)     => api.post(`/surat-jalan/${id}/print`).then(r => r.data),
+}
+
+export const packingJobsApi = {
+  list:       (params)     => api.get('/packing-jobs', { params }).then(r => r.data),
+  get:        (id)         => api.get(`/packing-jobs/${id}`).then(r => r.data),
+  create:     (data)       => api.post('/packing-jobs', data).then(r => r.data),
+  start:      (id)         => api.post(`/packing-jobs/${id}/start`).then(r => r.data),
+  submit:     (id, data)   => api.post(`/packing-jobs/${id}/submit`, data).then(r => r.data),
+  verify:     (id, data)   => api.post(`/packing-jobs/${id}/verify`, data).then(r => r.data),
+  getWorkers: (params)     => api.get('/packing-jobs/workers', { params }).then(r => r.data),
+}
+
+export const formAnakPackingApi = {
+  list: (params) => api.get('/form-anak-packing', { params }).then(r => r.data),
+  get:  (id)     => api.get(`/form-anak-packing/${id}`).then(r => r.data),
+}

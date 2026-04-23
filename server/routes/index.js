@@ -19,6 +19,12 @@ const stockOpnameSessionRouter = require('./stock_opname_session');
 const stockOpnameItemRouter = require('./stock_opname_item');
 const userRouter = require('./user');
 
+const vendorRouter          = require('./vendor');
+const incomingGoodsRouter   = require('./incoming_goods');
+const suratJalanRouter      = require('./surat_jalan');
+const packingJobRouter      = require('./packing_job');
+const formAnakPackingRouter = require('./form_anak_packing');
+
 // Public routes
 router.post('/login', LoginController.login);
 router.post('/refresh-token', LoginController.refreshToken);
@@ -36,6 +42,13 @@ router.use('/stock-out-headers', stockOutHeaderRouter);
 router.use('/stock-movements', stockMovementRouter);
 router.use('/stock-opname-sessions', stockOpnameSessionRouter);
 router.use('/stock-opname-items', stockOpnameItemRouter);
+
+// Packing module routes
+router.use('/vendors',            vendorRouter);
+router.use('/incoming-goods',     incomingGoodsRouter);
+router.use('/surat-jalan',        suratJalanRouter);
+router.use('/packing-jobs',       packingJobRouter);
+router.use('/form-anak-packing',  formAnakPackingRouter);
 
 // Admin only routes
 router.use('/users', isAdmin, userRouter);
