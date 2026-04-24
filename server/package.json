@@ -5,6 +5,7 @@
   "main": "index.js",
   "scripts": {
     "start": "npx sequelize-cli db:migrate && node bin/www.js",
+    "start:prod": "npx sequelize-cli db:migrate && node bin/www.js",
     "start:dev": "node bin/www.js",
     "seed": "npx sequelize-cli db:seed:all",
     "test": "echo \"Error: no test specified\" && exit 1"
