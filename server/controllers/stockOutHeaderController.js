@@ -14,7 +14,10 @@ class StockOutHeaderController {
             });
             const { rows, count } = await Stock_Out_Header.findAndCountAll({
                 where: { ...companyFilter(req), ...filter },
-                include: [{ model: User, foreignKey: 'createdBy', attributes: ['id', 'name'] }],
+                include: [
+                    { model: User, foreignKey: 'createdBy', attributes: ['id', 'name'] },
+                    { model: Warehouse, attributes: ['id', 'name'] },
+                ],
                 order: [['date', 'DESC']],
                 limit, offset,
                 distinct: true
@@ -27,7 +30,10 @@ class StockOutHeaderController {
         try {
             const header = await Stock_Out_Header.findOne({
                 where: { id: req.params.id, ...companyFilter(req) },
-                include: [{ model: User, foreignKey: 'createdBy', attributes: ['id', 'name'] }]
+                include: [
+                    { model: User, foreignKey: 'createdBy', attributes: ['id', 'name'] },
+                    { model: Warehouse, attributes: ['id', 'name'] },
+                ]
             });
             if (!header) throw { name: 'NotFound', message: 'Stock out header not found' };
             const movements = await Stock_Movement.findAll({
@@ -48,11 +54,22 @@ class StockOutHeaderController {
             const cid = companyId(req);
             if (!items.length) { await t.rollback(); return res.status(400).json({ message: 'Items tidak boleh kosong' }); }
 
+            // FE uses "note" singular at header; model column is "notes" plural.
+            if (headerData.note && !headerData.notes) headerData.notes = headerData.note;
+            delete headerData.note;
+
+            const headerWhId = headerData.WarehouseId || items.find(i => i.WarehouseId)?.WarehouseId || null;
+            if (!headerWhId) {
+                await t.rollback();
+                return res.status(400).json({ message: 'WarehouseId wajib dipilih' });
+            }
+
             for (const item of items) {
-                const { ProductId, WarehouseId, quantity } = item;
+                const { ProductId, quantity } = item;
+                const WarehouseId = item.WarehouseId || headerWhId;
                 if (!ProductId || !WarehouseId || !quantity || quantity <= 0) {
                     await t.rollback();
-                    return res.status(400).json({ message: 'Setiap item harus memiliki ProductId, WarehouseId, dan quantity > 0' });
+                    return res.status(400).json({ message: 'Setiap item harus memiliki ProductId dan quantity > 0' });
                 }
                 const stock = await Stock.findOne({ where: { ProductId, WarehouseId }, transaction: t });
                 if (!stock) { await t.rollback(); return res.status(400).json({ message: `Stok tidak ditemukan untuk ProductId=${ProductId} di WarehouseId=${WarehouseId}` }); }
@@ -60,12 +77,19 @@ class StockOutHeaderController {
             }
 
             const header = await Stock_Out_Header.create(
-                { ...headerData, createdBy: req.user.id, companyId: cid },
+                {
+                    ...headerData,
+                    WarehouseId: headerWhId,
+                    date: headerData.date || new Date(),
+                    createdBy: req.user.id,
+                    companyId: cid,
+                },
                 { transaction: t }
             );
             const movements = [];
             for (const item of items) {
-                const { ProductId, WarehouseId, quantity, note } = item;
+                const { ProductId, quantity, note } = item;
+                const WarehouseId = item.WarehouseId || headerWhId;
                 const stock = await Stock.findOne({ where: { ProductId, WarehouseId }, transaction: t });
                 await stock.decrement('quantity', { by: quantity, transaction: t });
                 movements.push(await Stock_Movement.create({

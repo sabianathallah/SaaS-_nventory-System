@@ -15,24 +15,20 @@ module.exports = (sequelize, DataTypes) => {
         onDelete: 'CASCADE',
         onUpdate: 'CASCADE'
       });
+      Stock_Out_Header.belongsTo(models.Warehouse, {
+        foreignKey: { name: 'WarehouseId', allowNull: true },
+        onDelete: 'SET NULL',
+        onUpdate: 'CASCADE'
+      });
     }
   }
   Stock_Out_Header.init({
-    destination: {
-      type: DataTypes.STRING,
-      allowNull: false,
-      validate: {
-        notNull: { msg: 'Destination is required' },
-        notEmpty: { msg: 'Destination is required' }
-      }
-    },
+    destination: { type: DataTypes.STRING, allowNull: true },
+    WarehouseId: { type: DataTypes.INTEGER, allowNull: true },
     date: {
       type: DataTypes.DATE,
       allowNull: false,
-      validate: {
-        notNull: { msg: 'Date is required' },
-        notEmpty: { msg: 'Date is required' }
-      }
+      defaultValue: DataTypes.NOW
     },
     notes: DataTypes.STRING,
     companyId: { type: DataTypes.INTEGER, allowNull: true },

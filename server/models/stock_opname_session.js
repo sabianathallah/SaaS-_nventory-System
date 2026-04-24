@@ -32,26 +32,19 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.INTEGER,
       allowNull: false,
       validate: {
-        notNull: { msg: 'Warehouse is required' },
-        notEmpty: { msg: 'Warehouse is required' }
+        notNull: { msg: 'Warehouse is required' }
       }
     },
     started_at: {
       type: DataTypes.DATE,
       allowNull: false,
-      validate: {
-        notNull: { msg: 'Started at is required' },
-        notEmpty: { msg: 'Started at is required' }
-      }
+      defaultValue: DataTypes.NOW
     },
     finished_at: DataTypes.DATE,
     status: {
       type: DataTypes.STRING,
       allowNull: false,
-      validate: {
-        notNull: { msg: 'Status is required' },
-        notEmpty: { msg: 'Status is required' }
-      }
+      defaultValue: 'open'
     },
     createdBy: {
       type: DataTypes.INTEGER,

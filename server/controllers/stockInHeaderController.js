@@ -14,7 +14,10 @@ class StockInHeaderController {
             });
             const { rows, count } = await Stock_In_Header.findAndCountAll({
                 where: { ...companyFilter(req), ...filter },
-                include: [{ model: Supplier, attributes: ['id', 'name'] }],
+                include: [
+                    { model: Supplier,  attributes: ['id', 'name'] },
+                    { model: Warehouse, attributes: ['id', 'name'] },
+                ],
                 order: [['date', 'DESC']],
                 limit, offset,
                 distinct: true
@@ -27,7 +30,10 @@ class StockInHeaderController {
         try {
             const header = await Stock_In_Header.findOne({
                 where: { id: req.params.id, ...companyFilter(req) },
-                include: [{ model: Supplier, attributes: ['id', 'name'] }]
+                include: [
+                    { model: Supplier,  attributes: ['id', 'name'] },
+                    { model: Warehouse, attributes: ['id', 'name'] },
+                ]
             });
             if (!header) throw { name: 'NotFound', message: 'Stock in header not found' };
             const movements = await Stock_Movement.findAll({
@@ -48,13 +54,28 @@ class StockInHeaderController {
             const cid = companyId(req);
             if (!items.length) { await t.rollback(); return res.status(400).json({ message: 'Items tidak boleh kosong' }); }
 
-            const header = await Stock_In_Header.create({ ...headerData, companyId: cid }, { transaction: t });
+            // Header-level WarehouseId is the single source of truth for FE; fall
+            // back to the first item's WarehouseId if caller sent it per-item.
+            const headerWhId = headerData.WarehouseId || items.find(i => i.WarehouseId)?.WarehouseId || null;
+            if (!headerWhId) {
+                await t.rollback();
+                return res.status(400).json({ message: 'WarehouseId wajib dipilih' });
+            }
+
+            const header = await Stock_In_Header.create({
+                ...headerData,
+                WarehouseId: headerWhId,
+                date: headerData.date || new Date(),
+                companyId: cid,
+            }, { transaction: t });
+
             const movements = [];
             for (const item of items) {
-                const { ProductId, WarehouseId, quantity, note } = item;
+                const { ProductId, quantity, note } = item;
+                const WarehouseId = item.WarehouseId || headerWhId;
                 if (!ProductId || !WarehouseId || !quantity || quantity <= 0) {
                     await t.rollback();
-                    return res.status(400).json({ message: 'Setiap item harus memiliki ProductId, WarehouseId, dan quantity > 0' });
+                    return res.status(400).json({ message: 'Setiap item harus memiliki ProductId dan quantity > 0' });
                 }
                 const [stock] = await Stock.findOrCreate({
                     where: { ProductId, WarehouseId },

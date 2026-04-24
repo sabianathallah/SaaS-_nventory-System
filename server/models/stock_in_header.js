@@ -11,28 +11,24 @@ module.exports = (sequelize, DataTypes) => {
      */
     static associate(models) {
       Stock_In_Header.belongsTo(models.Supplier, {
-        foreignKey: { name: 'SupplierId', allowNull: false },
-        onDelete: 'CASCADE',
+        foreignKey: { name: 'SupplierId', allowNull: true },
+        onDelete: 'SET NULL',
+        onUpdate: 'CASCADE'
+      });
+      Stock_In_Header.belongsTo(models.Warehouse, {
+        foreignKey: { name: 'WarehouseId', allowNull: true },
+        onDelete: 'SET NULL',
         onUpdate: 'CASCADE'
       });
     }
   }
   Stock_In_Header.init({
-    SupplierId: {
-      type: DataTypes.INTEGER,
-      allowNull: false,
-      validate: {
-        notNull: { msg: 'Supplier is required' },
-        notEmpty: { msg: 'Supplier is required' }
-      }
-    },
+    SupplierId:  { type: DataTypes.INTEGER, allowNull: true },
+    WarehouseId: { type: DataTypes.INTEGER, allowNull: true },
     date: {
       type: DataTypes.DATE,
       allowNull: false,
-      validate: {
-        notNull: { msg: 'Date is required' },
-        notEmpty: { msg: 'Date is required' }
-      }
+      defaultValue: DataTypes.NOW
     },
     note: DataTypes.STRING,
     companyId: { type: DataTypes.INTEGER, allowNull: true }

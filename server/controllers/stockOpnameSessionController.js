@@ -44,8 +44,18 @@ class StockOpnameSessionController {
 
     static async create(req, res, next) {
         try {
+            // FE uses capitalized WarehouseId to stay consistent with other forms,
+            // but the column on the session table is `warehouseId` (lowercase).
+            const body = { ...req.body };
+            if (body.WarehouseId && !body.warehouseId) body.warehouseId = body.WarehouseId;
+            delete body.WarehouseId;
+
             const session = await Stock_Opname_Session.create({
-                ...req.body, createdBy: req.user.id, companyId: companyId(req)
+                ...body,
+                started_at: body.started_at || new Date(),
+                status:     body.status     || 'open',
+                createdBy:  req.user.id,
+                companyId:  companyId(req),
             });
             res.status(201).json(session);
         } catch (err) { next(err); }

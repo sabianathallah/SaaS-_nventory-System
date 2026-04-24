@@ -36,7 +36,12 @@ class ProductController {
 
     static async create(req, res, next) {
         try {
-            const product = await Product.create({ ...req.body, companyId: companyId(req) });
+            const payload = { ...req.body, companyId: companyId(req) };
+            // FE treats barcode/qrString as optional — auto-fill from SKU so the
+            // unique QR scan path still works.
+            if (!payload.qrString) payload.qrString = payload.sku;
+            if (!payload.barcode)  payload.barcode  = payload.sku;
+            const product = await Product.create(payload);
             res.status(201).json(product);
         } catch (err) { next(err); }
     }

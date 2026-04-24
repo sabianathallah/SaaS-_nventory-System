@@ -1,5 +1,5 @@
 'use strict';
-const { Stock_Opname_Item, Stock_Opname_Session, Product } = require('../models');
+const { Stock_Opname_Item, Stock_Opname_Session, Product, Stock } = require('../models');
 const { companyFilter } = require('../helpers/tenancy');
 const { paginate, buildFilter, paginatedResponse } = require('../helpers/queryHelper');
 
@@ -39,7 +39,39 @@ class StockOpnameItemController {
 
     static async create(req, res, next) {
         try {
-            const item = await Stock_Opname_Item.create(req.body);
+            // Normalize FE payload → model columns.
+            // FE sends { StockOpnameSessionId, ProductId, actualQty }; the model
+            // uses SessionId + scanned_qty, and system_qty/difference are derived
+            // from the current Stock snapshot.
+            const body = { ...req.body };
+            const SessionId = body.SessionId || body.StockOpnameSessionId;
+            const scanned_qty = body.scanned_qty ?? body.actualQty;
+            const { ProductId } = body;
+
+            if (!SessionId || !ProductId || scanned_qty == null) {
+                return res.status(400).json({ message: 'SessionId, ProductId, dan actualQty wajib diisi' });
+            }
+
+            const session = await Stock_Opname_Session.findByPk(SessionId);
+            if (!session) return res.status(404).json({ message: 'Opname session tidak ditemukan' });
+
+            let system_qty = body.system_qty;
+            if (system_qty == null) {
+                const stock = await Stock.findOne({
+                    where: { ProductId, WarehouseId: session.warehouseId },
+                });
+                system_qty = stock?.quantity ?? 0;
+            }
+            const scanned = Number(scanned_qty);
+            const difference = scanned - Number(system_qty);
+
+            const item = await Stock_Opname_Item.create({
+                SessionId,
+                ProductId,
+                scanned_qty: scanned,
+                system_qty,
+                difference,
+            });
             res.status(201).json(item);
         } catch (err) { next(err); }
     }

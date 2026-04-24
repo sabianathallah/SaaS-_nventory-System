@@ -52,21 +52,13 @@ module.exports = (sequelize, DataTypes) => {
     },
     barcode: {
       type: DataTypes.STRING,
-      allowNull: false,
-      unique: { msg: 'Barcode already exists' },
-      validate: {
-        notNull: { msg: 'Barcode is required' },
-        notEmpty: { msg: 'Barcode is required' }
-      }
+      allowNull: true,
+      unique: { msg: 'Barcode already exists' }
     },
     qrString: {
       type: DataTypes.STRING,
-      allowNull: false,
-      unique: { msg: 'QR string already exists' },
-      validate: {
-        notNull: { msg: 'QR string is required' },
-        notEmpty: { msg: 'QR string is required' }
-      }
+      allowNull: true,
+      unique: { msg: 'QR string already exists' }
     },
     CategoryId: {
       type: DataTypes.INTEGER,
