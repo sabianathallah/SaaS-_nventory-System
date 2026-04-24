@@ -1,4 +1,4 @@
-import QRCode from 'react-qr-code'
+import { QRCode } from 'react-qr-code'
 
 export default function QRLabel({ product, size = 96 }) {
   return (

@@ -2,6 +2,7 @@
 const { Product, Category } = require('../models');
 const { companyFilter, companyId } = require('../helpers/tenancy');
 const { paginate, buildFilter, paginatedResponse } = require('../helpers/queryHelper');
+const { destroyByUrl } = require('../helpers/cloudinary');
 
 class ProductController {
     static async getAll(req, res, next) {
@@ -41,25 +42,46 @@ class ProductController {
             // unique QR scan path still works.
             if (!payload.qrString) payload.qrString = payload.sku;
             if (!payload.barcode)  payload.barcode  = payload.sku;
+            // Cloudinary middleware populates req.file when a photo is attached
+            if (req.file?.path) payload.imageUrl = req.file.path;
             const product = await Product.create(payload);
             res.status(201).json(product);
-        } catch (err) { next(err); }
+        } catch (err) {
+            if (req.file?.path) destroyByUrl(req.file.path);
+            next(err);
+        }
     }
 
     static async update(req, res, next) {
         try {
             const product = await Product.findOne({ where: { id: req.params.id, ...companyFilter(req) } });
             if (!product) throw { name: 'NotFound', message: 'Product not found' };
-            await product.update(req.body);
+            const updates = { ...req.body };
+            let oldImage = null;
+            if (req.file?.path) {
+                oldImage = product.imageUrl;
+                updates.imageUrl = req.file.path;
+            } else if (updates.imageUrl === '' || updates.imageUrl === 'null') {
+                // explicit "hapus gambar" from FE
+                oldImage = product.imageUrl;
+                updates.imageUrl = null;
+            }
+            await product.update(updates);
+            if (oldImage) destroyByUrl(oldImage);
             res.status(200).json(product);
-        } catch (err) { next(err); }
+        } catch (err) {
+            if (req.file?.path) destroyByUrl(req.file.path);
+            next(err);
+        }
     }
 
     static async delete(req, res, next) {
         try {
             const product = await Product.findOne({ where: { id: req.params.id, ...companyFilter(req) } });
             if (!product) throw { name: 'NotFound', message: 'Product not found' };
+            const oldImage = product.imageUrl;
             await product.destroy();
+            if (oldImage) destroyByUrl(oldImage);
             res.status(200).json({ message: 'Product deleted successfully' });
         } catch (err) { next(err); }
     }

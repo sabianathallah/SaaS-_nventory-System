@@ -154,6 +154,42 @@
   letter-spacing: 0.3px;
 }
 
+/* Thermal 58mm — single column, stacked down, tear-guide between labels */
+.qr-print-thermal58 .qr-label-grid {
+  grid-template-columns: 54mm;
+  justify-content: center;
+  padding: 2mm 0;
+  gap: 0;
+}
+.qr-print-thermal58 .qr-label-item {
+  width: 54mm;
+  border: none;
+  border-radius: 0;
+  border-bottom: 1px dashed #94a3b8;
+  padding: 3mm 2mm;
+  gap: 1.5mm;
+}
+.qr-print-thermal58 .qr-label-name { font-size: 8pt;  max-width: 50mm; }
+.qr-print-thermal58 .qr-label-sku  { font-size: 7pt; }
+
+/* Thermal 80mm — same idea, wider */
+.qr-print-thermal80 .qr-label-grid {
+  grid-template-columns: 76mm;
+  justify-content: center;
+  padding: 3mm 0;
+  gap: 0;
+}
+.qr-print-thermal80 .qr-label-item {
+  width: 76mm;
+  border: none;
+  border-radius: 0;
+  border-bottom: 1px dashed #94a3b8;
+  padding: 4mm 3mm;
+  gap: 2mm;
+}
+.qr-print-thermal80 .qr-label-name { font-size: 9pt;  max-width: 70mm; }
+.qr-print-thermal80 .qr-label-sku  { font-size: 7.5pt; }
+
 @media print {
   body * { visibility: hidden !important; }
   .qr-print-content,
@@ -164,5 +200,6 @@
     overflow: visible !important;
     background: white;
   }
+  /* Default A4 — per-mode @page size is injected dynamically via <style id="print-page-size"> */
   @page { margin: 0; size: A4; }
 }

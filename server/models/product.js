@@ -76,6 +76,7 @@ module.exports = (sequelize, DataTypes) => {
         notEmpty: { msg: 'Unit is required' }
       }
     },
+    imageUrl:  { type: DataTypes.TEXT,    allowNull: true },
     companyId: { type: DataTypes.INTEGER, allowNull: true }
   }, {
     sequelize,

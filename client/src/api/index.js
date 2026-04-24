@@ -11,9 +11,26 @@ const update = (url) => (id, data) => api.put(`${url}/${id}`, data).then(r => r.
 const remove = (url) => (id)     => api.delete(`${url}/${id}`).then(r => r.data)
 const crud   = (url) => ({ list: list(url), get: get(url), create: create(url), update: update(url), remove: remove(url) })
 
+// Convert an object (possibly containing a File) into FormData when an image
+// is attached; otherwise fall back to plain JSON. Axios sets the right
+// Content-Type automatically when given a FormData instance.
+const toPayload = (data) => {
+  if (!data || !(data.image instanceof File)) return data
+  const fd = new FormData()
+  for (const [k, v] of Object.entries(data)) {
+    if (v === undefined || v === null) continue
+    fd.append(k, v)
+  }
+  return fd
+}
+
 // ── Resources ─────────────────────────────────────────────────────────────────
 export const categoriesApi     = crud('/categories')
-export const productsApi       = crud('/products')
+export const productsApi       = {
+  ...crud('/products'),
+  create: (data)     => api.post('/products', toPayload(data)).then(r => r.data),
+  update: (id, data) => api.put(`/products/${id}`, toPayload(data)).then(r => r.data),
+}
 export const warehousesApi     = crud('/warehouses')
 export const suppliersApi      = crud('/suppliers')
 export const stocksApi         = crud('/stocks')
