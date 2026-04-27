@@ -6,9 +6,13 @@ const authentication = require('../middlewares/authentication');
 const isAdmin = require('../middlewares/authorization');
 const LoginController = require('../controllers/loginController');
 
-const companyRouter = require('./company');
-const categoryRouter = require('./category');
-const productRouter = require('./product');
+const dashboardRouter      = require('./dashboard');
+const companyRouter        = require('./company');
+const categoryRouter       = require('./category');
+const articleRouter        = require('./article');
+const productRouter        = require('./product');
+const productVariantRouter = require('./product_variant');
+const productSkuRouter     = require('./product_sku');
 const warehouseRouter = require('./warehouse');
 const stockRouter = require('./stock');
 const supplierRouter = require('./supplier');
@@ -32,8 +36,12 @@ router.post('/refresh-token', LoginController.refreshToken);
 // Protected routes
 router.use(authentication);
 
+router.use('/dashboard',  dashboardRouter);
 router.use('/categories', categoryRouter);
-router.use('/products', productRouter);
+router.use('/articles',   articleRouter);
+router.use('/products',   productRouter);
+router.use('/products/:productId/variant-types', productVariantRouter);
+router.use('/products/:productId/skus',          productSkuRouter);
 router.use('/warehouses', warehouseRouter);
 router.use('/stocks', stockRouter);
 router.use('/suppliers', supplierRouter);

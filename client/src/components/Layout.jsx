@@ -2,9 +2,9 @@ import { useState } from 'react'
 import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import {
-  LayoutDashboard, Package, Tags, Warehouse, Truck,
+  LayoutDashboard, Package, Warehouse, Truck,
   ArrowDownToLine, ArrowUpFromLine, ArrowLeftRight,
-  ClipboardList, Users, Building2, BoxesIcon, LogOut, Bell,
+  ClipboardList, Users, Building2, BookOpen, LogOut, Bell,
   PackageOpen, FileText, Layers, ClipboardCheck, Menu, X,
 } from 'lucide-react'
 import logoPreface from '../assets/logo-preface.jpeg'
@@ -21,10 +21,9 @@ const NAV_GROUPS = [
     label: 'Inventory',
     items: [
       { to: '/products',   icon: Package,   label: 'Products' },
-      { to: '/categories', icon: Tags,      label: 'Categories' },
+      { to: '/catalog',    icon: BookOpen,  label: 'Katalog' },
       { to: '/warehouses', icon: Warehouse, label: 'Warehouses' },
       { to: '/suppliers',  icon: Truck,     label: 'Suppliers' },
-      { to: '/stocks',     icon: BoxesIcon, label: 'Stock Levels' },
     ],
   },
   {
@@ -58,9 +57,9 @@ const NAV_GROUPS = [
 ]
 
 const PAGE_TITLES = {
-  '/': 'Dashboard', '/products': 'Products', '/categories': 'Categories',
-  '/warehouses': 'Warehouses', '/suppliers': 'Suppliers', '/stocks': 'Stock Levels',
-  '/stock-in': 'Stock In', '/stock-out': 'Stock Out', '/movements': 'Movements',
+  '/': 'Dashboard', '/products': 'Products', '/catalog': 'Katalog',
+  '/warehouses': 'Warehouses', '/suppliers': 'Suppliers',
+  '/stock-in': 'Stock In', '/stock-in/new': 'New Stock IN', '/stock-out': 'Stock Out', '/movements': 'Movements',
   '/opname': 'Stock Opname', '/users': 'Users', '/companies': 'Companies',
   '/vendors': 'Vendors', '/incoming-goods': 'Barang Masuk', '/surat-jalan': 'Surat Jalan',
   '/packing-jobs': 'Packing Jobs', '/form-anak-packing': 'Form Anak Packing',

@@ -1,0 +1,295 @@
+import { useState } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { categoriesApi, articlesApi } from '../api'
+import toast from 'react-hot-toast'
+import { Plus, Pencil, Trash2, Check, X, Loader2, Tag, BookOpen } from 'lucide-react'
+
+// ── Inline-editable row ────────────────────────────────────────────────────────
+
+function EditableRow({ item, onSave, onDelete }) {
+  const [editing, setEditing] = useState(false)
+  const [name, setName]       = useState(item.name)
+  const [saving, setSaving]   = useState(false)
+
+  const handleSave = async () => {
+    const trimmed = name.trim()
+    if (!trimmed || trimmed === item.name) { setEditing(false); setName(item.name); return }
+    setSaving(true)
+    try {
+      await onSave(item.id, trimmed)
+      setEditing(false)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter')  { e.preventDefault(); handleSave() }
+    if (e.key === 'Escape') { setEditing(false); setName(item.name) }
+  }
+
+  return (
+    <tr className="group border-b border-slate-100 last:border-0 hover:bg-slate-50/60 transition-colors">
+      <td className="px-4 py-3">
+        {editing ? (
+          <input
+            autoFocus
+            value={name}
+            onChange={e => setName(e.target.value)}
+            onKeyDown={handleKeyDown}
+            className="input py-1 text-sm w-full max-w-xs"
+          />
+        ) : (
+          <span className="text-sm font-medium text-slate-700">{item.name}</span>
+        )}
+      </td>
+      <td className="px-4 py-3 text-right">
+        {editing ? (
+          <div className="flex items-center justify-end gap-1">
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="p-1.5 rounded bg-brand text-white hover:bg-brand/90 disabled:opacity-40"
+            >
+              {saving ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
+            </button>
+            <button
+              onClick={() => { setEditing(false); setName(item.name) }}
+              className="p-1.5 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100"
+            >
+              <X size={13} />
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            <button
+              onClick={() => setEditing(true)}
+              className="p-1.5 rounded text-slate-400 hover:text-brand hover:bg-brand/5 transition-colors"
+              title="Edit"
+            >
+              <Pencil size={13} />
+            </button>
+            <button
+              onClick={() => onDelete(item.id, item.name)}
+              className="p-1.5 rounded text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+              title="Hapus"
+            >
+              <Trash2 size={13} />
+            </button>
+          </div>
+        )}
+      </td>
+    </tr>
+  )
+}
+
+// ── Add row ────────────────────────────────────────────────────────────────────
+
+function AddRow({ onAdd, placeholder }) {
+  const [open, setOpen] = useState(false)
+  const [name, setName] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  const handleAdd = async () => {
+    const trimmed = name.trim()
+    if (!trimmed) return
+    setSaving(true)
+    try {
+      await onAdd(trimmed)
+      setName('')
+      setOpen(false)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (!open) return (
+    <tr>
+      <td colSpan={2} className="px-4 py-2">
+        <button
+          onClick={() => setOpen(true)}
+          className="flex items-center gap-1.5 text-sm text-brand hover:text-brand/80 font-medium transition-colors"
+        >
+          <Plus size={14} /> Tambah baru
+        </button>
+      </td>
+    </tr>
+  )
+
+  return (
+    <tr className="bg-brand/5 border-b border-brand/20">
+      <td className="px-4 py-2">
+        <input
+          autoFocus
+          value={name}
+          onChange={e => setName(e.target.value)}
+          onKeyDown={e => {
+            if (e.key === 'Enter')  { e.preventDefault(); handleAdd() }
+            if (e.key === 'Escape') { setOpen(false); setName('') }
+          }}
+          placeholder={placeholder}
+          className="input py-1 text-sm w-full max-w-xs"
+        />
+      </td>
+      <td className="px-4 py-2 text-right">
+        <div className="flex items-center justify-end gap-1">
+          <button
+            onClick={handleAdd}
+            disabled={!name.trim() || saving}
+            className="p-1.5 rounded bg-brand text-white hover:bg-brand/90 disabled:opacity-40"
+          >
+            {saving ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
+          </button>
+          <button
+            onClick={() => { setOpen(false); setName('') }}
+            className="p-1.5 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100"
+          >
+            <X size={13} />
+          </button>
+        </div>
+      </td>
+    </tr>
+  )
+}
+
+// ── Section table ──────────────────────────────────────────────────────────────
+
+function CatalogTable({ title, icon: Icon, items = [], isLoading, onAdd, onSave, onDelete, placeholder }) {
+  return (
+    <div className="card overflow-hidden">
+      <div className="flex items-center gap-3 px-5 py-4 border-b border-slate-100">
+        <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500 flex-shrink-0">
+          <Icon size={15} />
+        </div>
+        <div className="flex-1">
+          <h3 className="text-sm font-bold text-slate-800">{title}</h3>
+          <p className="text-xs text-slate-400">{items.length} item</p>
+        </div>
+      </div>
+
+      {isLoading ? (
+        <div className="p-6 space-y-3">
+          {[1,2,3].map(i => <div key={i} className="h-8 bg-slate-100 rounded animate-pulse" />)}
+        </div>
+      ) : (
+        <table className="w-full">
+          <thead>
+            <tr className="border-b border-slate-100">
+              <th className="px-4 py-2.5 text-left text-xs font-semibold text-slate-400 uppercase tracking-wide">Nama</th>
+              <th className="px-4 py-2.5 w-24" />
+            </tr>
+          </thead>
+          <tbody>
+            {items.length === 0 && (
+              <tr>
+                <td colSpan={2} className="px-4 py-8 text-center text-sm text-slate-300">
+                  Belum ada data
+                </td>
+              </tr>
+            )}
+            {items.map(item => (
+              <EditableRow
+                key={item.id}
+                item={item}
+                onSave={onSave}
+                onDelete={onDelete}
+              />
+            ))}
+            <AddRow onAdd={onAdd} placeholder={placeholder} />
+          </tbody>
+        </table>
+      )}
+    </div>
+  )
+}
+
+// ── Main ──────────────────────────────────────────────────────────────────────
+
+export default function Catalog() {
+  const qc = useQueryClient()
+
+  // ── Categories ─────────────────────────────────────────────────────────────
+  const { data: catData, isLoading: catLoading } = useQuery({
+    queryKey: ['categories', { limit: 200 }],
+    queryFn:  () => categoriesApi.list({ limit: 200 }),
+  })
+  const cats = catData?.data ?? []
+
+  const addCat = useMutation({
+    mutationFn: name => categoriesApi.create({ name }),
+    onSuccess:  () => { qc.invalidateQueries(['categories']); toast.success('Kategori ditambahkan') },
+    onError:    e  => toast.error(e.response?.data?.message || 'Gagal menambah kategori'),
+  })
+  const saveCat = useMutation({
+    mutationFn: ([id, name]) => categoriesApi.update(id, { name }),
+    onSuccess:  () => { qc.invalidateQueries(['categories']); toast.success('Kategori diperbarui') },
+    onError:    e  => toast.error(e.response?.data?.message || 'Gagal memperbarui'),
+  })
+  const delCat = useMutation({
+    mutationFn: id => categoriesApi.remove(id),
+    onSuccess:  () => { qc.invalidateQueries(['categories']); toast.success('Kategori dihapus') },
+    onError:    e  => toast.error(e.response?.data?.message || 'Gagal menghapus — mungkin masih dipakai produk'),
+  })
+
+  // ── Articles ───────────────────────────────────────────────────────────────
+  const { data: artData, isLoading: artLoading } = useQuery({
+    queryKey: ['articles', { limit: 200 }],
+    queryFn:  () => articlesApi.list({ limit: 200 }),
+  })
+  const arts = artData?.data ?? []
+
+  const addArt = useMutation({
+    mutationFn: name => articlesApi.create({ name }),
+    onSuccess:  () => { qc.invalidateQueries(['articles']); toast.success('Artikel ditambahkan') },
+    onError:    e  => toast.error(e.response?.data?.message || 'Gagal menambah artikel'),
+  })
+  const saveArt = useMutation({
+    mutationFn: ([id, name]) => articlesApi.update(id, { name }),
+    onSuccess:  () => { qc.invalidateQueries(['articles']); toast.success('Artikel diperbarui') },
+    onError:    e  => toast.error(e.response?.data?.message || 'Gagal memperbarui'),
+  })
+  const delArt = useMutation({
+    mutationFn: id => articlesApi.remove(id),
+    onSuccess:  () => { qc.invalidateQueries(['articles']); toast.success('Artikel dihapus') },
+    onError:    e  => toast.error(e.response?.data?.message || 'Gagal menghapus — mungkin masih dipakai produk'),
+  })
+
+  const confirmDelete = (mutate) => (id, name) => {
+    if (confirm(`Hapus "${name}"? Produk yang menggunakan ini akan kehilangan referensinya.`)) {
+      mutate(id)
+    }
+  }
+
+  return (
+    <div className="px-6 py-6 max-w-3xl mx-auto space-y-6">
+      <div>
+        <h2 className="text-xl font-bold text-slate-800">Katalog</h2>
+        <p className="text-sm text-slate-400 mt-0.5">Kelola kategori dan artikel produk</p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <CatalogTable
+          title="Kategori"
+          icon={Tag}
+          items={cats}
+          isLoading={catLoading}
+          placeholder="Nama kategori baru…"
+          onAdd={name => addCat.mutateAsync(name)}
+          onSave={(id, name) => saveCat.mutateAsync([id, name])}
+          onDelete={confirmDelete(delCat.mutate)}
+        />
+
+        <CatalogTable
+          title="Artikel"
+          icon={BookOpen}
+          items={arts}
+          isLoading={artLoading}
+          placeholder="Nama artikel baru…"
+          onAdd={name => addArt.mutateAsync(name)}
+          onSave={(id, name) => saveArt.mutateAsync([id, name])}
+          onDelete={confirmDelete(delArt.mutate)}
+        />
+      </div>
+    </div>
+  )
+}

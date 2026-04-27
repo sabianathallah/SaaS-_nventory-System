@@ -25,16 +25,40 @@ const toPayload = (data) => {
 }
 
 // ── Resources ─────────────────────────────────────────────────────────────────
-export const categoriesApi     = crud('/categories')
-export const productsApi       = {
+export const dashboardApi  = { getStats: () => api.get('/dashboard/stats').then(r => r.data) }
+export const categoriesApi = crud('/categories')
+export const articlesApi   = crud('/articles')
+
+export const productsApi = {
   ...crud('/products'),
   create: (data)     => api.post('/products', toPayload(data)).then(r => r.data),
   update: (id, data) => api.put(`/products/${id}`, toPayload(data)).then(r => r.data),
 }
+
+export const productVariantsApi = {
+  getTypes:     (pid)           => api.get(`/products/${pid}/variant-types`).then(r => r.data),
+  createType:   (pid, data)     => api.post(`/products/${pid}/variant-types`, data).then(r => r.data),
+  deleteType:   (pid, tid)      => api.delete(`/products/${pid}/variant-types/${tid}`).then(r => r.data),
+  createOption: (pid, tid, data) => api.post(`/products/${pid}/variant-types/${tid}/options`, data).then(r => r.data),
+  deleteOption: (pid, tid, oid)  => api.delete(`/products/${pid}/variant-types/${tid}/options/${oid}`).then(r => r.data),
+}
+
+export const productSkusApi = {
+  list:   (pid)         => api.get(`/products/${pid}/skus`).then(r => r.data),
+  create: (pid, data)   => api.post(`/products/${pid}/skus`, data).then(r => r.data),
+  update: (pid, sid, d) => api.put(`/products/${pid}/skus/${sid}`, d).then(r => r.data),
+  delete: (pid, sid)    => api.delete(`/products/${pid}/skus/${sid}`).then(r => r.data),
+}
 export const warehousesApi     = crud('/warehouses')
 export const suppliersApi      = crud('/suppliers')
 export const stocksApi         = crud('/stocks')
-export const stockInApi        = crud('/stock-in-headers')
+export const stockInApi = {
+  ...crud('/stock-in-headers'),
+  resolveSku: (code)              => api.get('/stock-in-headers/resolve-sku', { params: { code } }).then(r => r.data),
+  addItem:    (id, data)          => api.post(`/stock-in-headers/${id}/items`, data).then(r => r.data),
+  updateItem: (id, itemId, data)  => api.put(`/stock-in-headers/${id}/items/${itemId}`, data).then(r => r.data),
+  removeItem: (id, itemId)        => api.delete(`/stock-in-headers/${id}/items/${itemId}`).then(r => r.data),
+}
 export const stockOutApi       = crud('/stock-out-headers')
 export const movementsApi      = crud('/stock-movements')
 export const opnameSessionsApi = crud('/stock-opname-sessions')

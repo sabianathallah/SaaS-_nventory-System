@@ -92,6 +92,7 @@ class StockOutHeaderController {
                 const WarehouseId = item.WarehouseId || headerWhId;
                 const stock = await Stock.findOne({ where: { ProductId, WarehouseId }, transaction: t });
                 await stock.decrement('quantity', { by: quantity, transaction: t });
+
                 movements.push(await Stock_Movement.create({
                     ProductId, WarehouseId, type: 'OUT', quantity,
                     ReferenceId: header.id, note: note || null, companyId: cid

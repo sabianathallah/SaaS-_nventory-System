@@ -4,16 +4,17 @@ import Layout from './components/Layout'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import Products from './pages/Products'
-import Categories from './pages/Categories'
+import ProductDetail from './pages/ProductDetail'
 import Warehouses from './pages/Warehouses'
 import Suppliers from './pages/Suppliers'
-import Stocks from './pages/Stocks'
 import StockIn from './pages/StockIn'
+import StockInDetail from './pages/StockInDetail'
 import StockOut from './pages/StockOut'
 import Movements from './pages/Movements'
 import Opname from './pages/Opname'
 import Users from './pages/Users'
 import Companies from './pages/Companies'
+import Catalog from './pages/Catalog'
 import Vendors from './pages/Vendors'
 import IncomingGoods from './pages/IncomingGoods'
 import SuratJalan from './pages/SuratJalan'
@@ -39,12 +40,15 @@ function AppRoutes() {
           <Layout>
             <Routes>
               <Route path="/"           element={<Dashboard />} />
-              <Route path="/products"   element={<Products />} />
-              <Route path="/categories" element={<Categories />} />
-              <Route path="/warehouses" element={<Warehouses />} />
+              <Route path="/products"        element={<Products />} />
+              <Route path="/products/new"   element={<ProductDetail />} />
+              <Route path="/products/:id"   element={<ProductDetail />} />
+              <Route path="/catalog"        element={<Catalog />} />
+              <Route path="/warehouses"     element={<Warehouses />} />
               <Route path="/suppliers"  element={<Suppliers />} />
-              <Route path="/stocks"     element={<Stocks />} />
-              <Route path="/stock-in"   element={<StockIn />} />
+              <Route path="/stock-in"        element={<StockIn />} />
+              <Route path="/stock-in/new"    element={<StockInDetail />} />
+              <Route path="/stock-in/:id"    element={<StockInDetail />} />
               <Route path="/stock-out"  element={<StockOut />} />
               <Route path="/movements"  element={<Movements />} />
               <Route path="/opname"     element={<Opname />} />

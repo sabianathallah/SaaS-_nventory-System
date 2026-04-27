@@ -67,6 +67,41 @@ module.exports = {
   },
 
   async down(queryInterface, Sequelize) {
+    await queryInterface.sequelize.query(`
+      UPDATE "Products"
+      SET
+        "barcode" = COALESCE("barcode", 'ROLLBACK-BARCODE-' || "id"::text),
+        "qrString" = COALESCE("qrString", 'ROLLBACK-QR-' || "id"::text)
+      WHERE "barcode" IS NULL OR "qrString" IS NULL
+    `)
+
+    await queryInterface.sequelize.query(`
+      UPDATE "Stock_In_Headers"
+      SET
+        "SupplierId" = COALESCE(
+          "SupplierId",
+          (SELECT "id" FROM "Suppliers" ORDER BY "id" LIMIT 1)
+        ),
+        "date" = COALESCE("date", NOW())
+      WHERE "SupplierId" IS NULL OR "date" IS NULL
+    `)
+
+    await queryInterface.sequelize.query(`
+      UPDATE "Stock_Out_Headers"
+      SET
+        "destination" = COALESCE("destination", 'ROLLBACK-DESTINATION'),
+        "date" = COALESCE("date", NOW())
+      WHERE "destination" IS NULL OR "date" IS NULL
+    `)
+
+    await queryInterface.sequelize.query(`
+      UPDATE "Stock_Opname_Sessions"
+      SET
+        "started_at" = COALESCE("started_at", NOW()),
+        "status" = COALESCE("status", 'DRAFT')
+      WHERE "started_at" IS NULL OR "status" IS NULL
+    `)
+
     await queryInterface.changeColumn('Products', 'barcode',  { type: Sequelize.STRING, allowNull: false });
     await queryInterface.changeColumn('Products', 'qrString', { type: Sequelize.STRING, allowNull: false });
 

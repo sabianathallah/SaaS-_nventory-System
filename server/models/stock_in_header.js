@@ -20,6 +20,10 @@ module.exports = (sequelize, DataTypes) => {
         onDelete: 'SET NULL',
         onUpdate: 'CASCADE'
       });
+      Stock_In_Header.hasMany(models.Stock_In_Item, {
+        foreignKey: 'StockInHeaderId',
+        onDelete: 'CASCADE',
+      });
     }
   }
   Stock_In_Header.init({

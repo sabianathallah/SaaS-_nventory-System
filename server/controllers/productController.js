@@ -1,5 +1,5 @@
 'use strict';
-const { Product, Category } = require('../models');
+const { sequelize, Product, Category, Article, ProductVariantType, ProductVariantOption, ProductSKU, Stock } = require('../models');
 const { companyFilter, companyId } = require('../helpers/tenancy');
 const { paginate, buildFilter, paginatedResponse } = require('../helpers/queryHelper');
 const { destroyByUrl } = require('../helpers/cloudinary');
@@ -12,13 +12,24 @@ class ProductController {
                 name:       'like',
                 sku:        'like',
                 CategoryId: 'exact',
+                ArticleId:  'exact',
             });
             const { rows, count } = await Product.findAndCountAll({
                 where: { ...companyFilter(req), ...filter },
-                include: [{ model: Category, attributes: ['id', 'name'] }],
+                attributes: {
+                    include: [[
+                        sequelize.literal('(SELECT COALESCE(SUM("Stocks"."quantity"),0) FROM "Stocks" WHERE "Stocks"."ProductId" = "Product"."id")'),
+                        'totalStock',
+                    ]],
+                },
+                include: [
+                    { model: Category,   attributes: ['id', 'name'] },
+                    { model: Article,    attributes: ['id', 'name'] },
+                    { model: ProductSKU, attributes: ['id', 'price'] },
+                ],
                 order: [['name', 'ASC']],
                 limit, offset,
-                distinct: true
+                distinct: true,
             });
             res.status(200).json(paginatedResponse(rows, count, page, limit));
         } catch (err) { next(err); }
@@ -28,7 +39,28 @@ class ProductController {
         try {
             const product = await Product.findOne({
                 where: { id: req.params.id, ...companyFilter(req) },
-                include: [{ model: Category, attributes: ['id', 'name'] }]
+                attributes: {
+                    include: [[
+                        sequelize.literal('(SELECT COALESCE(SUM("Stocks"."quantity"),0) FROM "Stocks" WHERE "Stocks"."ProductId" = "Product"."id")'),
+                        'totalStock',
+                    ]],
+                },
+                include: [
+                    { model: Category, attributes: ['id', 'name'] },
+                    { model: Article,  attributes: ['id', 'name'] },
+                    {
+                        model: ProductVariantType,
+                        include: [{ model: ProductVariantOption, attributes: ['id', 'value'] }],
+                    },
+                    {
+                        model: ProductSKU,
+                        include: [{
+                            model: ProductVariantOption,
+                            through: { attributes: [] },
+                            include: [{ model: ProductVariantType, attributes: ['id', 'name'] }],
+                        }],
+                    },
+                ]
             });
             if (!product) throw { name: 'NotFound', message: 'Product not found' };
             res.status(200).json(product);
@@ -38,11 +70,12 @@ class ProductController {
     static async create(req, res, next) {
         try {
             const payload = { ...req.body, companyId: companyId(req) };
-            // FE treats barcode/qrString as optional — auto-fill from SKU so the
-            // unique QR scan path still works.
-            if (!payload.qrString) payload.qrString = payload.sku;
-            if (!payload.barcode)  payload.barcode  = payload.sku;
-            // Cloudinary middleware populates req.file when a photo is attached
+            // SKU/barcode/qrString are managed at ProductSKU level — remove legacy fields
+            delete payload.sku;
+            delete payload.barcode;
+            delete payload.qrString;
+            delete payload.image; // not a DB column, only used as file upload key
+            if (!payload.imageUrl) payload.imageUrl = null;
             if (req.file?.path) payload.imageUrl = req.file.path;
             const product = await Product.create(payload);
             res.status(201).json(product);
@@ -57,6 +90,10 @@ class ProductController {
             const product = await Product.findOne({ where: { id: req.params.id, ...companyFilter(req) } });
             if (!product) throw { name: 'NotFound', message: 'Product not found' };
             const updates = { ...req.body };
+            delete updates.sku;
+            delete updates.barcode;
+            delete updates.qrString;
+            delete updates.image;
             let oldImage = null;
             if (req.file?.path) {
                 oldImage = product.imageUrl;

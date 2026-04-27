@@ -15,6 +15,21 @@ module.exports = (sequelize, DataTypes) => {
         onDelete: 'CASCADE',
         onUpdate: 'CASCADE'
       });
+      Product.belongsTo(models.Article, {
+        foreignKey: { name: 'ArticleId', allowNull: true },
+        onDelete: 'SET NULL',
+        onUpdate: 'CASCADE'
+      });
+      Product.hasMany(models.ProductVariantType, {
+        foreignKey: { name: 'ProductId', allowNull: false },
+        onDelete: 'CASCADE',
+        onUpdate: 'CASCADE'
+      });
+      Product.hasMany(models.ProductSKU, {
+        foreignKey: { name: 'ProductId', allowNull: false },
+        onDelete: 'CASCADE',
+        onUpdate: 'CASCADE'
+      });
       Product.hasMany(models.Stock, {
         foreignKey: { name: 'ProductId', allowNull: false },
         onDelete: 'CASCADE',
@@ -43,22 +58,19 @@ module.exports = (sequelize, DataTypes) => {
     },
     sku: {
       type: DataTypes.STRING,
-      allowNull: false,
-      unique: { msg: 'SKU already exists' },
-      validate: {
-        notNull: { msg: 'SKU is required' },
-        notEmpty: { msg: 'SKU is required' }
-      }
+      allowNull: true,
     },
     barcode: {
       type: DataTypes.STRING,
       allowNull: true,
-      unique: { msg: 'Barcode already exists' }
     },
     qrString: {
       type: DataTypes.STRING,
       allowNull: true,
-      unique: { msg: 'QR string already exists' }
+    },
+    ArticleId: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
     },
     CategoryId: {
       type: DataTypes.INTEGER,

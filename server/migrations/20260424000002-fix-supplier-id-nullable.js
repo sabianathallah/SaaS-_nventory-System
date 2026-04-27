@@ -12,6 +12,15 @@ module.exports = {
     );
   },
   async down(queryInterface) {
+    await queryInterface.sequelize.query(`
+      UPDATE "Stock_In_Headers"
+      SET "SupplierId" = COALESCE(
+        "SupplierId",
+        (SELECT "id" FROM "Suppliers" ORDER BY "id" LIMIT 1)
+      )
+      WHERE "SupplierId" IS NULL
+    `)
+
     await queryInterface.sequelize.query(
       'ALTER TABLE "Stock_In_Headers" ALTER COLUMN "SupplierId" SET NOT NULL;'
     );
