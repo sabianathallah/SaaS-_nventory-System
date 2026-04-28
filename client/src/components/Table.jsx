@@ -47,8 +47,8 @@ export function Table({ columns, data, loading, emptyText = 'No data found' }) {
 }
 
 export function Pagination({ pagination, onPageChange }) {
-  if (!pagination || pagination.totalPages <= 1) return null
-  const { page, totalPages, total, limit } = pagination
+  if (!pagination || !pagination.total) return null
+  const { page = 1, totalPages = 1, total, limit = 10 } = pagination
   const from = (page - 1) * limit + 1
   const to   = Math.min(page * limit, total)
 
@@ -63,41 +63,43 @@ export function Pagination({ pagination, onPageChange }) {
       <span className="text-xs text-slate-400 font-medium">
         Showing <span className="text-slate-600 font-semibold">{from}–{to}</span> of <span className="text-slate-600 font-semibold">{total}</span> results
       </span>
-      <div className="flex items-center gap-1">
-        <button
-          disabled={page <= 1}
-          onClick={() => onPageChange(page - 1)}
-          className="w-8 h-8 rounded flex items-center justify-center text-slate-500 hover:bg-slate-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-        >
-          <ChevronLeft size={14} />
-        </button>
-        {pages.map((p, i) =>
-          p === '...' ? (
-            <span key={`e-${i}`} className="w-8 h-8 flex items-center justify-center text-slate-400 text-xs">…</span>
-          ) : (
-            <button
-              key={p}
-              onClick={() => onPageChange(p)}
-              className="w-8 h-8 rounded text-xs font-semibold transition-colors"
-              style={p === page
-                ? { background: BRAND, color: '#fff' }
-                : { color: '#64748B' }
-              }
-              onMouseEnter={e => { if (p !== page) e.currentTarget.style.background = '#F1F5F9' }}
-              onMouseLeave={e => { if (p !== page) e.currentTarget.style.background = '' }}
-            >
-              {p}
-            </button>
-          )
-        )}
-        <button
-          disabled={page >= totalPages}
-          onClick={() => onPageChange(page + 1)}
-          className="w-8 h-8 rounded flex items-center justify-center text-slate-500 hover:bg-slate-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-        >
-          <ChevronRight size={14} />
-        </button>
-      </div>
+      {totalPages > 1 && (
+        <div className="flex items-center gap-1">
+          <button
+            disabled={page <= 1}
+            onClick={() => onPageChange(page - 1)}
+            className="w-8 h-8 rounded flex items-center justify-center text-slate-500 hover:bg-slate-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+          >
+            <ChevronLeft size={14} />
+          </button>
+          {pages.map((p, i) =>
+            p === '...' ? (
+              <span key={`e-${i}`} className="w-8 h-8 flex items-center justify-center text-slate-400 text-xs">…</span>
+            ) : (
+              <button
+                key={p}
+                onClick={() => onPageChange(p)}
+                className="w-8 h-8 rounded text-xs font-semibold transition-colors"
+                style={p === page
+                  ? { background: BRAND, color: '#fff' }
+                  : { color: '#64748B' }
+                }
+                onMouseEnter={e => { if (p !== page) e.currentTarget.style.background = '#F1F5F9' }}
+                onMouseLeave={e => { if (p !== page) e.currentTarget.style.background = '' }}
+              >
+                {p}
+              </button>
+            )
+          )}
+          <button
+            disabled={page >= totalPages}
+            onClick={() => onPageChange(page + 1)}
+            className="w-8 h-8 rounded flex items-center justify-center text-slate-500 hover:bg-slate-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+          >
+            <ChevronRight size={14} />
+          </button>
+        </div>
+      )}
     </div>
   )
 }

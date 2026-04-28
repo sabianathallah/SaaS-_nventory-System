@@ -1,7 +1,8 @@
-const { User, Company } = require('../models')
+const { User, Company, RolePermission } = require('../models')
 const { compare } = require('../helpers/bcrypt')
 const { signToken, verifyToken } = require('../helpers/jwt')
 const AuditLogger = require('../helpers/auditLogger')
+const { DEFAULT_PERMISSIONS } = require('../helpers/permissions')
 
 class LoginController {
     static async login(req, res, next) {
@@ -59,6 +60,19 @@ class LoginController {
 
             const access_token = signToken(payload)
 
+            // Load role permissions: company-specific → global (companyId=null) → hardcoded defaults
+            let rpRecord = await RolePermission.findOne({
+                where: { role: user.role, companyId: user.companyId ?? null },
+            });
+            if (!rpRecord && user.companyId) {
+                rpRecord = await RolePermission.findOne({
+                    where: { role: user.role, companyId: null },
+                });
+            }
+            const permissions = rpRecord
+                ? rpRecord.permissions
+                : (DEFAULT_PERMISSIONS[user.role] ?? []);
+
             // Log login activity
             await AuditLogger.logLogin({
                 userId: user.id,
@@ -66,7 +80,7 @@ class LoginController {
                 description: `User ${user.name} (${user.email}) logged in successfully`
             });
 
-            res.status(200).json({ 
+            res.status(200).json({
                 access_token,
                 user: {
                     id: user.id,
@@ -74,6 +88,7 @@ class LoginController {
                     email: user.email,
                     role: user.role,
                     companyId: user.companyId,
+                    permissions,
                     company: user.company ? {
                         id: user.company.id,
                         name: user.company.name,

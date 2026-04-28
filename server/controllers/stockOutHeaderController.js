@@ -107,7 +107,8 @@ class StockOutHeaderController {
         try {
             const header = await Stock_Out_Header.findOne({ where: { id: req.params.id, ...companyFilter(req) } });
             if (!header) throw { name: 'NotFound', message: 'Stock out header not found' };
-            await header.update(req.body);
+            const { date, WarehouseId, destination, notes } = req.body;
+            await header.update({ date, WarehouseId, destination, notes });
             res.status(200).json(header);
         } catch (err) { next(err); }
     }

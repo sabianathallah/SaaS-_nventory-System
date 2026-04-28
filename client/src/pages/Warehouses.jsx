@@ -1,15 +1,17 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useNavigate } from 'react-router-dom'
 import { warehousesApi } from '../api'
 import PageHeader from '../components/PageHeader'
 import { Table, Pagination } from '../components/Table'
 import Modal from '../components/Modal'
 import SearchBar from '../components/SearchBar'
 import toast from 'react-hot-toast'
-import { Plus, Pencil, Trash2 } from 'lucide-react'
+import { Plus, Pencil, Trash2, Package } from 'lucide-react'
 
 export default function Warehouses() {
-  const qc = useQueryClient()
+  const qc       = useQueryClient()
+  const navigate = useNavigate()
   const [page, setPage]     = useState(1)
   const [search, setSearch] = useState('')
   const [modal, setModal]   = useState(null)
@@ -35,8 +37,15 @@ export default function Warehouses() {
     { key: 'id',       label: '#',         width: 60,  render: r => <span className="font-mono text-xs text-slate-400">{r.id}</span> },
     { key: 'name',     label: 'Warehouse',             render: r => <span className="font-semibold text-slate-800">{r.name}</span> },
     { key: 'location', label: 'Location',              render: r => <span className="text-slate-500 text-sm">{r.location}</span> },
-    { key: 'actions',  label: '', width: 80, render: r => (
-      <div className="flex gap-1">
+    { key: 'actions',  label: '', width: 120, render: r => (
+      <div className="flex items-center gap-1 justify-end">
+        <button
+          onClick={() => navigate(`/warehouses/${r.id}/products`)}
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-brand bg-brand/5 hover:bg-brand/10 border border-brand/20 transition-colors"
+          title="Lihat produk di gudang ini"
+        >
+          <Package size={12} /> Produk
+        </button>
         <button onClick={() => { setForm({ name: r.name, location: r.location }); setModal({ mode: 'edit', data: r }) }} className="p-1.5 rounded text-slate-400 btn-edit transition-colors"><Pencil size={13} /></button>
         <button onClick={() => setModal({ mode: 'delete', data: r })} className="p-1.5 rounded text-slate-400 hover:text-danger hover:bg-danger-light transition-colors"><Trash2 size={13} /></button>
       </div>

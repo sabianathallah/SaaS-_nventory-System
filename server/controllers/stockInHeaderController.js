@@ -206,27 +206,77 @@ class StockInHeaderController {
   }
 
   static async updateItem(req, res, next) {
+    const t = await sequelize.transaction();
     try {
       const item = await Stock_In_Item.findOne({
         where: { id: req.params.itemId, StockInHeaderId: req.params.id },
+        transaction: t,
       });
-      if (!item) throw { name: 'NotFound', message: 'Item not found' };
-      const { quantity, price } = req.body;
-      await item.update({ quantity: Number(quantity) ?? item.quantity, price: Number(price) ?? item.price });
+      if (!item) { await t.rollback(); throw { name: 'NotFound', message: 'Item not found' }; }
+
+      const header = await Stock_In_Header.findByPk(req.params.id, { transaction: t });
+
+      const newQty   = req.body.quantity != null ? Number(req.body.quantity) : item.quantity;
+      const newPrice = req.body.price    != null ? Number(req.body.price)    : item.price;
+      const delta    = newQty - item.quantity;
+
+      await item.update({ quantity: newQty, price: newPrice }, { transaction: t });
+
+      if (delta !== 0 && header) {
+        const sku = await ProductSKU.findByPk(item.ProductSKUId, { transaction: t });
+        if (sku) {
+          const [stock] = await Stock.findOrCreate({
+            where: { ProductId: sku.ProductId, WarehouseId: header.WarehouseId },
+            defaults: { quantity: 0, companyId: companyId(req) },
+            transaction: t,
+          });
+          await stock.increment('quantity', { by: delta, transaction: t });
+          await Stock_Movement.create({
+            ProductId: sku.ProductId, WarehouseId: header.WarehouseId,
+            type: delta > 0 ? 'IN' : 'OUT', quantity: Math.abs(delta),
+            ReferenceId: header.id, companyId: companyId(req),
+          }, { transaction: t });
+        }
+      }
+
+      await t.commit();
       const full = await Stock_In_Item.findByPk(item.id, { include: SKU_INCLUDE });
       res.status(200).json(full);
-    } catch (err) { next(err); }
+    } catch (err) { await t.rollback(); next(err); }
   }
 
   static async removeItem(req, res, next) {
+    const t = await sequelize.transaction();
     try {
       const item = await Stock_In_Item.findOne({
         where: { id: req.params.itemId, StockInHeaderId: req.params.id },
+        transaction: t,
       });
-      if (!item) throw { name: 'NotFound', message: 'Item not found' };
-      await item.destroy();
+      if (!item) { await t.rollback(); throw { name: 'NotFound', message: 'Item not found' }; }
+
+      const header = await Stock_In_Header.findByPk(req.params.id, { transaction: t });
+      if (header) {
+        const sku = await ProductSKU.findByPk(item.ProductSKUId, { transaction: t });
+        if (sku) {
+          const stock = await Stock.findOne({
+            where: { ProductId: sku.ProductId, WarehouseId: header.WarehouseId },
+            transaction: t,
+          });
+          if (stock) {
+            await stock.decrement('quantity', { by: item.quantity, transaction: t });
+          }
+          await Stock_Movement.create({
+            ProductId: sku.ProductId, WarehouseId: header.WarehouseId,
+            type: 'OUT', quantity: item.quantity,
+            ReferenceId: header.id, companyId: companyId(req),
+          }, { transaction: t });
+        }
+      }
+
+      await item.destroy({ transaction: t });
+      await t.commit();
       res.status(200).json({ message: 'Item removed' });
-    } catch (err) { next(err); }
+    } catch (err) { await t.rollback(); next(err); }
   }
 
   // Resolve a SKU by sku_code (for scan flow)

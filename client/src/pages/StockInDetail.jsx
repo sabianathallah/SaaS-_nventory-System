@@ -7,7 +7,7 @@ import QRScanner from '../components/QRScanner'
 import toast from 'react-hot-toast'
 import {
   ArrowLeft, PackagePlus, ScanLine, Plus, Trash2,
-  Save, ChevronDown, Package,
+  Save, ChevronDown, Package, CheckCircle2, X,
 } from 'lucide-react'
 
 const fmt     = (n) => Number(n ?? 0).toLocaleString('id-ID')
@@ -165,16 +165,16 @@ function ProductSkuPicker({ onSelect }) {
 }
 
 // ── Item row (view mode) ──────────────────────────────────────────────────────
-function ItemRow({ item, isAdmin, headerId }) {
+function ItemRow({ item, canDelete, headerId }) {
   const qc = useQueryClient()
-  const sku  = item.ProductSKU
-  const prod = sku?.Product
+  const sku   = item.ProductSKU
+  const prod  = sku?.Product
   const total = Number(item.price) * item.quantity
 
   const removeMutation = useMutation({
     mutationFn: () => stockInApi.removeItem(headerId, item.id),
-    onSuccess: () => { qc.invalidateQueries(['stock-in', String(headerId)]); toast.success('Item dihapus') },
-    onError:   e  => toast.error(e.response?.data?.message || 'Error'),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['stock-in', String(headerId)] }); toast.success('Item dihapus') },
+    onError:   e => toast.error(e.response?.data?.message || 'Error'),
   })
 
   return (
@@ -196,7 +196,7 @@ function ItemRow({ item, isAdmin, headerId }) {
       </td>
       <td className="td py-3 text-right font-mono text-sm text-slate-600">Rp {fmt(item.price)}</td>
       <td className="td py-3 text-right font-mono font-semibold text-slate-800">Rp {fmt(total)}</td>
-      {isAdmin && (
+      {canDelete && (
         <td className="td py-3 w-10">
           <button
             onClick={() => removeMutation.mutate()}
@@ -211,9 +211,9 @@ function ItemRow({ item, isAdmin, headerId }) {
   )
 }
 
-// ── Items table (shared between create + view) ────────────────────────────────
-function ItemsTable({ items, isAdmin, headerId, onRemovePending }) {
-  const cols = isAdmin ? 6 : 5
+// ── Items table ───────────────────────────────────────────────────────────────
+function ItemsTable({ items, canDelete, headerId, onRemovePending }) {
+  const cols = canDelete ? 6 : 5
   return (
     <table className="w-full text-sm">
       <thead>
@@ -223,7 +223,7 @@ function ItemsTable({ items, isAdmin, headerId, onRemovePending }) {
           <th className="th py-2 text-right w-24">Qty</th>
           <th className="th py-2 text-right w-36">Harga</th>
           <th className="th py-2 text-right w-36">Total</th>
-          {isAdmin && <th className="th py-2 w-10"></th>}
+          {canDelete && <th className="th py-2 w-10"></th>}
         </tr>
       </thead>
       <tbody>
@@ -231,9 +231,7 @@ function ItemsTable({ items, isAdmin, headerId, onRemovePending }) {
           <tr><td colSpan={cols} className="td py-10 text-center text-slate-400">Belum ada item</td></tr>
         )}
         {items.map((item, idx) => {
-          // View mode item
-          if (item.id) return <ItemRow key={item.id} item={item} isAdmin={isAdmin} headerId={headerId} />
-          // Pending item (create mode)
+          if (item.id) return <ItemRow key={item.id} item={item} canDelete={canDelete} headerId={headerId} />
           const prod = item.sku.Product
           return (
             <tr key={idx} className="tr border-b border-slate-100 hover:bg-slate-50/50">
@@ -264,19 +262,90 @@ function ItemsTable({ items, isAdmin, headerId, onRemovePending }) {
   )
 }
 
+// ── Scan confirm popup (barcode-only mode) ────────────────────────────────────
+// Muncul setelah scan berhasil — user konfirmasi qty sebelum item ditambah
+function ScanConfirm({ sku, onConfirm, onCancel }) {
+  const [qty,   setQty]   = useState(1)
+  const [price, setPrice] = useState(String(sku.price ?? ''))
+  const prod = sku.Product
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/40">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-5 space-y-4 animate-fade-in">
+        {/* Product preview */}
+        <div className="flex items-center gap-3">
+          {prod?.imageUrl
+            ? <img src={prod.imageUrl} className="w-12 h-12 rounded-xl object-cover border border-slate-200 flex-shrink-0" />
+            : <div className="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center flex-shrink-0"><Package size={18} className="text-slate-300" /></div>
+          }
+          <div className="min-w-0">
+            <p className="font-bold text-slate-800 leading-tight truncate">{prod?.name ?? 'Produk'}</p>
+            <p className="text-xs text-slate-400 mt-0.5">{skuLabel(sku)}</p>
+            <p className="text-[10px] font-mono text-green-600 mt-0.5 flex items-center gap-1">
+              <CheckCircle2 size={10} /> Barcode cocok
+            </p>
+          </div>
+        </div>
+
+        {/* Qty + Price */}
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="label">Jumlah (Qty) <span className="text-red-500">*</span></label>
+            <input
+              type="number" min="1" className="input text-center font-bold text-lg"
+              value={qty} onChange={e => setQty(e.target.value)}
+              autoFocus
+            />
+          </div>
+          <div>
+            <label className="label">Harga / unit</label>
+            <input
+              type="number" min="0" className="input"
+              value={price} onChange={e => setPrice(e.target.value)}
+              placeholder="0"
+            />
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div className="flex gap-2 pt-1">
+          <button type="button" onClick={onCancel}
+            className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-slate-200 text-slate-600 text-sm font-medium hover:bg-slate-50 transition-colors">
+            <X size={14} /> Batal
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              if (!qty || Number(qty) <= 0) return toast.error('Qty harus > 0')
+              onConfirm({ sku, quantity: Number(qty), price: Number(price) || 0 })
+            }}
+            className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-brand text-white text-sm font-semibold hover:bg-red-700 transition-colors"
+          >
+            <Plus size={14} /> Tambah Item
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function StockInDetail() {
-  const { id }      = useParams()
-  const navigate    = useNavigate()
-  const qc          = useQueryClient()
-  const { isAdmin } = useAuth()
-  const isNew       = !id || id === 'new'
+  const { id }          = useParams()
+  const navigate        = useNavigate()
+  const qc              = useQueryClient()
+  const { hasPermission } = useAuth()
+  const isNew           = !id || id === 'new'
+
+  // Granular permission flags
+  const canManualInput = hasPermission('stock.in.manual_input')
+  const canDeleteItem  = hasPermission('stock.in.delete_item')
 
   const [form, setForm]             = useState({ date: fmtDate(), WarehouseId: '', note: '' })
   const [pendingItems, setPending]  = useState([])
   const [showScanner, setShowScanner] = useState(false)
+  const [scanConfirm, setScanConfirm] = useState(null) // { sku } — waiting for qty confirm
 
-  // View mode query
   const { data: detail, isLoading } = useQuery({
     queryKey: ['stock-in', id],
     queryFn:  () => stockInApi.get(id),
@@ -291,24 +360,12 @@ export default function StockInDetail() {
   const createMutation = useMutation({
     mutationFn: (payload) => stockInApi.create(payload),
     onSuccess: (data) => {
-      qc.invalidateQueries(['stock-in'])
+      qc.invalidateQueries({ queryKey: ['stock-in'] })
       toast.success('Stock IN berhasil dibuat')
       navigate(`/stock-in/${data.id}`)
     },
     onError: e => toast.error(e.response?.data?.message || 'Error'),
   })
-
-  // QR scan → resolve SKU → add to pending
-  const handleScan = async (code) => {
-    try {
-      const sku = await stockInApi.resolveSku(code)
-      addItem({ sku, quantity: 1, price: Number(sku.price) || 0 })
-      toast.success(`Ditambahkan: ${sku.Product?.name} ${skuLabel(sku)}`)
-    } catch {
-      toast.error(`SKU "${code}" tidak ditemukan`)
-    }
-    setShowScanner(false)
-  }
 
   const addItem = ({ sku, quantity, price }) => {
     setPending(prev => {
@@ -320,6 +377,30 @@ export default function StockInDetail() {
       }
       return [...prev, { sku, quantity, price }]
     })
+  }
+
+  // QR scan handler
+  // - canManualInput: add immediately qty=1 (they can also use manual picker)
+  // - barcode-only: show ScanConfirm popup to enter qty before adding
+  const handleScan = async (code) => {
+    setShowScanner(false)
+    try {
+      const sku = await stockInApi.resolveSku(code)
+      if (canManualInput) {
+        addItem({ sku, quantity: 1, price: Number(sku.price) || 0 })
+        toast.success(`Ditambahkan: ${sku.Product?.name} ${skuLabel(sku)}`)
+      } else {
+        setScanConfirm({ sku })
+      }
+    } catch {
+      toast.error(`SKU "${code}" tidak ditemukan`)
+    }
+  }
+
+  const handleScanConfirm = ({ sku, quantity, price }) => {
+    addItem({ sku, quantity, price })
+    setScanConfirm(null)
+    toast.success(`Ditambahkan: ${sku.Product?.name} ×${quantity}`)
   }
 
   const handleSubmit = (e) => {
@@ -357,18 +438,9 @@ export default function StockInDetail() {
         </div>
 
         <div className="card p-5 mb-5 grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
-          <div>
-            <p className="label mb-1">Warehouse</p>
-            <p className="font-semibold text-slate-700">{detail.Warehouse?.name ?? '—'}</p>
-          </div>
-          <div>
-            <p className="label mb-1">Tanggal</p>
-            <p className="font-mono text-slate-600">{new Date(detail.date).toLocaleDateString('id-ID')}</p>
-          </div>
-          <div>
-            <p className="label mb-1">Notes</p>
-            <p className="text-slate-500">{detail.note || '—'}</p>
-          </div>
+          <div><p className="label mb-1">Warehouse</p><p className="font-semibold text-slate-700">{detail.Warehouse?.name ?? '—'}</p></div>
+          <div><p className="label mb-1">Tanggal</p><p className="font-mono text-slate-600">{new Date(detail.date).toLocaleDateString('id-ID')}</p></div>
+          <div><p className="label mb-1">Notes</p><p className="text-slate-500">{detail.note || '—'}</p></div>
         </div>
 
         <div className="card overflow-hidden mb-4">
@@ -376,7 +448,7 @@ export default function StockInDetail() {
             <PackagePlus size={13} className="text-red-700" />
             <span className="text-xs font-bold text-slate-600 uppercase tracking-wide">Items ({items.length})</span>
           </div>
-          <ItemsTable items={items} isAdmin={isAdmin} headerId={detail.id} />
+          <ItemsTable items={items} canDelete={canDeleteItem} headerId={detail.id} />
           <div className="px-5 py-4 bg-slate-50 border-t border-slate-200 flex justify-end items-center gap-3">
             <span className="text-sm font-semibold text-slate-600">GRAND TOTAL</span>
             <span className="text-xl font-bold text-slate-900 font-mono">Rp {fmt(grandTotal)}</span>
@@ -395,66 +467,77 @@ export default function StockInDetail() {
         <button onClick={() => navigate('/stock-in')} className="p-1.5 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors">
           <ArrowLeft size={16} />
         </button>
-        <h1 className="text-lg font-bold text-slate-800">New Stock IN</h1>
+        <div>
+          <h1 className="text-lg font-bold text-slate-800">New Stock IN</h1>
+          {!canManualInput && (
+            <p className="text-xs text-amber-600 mt-0.5 flex items-center gap-1">
+              <ScanLine size={11} /> Mode barcode — gunakan scan untuk menambah item
+            </p>
+          )}
+        </div>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-5">
-        {/* Header fields */}
         <div className="card p-5">
           <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-4">Informasi Transaksi</p>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <label className="label">Tanggal <span className="text-red-500">*</span></label>
-              <input
-                type="date" className="input"
-                value={form.date}
-                onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
-                required
-              />
+              <input type="date" className="input" value={form.date}
+                onChange={e => setForm(f => ({ ...f, date: e.target.value }))} required />
             </div>
             <div>
               <label className="label">Warehouse <span className="text-red-500">*</span></label>
-              <select className="select" value={form.WarehouseId} onChange={e => setForm(f => ({ ...f, WarehouseId: e.target.value }))} required>
+              <select className="select" value={form.WarehouseId}
+                onChange={e => setForm(f => ({ ...f, WarehouseId: e.target.value }))} required>
                 <option value="">Pilih warehouse…</option>
                 {warehouses?.data?.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
               </select>
             </div>
             <div>
               <label className="label">Notes</label>
-              <input className="input" placeholder="Catatan (opsional)…" value={form.note} onChange={e => setForm(f => ({ ...f, note: e.target.value }))} />
+              <input className="input" placeholder="Catatan (opsional)…" value={form.note}
+                onChange={e => setForm(f => ({ ...f, note: e.target.value }))} />
             </div>
           </div>
         </div>
 
-        {/* Add items */}
         <div className="card overflow-hidden">
           <div className="px-5 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <PackagePlus size={13} className="text-red-700" />
               <span className="text-xs font-bold text-slate-600 uppercase tracking-wide">Tambah Item</span>
             </div>
-            <button
-              type="button"
-              onClick={() => setShowScanner(true)}
-              className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-red-700 px-2.5 py-1 rounded hover:bg-red-50 border border-slate-200 hover:border-red-200 transition-colors"
-            >
+            <button type="button" onClick={() => setShowScanner(true)}
+              className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-red-700 px-2.5 py-1 rounded hover:bg-red-50 border border-slate-200 hover:border-red-200 transition-colors">
               <ScanLine size={13} /> Scan QR
             </button>
           </div>
 
           <div className="p-4 border-b border-slate-100">
-            {isAdmin
+            {canManualInput
               ? <ProductSkuPicker onSelect={addItem} />
               : (
-                <div className="flex items-center gap-3 py-2 text-slate-400">
-                  <ScanLine size={18} />
-                  <p className="text-sm">Gunakan tombol <strong>Scan QR</strong> di atas untuk menambahkan item.</p>
+                <div className="flex items-center gap-3 py-3 px-1">
+                  <div className="w-10 h-10 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-center flex-shrink-0">
+                    <ScanLine size={18} className="text-amber-600" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-slate-700">Wajib scan barcode</p>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Role Anda tidak memiliki izin input manual. Klik <strong>Scan QR</strong> untuk menambah item.
+                    </p>
+                  </div>
                 </div>
               )
             }
           </div>
 
-          <ItemsTable items={pendingItems} isAdmin={isAdmin} onRemovePending={idx => setPending(p => p.filter((_, i) => i !== idx))} />
+          <ItemsTable
+            items={pendingItems}
+            canDelete={true}
+            onRemovePending={idx => setPending(p => p.filter((_, i) => i !== idx))}
+          />
 
           {pendingItems.length > 0 && (
             <div className="px-5 py-4 bg-slate-50 border-t border-slate-200 flex justify-end items-center gap-3">
@@ -477,7 +560,15 @@ export default function StockInDetail() {
         <QRScanner
           onScan={handleScan}
           onClose={() => setShowScanner(false)}
-          hint="Scan QR code SKU produk untuk menambah item"
+          hint={canManualInput ? 'Scan QR code SKU produk' : 'Scan barcode produk untuk menambah item'}
+        />
+      )}
+
+      {scanConfirm && (
+        <ScanConfirm
+          sku={scanConfirm.sku}
+          onConfirm={handleScanConfirm}
+          onCancel={() => setScanConfirm(null)}
         />
       )}
     </div>

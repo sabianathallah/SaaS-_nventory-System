@@ -97,3 +97,9 @@ export const formAnakPackingApi = {
   list: (params) => api.get('/form-anak-packing', { params }).then(r => r.data),
   get:  (id)     => api.get(`/form-anak-packing/${id}`).then(r => r.data),
 }
+
+export const rolePermissionsApi = {
+  getAll:         (params) => api.get('/role-permissions', { params }).then(r => r.data),
+  update:         (role, permissions) => api.put(`/role-permissions/${role}`, { permissions }).then(r => r.data),
+  resetToDefault: (role)   => api.delete(`/role-permissions/${role}`).then(r => r.data),
+}

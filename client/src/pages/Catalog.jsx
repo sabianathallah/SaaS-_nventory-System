@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { categoriesApi, articlesApi } from '../api'
+import { Pagination } from '../components/Table'
+import SearchBar from '../components/SearchBar'
 import toast from 'react-hot-toast'
 import { Plus, Pencil, Trash2, Check, X, Loader2, Tag, BookOpen } from 'lucide-react'
 
@@ -154,7 +156,10 @@ function AddRow({ onAdd, placeholder }) {
 
 // ── Section table ──────────────────────────────────────────────────────────────
 
-function CatalogTable({ title, icon: Icon, items = [], isLoading, onAdd, onSave, onDelete, placeholder }) {
+function CatalogTable({ title, icon: Icon, data, pagination, isLoading, onAdd, onSave, onDelete, placeholder, search, onSearch, onPageChange }) {
+  const items = data ?? []
+  const total = pagination?.total ?? items.length
+
   return (
     <div className="card overflow-hidden">
       <div className="flex items-center gap-3 px-5 py-4 border-b border-slate-100">
@@ -163,8 +168,12 @@ function CatalogTable({ title, icon: Icon, items = [], isLoading, onAdd, onSave,
         </div>
         <div className="flex-1">
           <h3 className="text-sm font-bold text-slate-800">{title}</h3>
-          <p className="text-xs text-slate-400">{items.length} item</p>
+          <p className="text-xs text-slate-400">{total} item</p>
         </div>
+      </div>
+
+      <div className="px-4 py-2.5 border-b border-slate-100 bg-slate-50/50">
+        <SearchBar value={search} onChange={v => { onSearch(v) }} placeholder={`Cari ${title.toLowerCase()}…`} />
       </div>
 
       {isLoading ? (
@@ -183,7 +192,7 @@ function CatalogTable({ title, icon: Icon, items = [], isLoading, onAdd, onSave,
             {items.length === 0 && (
               <tr>
                 <td colSpan={2} className="px-4 py-8 text-center text-sm text-slate-300">
-                  Belum ada data
+                  {search ? 'Tidak ada hasil' : 'Belum ada data'}
                 </td>
               </tr>
             )}
@@ -199,6 +208,8 @@ function CatalogTable({ title, icon: Icon, items = [], isLoading, onAdd, onSave,
           </tbody>
         </table>
       )}
+
+      <Pagination pagination={pagination} onPageChange={onPageChange} />
     </div>
   )
 }
@@ -208,12 +219,16 @@ function CatalogTable({ title, icon: Icon, items = [], isLoading, onAdd, onSave,
 export default function Catalog() {
   const qc = useQueryClient()
 
+  const [catPage, setCatPage] = useState(1)
+  const [catSearch, setCatSearch] = useState('')
+  const [artPage, setArtPage] = useState(1)
+  const [artSearch, setArtSearch] = useState('')
+
   // ── Categories ─────────────────────────────────────────────────────────────
   const { data: catData, isLoading: catLoading } = useQuery({
-    queryKey: ['categories', { limit: 200 }],
-    queryFn:  () => categoriesApi.list({ limit: 200 }),
+    queryKey: ['categories', { page: catPage, name: catSearch }],
+    queryFn:  () => categoriesApi.list({ page: catPage, limit: 15, name: catSearch || undefined }),
   })
-  const cats = catData?.data ?? []
 
   const addCat = useMutation({
     mutationFn: name => categoriesApi.create({ name }),
@@ -233,10 +248,9 @@ export default function Catalog() {
 
   // ── Articles ───────────────────────────────────────────────────────────────
   const { data: artData, isLoading: artLoading } = useQuery({
-    queryKey: ['articles', { limit: 200 }],
-    queryFn:  () => articlesApi.list({ limit: 200 }),
+    queryKey: ['articles', { page: artPage, name: artSearch }],
+    queryFn:  () => articlesApi.list({ page: artPage, limit: 15, name: artSearch || undefined }),
   })
-  const arts = artData?.data ?? []
 
   const addArt = useMutation({
     mutationFn: name => articlesApi.create({ name }),
@@ -271,9 +285,13 @@ export default function Catalog() {
         <CatalogTable
           title="Kategori"
           icon={Tag}
-          items={cats}
+          data={catData?.data}
+          pagination={catData?.pagination}
           isLoading={catLoading}
           placeholder="Nama kategori baru…"
+          search={catSearch}
+          onSearch={v => { setCatSearch(v); setCatPage(1) }}
+          onPageChange={setCatPage}
           onAdd={name => addCat.mutateAsync(name)}
           onSave={(id, name) => saveCat.mutateAsync([id, name])}
           onDelete={confirmDelete(delCat.mutate)}
@@ -282,9 +300,13 @@ export default function Catalog() {
         <CatalogTable
           title="Artikel"
           icon={BookOpen}
-          items={arts}
+          data={artData?.data}
+          pagination={artData?.pagination}
           isLoading={artLoading}
           placeholder="Nama artikel baru…"
+          search={artSearch}
+          onSearch={v => { setArtSearch(v); setArtPage(1) }}
+          onPageChange={setArtPage}
           onAdd={name => addArt.mutateAsync(name)}
           onSave={(id, name) => saveArt.mutateAsync([id, name])}
           onDelete={confirmDelete(delArt.mutate)}

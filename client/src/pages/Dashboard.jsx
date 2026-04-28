@@ -199,6 +199,7 @@ export default function Dashboard() {
     totalProducts = 0,
     totalStock    = 0,
     totalValue    = 0,
+    todayMovements          = 0,
     stockByArticle          = [],
     stockByWarehouse        = [],
     stockByWarehouseAndArticle = [],
@@ -390,7 +391,7 @@ export default function Dashboard() {
         <div className="lg:col-span-2 card p-5">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-sm font-bold text-slate-800">Pergerakan Terbaru</h3>
-            <span className="badge-muted text-[10px]">{movements?.total ?? 0} total</span>
+            <span className="badge-muted text-[10px]">{todayMovements} total pergerakan barang hari ini</span>
           </div>
           {(movements?.data ?? []).length === 0 ? (
             <div className="text-center py-8 text-sm text-slate-300">Belum ada pergerakan</div>

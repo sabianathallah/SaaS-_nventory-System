@@ -69,7 +69,16 @@ class DashboardController {
         ORDER BY "totalStock" DESC
       `, opts);
 
-      // ── 5. Stock per warehouse × article (from Stock table) ───────
+      // ── 5. Today's movement count ─────────────────────────────────
+      const todayClause = clause.replace(/p\."companyId"/g, 'p."companyId"');
+      const [todayRow] = await sequelize.query(`
+        SELECT COUNT(*)::int AS val
+        FROM "Stock_Movements" sm
+        JOIN "Products" p ON sm."ProductId" = p.id
+        WHERE DATE(sm."createdAt" AT TIME ZONE 'Asia/Jakarta') = CURRENT_DATE ${todayClause}
+      `, opts);
+
+      // ── 6. Stock per warehouse × article (from Stock table) ───────
       const stockByWarehouseAndArticle = await sequelize.query(`
         SELECT
           w.id                                         AS "warehouseId",
@@ -114,6 +123,8 @@ class DashboardController {
           articleName:   r.articleName,
           totalStock:    n(r.totalStock),
         })),
+
+        todayMovements: todayRow.val ?? 0,
       });
     } catch (err) { next(err); }
   }

@@ -1,8 +1,11 @@
 'use strict';
+const { Op } = require('sequelize');
 const { sequelize, Product, Category, Article, ProductVariantType, ProductVariantOption, ProductSKU, Stock } = require('../models');
 const { companyFilter, companyId } = require('../helpers/tenancy');
 const { paginate, buildFilter, paginatedResponse } = require('../helpers/queryHelper');
 const { destroyByUrl } = require('../helpers/cloudinary');
+
+const VALID_SORT = ['name', 'createdAt', 'totalStock'];
 
 class ProductController {
     static async getAll(req, res, next) {
@@ -14,8 +17,22 @@ class ProductController {
                 CategoryId: 'exact',
                 ArticleId:  'exact',
             });
+
+            // Sorting
+            const sortBy    = VALID_SORT.includes(req.query.sortBy) ? req.query.sortBy : 'name';
+            const sortOrder = req.query.sortOrder === 'desc' ? 'DESC' : 'ASC';
+            const order = sortBy === 'totalStock'
+                ? [[sequelize.literal('"totalStock"'), sortOrder]]
+                : [[sortBy, sortOrder]];
+
+            // Warehouse filter — products that have stock in the given warehouse
+            const warehouseId = req.query.WarehouseId ? parseInt(req.query.WarehouseId) : null;
+            const extraWhere  = warehouseId
+                ? { [Op.and]: sequelize.literal(`EXISTS (SELECT 1 FROM "Stocks" s WHERE s."ProductId" = "Product"."id" AND s."WarehouseId" = ${warehouseId})`) }
+                : {};
+
             const { rows, count } = await Product.findAndCountAll({
-                where: { ...companyFilter(req), ...filter },
+                where: { ...companyFilter(req), ...filter, ...extraWhere },
                 attributes: {
                     include: [[
                         sequelize.literal('(SELECT COALESCE(SUM("Stocks"."quantity"),0) FROM "Stocks" WHERE "Stocks"."ProductId" = "Product"."id")'),
@@ -25,11 +42,11 @@ class ProductController {
                 include: [
                     { model: Category,   attributes: ['id', 'name'] },
                     { model: Article,    attributes: ['id', 'name'] },
-                    { model: ProductSKU, attributes: ['id', 'price'] },
+                    { model: ProductSKU, attributes: ['id', 'sku_code', 'price', 'qty'] },
+                    { model: ProductVariantType, attributes: ['id', 'name'],
+                      include: [{ model: ProductVariantOption, attributes: ['id', 'value'] }] },
                 ],
-                order: [['name', 'ASC']],
-                limit, offset,
-                distinct: true,
+                order, limit, offset, distinct: true,
             });
             res.status(200).json(paginatedResponse(rows, count, page, limit));
         } catch (err) { next(err); }

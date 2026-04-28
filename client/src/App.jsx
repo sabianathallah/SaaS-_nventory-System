@@ -5,7 +5,9 @@ import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import Products from './pages/Products'
 import ProductDetail from './pages/ProductDetail'
+import ProductEdit from './pages/ProductEdit'
 import Warehouses from './pages/Warehouses'
+import WarehouseProducts from './pages/WarehouseProducts'
 import Suppliers from './pages/Suppliers'
 import StockIn from './pages/StockIn'
 import StockInDetail from './pages/StockInDetail'
@@ -40,11 +42,13 @@ function AppRoutes() {
           <Layout>
             <Routes>
               <Route path="/"           element={<Dashboard />} />
-              <Route path="/products"        element={<Products />} />
-              <Route path="/products/new"   element={<ProductDetail />} />
-              <Route path="/products/:id"   element={<ProductDetail />} />
+              <Route path="/products"            element={<Products />} />
+              <Route path="/products/new"       element={<ProductEdit />} />
+              <Route path="/products/:id"       element={<ProductDetail />} />
+              <Route path="/products/:id/edit"  element={<ProductEdit />} />
               <Route path="/catalog"        element={<Catalog />} />
-              <Route path="/warehouses"     element={<Warehouses />} />
+              <Route path="/warehouses"                    element={<Warehouses />} />
+              <Route path="/warehouses/:id/products"    element={<WarehouseProducts />} />
               <Route path="/suppliers"  element={<Suppliers />} />
               <Route path="/stock-in"        element={<StockIn />} />
               <Route path="/stock-in/new"    element={<StockInDetail />} />

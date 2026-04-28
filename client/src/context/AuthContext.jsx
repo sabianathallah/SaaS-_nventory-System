@@ -22,6 +22,14 @@ export function AuthProvider({ children }) {
     setUser(null)
   }, [])
 
+  // Check if user has a specific permission key
+  const hasPermission = useCallback((key) => {
+    if (!user) return false
+    // SUPER_ADMIN always has everything
+    if (user.role === 'SUPER_ADMIN') return true
+    return Array.isArray(user.permissions) && user.permissions.includes(key)
+  }, [user])
+
   const isSuperAdmin  = user?.role === 'SUPER_ADMIN'
   const isAdmin       = ['SUPER_ADMIN', 'ADMIN', 'COMPANY_ADMIN'].includes(user?.role)
   const isOperasional = ['SUPER_ADMIN', 'ADMIN', 'COMPANY_ADMIN', 'OPERASIONAL'].includes(user?.role)
@@ -31,7 +39,10 @@ export function AuthProvider({ children }) {
   const canViewPacking = ['SUPER_ADMIN','ADMIN','COMPANY_ADMIN','OPERASIONAL','HEAD_PACKING','TIM_PACKING','HR','CEO'].includes(user?.role)
 
   return (
-    <AuthContext.Provider value={{ user, signIn, signOut, isSuperAdmin, isAdmin, isOperasional, isHeadPacking, isTimPacking, isHR, canViewPacking }}>
+    <AuthContext.Provider value={{
+      user, signIn, signOut, hasPermission,
+      isSuperAdmin, isAdmin, isOperasional, isHeadPacking, isTimPacking, isHR, canViewPacking,
+    }}>
       {children}
     </AuthContext.Provider>
   )
