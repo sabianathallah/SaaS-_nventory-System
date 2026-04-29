@@ -62,7 +62,12 @@ export const stockInApi = {
   removeItem: (id, itemId)        => api.delete(`/stock-in-headers/${id}/items/${itemId}`).then(r => r.data),
 }
 export const stockOutApi       = crud('/stock-out-headers')
-export const movementsApi      = crud('/stock-movements')
+export const movementsApi = {
+  ...crud('/stock-movements'),
+  summary: (params) => api.get('/stock-movements/summary', { params }).then(r => r.data),
+  chart:   (params) => api.get('/stock-movements/chart',   { params }).then(r => r.data),
+  exportCsv: (params) => api.get('/stock-movements/export/csv', { params, responseType: 'blob' }).then(r => r.data),
+}
 export const opnameSessionsApi = crud('/stock-opname-sessions')
 export const opnameItemsApi    = crud('/stock-opname-items')
 export const usersApi          = crud('/users')

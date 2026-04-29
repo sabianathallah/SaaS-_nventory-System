@@ -8,7 +8,7 @@
     "start:prod": "npx sequelize-cli db:migrate && node bin/www.js",
     "start:dev": "node bin/www.js",
     "seed": "npx sequelize-cli db:seed:all",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "NODE_ENV=test jest --runInBand --forceExit"
   },
   "keywords": [],
   "author": "",
@@ -27,6 +27,8 @@
     "sequelize": "^6.37.8"
   },
   "devDependencies": {
-    "sequelize-cli": "^6.6.5"
+    "jest": "^30.2.0",
+    "sequelize-cli": "^6.6.5",
+    "supertest": "^7.2.2"
   }
 }

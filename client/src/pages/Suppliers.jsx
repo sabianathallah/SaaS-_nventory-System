@@ -33,8 +33,8 @@ export default function Suppliers() {
 
   const columns = [
     { key: 'id',      label: '#',       width: 60,  render: r => <span className="font-mono text-xs text-slate-400">{r.id}</span> },
-    { key: 'name',    label: 'Supplier',             render: r => <span className="font-semibold text-slate-800">{r.name}</span> },
-    { key: 'contact', label: 'Contact',              render: r => <span className="text-slate-500 text-sm">{r.contact || '—'}</span> },
+    { key: 'name',    label: 'Pemasok',             render: r => <span className="font-semibold text-slate-800">{r.name}</span> },
+    { key: 'contact', label: 'Kontak',              render: r => <span className="text-slate-500 text-sm">{r.contact || '—'}</span> },
     { key: 'actions', label: '', width: 80, render: r => (
       <div className="flex gap-1">
         <button onClick={() => { setForm({ name: r.name, contact: r.contact || '' }); setModal({ mode: 'edit', data: r }) }} className="p-1.5 rounded text-slate-400 btn-edit transition-colors"><Pencil size={13} /></button>
@@ -45,12 +45,12 @@ export default function Suppliers() {
 
   return (
     <div className="px-6 py-6">
-      <PageHeader title="Suppliers" subtitle={`${data?.pagination?.total ?? 0} total suppliers`}
-        action={<button onClick={() => { setForm({ name: '', contact: '' }); setModal({ mode: 'create' }) }} className="btn-primary"><Plus size={14} />Add Supplier</button>}
+      <PageHeader title="Pemasok" subtitle={`${data?.pagination?.total ?? 0} pemasok`}
+        action={<button onClick={() => { setForm({ name: '', contact: '' }); setModal({ mode: 'create' }) }} className="btn-primary"><Plus size={14} />Pemasok Baru</button>}
       />
       <div className="card overflow-hidden">
         <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/50 flex items-center gap-3">
-          <SearchBar value={search} onChange={v => { setSearch(v); setPage(1) }} placeholder="Search suppliers…" />
+          <SearchBar value={search} onChange={v => { setSearch(v); setPage(1) }} placeholder="Cari pemasok…" />
         </div>
         <Table columns={columns} data={data?.data} loading={isLoading} />
         <Pagination pagination={data?.pagination} onPageChange={setPage} />

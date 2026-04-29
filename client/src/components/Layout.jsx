@@ -16,24 +16,24 @@ const BRAND_HOVER = '#D93248'
 
 const NAV_GROUPS = [
   {
-    label: 'Overview',
+    label: 'Ringkasan',
     items: [{ to: '/', icon: LayoutDashboard, label: 'Dashboard' }],
   },
   {
-    label: 'Inventory',
+    label: 'Inventori',
     items: [
-      { to: '/products',   icon: Package,   label: 'Products',   pageKey: 'products' },
-      { to: '/catalog',    icon: BookOpen,  label: 'Katalog',    pageKey: 'catalog' },
-      { to: '/warehouses', icon: Warehouse, label: 'Warehouses', pageKey: 'warehouses' },
-      { to: '/suppliers',  icon: Truck,     label: 'Suppliers',  pageKey: 'suppliers' },
+      { to: '/products',   icon: Package,   label: 'Produk',   pageKey: 'products' },
+      { to: '/catalog',    icon: BookOpen,  label: 'Katalog dan Artikel',    pageKey: 'catalog' },
+      { to: '/warehouses', icon: Warehouse, label: 'Gudang', pageKey: 'warehouses' },
+      { to: '/suppliers',  icon: Truck,     label: 'Pemasok',  pageKey: 'suppliers' },
     ],
   },
   {
-    label: 'Transactions',
+    label: 'Transaksi',
     items: [
-      { to: '/stock-in',  icon: ArrowDownToLine, label: 'Stock In',      pageKey: 'stock-in' },
-      { to: '/stock-out', icon: ArrowUpFromLine,  label: 'Stock Out',    pageKey: 'stock-out' },
-      { to: '/movements', icon: ArrowLeftRight,   label: 'Movements',    pageKey: 'movements' },
+      { to: '/stock-in',  icon: ArrowDownToLine, label: 'Penerimaan Stock',      pageKey: 'stock-in' },
+      { to: '/stock-out', icon: ArrowUpFromLine,  label: 'Pengeluaran Stock',    pageKey: 'stock-out' },
+      { to: '/movements', icon: ArrowLeftRight,   label: 'Pergerakan', pageKey: 'movements' },
       { to: '/opname',    icon: ClipboardList,    label: 'Stock Opname', pageKey: 'opname' },
     ],
   },
@@ -55,23 +55,23 @@ const NAV_GROUPS = [
     ],
   },
   {
-    label: 'Administration',
+    label: 'Administrasi',
     adminOnly: true,
     items: [
-      { to: '/users',            icon: Users,     label: 'Users',             pageKey: 'users',     adminOnly: true },
-      { to: '/companies',        icon: Building2, label: 'Companies',         pageKey: 'companies', superOnly: true },
+      { to: '/users',            icon: Users,     label: 'Pengguna',             pageKey: 'users',     adminOnly: true },
+      { to: '/companies',        icon: Building2, label: 'Perusahaan',         pageKey: 'companies', superOnly: true },
       { to: '/page-visibility',  icon: Eye,       label: 'Visibilitas Halaman',                     superOnly: true },
     ],
   },
 ]
 
 const PAGE_TITLES = {
-  '/': 'Dashboard', '/products': 'Products', '/catalog': 'Katalog',
-  '/warehouses': 'Warehouses', '/suppliers': 'Suppliers',
-  '/stock-in': 'Stock In', '/stock-in/new': 'New Stock IN', '/stock-out': 'Stock Out', '/movements': 'Movements',
-  '/opname': 'Stock Opname', '/users': 'Users', '/companies': 'Companies',
-  '/vendors': 'Vendors', '/incoming-goods': 'Barang Masuk', '/surat-jalan': 'Surat Jalan',
-  '/packing-jobs': 'Packing Jobs', '/form-anak-packing': 'Form Anak Packing',
+  '/': 'Dashboard', '/products': 'Produk', '/catalog': 'Katalog dan Artikel',
+  '/warehouses': 'Gudang', '/suppliers': 'Pemasok',
+  '/stock-in': 'Penerimaan Stok', '/stock-in/new': 'Penerimaan Stok Baru', '/stock-out': 'Pengeluaran Stok', '/movements': 'Pergerakan',
+  '/opname': 'Stock Opname', '/users': 'Pengguna', '/companies': 'Perusahaan',
+  '/vendors': 'Vendor', '/incoming-goods': 'Barang Masuk', '/surat-jalan': 'Surat Jalan',
+  '/packing-jobs': 'Pekerjaan Packing', '/form-anak-packing': 'Form Anak Packing',
   '/page-visibility': 'Visibilitas Halaman',
 }
 

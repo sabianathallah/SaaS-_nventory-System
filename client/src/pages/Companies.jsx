@@ -77,7 +77,7 @@ export default function Companies() {
   }
 
   const columns = [
-    { key: 'name',    label: 'Company', render: r => (
+    { key: 'name',    label: 'Perusahaan', render: r => (
       <div className="flex items-center gap-2.5">
         <div className="w-8 h-8 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center flex-shrink-0">
           <Building2 size={14} className="text-slate-400" />
@@ -89,11 +89,11 @@ export default function Companies() {
       </div>
     )},
     { key: 'status',  label: 'Status',  width: 110, render: r => STATUS_BADGE[r.status] ?? <span className="badge-muted">{r.status}</span> },
-    { key: 'expires', label: 'Expires',             render: r => r.subscriptionExpiresAt
-      ? <span className="text-xs text-slate-500">{new Date(r.subscriptionExpiresAt).toLocaleDateString()}</span>
+    { key: 'expires', label: 'Berlaku Sampai',             render: r => r.subscriptionExpiresAt
+      ? <span className="text-xs text-slate-500">{new Date(r.subscriptionExpiresAt).toLocaleDateString('id-ID')}</span>
       : <span className="text-slate-300 text-xs">—</span>
     },
-    { key: 'created', label: 'Created',             render: r => <span className="text-xs text-slate-400">{new Date(r.createdAt).toLocaleDateString()}</span> },
+    { key: 'created', label: 'Dibuat',             render: r => <span className="text-xs text-slate-400">{new Date(r.createdAt).toLocaleDateString('id-ID')}</span> },
     { key: 'actions', label: '', width: 80, render: r => (
       <div className="flex gap-1">
         <button onClick={() => openEdit(r)} className="p-1.5 rounded text-slate-400 btn-edit transition-colors"><Pencil size={13} /></button>
@@ -104,20 +104,20 @@ export default function Companies() {
 
   return (
     <div className="px-6 py-6">
-      <PageHeader title="Companies" subtitle={`${data?.pagination?.total ?? 0} total companies`}
-        action={<button onClick={() => { setForm(EMPTY); setModal({ mode: 'create' }) }} className="btn-primary"><Plus size={14} />Add Company</button>}
+      <PageHeader title="Perusahaan" subtitle={`${data?.pagination?.total ?? 0} perusahaan`}
+        action={<button onClick={() => { setForm(EMPTY); setModal({ mode: 'create' }) }} className="btn-primary"><Plus size={14} />Perusahaan Baru</button>}
       />
 
       <div className="card overflow-hidden">
         <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/50 flex items-center gap-3">
-          <SearchBar value={search} onChange={v => { setSearch(v); setPage(1) }} placeholder="Search companies…" />
+          <SearchBar value={search} onChange={v => { setSearch(v); setPage(1) }} placeholder="Cari perusahaan…" />
         </div>
         <Table columns={columns} data={data?.data} loading={isLoading} />
         <Pagination pagination={data?.pagination} onPageChange={setPage} />
       </div>
 
       <Modal open={['create','edit'].includes(modal?.mode)} onClose={() => setModal(null)}
-        title={modal?.mode === 'edit' ? 'Edit Company' : 'New Company'} size="md">
+        title={modal?.mode === 'edit' ? 'Ubah Perusahaan' : 'Perusahaan Baru'} size="md">
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div className="col-span-2">
@@ -168,12 +168,12 @@ export default function Companies() {
         </form>
       </Modal>
 
-      <Modal open={modal?.mode === 'delete'} onClose={() => setModal(null)} title="Delete Company" size="sm">
-        <p className="text-sm text-slate-600 mb-2">Delete <span className="font-semibold text-slate-800">"{modal?.data?.name}"</span>?</p>
-        <p className="text-xs text-danger font-semibold mb-5">All associated data will be permanently removed.</p>
+      <Modal open={modal?.mode === 'delete'} onClose={() => setModal(null)} title="Hapus Perusahaan" size="sm">
+        <p className="text-sm text-slate-600 mb-2">Hapus <span className="font-semibold text-slate-800">"{ modal?.data?.name}"</span>?</p>
+        <p className="text-xs text-danger font-semibold mb-5">Semua data terkait akan dihapus secara permanen.</p>
         <div className="flex gap-2">
-          <button onClick={() => setModal(null)} className="btn-secondary flex-1 justify-center">Cancel</button>
-          <button onClick={() => del.mutate(modal.data.id)} disabled={del.isPending} className="btn-danger flex-1 justify-center">{del.isPending ? 'Deleting…' : 'Delete'}</button>
+          <button onClick={() => setModal(null)} className="btn-secondary flex-1 justify-center">Batal</button>
+          <button onClick={() => del.mutate(modal.data.id)} disabled={del.isPending} className="btn-danger flex-1 justify-center">{del.isPending ? 'Menghapus…' : 'Hapus'}</button>
         </div>
       </Modal>
     </div>

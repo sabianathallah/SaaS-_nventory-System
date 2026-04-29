@@ -35,8 +35,8 @@ export default function Warehouses() {
 
   const columns = [
     { key: 'id',       label: '#',         width: 60,  render: r => <span className="font-mono text-xs text-slate-400">{r.id}</span> },
-    { key: 'name',     label: 'Warehouse',             render: r => <span className="font-semibold text-slate-800">{r.name}</span> },
-    { key: 'location', label: 'Location',              render: r => <span className="text-slate-500 text-sm">{r.location}</span> },
+    { key: 'name',     label: 'Gudang',             render: r => <span className="font-semibold text-slate-800">{r.name}</span> },
+    { key: 'location', label: 'Lokasi',              render: r => <span className="text-slate-500 text-sm">{r.location}</span> },
     { key: 'actions',  label: '', width: 120, render: r => (
       <div className="flex items-center gap-1 justify-end">
         <button
@@ -54,12 +54,12 @@ export default function Warehouses() {
 
   return (
     <div className="px-6 py-6">
-      <PageHeader title="Warehouses" subtitle={`${data?.pagination?.total ?? 0} total warehouses`}
-        action={<button onClick={() => { setForm({ name: '', location: '' }); setModal({ mode: 'create' }) }} className="btn-primary"><Plus size={14} />Add Warehouse</button>}
+      <PageHeader title="Gudang" subtitle={`${data?.pagination?.total ?? 0} gudang`}
+        action={<button onClick={() => { setForm({ name: '', location: '' }); setModal({ mode: 'create' }) }} className="btn-primary"><Plus size={14} />Gudang Baru</button>}
       />
       <div className="card overflow-hidden">
         <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/50 flex items-center gap-3">
-          <SearchBar value={search} onChange={v => { setSearch(v); setPage(1) }} placeholder="Search warehouses…" />
+          <SearchBar value={search} onChange={v => { setSearch(v); setPage(1) }} placeholder="Cari gudang…" />
         </div>
         <Table columns={columns} data={data?.data} loading={isLoading} />
         <Pagination pagination={data?.pagination} onPageChange={setPage} />

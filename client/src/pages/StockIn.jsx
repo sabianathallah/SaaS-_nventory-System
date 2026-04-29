@@ -24,19 +24,19 @@ export default function StockIn() {
       render: r => <span className="text-xs font-mono text-slate-500">{fmtDate(r.date)}</span>,
     },
     {
-      key: 'warehouse', label: 'Warehouse',
+      key: 'warehouse', label: 'Gudang',
       render: r => <span className="text-slate-600">{r.Warehouse?.name ?? '—'}</span>,
     },
     {
-      key: 'note', label: 'Notes',
+      key: 'note', label: 'Catatan',
       render: r => <span className="text-xs text-slate-400 truncate max-w-[200px] block">{r.note || '—'}</span>,
     },
     {
-      key: 'itemCount', label: 'Items', width: 70,
+      key: 'itemCount', label: 'Item', width: 70,
       render: r => <span className="text-sm font-semibold text-slate-700">{r.itemCount ?? 0}</span>,
     },
     {
-      key: 'grandTotal', label: 'Grand Total', width: 160,
+      key: 'grandTotal', label: 'Total', width: 160,
       render: r => (
         <span className="font-mono font-bold text-sm text-slate-800">
           Rp {fmt(r.grandTotal)}
@@ -44,14 +44,14 @@ export default function StockIn() {
       ),
     },
     {
-      key: 'actions', label: '', width: 56,
+      key: 'actions', label: '', width: 130,
       render: r => (
         <button
           onClick={() => navigate(`/stock-in/${r.id}`)}
-          className="p-1.5 rounded text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
-          title="Lihat detail"
+          className="btn-secondary text-[10px] px-2 py-0.5 flex items-center gap-1 rounded"
         >
-          <Eye size={13} />
+          <Eye size={10} />
+          Lihat Detail
         </button>
       ),
     },
@@ -60,18 +60,18 @@ export default function StockIn() {
   return (
     <div className="px-6 py-6">
       <PageHeader
-        title="Stock IN"
+        title="Penerimaan Stok"
         subtitle={`${data?.pagination?.total ?? 0} transaksi`}
         action={
           <button onClick={() => navigate('/stock-in/new')} className="btn-primary">
             <PackagePlus size={14} />
-            New Stock IN
+            Buat Baru
           </button>
         }
       />
 
       <div className="card overflow-hidden">
-        <Table columns={columns} data={data?.data} loading={isLoading} emptyText="Belum ada transaksi stock in" />
+        <Table columns={columns} data={data?.data} loading={isLoading} emptyText="Belum ada transaksi" />
         <Pagination pagination={data?.pagination} onPageChange={setPage} />
       </div>
     </div>

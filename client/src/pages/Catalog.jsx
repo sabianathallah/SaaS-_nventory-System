@@ -227,7 +227,7 @@ export default function Catalog() {
   // ── Categories ─────────────────────────────────────────────────────────────
   const { data: catData, isLoading: catLoading } = useQuery({
     queryKey: ['categories', { page: catPage, name: catSearch }],
-    queryFn:  () => categoriesApi.list({ page: catPage, limit: 15, name: catSearch || undefined }),
+    queryFn:  () => categoriesApi.list({ page: catPage, limit: 8, name: catSearch || undefined }),
   })
 
   const addCat = useMutation({
@@ -249,7 +249,7 @@ export default function Catalog() {
   // ── Articles ───────────────────────────────────────────────────────────────
   const { data: artData, isLoading: artLoading } = useQuery({
     queryKey: ['articles', { page: artPage, name: artSearch }],
-    queryFn:  () => articlesApi.list({ page: artPage, limit: 15, name: artSearch || undefined }),
+    queryFn:  () => articlesApi.list({ page: artPage, limit: 8, name: artSearch || undefined }),
   })
 
   const addArt = useMutation({
@@ -277,7 +277,7 @@ export default function Catalog() {
   return (
     <div className="px-6 py-6 max-w-3xl mx-auto space-y-6">
       <div>
-        <h2 className="text-xl font-bold text-slate-800">Katalog</h2>
+        <h2 className="text-xl font-bold text-slate-800">Katalog dan Artikel</h2>
         <p className="text-sm text-slate-400 mt-0.5">Kelola kategori dan artikel produk</p>
       </div>
 

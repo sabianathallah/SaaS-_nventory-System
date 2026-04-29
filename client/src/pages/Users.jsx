@@ -228,16 +228,21 @@ const ROLE_COLORS = {
 }
 
 const PERM_DESCRIPTIONS = {
-  'inventory.view':    'Dapat melihat daftar produk, katalog, dan informasi warehouse',
-  'inventory.manage':  'Dapat menambah, mengubah, dan menghapus produk serta konfigurasi warehouse',
-  'stock.view':        'Dapat melihat level stok saat ini dan riwayat pergerakan stok',
-  'stock.manage':      'Dapat melakukan stock in, stock out, dan stock opname',
-  'packing.view':      'Dapat mengakses dan melihat semua halaman modul packing',
-  'packing.incoming':  'Dapat membuat dan mengelola dokumen barang masuk serta surat jalan',
-  'packing.jobs':      'Dapat membuat packing job dan mengassign ke tim packing',
-  'packing.verify':    'Dapat memverifikasi hasil packing dan membuat Form Anak Packing (FAP)',
-  'reports.dashboard': 'Dapat melihat dashboard statistik dan laporan inventory',
-  'admin.users':       'Dapat mengelola akun user (tambah, edit, nonaktifkan)',
+  'inventory.view':         'Dapat melihat daftar produk, katalog, dan informasi warehouse',
+  'inventory.manage':       'Dapat menambah, mengubah, dan menghapus produk serta konfigurasi warehouse',
+  'stock.view':             'Dapat melihat level stok saat ini dan riwayat pergerakan stok',
+  'stock.manage':           'Dapat melakukan stock in, stock out, dan stock opname',
+  'stock.in.scan':          'Stock In: menambah item hanya via scan barcode/QR',
+  'stock.in.manual_input':  'Stock In: input produk secara manual tanpa scan (dropdown + qty)',
+  'stock.in.delete_item':   'Stock In: menghapus item yang sudah tersimpan di transaksi',
+  'stock.out.scan':         'Stock Out: menambah item hanya via scan barcode/QR',
+  'stock.out.manual_input': 'Stock Out: input produk secara manual tanpa scan (dropdown + qty)',
+  'packing.view':           'Dapat mengakses dan melihat semua halaman modul packing',
+  'packing.incoming':       'Dapat membuat dan mengelola dokumen barang masuk serta surat jalan',
+  'packing.jobs':           'Dapat membuat packing job dan mengassign ke tim packing',
+  'packing.verify':         'Dapat memverifikasi hasil packing dan membuat Form Anak Packing (FAP)',
+  'reports.dashboard':      'Dapat melihat dashboard statistik dan laporan inventory',
+  'admin.users':            'Dapat mengelola akun user (tambah, edit, nonaktifkan)',
 }
 
 // Toggle switch component (Discord style)
