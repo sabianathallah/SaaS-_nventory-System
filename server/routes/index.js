@@ -28,7 +28,8 @@ const incomingGoodsRouter   = require('./incoming_goods');
 const suratJalanRouter      = require('./surat_jalan');
 const packingJobRouter      = require('./packing_job');
 const formAnakPackingRouter    = require('./form_anak_packing');
-const rolePermissionRouter     = require('./role_permission');
+const rolePermissionRouter     = require('./role_permission')
+const systemSettingRouter      = require('./system_setting');
 
 // Public routes
 router.post('/login', LoginController.login);
@@ -59,7 +60,8 @@ router.use('/surat-jalan',        suratJalanRouter);
 router.use('/packing-jobs',       packingJobRouter);
 router.use('/form-anak-packing',  formAnakPackingRouter);
 
-router.use('/role-permissions', rolePermissionRouter);
+router.use('/role-permissions', rolePermissionRouter)
+router.use('/system',          systemSettingRouter);
 
 // Admin only routes
 router.use('/users', isAdmin, userRouter);

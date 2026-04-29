@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { usePageVisibility } from '../context/PageVisibilityContext'
 import {
   LayoutDashboard, Package, Warehouse, Truck,
   ArrowDownToLine, ArrowUpFromLine, ArrowLeftRight,
   ClipboardList, Users, Building2, BookOpen, LogOut, Bell,
-  PackageOpen, FileText, Layers, ClipboardCheck, Menu, X,
+  PackageOpen, FileText, Layers, ClipboardCheck, Menu, X, Eye,
 } from 'lucide-react'
 import logoPreface from '../assets/logo-preface.jpeg'
 
@@ -20,38 +21,39 @@ const NAV_GROUPS = [
   {
     label: 'Inventory',
     items: [
-      { to: '/products',   icon: Package,   label: 'Products' },
-      { to: '/catalog',    icon: BookOpen,  label: 'Katalog' },
-      { to: '/warehouses', icon: Warehouse, label: 'Warehouses' },
-      { to: '/suppliers',  icon: Truck,     label: 'Suppliers' },
+      { to: '/products',   icon: Package,   label: 'Products',   pageKey: 'products' },
+      { to: '/catalog',    icon: BookOpen,  label: 'Katalog',    pageKey: 'catalog' },
+      { to: '/warehouses', icon: Warehouse, label: 'Warehouses', pageKey: 'warehouses' },
+      { to: '/suppliers',  icon: Truck,     label: 'Suppliers',  pageKey: 'suppliers' },
     ],
   },
   {
     label: 'Transactions',
     items: [
-      { to: '/stock-in',  icon: ArrowDownToLine, label: 'Stock In' },
-      { to: '/stock-out', icon: ArrowUpFromLine,  label: 'Stock Out' },
-      { to: '/movements', icon: ArrowLeftRight,   label: 'Movements' },
-      { to: '/opname',    icon: ClipboardList,    label: 'Stock Opname' },
+      { to: '/stock-in',  icon: ArrowDownToLine, label: 'Stock In',      pageKey: 'stock-in' },
+      { to: '/stock-out', icon: ArrowUpFromLine,  label: 'Stock Out',    pageKey: 'stock-out' },
+      { to: '/movements', icon: ArrowLeftRight,   label: 'Movements',    pageKey: 'movements' },
+      { to: '/opname',    icon: ClipboardList,    label: 'Stock Opname', pageKey: 'opname' },
     ],
   },
   {
     label: 'Packing',
     packingOnly: true,
     items: [
-      { to: '/vendors',           icon: Truck,          label: 'Vendors',         adminOnly: true },
-      { to: '/incoming-goods',    icon: PackageOpen,    label: 'Barang Masuk',    operasionalOnly: true },
-      { to: '/surat-jalan',       icon: FileText,       label: 'Surat Jalan',     operasionalOnly: true },
-      { to: '/packing-jobs',      icon: Layers,         label: 'Packing Jobs' },
-      { to: '/form-anak-packing', icon: ClipboardCheck, label: 'Form Anak Packing' },
+      { to: '/vendors',           icon: Truck,          label: 'Vendors',           pageKey: 'vendors',           adminOnly: true },
+      { to: '/incoming-goods',    icon: PackageOpen,    label: 'Barang Masuk',      pageKey: 'incoming-goods',    operasionalOnly: true },
+      { to: '/surat-jalan',       icon: FileText,       label: 'Surat Jalan',       pageKey: 'surat-jalan',       operasionalOnly: true },
+      { to: '/packing-jobs',      icon: Layers,         label: 'Packing Jobs',      pageKey: 'packing-jobs' },
+      { to: '/form-anak-packing', icon: ClipboardCheck, label: 'Form Anak Packing', pageKey: 'form-anak-packing' },
     ],
   },
   {
     label: 'Administration',
     adminOnly: true,
     items: [
-      { to: '/users',     icon: Users,     label: 'Users',     adminOnly: true },
-      { to: '/companies', icon: Building2, label: 'Companies', superOnly: true },
+      { to: '/users',            icon: Users,     label: 'Users',             pageKey: 'users',     adminOnly: true },
+      { to: '/companies',        icon: Building2, label: 'Companies',         pageKey: 'companies', superOnly: true },
+      { to: '/page-visibility',  icon: Eye,       label: 'Visibilitas Halaman',                     superOnly: true },
     ],
   },
 ]
@@ -63,10 +65,12 @@ const PAGE_TITLES = {
   '/opname': 'Stock Opname', '/users': 'Users', '/companies': 'Companies',
   '/vendors': 'Vendors', '/incoming-goods': 'Barang Masuk', '/surat-jalan': 'Surat Jalan',
   '/packing-jobs': 'Packing Jobs', '/form-anak-packing': 'Form Anak Packing',
+  '/page-visibility': 'Visibilitas Halaman',
 }
 
 export default function Layout({ children }) {
   const { user, signOut, isAdmin, isSuperAdmin, isOperasional, isHeadPacking, canViewPacking } = useAuth()
+  const { isPageVisible } = usePageVisibility()
   const navigate  = useNavigate()
   const location  = useLocation()
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -115,6 +119,7 @@ export default function Layout({ children }) {
               if (item.superOnly && !isSuperAdmin) return false
               if (item.operasionalOnly && !isOperasional) return false
               if (item.headPackingOnly && !isHeadPacking) return false
+              if (item.pageKey && !isPageVisible(item.pageKey)) return false
               return true
             })
             if (!visibleItems.length) return null

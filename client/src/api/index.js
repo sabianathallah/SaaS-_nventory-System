@@ -103,3 +103,8 @@ export const rolePermissionsApi = {
   update:         (role, permissions) => api.put(`/role-permissions/${role}`, { permissions }).then(r => r.data),
   resetToDefault: (role)   => api.delete(`/role-permissions/${role}`).then(r => r.data),
 }
+
+export const systemApi = {
+  getPageVisibility:    ()     => api.get('/system/page-visibility').then(r => r.data),
+  updatePageVisibility: (data) => api.put('/system/page-visibility', data).then(r => r.data),
+}
