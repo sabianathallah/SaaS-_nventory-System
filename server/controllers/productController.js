@@ -31,11 +31,16 @@ class ProductController {
                 ? { [Op.and]: sequelize.literal(`EXISTS (SELECT 1 FROM "Stocks" s WHERE s."ProductId" = "Product"."id" AND s."WarehouseId" = ${warehouseId})`) }
                 : {};
 
+            // When filtering by warehouse, totalStock reflects only that warehouse's stock
+            const stockSubquery = warehouseId
+                ? `(SELECT COALESCE(SUM(s."quantity"),0) FROM "Stocks" s WHERE s."ProductId" = "Product"."id" AND s."WarehouseId" = ${warehouseId})`
+                : `(SELECT COALESCE(SUM(s."quantity"),0) FROM "Stocks" s WHERE s."ProductId" = "Product"."id")`;
+
             const { rows, count } = await Product.findAndCountAll({
                 where: { ...companyFilter(req), ...filter, ...extraWhere },
                 attributes: {
                     include: [[
-                        sequelize.literal('(SELECT COALESCE(SUM("Stocks"."quantity"),0) FROM "Stocks" WHERE "Stocks"."ProductId" = "Product"."id")'),
+                        sequelize.literal(stockSubquery),
                         'totalStock',
                     ]],
                 },

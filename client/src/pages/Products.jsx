@@ -1,29 +1,33 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { productsApi, categoriesApi, articlesApi, warehousesApi } from '../api'
+import { productsApi, categoriesApi, articlesApi, warehousesApi, productSkusApi } from '../api'
 import SearchBar from '../components/SearchBar'
 import { Pagination } from '../components/Table'
+import QrModal from '../components/QrModal'
 import toast from 'react-hot-toast'
 import {
-  Plus, Trash2, ImageIcon, Filter, ChevronRight,
-  Package, Hash, Layers, ArrowUpDown, ArrowUp, ArrowDown,
+  Plus, Trash2, ImageIcon, Filter, ChevronRight, ChevronDown,
+  Package, ArrowUpDown, ArrowUp, ArrowDown, QrCode, Pencil,
+  Loader2, Tag,
 } from 'lucide-react'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+const fmt = n => `Rp ${Number(n).toLocaleString('id-ID')}`
 
 function priceRange(skus = []) {
   const prices = skus.map(s => Number(s.price || 0)).filter(Boolean)
   if (!prices.length) return null
   const min = Math.min(...prices)
   const max = Math.max(...prices)
-  const fmt = n => `Rp ${n.toLocaleString('id-ID')}`
   return min === max ? fmt(min) : `${fmt(min)} – ${fmt(max)}`
 }
 
-function nilaiStok(skus = []) {
-  const v = skus.reduce((s, k) => s + Number(k.price || 0) * Number(k.qty || 0), 0)
-  return v > 0 ? v : null
+function variantLabel(sku) {
+  const opts = sku.ProductVariantOptions ?? []
+  if (!opts.length) return null
+  return opts.map(o => o.value).join(' / ')
 }
 
 // ── Sort header ───────────────────────────────────────────────────────────────
@@ -38,9 +42,7 @@ function SortTh({ label, col, sort, onSort, className = '' }) {
       <span className="inline-flex items-center gap-1">
         {label}
         {active
-          ? sort.dir === 'asc'
-            ? <ArrowUp size={11} className="text-brand" />
-            : <ArrowDown size={11} className="text-brand" />
+          ? sort.dir === 'asc' ? <ArrowUp size={11} className="text-brand" /> : <ArrowDown size={11} className="text-brand" />
           : <ArrowUpDown size={11} className="text-slate-300 group-hover:text-slate-400" />}
       </span>
     </th>
@@ -70,116 +72,232 @@ function EmptyState({ filtered, onAdd }) {
   )
 }
 
-// ── Variant cell ──────────────────────────────────────────────────────────────
+// ── SKU sub-rows (lazy) ───────────────────────────────────────────────────────
 
-function VariantCell({ types = [] }) {
-  if (!types.length) return <span className="text-slate-300 text-xs">—</span>
-  return (
-    <div className="space-y-1.5">
-      {types.map(t => (
-        <div key={t.id} className="flex items-start gap-1.5 flex-wrap">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mt-0.5 shrink-0 w-14 truncate">{t.name}</span>
-          <div className="flex flex-wrap gap-1">
-            {(t.ProductVariantOptions ?? []).map(o => (
-              <span key={o.id} className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-600 border border-slate-200">
-                {o.value}
-              </span>
-            ))}
-            {!(t.ProductVariantOptions?.length) && <span className="text-[10px] text-slate-300 italic">kosong</span>}
+function SkuRows({ product, onOpenQr }) {
+  const skuCount = product.ProductSKUs?.length ?? 0
+
+  const { data: skus, isLoading } = useQuery({
+    queryKey: ['product-skus', product.id],
+    queryFn:  () => productSkusApi.list(product.id),
+    staleTime: 60_000,
+  })
+
+  if (isLoading) {
+    return (
+      <tr>
+        <td colSpan={8} className="px-4 py-3 bg-slate-50/60 border-b border-slate-100">
+          <div className="flex items-center gap-2 pl-12 text-xs text-slate-400">
+            <Loader2 size={12} className="animate-spin" /> Memuat SKU…
           </div>
-        </div>
-      ))}
-    </div>
+        </td>
+      </tr>
+    )
+  }
+
+  if (!skus?.length) {
+    return (
+      <tr>
+        <td colSpan={8} className="px-4 py-3 bg-slate-50/60 border-b border-slate-100">
+          <p className="pl-12 text-xs text-slate-400 italic">Belum ada SKU.</p>
+        </td>
+      </tr>
+    )
+  }
+
+  return (
+    <>
+      {/* SKU header */}
+      <tr className="bg-slate-50/80">
+        <td colSpan={8} className="pt-0 pb-0">
+          <div className="ml-14 mr-4 mt-2">
+            <div className="grid text-[10px] font-bold uppercase tracking-widest text-slate-400 border-b border-slate-200 pb-1.5"
+              style={{ gridTemplateColumns: '1fr 160px 90px 140px 36px' }}>
+              <span className="pl-1">SKU / Variant</span>
+              <span>Kode SKU</span>
+              <span className="text-right">Stok</span>
+              <span className="text-right">Harga</span>
+              <span />
+            </div>
+          </div>
+        </td>
+      </tr>
+
+      {/* SKU data rows */}
+      {skus.map((sku, idx) => {
+        const label  = variantLabel(sku)
+        const isLast = idx === skus.length - 1
+        const stock  = Number(sku.qty ?? 0)
+        return (
+          <tr key={sku.id} className="bg-slate-50/60 hover:bg-slate-100/60 transition-colors">
+            <td colSpan={8} className={`py-0 ${isLast ? 'pb-2 border-b border-slate-200' : ''}`}>
+              <div
+                className="ml-14 mr-4 grid items-center py-2 border-b border-slate-100 last:border-0"
+                style={{ gridTemplateColumns: '1fr 160px 90px 140px 36px' }}
+              >
+                {/* Name + variant */}
+                <div className="pl-1 min-w-0">
+                  {label
+                    ? <div className="flex items-center gap-1.5 flex-wrap">
+                        {(sku.ProductVariantOptions ?? []).map(o => (
+                          <span key={o.id} className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-white border border-slate-200 text-slate-600">
+                            {o.ProductVariantType?.name && <span className="text-slate-400 mr-0.5">{o.ProductVariantType.name}:</span>}
+                            {o.value}
+                          </span>
+                        ))}
+                      </div>
+                    : <span className="text-xs text-slate-400 italic">No variant</span>}
+                </div>
+
+                {/* SKU code */}
+                <div>
+                  <span className="font-mono text-xs text-slate-500 bg-white border border-slate-200 rounded px-1.5 py-0.5">
+                    {sku.sku_code}
+                  </span>
+                </div>
+
+                {/* Stock */}
+                <div className="text-right">
+                  <span className={`text-xs font-bold tabular-nums ${stock === 0 ? 'text-red-400' : stock < 5 ? 'text-amber-500' : 'text-slate-700'}`}>
+                    {stock.toLocaleString('id-ID')}
+                  </span>
+                  <span className="text-[10px] text-slate-400 ml-0.5">{product.unit || 'unit'}</span>
+                </div>
+
+                {/* Price */}
+                <div className="text-right">
+                  {sku.price
+                    ? <span className="text-xs font-semibold text-slate-700 tabular-nums">{fmt(sku.price)}</span>
+                    : <span className="text-xs text-slate-300">—</span>}
+                </div>
+
+                {/* QR */}
+                <div className="flex justify-end">
+                  <button
+                    onClick={() => onOpenQr({ sku: sku.sku_code, skuName: label ?? product.name })}
+                    className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-white transition-colors"
+                    title="Print QR"
+                  >
+                    <QrCode size={13} />
+                  </button>
+                </div>
+              </div>
+            </td>
+          </tr>
+        )
+      })}
+    </>
   )
 }
 
 // ── Product Row ───────────────────────────────────────────────────────────────
 
-function ProductRow({ product, onDelete, onClick }) {
+function ProductRow({ product, expanded, onToggle, onDelete, onNavigate, onOpenQr }) {
   const skus   = product.ProductSKUs ?? []
-  const types  = product.ProductVariantTypes ?? []
   const range  = priceRange(skus)
-  const nilai  = nilaiStok(skus)
   const stock  = Number(product.totalStock ?? 0)
   const skuCnt = skus.length
 
   return (
-    <tr
-      className="group border-b border-slate-100 last:border-0 hover:bg-slate-50/70 transition-colors cursor-pointer"
-      onClick={onClick}
-    >
-      {/* Produk */}
-      <td className="td">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl overflow-hidden border border-slate-200 flex-shrink-0 bg-slate-100">
-            {product.imageUrl
-              ? <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover" />
-              : <div className="w-full h-full flex items-center justify-center text-slate-300"><ImageIcon size={14} /></div>}
-          </div>
-          <div className="min-w-0">
-            <p className="font-semibold text-slate-800 truncate leading-tight text-sm">{product.name}</p>
-            <p className="text-xs text-slate-400 mt-0.5">{product.unit}</p>
-          </div>
-        </div>
-      </td>
-
-      {/* Kategori */}
-      <td className="td">
-        {product.Category
-          ? <span className="badge-teal">{product.Category.name}</span>
-          : <span className="text-slate-300 text-xs">—</span>}
-      </td>
-
-      {/* Variant */}
-      <td className="td max-w-[200px]"><VariantCell types={types} /></td>
-
-      {/* SKU */}
-      <td className="td">
-        {skuCnt > 0
-          ? <div className="flex items-center gap-1 text-slate-600"><Hash size={10} className="text-slate-400" /><span className="text-sm font-bold">{skuCnt}</span></div>
-          : <span className="text-xs text-amber-500 font-medium bg-amber-50 px-2 py-0.5 rounded border border-amber-100">Belum ada</span>}
-      </td>
-
-      {/* Harga */}
-      <td className="td">
-        {range
-          ? <span className="text-sm font-semibold text-slate-700 tabular-nums">{range}</span>
-          : <span className="text-slate-300 text-xs">—</span>}
-      </td>
-
-      {/* Stok */}
-      <td className="td text-right">
-        {skuCnt > 0
-          ? <div>
-              <span className={`text-sm font-bold tabular-nums ${stock === 0 ? 'text-red-500' : stock < 10 ? 'text-amber-500' : 'text-slate-800'}`}>
-                {stock.toLocaleString('id-ID')}
-              </span>
-              <span className="text-xs text-slate-400 ml-1">{product.unit || 'unit'}</span>
-            </div>
-          : <span className="text-slate-300 text-xs">—</span>}
-      </td>
-
-      {/* Nilai Stok */}
-      <td className="td text-right">
-        {nilai
-          ? <span className="text-sm font-semibold text-emerald-700 tabular-nums">Rp {nilai.toLocaleString('id-ID')}</span>
-          : <span className="text-slate-300 text-xs">—</span>}
-      </td>
-
-      {/* Actions */}
-      <td className="td">
-        <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+    <>
+      <tr
+        className="group border-b border-slate-100 hover:bg-slate-50/70 transition-colors"
+        style={{ borderBottomWidth: expanded ? 0 : undefined }}
+      >
+        {/* Expand toggle */}
+        <td className="td w-10 pr-0">
           <button
-            type="button"
-            onClick={e => { e.stopPropagation(); onDelete(product) }}
-            className="p-1.5 rounded-lg text-slate-300 hover:text-red-400 hover:bg-red-50 transition-colors"
+            onClick={onToggle}
+            className={`w-6 h-6 rounded flex items-center justify-center transition-colors
+              ${skuCnt > 0 ? 'text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 cursor-pointer' : 'text-slate-200 cursor-default'}`}
+            disabled={skuCnt === 0}
           >
-            <Trash2 size={13} />
+            {expanded
+              ? <ChevronDown size={14} />
+              : <ChevronRight size={14} />}
           </button>
-          <ChevronRight size={14} className="text-slate-200" />
-        </div>
-      </td>
-    </tr>
+        </td>
+
+        {/* Product */}
+        <td className="td cursor-pointer" onClick={onToggle}>
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-lg overflow-hidden border border-slate-200 flex-shrink-0 bg-slate-100">
+              {product.imageUrl
+                ? <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover" />
+                : <div className="w-full h-full flex items-center justify-center text-slate-300"><ImageIcon size={13} /></div>}
+            </div>
+            <div className="min-w-0">
+              <p className="font-semibold text-slate-800 truncate leading-tight text-sm">{product.name}</p>
+              <p className="text-[11px] text-slate-400 mt-0.5">{product.unit}</p>
+            </div>
+          </div>
+        </td>
+
+        {/* Kategori */}
+        <td className="td w-32">
+          {product.Category
+            ? <span className="badge-teal">{product.Category.name}</span>
+            : <span className="text-slate-300 text-xs">—</span>}
+        </td>
+
+        {/* SKU count */}
+        <td className="td w-24">
+          {skuCnt > 0
+            ? <div className="flex items-center gap-1">
+                <Tag size={10} className="text-slate-400 flex-shrink-0" />
+                <span className="text-sm font-bold text-slate-700">{skuCnt}</span>
+                <span className="text-xs text-slate-400">SKU</span>
+              </div>
+            : <span className="text-xs text-amber-500 font-medium bg-amber-50 px-2 py-0.5 rounded border border-amber-100">Belum ada</span>}
+        </td>
+
+        {/* Harga */}
+        <td className="td w-44">
+          {range
+            ? <span className="text-sm font-semibold text-slate-700 tabular-nums">{range}</span>
+            : <span className="text-slate-300 text-xs">—</span>}
+        </td>
+
+        {/* Stok */}
+        <td className="td w-28 text-right">
+          {skuCnt > 0
+            ? <div>
+                <span className={`text-sm font-bold tabular-nums ${stock === 0 ? 'text-red-500' : stock < 10 ? 'text-amber-500' : 'text-slate-800'}`}>
+                  {stock.toLocaleString('id-ID')}
+                </span>
+                <span className="text-xs text-slate-400 ml-1">{product.unit || 'unit'}</span>
+              </div>
+            : <span className="text-slate-300 text-xs">—</span>}
+        </td>
+
+        {/* Actions */}
+        <td className="td w-16">
+          <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            <button
+              type="button"
+              onClick={e => { e.stopPropagation(); onNavigate() }}
+              className="p-1.5 rounded-lg text-slate-300 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+              title="Edit produk"
+            >
+              <Pencil size={12} />
+            </button>
+            <button
+              type="button"
+              onClick={e => { e.stopPropagation(); onDelete(product) }}
+              className="p-1.5 rounded-lg text-slate-300 hover:text-red-400 hover:bg-red-50 transition-colors"
+              title="Hapus produk"
+            >
+              <Trash2 size={12} />
+            </button>
+          </div>
+        </td>
+      </tr>
+
+      {/* Expanded SKU rows */}
+      {expanded && skuCnt > 0 && (
+        <SkuRows product={product} onOpenQr={onOpenQr} />
+      )}
+    </>
   )
 }
 
@@ -189,17 +307,27 @@ export default function Products() {
   const navigate = useNavigate()
   const qc       = useQueryClient()
 
-  const [page, setPage]             = useState(1)
-  const [search, setSearch]         = useState('')
-  const [catFilter, setCat]         = useState('')
-  const [artFilter, setArt]         = useState('')
-  const [whFilter, setWh]           = useState('')
-  const [sort, setSort]             = useState({ col: 'name', dir: 'asc' })
-  const [delModal, setDelModal]     = useState(null)
+  const [page, setPage]         = useState(1)
+  const [search, setSearch]     = useState('')
+  const [catFilter, setCat]     = useState('')
+  const [artFilter, setArt]     = useState('')
+  const [whFilter, setWh]       = useState('')
+  const [sort, setSort]         = useState({ col: 'name', dir: 'asc' })
+  const [delModal, setDelModal] = useState(null)
+  const [expanded, setExpanded] = useState(new Set())
+  const [qrTarget, setQrTarget] = useState(null)
 
   const handleSort = (col) => {
     setSort(s => ({ col, dir: s.col === col && s.dir === 'asc' ? 'desc' : 'asc' }))
     setPage(1)
+  }
+
+  const toggleExpand = (id) => {
+    setExpanded(prev => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
   }
 
   const { data, isLoading } = useQuery({
@@ -255,25 +383,20 @@ export default function Products() {
           placeholder="Cari nama produk…"
           className="flex-1 min-w-48"
         />
-
         <div className="flex items-center gap-2 flex-wrap">
           <Filter size={13} className={activeFilters ? 'text-brand' : 'text-slate-400'} />
-
           <select className="select w-40" value={catFilter} onChange={e => { setCat(e.target.value); setPage(1) }}>
             <option value="">Semua kategori</option>
             {catOptions.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
-
           <select className="select w-40" value={artFilter} onChange={e => { setArt(e.target.value); setPage(1) }}>
             <option value="">Semua artikel</option>
             {artOptions.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
           </select>
-
           <select className="select w-44" value={whFilter} onChange={e => { setWh(e.target.value); setPage(1) }}>
             <option value="">Semua gudang</option>
             {whOptions.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
           </select>
-
           {activeFilters > 0 && (
             <button
               onClick={() => { setCat(''); setArt(''); setWh(''); setPage(1) }}
@@ -298,14 +421,13 @@ export default function Products() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-slate-100">
-                  <SortTh label="Produk"     col="name"       sort={sort} onSort={handleSort} />
-                  <th className="th">Kategori</th>
-                  <th className="th">Variant</th>
-                  <th className="th">SKU</th>
-                  <th className="th">Harga</th>
-                  <SortTh label="Stok"       col="totalStock" sort={sort} onSort={handleSort} className="text-right" />
-                  <th className="th text-right">Nilai Stok</th>
-                  <th className="th w-10" />
+                  <th className="th w-10 pr-0" />
+                  <SortTh label="Produk"  col="name"       sort={sort} onSort={handleSort} />
+                  <th className="th w-32">Kategori</th>
+                  <th className="th w-24">SKU</th>
+                  <th className="th w-44">Harga</th>
+                  <SortTh label="Stok"    col="totalStock" sort={sort} onSort={handleSort} className="w-28 text-right" />
+                  <th className="th w-16" />
                 </tr>
               </thead>
               <tbody>
@@ -313,17 +435,28 @@ export default function Products() {
                   <ProductRow
                     key={p.id}
                     product={p}
-                    onClick={() => navigate(`/products/${p.id}`)}
+                    expanded={expanded.has(p.id)}
+                    onToggle={() => toggleExpand(p.id)}
+                    onNavigate={() => navigate(`/products/${p.id}`)}
                     onDelete={product => setDelModal(product)}
+                    onOpenQr={setQrTarget}
                   />
                 ))}
               </tbody>
             </table>
-
             <Pagination pagination={pagination} onPageChange={setPage} />
           </>
         )}
       </div>
+
+      {/* QR Modal */}
+      {qrTarget && (
+        <QrModal
+          sku={qrTarget.sku}
+          skuName={qrTarget.skuName}
+          onClose={() => setQrTarget(null)}
+        />
+      )}
 
       {/* Delete confirm */}
       {delModal && (

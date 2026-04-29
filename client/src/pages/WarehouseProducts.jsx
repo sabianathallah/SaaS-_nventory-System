@@ -21,8 +21,13 @@ function priceRange(skus = []) {
   return min === max ? fmt(min) : `${fmt(min)} – ${fmt(max)}`
 }
 
-function nilaiStok(skus = []) {
-  return skus.reduce((s, k) => s + Number(k.price || 0) * Number(k.qty || 0), 0)
+// Estimate nilai stok using warehouse-specific totalStock × average SKU price
+function nilaiStok(product) {
+  const skus = product.ProductSKUs ?? []
+  const total = Number(product.totalStock ?? 0)
+  if (!skus.length || !total) return 0
+  const avgPrice = skus.reduce((s, k) => s + Number(k.price || 0), 0) / skus.length
+  return total * avgPrice
 }
 
 // ── Sort header ───────────────────────────────────────────────────────────────
@@ -126,7 +131,7 @@ export default function WarehouseProducts() {
   // Compute aggregate stats from loaded rows
   const totalProduk = pagination?.total ?? 0
   const totalStok   = rows.reduce((s, p) => s + Number(p.totalStock ?? 0), 0)
-  const totalNilai  = rows.reduce((s, p) => s + nilaiStok(p.ProductSKUs ?? []), 0)
+  const totalNilai  = rows.reduce((s, p) => s + nilaiStok(p), 0)
 
   const isLoading = whLoading || prodLoading
 
@@ -221,7 +226,7 @@ export default function WarehouseProducts() {
                     const skus   = p.ProductSKUs ?? []
                     const types  = p.ProductVariantTypes ?? []
                     const range  = priceRange(skus)
-                    const nilai  = nilaiStok(skus)
+                    const nilai  = nilaiStok(p)
                     const stock  = Number(p.totalStock ?? 0)
                     const skuCnt = skus.length
 

@@ -30,25 +30,37 @@ class DashboardController {
         WHERE 1=1 ${clause}
       `, opts);
 
-      // ── 2. Total stock & value from ProductSKUs ───────────────────
+      // ── 2. Total stock & value from Stocks table ─────────────────
+      // Value = warehouse_quantity × avg SKU price per product
+      // This is the same formula used in per-warehouse views so all numbers are consistent.
       const [skuRow] = await sequelize.query(`
         SELECT
-          COALESCE(SUM(ps.qty),              0)::bigint  AS total_stock,
-          COALESCE(SUM(ps.price * ps.qty),   0)::numeric AS total_value
-        FROM "ProductSKUs" ps
-        JOIN "Products" p ON ps."ProductId" = p.id
+          COALESCE(SUM(s.quantity), 0)::bigint AS total_stock,
+          COALESCE(SUM(
+            s.quantity::numeric * (
+              SELECT COALESCE(AVG(ps2.price), 0)
+              FROM "ProductSKUs" ps2 WHERE ps2."ProductId" = s."ProductId"
+            )
+          ), 0)::numeric AS total_value
+        FROM "Stocks" s
+        JOIN "Products" p ON s."ProductId" = p.id
         WHERE 1=1 ${clause}
       `, opts);
 
-      // ── 3. Stock & value per article (from ProductSKUs) ───────────
+      // ── 3. Stock & value per article (from Stocks table) ─────────
       const stockByArticle = await sequelize.query(`
         SELECT
           a.id                                              AS "articleId",
           COALESCE(a.name, 'Tanpa Artikel')                AS "articleName",
-          COALESCE(SUM(ps.qty),            0)::bigint      AS "totalStock",
-          COALESCE(SUM(ps.price * ps.qty), 0)::numeric     AS "totalValue"
-        FROM "ProductSKUs" ps
-        JOIN "Products"  p ON ps."ProductId" = p.id
+          COALESCE(SUM(s.quantity), 0)::bigint             AS "totalStock",
+          COALESCE(SUM(
+            s.quantity::numeric * (
+              SELECT COALESCE(AVG(ps2.price), 0)
+              FROM "ProductSKUs" ps2 WHERE ps2."ProductId" = s."ProductId"
+            )
+          ), 0)::numeric AS "totalValue"
+        FROM "Stocks" s
+        JOIN "Products"  p ON s."ProductId" = p.id
         LEFT JOIN "Articles" a ON p."ArticleId" = a.id
         WHERE 1=1 ${clause}
         GROUP BY a.id, a.name
