@@ -15,7 +15,9 @@ const crud   = (url) => ({ list: list(url), get: get(url), create: create(url), 
 // is attached; otherwise fall back to plain JSON. Axios sets the right
 // Content-Type automatically when given a FormData instance.
 const toPayload = (data) => {
-  if (!data || !(data.image instanceof File)) return data
+  if (!data || typeof data !== 'object') return data
+  const hasFile = Object.values(data).some(value => value instanceof File)
+  if (!hasFile) return data
   const fd = new FormData()
   for (const [k, v] of Object.entries(data)) {
     if (v === undefined || v === null) continue

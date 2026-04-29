@@ -5,7 +5,7 @@ const DEFAULT_VISIBILITY = {
   products:          true,
   catalog:           true,
   warehouses:        true,
-  suppliers:         true,
+  suppliers:         false,   // not used — vendor handles incoming goods
   'stock-in':        true,
   'stock-out':       true,
   movements:         true,

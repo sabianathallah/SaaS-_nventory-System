@@ -9,9 +9,10 @@ const ALL_PERMISSIONS = [
   { key: 'stock.manage',           label: 'Kelola Stock In / Out / Opname',         group: 'Stok' },
   { key: 'stock.in.manual_input',  label: 'Stock In: Input Manual (tanpa barcode)', group: 'Stok' },
   { key: 'stock.in.delete_item',   label: 'Stock In: Hapus Item yang Sudah Tersimpan', group: 'Stok' },
+  // Penerimaan Barang Vendor
+  { key: 'packing.view',           label: 'Lihat Modul Penerimaan & Packing',       group: 'Penerimaan Barang Vendor' },
+  { key: 'packing.incoming',       label: 'Kelola Barang Masuk & Surat Jalan',      group: 'Penerimaan Barang Vendor' },
   // Packing
-  { key: 'packing.view',           label: 'Lihat Modul Packing',                   group: 'Packing' },
-  { key: 'packing.incoming',       label: 'Kelola Barang Masuk & Surat Jalan',      group: 'Packing' },
   { key: 'packing.jobs',           label: 'Buat & Kelola Packing Job',              group: 'Packing' },
   { key: 'packing.verify',         label: 'Verifikasi Packing & Buat FAP',          group: 'Packing' },
   // Laporan

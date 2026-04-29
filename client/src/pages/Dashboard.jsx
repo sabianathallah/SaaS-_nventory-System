@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import {
   Package, BoxesIcon, Wallet, Warehouse,
   ChevronDown, ChevronRight, Tag, TrendingUp,
-  ArrowUpRight, ArrowDownRight, LayoutGrid,
+  ArrowUpRight, ArrowDownRight, LayoutGrid, ChevronLeft,
 } from 'lucide-react'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip,
@@ -150,6 +150,40 @@ function WarehouseArticleGroup({ warehouse, rows }) {
   )
 }
 
+// ── Card pagination ───────────────────────────────────────────────────────────
+
+function CardPager({ page, total, perPage, onChange }) {
+  const totalPages = Math.ceil(total / perPage)
+  if (totalPages <= 1) return null
+  return (
+    <div className="flex items-center justify-between pt-3 mt-3 border-t border-slate-100">
+      <button
+        onClick={() => onChange(page - 1)}
+        disabled={page === 0}
+        className="w-6 h-6 rounded flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+      >
+        <ChevronLeft size={13} />
+      </button>
+      <div className="flex items-center gap-1">
+        {Array.from({ length: totalPages }).map((_, i) => (
+          <button
+            key={i}
+            onClick={() => onChange(i)}
+            className={`w-1.5 h-1.5 rounded-full transition-all duration-150 ${i === page ? 'bg-brand w-3' : 'bg-slate-200 hover:bg-slate-400'}`}
+          />
+        ))}
+      </div>
+      <button
+        onClick={() => onChange(page + 1)}
+        disabled={page >= totalPages - 1}
+        className="w-6 h-6 rounded flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+      >
+        <ChevronRight size={13} />
+      </button>
+    </div>
+  )
+}
+
 // ── Recent movements ──────────────────────────────────────────────────────────
 
 const TYPE_STYLE = {
@@ -181,8 +215,13 @@ function MovementRow({ m }) {
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 
+const ART_PER_PAGE = 4
+const WH_PER_PAGE  = 2
+
 export default function Dashboard() {
   const { user } = useAuth()
+  const [artPage, setArtPage] = useState(0)
+  const [whPage,  setWhPage]  = useState(0)
 
   const { data: stats, isLoading } = useQuery({
     queryKey: ['dashboard-stats'],
@@ -205,14 +244,19 @@ export default function Dashboard() {
     stockByWarehouseAndArticle = [],
   } = stats ?? {}
 
+  // Sliced data for paginated cards
+  const visibleArticles  = stockByArticle.slice(artPage * ART_PER_PAGE, (artPage + 1) * ART_PER_PAGE)
+  const visibleWarehouses = stockByWarehouse.slice(whPage * WH_PER_PAGE, (whPage + 1) * WH_PER_PAGE)
+
+  const maxVisibleArticleStock   = Math.max(...visibleArticles.map(a => a.totalStock), 1)
+  const maxVisibleWarehouseStock = Math.max(...visibleWarehouses.map(w => w.totalStock), 1)
+
   // Unique warehouses for the expandable section
   const warehouseGroups = stockByWarehouse.map(wh => ({
     ...wh,
     rows: stockByWarehouseAndArticle.filter(r => r.warehouseId === wh.warehouseId),
   }))
 
-  const maxWarehouseStock = Math.max(...stockByWarehouse.map(w => w.totalStock), 1)
-  const maxArticleStock   = Math.max(...stockByArticle.map(a => a.totalStock), 1)
 
   const greeting = () => {
     const h = new Date().getHours()
@@ -268,43 +312,61 @@ export default function Dashboard() {
 
         {/* Stock & Value per Artikel */}
         <div className="card p-5">
-          <div className="flex items-center gap-2 mb-4">
-            <Tag size={14} className="text-slate-500" />
-            <h3 className="text-sm font-bold text-slate-800">Stock & Nilai per Artikel</h3>
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Tag size={14} className="text-slate-500" />
+              <h3 className="text-sm font-bold text-slate-800">Stock & Nilai per Artikel</h3>
+            </div>
+            {stockByArticle.length > 0 && (
+              <span className="text-[10px] text-slate-400 tabular-nums">
+                {artPage * ART_PER_PAGE + 1}–{Math.min((artPage + 1) * ART_PER_PAGE, stockByArticle.length)} / {stockByArticle.length}
+              </span>
+            )}
           </div>
 
           {isLoading ? (
             <div className="space-y-3">
-              {[1,2,3].map(i => <div key={i} className="h-10 bg-slate-100 rounded-lg animate-pulse" />)}
+              {[1,2,3,4].map(i => <div key={i} className="h-10 bg-slate-100 rounded-lg animate-pulse" />)}
             </div>
           ) : stockByArticle.length === 0 ? (
             <p className="text-sm text-slate-300 text-center py-8">Belum ada data artikel</p>
           ) : (
-            <div className="divide-y divide-slate-50">
-              {stockByArticle.map((art, i) => (
-                <div key={art.articleId ?? 'null'} className="py-3 first:pt-0 last:pb-0">
-                  <div className="flex items-start justify-between gap-3 mb-1.5">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <div className="w-2 h-2 rounded-full flex-shrink-0 mt-1" style={{ background: PALETTE[i % PALETTE.length] }} />
-                      <span className="text-sm font-semibold text-slate-700 truncate">{art.articleName}</span>
+            <>
+              <div className="divide-y divide-slate-50">
+                {visibleArticles.map((art, i) => {
+                  const globalIdx = artPage * ART_PER_PAGE + i
+                  return (
+                    <div key={art.articleId ?? 'null'} className="py-3 first:pt-0 last:pb-0">
+                      <div className="flex items-start justify-between gap-3 mb-1.5">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className="w-2 h-2 rounded-full flex-shrink-0 mt-1" style={{ background: PALETTE[globalIdx % PALETTE.length] }} />
+                          <span className="text-sm font-semibold text-slate-700 truncate">{art.articleName}</span>
+                        </div>
+                        <div className="text-right flex-shrink-0">
+                          <p className="text-sm font-bold tabular-nums text-slate-800">{fmtNum(art.totalStock)} <span className="text-xs font-normal text-slate-400">unit</span></p>
+                          <p className="text-xs font-semibold text-emerald-600">{fmtRp(art.totalValue)}</p>
+                        </div>
+                      </div>
+                      <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                        <div
+                          className="h-full rounded-full transition-all duration-500"
+                          style={{
+                            width: `${Math.round((art.totalStock / maxVisibleArticleStock) * 100)}%`,
+                            background: PALETTE[globalIdx % PALETTE.length],
+                          }}
+                        />
+                      </div>
                     </div>
-                    <div className="text-right flex-shrink-0">
-                      <p className="text-sm font-bold tabular-nums text-slate-800">{fmtNum(art.totalStock)} <span className="text-xs font-normal text-slate-400">unit</span></p>
-                      <p className="text-xs font-semibold text-emerald-600">{fmtRp(art.totalValue)}</p>
-                    </div>
-                  </div>
-                  <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                    <div
-                      className="h-full rounded-full transition-all duration-700"
-                      style={{
-                        width: `${Math.round((art.totalStock / maxArticleStock) * 100)}%`,
-                        background: PALETTE[i % PALETTE.length],
-                      }}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
+                  )
+                })}
+              </div>
+              <CardPager
+                page={artPage}
+                total={stockByArticle.length}
+                perPage={ART_PER_PAGE}
+                onChange={setArtPage}
+              />
+            </>
           )}
         </div>
 
@@ -315,7 +377,14 @@ export default function Dashboard() {
               <Warehouse size={14} className="text-slate-500" />
               <h3 className="text-sm font-bold text-slate-800">Stock per Gudang</h3>
             </div>
-            <span className="badge-muted text-[10px]">{stockByWarehouse.length} gudang</span>
+            <div className="flex items-center gap-2">
+              {stockByWarehouse.length > 0 && (
+                <span className="text-[10px] text-slate-400 tabular-nums">
+                  {whPage * WH_PER_PAGE + 1}–{Math.min((whPage + 1) * WH_PER_PAGE, stockByWarehouse.length)} / {stockByWarehouse.length}
+                </span>
+              )}
+              <span className="badge-muted text-[10px]">{stockByWarehouse.length} gudang</span>
+            </div>
           </div>
 
           {isLoading ? (
@@ -327,29 +396,57 @@ export default function Dashboard() {
           ) : (
             <>
               <ResponsiveContainer width="100%" height={180}>
-                <BarChart data={stockByWarehouse.map(w => ({ name: w.warehouseName.length > 12 ? w.warehouseName.slice(0,12)+'…' : w.warehouseName, stock: w.totalStock }))} barSize={28}>
+                <BarChart
+                  data={visibleWarehouses.map((w, i) => ({
+                    name:  w.warehouseName.length > 14 ? w.warehouseName.slice(0, 14) + '…' : w.warehouseName,
+                    stock: w.totalStock,
+                    fill:  PALETTE[(whPage * WH_PER_PAGE + i) % PALETTE.length],
+                  }))}
+                  barSize={40}
+                >
                   <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false} />
-                  <XAxis dataKey="name" tick={{ fill: '#94A3B8', fontSize: 10 }} axisLine={false} tickLine={false} />
+                  <XAxis dataKey="name" tick={{ fill: '#94A3B8', fontSize: 11 }} axisLine={false} tickLine={false} />
                   <YAxis tick={{ fill: '#94A3B8', fontSize: 10 }} axisLine={false} tickLine={false} width={36} tickFormatter={v => v >= 1000 ? `${(v/1000).toFixed(0)}k` : v} />
                   <Tooltip content={<ChartTooltip />} cursor={{ fill: BRAND_20, radius: 4 }} />
-                  <Bar dataKey="stock" radius={[5, 5, 0, 0]}>
-                    {stockByWarehouse.map((_, i) => <Cell key={i} fill={PALETTE[i % PALETTE.length]} />)}
+                  <Bar dataKey="stock" radius={[6, 6, 0, 0]}>
+                    {visibleWarehouses.map((_, i) => (
+                      <Cell key={i} fill={PALETTE[(whPage * WH_PER_PAGE + i) % PALETTE.length]} />
+                    ))}
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
 
-              {/* Mini list di bawah chart */}
-              <div className="mt-3 space-y-1.5 border-t border-slate-100 pt-3">
-                {stockByWarehouse.map((w, i) => (
-                  <div key={w.warehouseId} className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 rounded-full" style={{ background: PALETTE[i % PALETTE.length] }} />
-                      <span className="text-xs text-slate-600 font-medium">{w.warehouseName}</span>
+              {/* Mini list */}
+              <div className="mt-3 space-y-2 border-t border-slate-100 pt-3">
+                {visibleWarehouses.map((w, i) => {
+                  const globalIdx = whPage * WH_PER_PAGE + i
+                  const pct = Math.round((w.totalStock / maxVisibleWarehouseStock) * 100)
+                  return (
+                    <div key={w.warehouseId}>
+                      <div className="flex items-center justify-between mb-1">
+                        <div className="flex items-center gap-2">
+                          <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: PALETTE[globalIdx % PALETTE.length] }} />
+                          <span className="text-xs text-slate-600 font-medium">{w.warehouseName}</span>
+                        </div>
+                        <span className="text-xs font-bold tabular-nums text-slate-700">{fmtNum(w.totalStock)} unit</span>
+                      </div>
+                      <div className="h-1 bg-slate-100 rounded-full overflow-hidden">
+                        <div
+                          className="h-full rounded-full transition-all duration-500"
+                          style={{ width: `${pct}%`, background: PALETTE[globalIdx % PALETTE.length] }}
+                        />
+                      </div>
                     </div>
-                    <span className="text-xs font-bold tabular-nums text-slate-700">{fmtNum(w.totalStock)} unit</span>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
+
+              <CardPager
+                page={whPage}
+                total={stockByWarehouse.length}
+                perPage={WH_PER_PAGE}
+                onChange={setWhPage}
+              />
             </>
           )}
         </div>

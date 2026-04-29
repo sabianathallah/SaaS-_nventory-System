@@ -15,20 +15,23 @@ const isConfigured = Boolean(
   process.env.CLOUDINARY_API_SECRET
 );
 
-// Named folder keeps assets organised in the Cloudinary console.
-const storage = new CloudinaryStorage({
-  cloudinary,
-  params: {
-    folder: 'saas-inventory/products',
-    allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
-    transformation: [{ width: 800, height: 800, crop: 'limit' }],
-  },
-});
+function createUpload(folder) {
+  const storage = new CloudinaryStorage({
+    cloudinary,
+    params: {
+      folder,
+      allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
+      transformation: [{ width: 800, height: 800, crop: 'limit' }],
+    },
+  });
 
-const upload = multer({
-  storage,
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB
-});
+  return multer({
+    storage,
+    limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB
+  });
+}
+
+const upload = createUpload('saas-inventory/products');
 
 // Extract Cloudinary public_id from a delivery URL so we can clean up old
 // assets when a product's image is replaced or the product is deleted.
@@ -47,7 +50,8 @@ async function destroyByUrl(url) {
 
 // Middleware wrapper that returns a friendly error when Cloudinary envs are
 // missing, instead of a cryptic "cloud_name is disabled".
-function uploadSingle(field) {
+function uploadSingle(field, folder = 'saas-inventory/products') {
+  const singleUpload = createUpload(folder);
   return (req, res, next) => {
     if (!isConfigured && req.is('multipart/form-data')) {
       return res.status(500).json({
@@ -55,7 +59,7 @@ function uploadSingle(field) {
       });
     }
     if (!req.is('multipart/form-data')) return next();
-    upload.single(field)(req, res, next);
+    singleUpload.single(field)(req, res, next);
   };
 }
 

@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { PageVisibilityProvider, usePageVisibility } from './context/PageVisibilityContext'
+import { SelectedCompanyProvider } from './context/SelectedCompanyContext'
 import Layout from './components/Layout'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
@@ -36,8 +37,10 @@ function PublicRoute({ children }) {
 }
 
 function PageVisibleRoute({ pageKey, children }) {
+  const { isSuperAdmin } = useAuth()
   const { isPageVisible } = usePageVisibility()
-  if (!isPageVisible(pageKey)) return <Navigate to="/" replace />
+  // SUPER_ADMIN can always access any page regardless of visibility setting
+  if (!isSuperAdmin && !isPageVisible(pageKey)) return <Navigate to="/" replace />
   return children
 }
 
@@ -86,7 +89,9 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <AppRoutes />
+        <SelectedCompanyProvider>
+          <AppRoutes />
+        </SelectedCompanyProvider>
       </AuthProvider>
     </BrowserRouter>
   )

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { companiesApi } from '../api'
 import PageHeader from '../components/PageHeader'
@@ -6,9 +6,10 @@ import { Table, Pagination } from '../components/Table'
 import Modal from '../components/Modal'
 import SearchBar from '../components/SearchBar'
 import toast from 'react-hot-toast'
-import { Plus, Pencil, Trash2, Building2 } from 'lucide-react'
+import { Plus, Pencil, Trash2, Building2, Upload, ImageIcon } from 'lucide-react'
 
-const EMPTY = { name: '', slug: '', logo: '', status: 'active', subscriptionExpiresAt: '' }
+const MAX_LOGO_SIZE = 5 * 1024 * 1024
+const EMPTY = { name: '', slug: '', logo: null, logoPreview: '', status: 'active', subscriptionExpiresAt: '' }
 
 const STATUS_BADGE = {
   active:    <span className="badge-green">Active</span>,
@@ -18,10 +19,17 @@ const STATUS_BADGE = {
 
 export default function Companies() {
   const qc = useQueryClient()
+  const logoInputRef = useRef(null)
   const [page, setPage]     = useState(1)
   const [search, setSearch] = useState('')
   const [modal, setModal]   = useState(null)
   const [form, setForm]     = useState(EMPTY)
+
+  useEffect(() => {
+    return () => {
+      if (form.logoPreview?.startsWith('blob:')) URL.revokeObjectURL(form.logoPreview)
+    }
+  }, [form.logoPreview])
 
   const { data, isLoading } = useQuery({
     queryKey: ['companies', { page, name: search }],
@@ -40,15 +48,30 @@ export default function Companies() {
   })
 
   const openEdit = (r) => {
-    setForm({ name: r.name, slug: r.slug, logo: r.logo ?? '', status: r.status,
+    setForm({ name: r.name, slug: r.slug, logo: null, logoPreview: r.logo ?? '', status: r.status,
       subscriptionExpiresAt: r.subscriptionExpiresAt ? r.subscriptionExpiresAt.slice(0, 10) : '' })
     setModal({ mode: 'edit', data: r })
+  }
+
+  const handleLogoPick = (file) => {
+    if (!file) return
+    if (!file.type.startsWith('image/')) return toast.error('File harus berupa gambar')
+    if (file.size > MAX_LOGO_SIZE) return toast.error('Ukuran file maks 5MB')
+    setForm(prev => {
+      if (prev.logoPreview?.startsWith('blob:')) URL.revokeObjectURL(prev.logoPreview)
+      return { ...prev, logo: file, logoPreview: URL.createObjectURL(file) }
+    })
   }
 
   const handleSubmit = (e) => {
     e.preventDefault()
     const payload = { ...form }
-    if (!payload.logo) delete payload.logo
+    if (payload.logo instanceof File) {
+      // keep the selected file so the API can convert it into multipart/form-data
+    } else {
+      delete payload.logo
+    }
+    delete payload.logoPreview
     if (!payload.subscriptionExpiresAt) delete payload.subscriptionExpiresAt
     save.mutate(payload)
   }
@@ -114,8 +137,24 @@ export default function Companies() {
               </select>
             </div>
             <div className="col-span-2">
-              <label className="label">Logo URL</label>
-              <input className="input" type="url" value={form.logo} onChange={e => setForm(f => ({ ...f, logo: e.target.value }))} placeholder="https://…" />
+              <label className="label">Logo</label>
+              <div className="space-y-3">
+                <div
+                  className="w-full rounded-xl border-2 border-dashed border-slate-200 bg-slate-50 flex items-center justify-center overflow-hidden hover:border-brand/30 transition-colors cursor-pointer"
+                  style={{ aspectRatio: '16/9' }}
+                  onClick={() => logoInputRef.current?.click()}
+                  onDragOver={e => e.preventDefault()}
+                  onDrop={e => { e.preventDefault(); handleLogoPick(e.dataTransfer.files?.[0]) }}
+                >
+                  {form.logoPreview
+                    ? <img src={form.logoPreview} alt="Logo preview" className="w-full h-full object-contain bg-white" />
+                    : <div className="text-center p-6"><ImageIcon size={28} className="mx-auto text-slate-300 mb-2" /><p className="text-xs text-slate-400 font-medium">Drop logo di sini</p><p className="text-xs text-slate-300 mt-1">atau klik untuk memilih</p></div>}
+                </div>
+                <input ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={e => handleLogoPick(e.target.files?.[0])} />
+                <button type="button" onClick={() => logoInputRef.current?.click()} className="btn-secondary w-full text-xs justify-center">
+                  <Upload size={12} /> {form.logoPreview ? 'Ganti Logo' : 'Upload Logo'}
+                </button>
+              </div>
             </div>
             <div className="col-span-2">
               <label className="label">Subscription Expires At</label>

@@ -1,6 +1,7 @@
 'use strict';
 const { Company, User } = require('../models');
 const { paginate, buildFilter, paginatedResponse } = require('../helpers/queryHelper');
+const { destroyByUrl } = require('../helpers/cloudinary');
 
 class CompanyController {
     static async getAll(req, res, next) {
@@ -31,18 +32,35 @@ class CompanyController {
 
     static async create(req, res, next) {
         try {
-            const company = await Company.create(req.body);
+            const payload = { ...req.body };
+            delete payload.logoPreview;
+            if (req.file?.path) payload.logo = req.file.path;
+            const company = await Company.create(payload);
             res.status(201).json(company);
-        } catch (err) { next(err); }
+        } catch (err) {
+            if (req.file?.path) destroyByUrl(req.file.path);
+            next(err);
+        }
     }
 
     static async update(req, res, next) {
         try {
             const company = await Company.findByPk(req.params.id);
             if (!company) throw { name: 'NotFound', message: 'Company not found' };
-            await company.update(req.body);
+            const updates = { ...req.body };
+            delete updates.logoPreview;
+            let oldLogo = null;
+            if (req.file?.path) {
+                oldLogo = company.logo;
+                updates.logo = req.file.path;
+            }
+            await company.update(updates);
+            if (oldLogo) destroyByUrl(oldLogo);
             res.status(200).json(company);
-        } catch (err) { next(err); }
+        } catch (err) {
+            if (req.file?.path) destroyByUrl(req.file.path);
+            next(err);
+        }
     }
 
     static async delete(req, res, next) {

@@ -2,11 +2,12 @@ import { useState } from 'react'
 import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { usePageVisibility } from '../context/PageVisibilityContext'
+import CompanySwitcher from './CompanySwitcher'
 import {
   LayoutDashboard, Package, Warehouse, Truck,
   ArrowDownToLine, ArrowUpFromLine, ArrowLeftRight,
   ClipboardList, Users, Building2, BookOpen, LogOut, Bell,
-  PackageOpen, FileText, Layers, ClipboardCheck, Menu, X, Eye,
+  PackageOpen, FileText, Layers, ClipboardCheck, Menu, X, Eye, EyeOff,
 } from 'lucide-react'
 import logoPreface from '../assets/logo-preface.jpeg'
 
@@ -37,12 +38,18 @@ const NAV_GROUPS = [
     ],
   },
   {
+    label: 'Penerimaan Barang Vendor',
+    packingOnly: true,
+    items: [
+      { to: '/vendors',        icon: Truck,       label: 'Vendors',      pageKey: 'vendors',          adminOnly: true },
+      { to: '/incoming-goods', icon: PackageOpen, label: 'Barang Masuk', pageKey: 'incoming-goods',   operasionalOnly: true },
+      { to: '/surat-jalan',    icon: FileText,    label: 'Surat Jalan',  pageKey: 'surat-jalan',      operasionalOnly: true },
+    ],
+  },
+  {
     label: 'Packing',
     packingOnly: true,
     items: [
-      { to: '/vendors',           icon: Truck,          label: 'Vendors',           pageKey: 'vendors',           adminOnly: true },
-      { to: '/incoming-goods',    icon: PackageOpen,    label: 'Barang Masuk',      pageKey: 'incoming-goods',    operasionalOnly: true },
-      { to: '/surat-jalan',       icon: FileText,       label: 'Surat Jalan',       pageKey: 'surat-jalan',       operasionalOnly: true },
       { to: '/packing-jobs',      icon: Layers,         label: 'Packing Jobs',      pageKey: 'packing-jobs' },
       { to: '/form-anak-packing', icon: ClipboardCheck, label: 'Form Anak Packing', pageKey: 'form-anak-packing' },
     ],
@@ -114,22 +121,29 @@ export default function Layout({ children }) {
           {NAV_GROUPS.map((group) => {
             if (group.adminOnly && !isAdmin) return null
             if (group.packingOnly && !canViewPacking) return null
-            const visibleItems = group.items.filter(item => {
-              if (item.adminOnly && !isAdmin) return false
-              if (item.superOnly && !isSuperAdmin) return false
-              if (item.operasionalOnly && !isOperasional) return false
-              if (item.headPackingOnly && !isHeadPacking) return false
-              if (item.pageKey && !isPageVisible(item.pageKey)) return false
-              return true
-            })
-            if (!visibleItems.length) return null
+
+            const navItems = group.items.reduce((acc, item) => {
+              if (item.adminOnly && !isAdmin) return acc
+              if (item.superOnly && !isSuperAdmin) return acc
+              if (item.operasionalOnly && !isOperasional) return acc
+              if (item.headPackingOnly && !isHeadPacking) return acc
+
+              const hidden = !!(item.pageKey && !isPageVisible(item.pageKey))
+              // Non-SUPER_ADMIN: filter out hidden pages entirely
+              if (hidden && !isSuperAdmin) return acc
+
+              acc.push({ ...item, hidden })
+              return acc
+            }, [])
+
+            if (!navItems.length) return null
             return (
               <div key={group.label}>
                 <p className="px-2 mb-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-400">
                   {group.label}
                 </p>
                 <div className="space-y-0.5">
-                  {visibleItems.map((item) => {
+                  {navItems.map((item) => {
                     const Icon = item.icon
                     return (
                       <NavLink
@@ -143,13 +157,28 @@ export default function Layout({ children }) {
                         }
                         className={({ isActive }) =>
                           `flex items-center gap-2.5 px-2.5 py-2 text-sm font-medium transition-colors duration-100
-                          ${isActive ? '' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'}`
+                          ${isActive ? '' : item.hidden
+                            ? 'text-slate-400 hover:text-slate-600 hover:bg-slate-100/60'
+                            : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'}`
                         }
                       >
                         {({ isActive }) => (
                           <>
-                            <Icon size={15} strokeWidth={isActive ? 2.5 : 2} className="flex-shrink-0" />
-                            {item.label}
+                            <Icon
+                              size={15}
+                              strokeWidth={isActive ? 2.5 : 2}
+                              className={`flex-shrink-0 ${item.hidden && !isActive ? 'opacity-50' : ''}`}
+                            />
+                            <span className={`flex-1 truncate ${item.hidden && !isActive ? 'opacity-60' : ''}`}>
+                              {item.label}
+                            </span>
+                            {item.hidden && (
+                              <EyeOff
+                                size={10}
+                                className="flex-shrink-0 opacity-50"
+                                title="Halaman disembunyikan dari pengguna"
+                              />
+                            )}
                           </>
                         )}
                       </NavLink>
@@ -203,6 +232,7 @@ export default function Layout({ children }) {
             <h1 className="text-sm font-bold text-slate-800 truncate">{pageTitle}</h1>
           </div>
           <div className="flex items-center gap-2">
+            <CompanySwitcher />
             <button className="w-8 h-8 rounded-md flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors">
               <Bell size={15} />
             </button>

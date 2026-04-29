@@ -30,11 +30,16 @@ const PAGE_GROUPS = [
     ],
   },
   {
+    label: 'Penerimaan Barang Vendor',
+    items: [
+      { key: 'vendors',        label: 'Vendors',      icon: Truck },
+      { key: 'incoming-goods', label: 'Barang Masuk', icon: PackageOpen },
+      { key: 'surat-jalan',    label: 'Surat Jalan',  icon: FileText },
+    ],
+  },
+  {
     label: 'Packing',
     items: [
-      { key: 'vendors',           label: 'Vendors',           icon: Truck },
-      { key: 'incoming-goods',    label: 'Barang Masuk',      icon: PackageOpen },
-      { key: 'surat-jalan',       label: 'Surat Jalan',       icon: FileText },
       { key: 'packing-jobs',      label: 'Packing Jobs',      icon: Layers },
       { key: 'form-anak-packing', label: 'Form Anak Packing', icon: ClipboardCheck },
     ],
