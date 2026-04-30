@@ -7,7 +7,8 @@ import { Table, Pagination } from '../components/Table'
 import Modal from '../components/Modal'
 import QRScanner from '../components/QRScanner'
 import toast from 'react-hot-toast'
-import { Plus, Eye, CheckCircle, Search, X, ScanLine, ClipboardList } from 'lucide-react'
+import { exportExcel } from '../utils/exportExcel'
+import { Plus, Eye, CheckCircle, Search, X, ScanLine, ClipboardList, FileSpreadsheet } from 'lucide-react'
 
 const STATUS_BADGE = {
   open:      <span className="badge-amber">● Open</span>,
@@ -535,7 +536,25 @@ export default function Opname() {
             ) : (
               <p className="text-sm text-slate-400 text-center py-8">Tidak ada data opname tersimpan.</p>
             )}
-            <div className="flex justify-end">
+            <div className="flex items-center justify-between">
+              <button
+                onClick={() => {
+                  const items = existingItems?.data ?? []
+                  const headers = ['No', 'Produk', 'SKU', 'Stok Sistem', 'Stok Aktual', 'Selisih']
+                  const rows = items.map((item, i) => [
+                    i + 1,
+                    item.Product?.name ?? '—',
+                    item.Product?.sku ?? '—',
+                    item.system_qty,
+                    item.scanned_qty,
+                    item.difference ?? 0,
+                  ])
+                  exportExcel(`opname-sesi-${modal?.data?.id}-${new Date().toISOString().slice(0, 10)}`, { headers, rows, sheetName: 'Hasil Opname' })
+                }}
+                className="btn-secondary text-sm flex items-center gap-1.5"
+              >
+                <FileSpreadsheet size={14} /> Export Excel
+              </button>
               <button onClick={() => setModal(null)} className="btn-secondary">Tutup</button>
             </div>
           </div>

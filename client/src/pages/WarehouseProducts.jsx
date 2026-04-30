@@ -4,10 +4,12 @@ import { useQuery } from '@tanstack/react-query'
 import { warehousesApi, productsApi } from '../api'
 import SearchBar from '../components/SearchBar'
 import { Pagination } from '../components/Table'
+import { exportExcel } from '../utils/exportExcel'
+import toast from 'react-hot-toast'
 import {
   ArrowLeft, ChevronRight, Package, Hash, Layers, ImageIcon,
   Warehouse, ArrowUpDown, ArrowUp, ArrowDown, TrendingUp,
-  BoxesIcon, Banknote,
+  BoxesIcon, Banknote, FileSpreadsheet, Loader2,
 } from 'lucide-react'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -103,6 +105,7 @@ export default function WarehouseProducts() {
   const [search, setSearch] = useState('')
   const [page, setPage]     = useState(1)
   const [sort, setSort]     = useState({ col: 'name', dir: 'asc' })
+  const [exporting, setExporting] = useState(false)
 
   const handleSort = (col) => {
     setSort(s => ({ col, dir: s.col === col && s.dir === 'asc' ? 'desc' : 'asc' }))
@@ -135,6 +138,30 @@ export default function WarehouseProducts() {
 
   const isLoading = whLoading || prodLoading
 
+  const handleExportExcel = async () => {
+    setExporting(true)
+    try {
+      const result = await productsApi.list({ limit: 9999, WarehouseId: id, sortBy: sort.col, sortOrder: sort.dir })
+      const headers = ['No', 'Nama Produk', 'Unit', 'Kategori', 'Total SKU', 'Total Stok', 'Harga Min (Rp)', 'Harga Max (Rp)', 'Nilai Stok (Rp)']
+      const exRows = result.data.map((p, i) => {
+        const skus   = p.ProductSKUs ?? []
+        const prices = skus.map(s => Number(s.price || 0)).filter(Boolean)
+        return [
+          i + 1, p.name, p.unit ?? '', p.Category?.name ?? '',
+          skus.length, Number(p.totalStock ?? 0),
+          prices.length ? Math.min(...prices) : '',
+          prices.length ? Math.max(...prices) : '',
+          Math.round(nilaiStok(p)),
+        ]
+      })
+      exportExcel(`gudang-${warehouse?.name ?? id}-${new Date().toISOString().slice(0, 10)}`, { headers, rows: exRows, sheetName: 'Produk Gudang' })
+    } catch {
+      toast.error('Gagal export Excel')
+    } finally {
+      setExporting(false)
+    }
+  }
+
   return (
     <div className="min-h-screen bg-canvas">
       {/* ── Sticky Header ──────────────────────────────────────────── */}
@@ -165,10 +192,10 @@ export default function WarehouseProducts() {
               )}
             </div>
           </div>
-          <button
-            onClick={() => navigate(`/products?WarehouseId=${id}`)}
-            className="btn-secondary text-sm hidden"
-          />
+          <button onClick={handleExportExcel} disabled={exporting || isLoading} className="btn-secondary text-sm flex items-center gap-1.5">
+            {exporting ? <Loader2 size={14} className="animate-spin" /> : <FileSpreadsheet size={14} />}
+            Export Excel
+          </button>
         </div>
 
         {/* ── Stat cards ─────────────────────────────────────────── */}

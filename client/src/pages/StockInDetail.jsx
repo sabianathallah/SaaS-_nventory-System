@@ -5,9 +5,10 @@ import { stockInApi, warehousesApi, productsApi, productSkusApi } from '../api'
 import { useAuth } from '../context/AuthContext'
 import QRScanner from '../components/QRScanner'
 import toast from 'react-hot-toast'
+import { exportExcel } from '../utils/exportExcel'
 import {
   ArrowLeft, PackagePlus, ScanLine, Plus, Trash2,
-  Save, ChevronDown, Package, CheckCircle2, X,
+  Save, ChevronDown, Package, CheckCircle2, X, FileSpreadsheet,
 } from 'lucide-react'
 
 const fmt     = (n) => Number(n ?? 0).toLocaleString('id-ID')
@@ -423,18 +424,37 @@ export default function StockInDetail() {
     const items      = detail.Stock_In_Items ?? []
     const grandTotal = detail.grandTotal ?? items.reduce((s, i) => s + Number(i.price) * i.quantity, 0)
 
+    const handleExportExcel = () => {
+      const headers = ['No', 'Produk', 'SKU', 'Varian', 'Qty', 'Unit', 'Harga Satuan (Rp)', 'Subtotal (Rp)']
+      const rows = items.map((item, i) => {
+        const sku  = item.ProductSKU
+        const prod = sku?.Product
+        const opts = sku?.ProductVariantOptions ?? []
+        const variant = opts.map(o => o.value).join(' / ') || '-'
+        return [
+          i + 1, prod?.name ?? '—', sku?.sku_code ?? '—', variant,
+          item.quantity, prod?.unit ?? '',
+          Number(item.price), Number(item.price) * item.quantity,
+        ]
+      })
+      exportExcel(`stock-in-${detail.id}-${new Date().toISOString().slice(0, 10)}`, { headers, rows, sheetName: 'Stock IN' })
+    }
+
     return (
       <div className="px-6 py-6 max-w-5xl">
         <div className="flex items-center gap-3 mb-6">
           <button onClick={() => navigate('/stock-in')} className="p-1.5 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors">
             <ArrowLeft size={16} />
           </button>
-          <div>
+          <div className="flex-1">
             <h1 className="text-lg font-bold text-slate-800">Stock IN #{detail.id}</h1>
             <p className="text-xs text-slate-400">
               {new Date(detail.date).toLocaleDateString('id-ID', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}
             </p>
           </div>
+          <button onClick={handleExportExcel} className="btn-secondary text-sm flex items-center gap-1.5">
+            <FileSpreadsheet size={14} /> Export Excel
+          </button>
         </div>
 
         <div className="card p-5 mb-5 grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">

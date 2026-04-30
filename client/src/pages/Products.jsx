@@ -6,10 +6,11 @@ import SearchBar from '../components/SearchBar'
 import { Pagination } from '../components/Table'
 import QrModal from '../components/QrModal'
 import toast from 'react-hot-toast'
+import { exportExcel } from '../utils/exportExcel'
 import {
   Plus, Trash2, ImageIcon, Filter, ChevronRight, ChevronDown,
   Package, ArrowUpDown, ArrowUp, ArrowDown, QrCode, Pencil,
-  Loader2, Tag,
+  Loader2, Tag, FileSpreadsheet,
 } from 'lucide-react'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -174,7 +175,7 @@ function SkuRows({ product, onOpenQr }) {
                 {/* QR */}
                 <div className="flex justify-end">
                   <button
-                    onClick={() => onOpenQr({ sku: sku.sku_code, skuName: label ?? product.name })}
+                    onClick={() => onOpenQr({ sku: sku, skuName: label ?? product.name })}
                     className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-white transition-colors"
                     title="Print QR"
                   >
@@ -361,6 +362,36 @@ export default function Products() {
   const activeFilters = [catFilter, artFilter, whFilter].filter(Boolean).length
   const isFiltered   = !!(search || catFilter || artFilter || whFilter)
 
+  const [exporting, setExporting] = useState(false)
+  const handleExportExcel = async () => {
+    setExporting(true)
+    try {
+      const result = await productsApi.list({
+        limit: 9999, name: search,
+        CategoryId: catFilter || undefined,
+        ArticleId:  artFilter || undefined,
+        WarehouseId: whFilter || undefined,
+        sortBy: sort.col, sortOrder: sort.dir,
+      })
+      const headers = ['No', 'Nama Produk', 'Unit', 'Kategori', 'Total SKU', 'Total Stok', 'Harga Min (Rp)', 'Harga Max (Rp)']
+      const rows = result.data.map((p, i) => {
+        const skus   = p.ProductSKUs ?? []
+        const prices = skus.map(s => Number(s.price || 0)).filter(Boolean)
+        return [
+          i + 1, p.name, p.unit ?? '', p.Category?.name ?? '',
+          skus.length, Number(p.totalStock ?? 0),
+          prices.length ? Math.min(...prices) : '',
+          prices.length ? Math.max(...prices) : '',
+        ]
+      })
+      exportExcel(`produk-${new Date().toISOString().slice(0, 10)}`, { headers, rows, sheetName: 'Produk' })
+    } catch {
+      toast.error('Gagal export Excel')
+    } finally {
+      setExporting(false)
+    }
+  }
+
   return (
     <div className="px-6 py-6 max-w-screen-xl mx-auto">
 
@@ -370,9 +401,15 @@ export default function Products() {
           <h1 className="text-xl font-bold text-slate-800">Products</h1>
           <p className="text-sm text-slate-400 mt-0.5">{pagination?.total ?? 0} produk terdaftar</p>
         </div>
-        <button onClick={() => navigate('/products/new')} className="btn-primary">
-          <Plus size={15} /> Tambah Produk
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={handleExportExcel} disabled={exporting} className="btn-secondary text-sm flex items-center gap-1.5">
+            {exporting ? <Loader2 size={14} className="animate-spin" /> : <FileSpreadsheet size={14} />}
+            Export Excel
+          </button>
+          <button onClick={() => navigate('/products/new')} className="btn-primary">
+            <Plus size={15} /> Tambah Produk
+          </button>
+        </div>
       </div>
 
       {/* Filter bar */}

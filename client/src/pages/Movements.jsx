@@ -4,6 +4,8 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsive
 import { movementsApi, warehousesApi, productsApi } from '../api'
 import PageHeader from '../components/PageHeader'
 import { Table, Pagination } from '../components/Table'
+import { exportExcel } from '../utils/exportExcel'
+import toast from 'react-hot-toast'
 
 const TYPE_BADGE = {
   IN:         <span className="badge-green">▲ IN</span>,
@@ -65,7 +67,7 @@ export default function Movements() {
     setPage(1)
   }
 
-  function handleExport() {
+  function handleExportCsv() {
     movementsApi.exportCsv(filters).then(blob => {
       const url = URL.createObjectURL(blob)
       const a   = document.createElement('a')
@@ -74,6 +76,29 @@ export default function Movements() {
       a.click()
       URL.revokeObjectURL(url)
     })
+  }
+
+  const [exporting, setExporting] = useState(false)
+  async function handleExportExcel() {
+    setExporting(true)
+    try {
+      const result = await movementsApi.list({ ...filters, limit: 9999 })
+      const headers = ['No', 'Tanggal', 'Tipe', 'Produk', 'Warehouse', 'Qty', 'Ref #']
+      const rows = (result.data ?? []).map((m, i) => [
+        i + 1,
+        new Date(m.createdAt).toLocaleString('id-ID'),
+        m.type,
+        m.Product?.name ?? `#${m.ProductId}`,
+        m.Warehouse?.name ?? '—',
+        m.quantity,
+        m.ReferenceId ?? '—',
+      ])
+      exportExcel(`pergerakan-${dateFrom ?? 'all'}-to-${dateTo ?? 'all'}`, { headers, rows, sheetName: 'Pergerakan Stok' })
+    } catch {
+      toast.error('Gagal export Excel')
+    } finally {
+      setExporting(false)
+    }
   }
 
   const columns = [
@@ -103,10 +128,16 @@ export default function Movements() {
         title="Pergerakan Stok"
         subtitle={`${data?.pagination?.total ?? 0} catatan`}
         action={
-          <button onClick={handleExport} className="btn-secondary text-sm flex items-center gap-1.5">
-            <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd"/></svg>
-            Export CSV
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={handleExportExcel} disabled={exporting} className="btn-secondary text-sm flex items-center gap-1.5">
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18M3 9h6M3 15h6M15 9l3 3-3 3M12 12h6"/></svg>
+              {exporting ? 'Exporting…' : 'Excel'}
+            </button>
+            <button onClick={handleExportCsv} className="btn-secondary text-sm flex items-center gap-1.5">
+              <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd"/></svg>
+              CSV
+            </button>
+          </div>
         }
       />
 
