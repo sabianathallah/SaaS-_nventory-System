@@ -6,9 +6,10 @@ import PageHeader from '../components/PageHeader'
 import { Table, Pagination } from '../components/Table'
 import Modal from '../components/Modal'
 import QRScanner from '../components/QRScanner'
+import { useExternalScanner } from '../hooks/useExternalScanner'
 import toast from 'react-hot-toast'
 import { exportExcel } from '../utils/exportExcel'
-import { Plus, Eye, CheckCircle, Search, X, ScanLine, ClipboardList, FileSpreadsheet } from 'lucide-react'
+import { Plus, Eye, CheckCircle, Search, X, ScanLine, ClipboardList, FileSpreadsheet, ScanBarcode } from 'lucide-react'
 
 const STATUS_BADGE = {
   open:      <span className="badge-amber">● Open</span>,
@@ -43,8 +44,9 @@ export default function Opname() {
   const [localItems, setLocalItems]       = useState([])
   const [fillMode, setFillMode]           = useState('manual')
   const [search, setSearch]               = useState('')
-  const [showScanner, setShowScanner]     = useState(false)
-  const [fillInitialized, setFillInitialized] = useState(false)
+  const [showScanner, setShowScanner]         = useState(false)
+  const [scannerConnected, setScannerConnected] = useState(false)
+  const [fillInitialized, setFillInitialized]   = useState(false)
 
   const activeWarehouseId = modal?.data?.warehouseId
   const activeSessionId   = modal?.data?.id
@@ -123,6 +125,7 @@ export default function Opname() {
       qc.invalidateQueries(['stocks'])
       qc.invalidateQueries(['movements'])
       toast.success('Session ditutup — stok disesuaikan')
+      setScannerConnected(false)
       setModal(null)
     },
     onError: e => toast.error(e.response?.data?.message || 'Error'),
@@ -151,6 +154,7 @@ export default function Opname() {
       toast.success('Hasil opname disimpan')
       setLocalItems([])
       setFillInitialized(false)
+      setScannerConnected(false)
       setModal(null)
     },
     onError: e => toast.error(e.response?.data?.message || 'Error'),
@@ -161,6 +165,7 @@ export default function Opname() {
     setLocalItems([])
     setFillInitialized(false)
     setSearch('')
+    setScannerConnected(false)
     setFillMode(canManual ? 'manual' : 'scan')
     setModal({ mode: 'fill', data: session })
   }
@@ -210,6 +215,8 @@ export default function Opname() {
       toast.error(`SKU "${code}" tidak ditemukan`)
     }
   }
+
+  useExternalScanner(handleScan, modal?.mode === 'fill' && scannerConnected)
 
   const updateQty = (productId, val) =>
     setLocalItems(prev => prev.map(i =>
@@ -344,7 +351,7 @@ export default function Opname() {
       </Modal>
 
       {/* ── FILL ───────────────────────────────────────────────────────────── */}
-      <Modal open={modal?.mode === 'fill'} onClose={() => setModal(null)} title={`Fill Opname — Sesi #${modal?.data?.id}`} size="xl">
+      <Modal open={modal?.mode === 'fill'} onClose={() => { setScannerConnected(false); setModal(null) }} title={`Fill Opname — Sesi #${modal?.data?.id}`} size="xl">
         {modal?.data && (
           <div className="space-y-4">
             {/* Session info */}
@@ -378,9 +385,28 @@ export default function Opname() {
                     <input className="input pl-8 text-sm" placeholder="Cari produk…" value={search} onChange={e => setSearch(e.target.value)} />
                   </div>
                   {(fillMode === 'scan' || (!canManual && canScan)) && (
-                    <button onClick={() => setShowScanner(true)} className="btn-primary px-3 py-2 flex items-center gap-1.5 text-sm whitespace-nowrap">
-                      <ScanLine size={14} /> Scan
-                    </button>
+                    <>
+                      <button
+                        onClick={() => {
+                          setScannerConnected(v => !v)
+                          if (!scannerConnected) toast.success('Scanner eksternal terhubung', { icon: '🔌' })
+                          else toast('Scanner diputus', { icon: '🔌' })
+                        }}
+                        className={`flex items-center gap-1.5 px-2.5 py-2 rounded-lg border text-xs font-medium transition-colors whitespace-nowrap ${
+                          scannerConnected
+                            ? 'bg-green-50 border-green-300 text-green-700 hover:bg-green-100'
+                            : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300 hover:text-slate-700'
+                        }`}
+                      >
+                        {scannerConnected
+                          ? <><span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" /> Connected</>
+                          : <><ScanBarcode size={13} /> Hubungkan</>
+                        }
+                      </button>
+                      <button onClick={() => setShowScanner(true)} className="btn-primary px-3 py-2 flex items-center gap-1.5 text-sm whitespace-nowrap">
+                        <ScanLine size={14} /> Scan
+                      </button>
+                    </>
                   )}
                 </div>
 

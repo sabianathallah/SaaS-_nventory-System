@@ -4,11 +4,13 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { stockInApi, warehousesApi, productsApi, productSkusApi } from '../api'
 import { useAuth } from '../context/AuthContext'
 import QRScanner from '../components/QRScanner'
+import { useExternalScanner } from '../hooks/useExternalScanner'
 import toast from 'react-hot-toast'
 import { exportExcel } from '../utils/exportExcel'
 import {
   ArrowLeft, PackagePlus, ScanLine, Plus, Trash2,
-  Save, ChevronDown, Package, CheckCircle2, X, FileSpreadsheet,
+  Save, ChevronDown, Package, X, FileSpreadsheet,
+  ScanBarcode, Unplug,
 } from 'lucide-react'
 
 const fmt     = (n) => Number(n ?? 0).toLocaleString('id-ID')
@@ -216,7 +218,8 @@ function ItemRow({ item, canDelete, headerId }) {
 function ItemsTable({ items, canDelete, headerId, onRemovePending }) {
   const cols = canDelete ? 6 : 5
   return (
-    <table className="w-full text-sm">
+    <div className="overflow-x-auto">
+    <table className="w-full min-w-[560px] text-sm">
       <thead>
         <tr className="bg-slate-50 border-b border-slate-200">
           <th className="th py-2 w-14">Foto</th>
@@ -260,75 +263,10 @@ function ItemsTable({ items, canDelete, headerId, onRemovePending }) {
         })}
       </tbody>
     </table>
-  )
-}
-
-// ── Scan confirm popup (barcode-only mode) ────────────────────────────────────
-// Muncul setelah scan berhasil — user konfirmasi qty sebelum item ditambah
-function ScanConfirm({ sku, onConfirm, onCancel }) {
-  const [qty,   setQty]   = useState(1)
-  const [price, setPrice] = useState(String(sku.price ?? ''))
-  const prod = sku.Product
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/40">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-5 space-y-4 animate-fade-in">
-        {/* Product preview */}
-        <div className="flex items-center gap-3">
-          {prod?.imageUrl
-            ? <img src={prod.imageUrl} className="w-12 h-12 rounded-xl object-cover border border-slate-200 flex-shrink-0" />
-            : <div className="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center flex-shrink-0"><Package size={18} className="text-slate-300" /></div>
-          }
-          <div className="min-w-0">
-            <p className="font-bold text-slate-800 leading-tight truncate">{prod?.name ?? 'Produk'}</p>
-            <p className="text-xs text-slate-400 mt-0.5">{skuLabel(sku)}</p>
-            <p className="text-[10px] font-mono text-green-600 mt-0.5 flex items-center gap-1">
-              <CheckCircle2 size={10} /> Barcode cocok
-            </p>
-          </div>
-        </div>
-
-        {/* Qty + Price */}
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="label">Jumlah (Qty) <span className="text-red-500">*</span></label>
-            <input
-              type="number" min="1" className="input text-center font-bold text-lg"
-              value={qty} onChange={e => setQty(e.target.value)}
-              autoFocus
-            />
-          </div>
-          <div>
-            <label className="label">Harga / unit</label>
-            <input
-              type="number" min="0" className="input"
-              value={price} onChange={e => setPrice(e.target.value)}
-              placeholder="0"
-            />
-          </div>
-        </div>
-
-        {/* Actions */}
-        <div className="flex gap-2 pt-1">
-          <button type="button" onClick={onCancel}
-            className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-slate-200 text-slate-600 text-sm font-medium hover:bg-slate-50 transition-colors">
-            <X size={14} /> Batal
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              if (!qty || Number(qty) <= 0) return toast.error('Qty harus > 0')
-              onConfirm({ sku, quantity: Number(qty), price: Number(price) || 0 })
-            }}
-            className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-brand text-white text-sm font-semibold hover:bg-red-700 transition-colors"
-          >
-            <Plus size={14} /> Tambah Item
-          </button>
-        </div>
-      </div>
     </div>
   )
 }
+
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function StockInDetail() {
@@ -344,8 +282,8 @@ export default function StockInDetail() {
 
   const [form, setForm]             = useState({ date: fmtDate(), WarehouseId: '', note: '' })
   const [pendingItems, setPending]  = useState([])
-  const [showScanner, setShowScanner] = useState(false)
-  const [scanConfirm, setScanConfirm] = useState(null) // { sku } — waiting for qty confirm
+  const [showScanner, setShowScanner]           = useState(false)
+  const [scannerConnected, setScannerConnected] = useState(false)
 
   const { data: detail, isLoading } = useQuery({
     queryKey: ['stock-in', id],
@@ -380,29 +318,24 @@ export default function StockInDetail() {
     })
   }
 
-  // QR scan handler
-  // - canManualInput: add immediately qty=1 (they can also use manual picker)
-  // - barcode-only: show ScanConfirm popup to enter qty before adding
+  // QR scan handler — both roles add directly (qty+1 jika SKU sudah ada)
+  // canManualInput (admin): scanner menutup setelah scan
+  // !canManualInput (staff): scanner tetap terbuka, bisa scan banyak sekaligus
   const handleScan = async (code) => {
-    setShowScanner(false)
     try {
       const sku = await stockInApi.resolveSku(code)
+      addItem({ sku, quantity: 1, price: Number(sku.price) || 0 })
       if (canManualInput) {
-        addItem({ sku, quantity: 1, price: Number(sku.price) || 0 })
+        setShowScanner(false)
         toast.success(`Ditambahkan: ${sku.Product?.name} ${skuLabel(sku)}`)
-      } else {
-        setScanConfirm({ sku })
       }
+      // staff: scanner tetap terbuka, feedback ditampilkan oleh QRScanner
     } catch {
       toast.error(`SKU "${code}" tidak ditemukan`)
     }
   }
 
-  const handleScanConfirm = ({ sku, quantity, price }) => {
-    addItem({ sku, quantity, price })
-    setScanConfirm(null)
-    toast.success(`Ditambahkan: ${sku.Product?.name} ×${quantity}`)
-  }
+  useExternalScanner(handleScan, isNew && scannerConnected)
 
   const handleSubmit = (e) => {
     e.preventDefault()
@@ -463,7 +396,7 @@ export default function StockInDetail() {
           <div><p className="label mb-1">Notes</p><p className="text-slate-500">{detail.note || '—'}</p></div>
         </div>
 
-        <div className="card overflow-hidden mb-4">
+        <div className="card mb-4">
           <div className="px-5 py-3 bg-slate-50 border-b border-slate-200 flex items-center gap-2">
             <PackagePlus size={13} className="text-red-700" />
             <span className="text-xs font-bold text-slate-600 uppercase tracking-wide">Items ({items.length})</span>
@@ -487,7 +420,7 @@ export default function StockInDetail() {
         <button onClick={() => navigate('/stock-in')} className="p-1.5 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors">
           <ArrowLeft size={16} />
         </button>
-        <div>
+        <div className="flex-1">
           <h1 className="text-lg font-bold text-slate-800">New Stock IN</h1>
           {!canManualInput && (
             <p className="text-xs text-amber-600 mt-0.5 flex items-center gap-1">
@@ -495,6 +428,24 @@ export default function StockInDetail() {
             </p>
           )}
         </div>
+        <button
+          type="button"
+          onClick={() => {
+            setScannerConnected(v => !v)
+            if (!scannerConnected) toast.success('Scanner eksternal terhubung', { icon: '🔌' })
+            else toast('Scanner diputus', { icon: '🔌' })
+          }}
+          className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${
+            scannerConnected
+              ? 'bg-green-50 border-green-300 text-green-700 hover:bg-green-100'
+              : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300 hover:text-slate-700'
+          }`}
+        >
+          {scannerConnected
+            ? <><span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" /> Connected</>
+            : <><ScanBarcode size={14} /> Hubungkan Scanner</>
+          }
+        </button>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-5">
@@ -522,7 +473,7 @@ export default function StockInDetail() {
           </div>
         </div>
 
-        <div className="card overflow-hidden">
+        <div className="card">
           <div className="px-5 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <PackagePlus size={13} className="text-red-700" />
@@ -580,15 +531,10 @@ export default function StockInDetail() {
         <QRScanner
           onScan={handleScan}
           onClose={() => setShowScanner(false)}
-          hint={canManualInput ? 'Scan QR code SKU produk' : 'Scan barcode produk untuk menambah item'}
-        />
-      )}
-
-      {scanConfirm && (
-        <ScanConfirm
-          sku={scanConfirm.sku}
-          onConfirm={handleScanConfirm}
-          onCancel={() => setScanConfirm(null)}
+          autoClose={canManualInput}
+          hint={canManualInput
+            ? 'Scan QR code SKU produk'
+            : 'Scan semua item lalu tutup & simpan'}
         />
       )}
     </div>

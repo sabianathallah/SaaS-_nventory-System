@@ -455,32 +455,34 @@ export default function Products() {
           <EmptyState filtered={isFiltered} onAdd={() => navigate('/products/new')} />
         ) : (
           <>
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-slate-100">
-                  <th className="th w-10 pr-0" />
-                  <SortTh label="Produk"  col="name"       sort={sort} onSort={handleSort} />
-                  <th className="th w-32">Kategori</th>
-                  <th className="th w-24">SKU</th>
-                  <th className="th w-44">Harga</th>
-                  <SortTh label="Stok"    col="totalStock" sort={sort} onSort={handleSort} className="w-28 text-right" />
-                  <th className="th w-16" />
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map(p => (
-                  <ProductRow
-                    key={p.id}
-                    product={p}
-                    expanded={expanded.has(p.id)}
-                    onToggle={() => toggleExpand(p.id)}
-                    onNavigate={() => navigate(`/products/${p.id}`)}
-                    onDelete={product => setDelModal(product)}
-                    onOpenQr={setQrTarget}
-                  />
-                ))}
-              </tbody>
-            </table>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[900px]">
+                <thead>
+                  <tr className="border-b border-slate-100">
+                    <th className="th w-10 pr-0" />
+                    <SortTh label="Produk"  col="name"       sort={sort} onSort={handleSort} />
+                    <th className="th w-32">Kategori</th>
+                    <th className="th w-24">SKU</th>
+                    <th className="th w-44">Harga</th>
+                    <SortTh label="Stok"    col="totalStock" sort={sort} onSort={handleSort} className="w-28 text-right" />
+                    <th className="th w-16" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map(p => (
+                    <ProductRow
+                      key={p.id}
+                      product={p}
+                      expanded={expanded.has(p.id)}
+                      onToggle={() => toggleExpand(p.id)}
+                      onNavigate={() => navigate(`/products/${p.id}`)}
+                      onDelete={product => setDelModal(product)}
+                      onOpenQr={setQrTarget}
+                    />
+                  ))}
+                </tbody>
+              </table>
+            </div>
             <Pagination pagination={pagination} onPageChange={setPage} />
           </>
         )}

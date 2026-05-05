@@ -6,8 +6,9 @@ import PageHeader from '../components/PageHeader'
 import { Table, Pagination } from '../components/Table'
 import Modal from '../components/Modal'
 import QRScanner from '../components/QRScanner'
+import { useExternalScanner } from '../hooks/useExternalScanner'
 import toast from 'react-hot-toast'
-import { Plus, Trash2, PackageMinus, Eye, ScanLine, Package, CheckCircle2, X } from 'lucide-react'
+import { Plus, Trash2, PackageMinus, Eye, ScanLine, Package, CheckCircle2, X, ScanBarcode } from 'lucide-react'
 
 const fmt = (n) => Number(n ?? 0).toLocaleString('id-ID')
 
@@ -74,8 +75,9 @@ export default function StockOut() {
   const [page, setPage]           = useState(1)
   const [modal, setModal]         = useState(null)
   const [form, setForm]           = useState(EMPTY_FORM)
-  const [showScanner, setShowScanner] = useState(false)
-  const [scanConfirm, setScanConfirm] = useState(null) // { sku, available }
+  const [showScanner, setShowScanner]           = useState(false)
+  const [scanConfirm, setScanConfirm]           = useState(null) // { sku, available }
+  const [scannerConnected, setScannerConnected] = useState(false)
 
   const canManualOutput = hasPermission('stock.out.manual_input')
 
@@ -153,6 +155,8 @@ export default function StockOut() {
     toast.success(`Ditambahkan: ${item.productName} ×${item.quantity}`)
   }
 
+  useExternalScanner(handleScan, modal?.mode === 'create' && scannerConnected)
+
   const handleSubmit = (e) => {
     e.preventDefault()
     if (!form.items.length) return toast.error('Tambahkan minimal 1 item')
@@ -197,7 +201,7 @@ export default function StockOut() {
       </div>
 
       {/* ── Create modal ──────────────────────────────────────────────────────── */}
-      <Modal open={modal?.mode === 'create'} onClose={() => setModal(null)} title="New Stock OUT Transaction" size="xl">
+      <Modal open={modal?.mode === 'create'} onClose={() => { setModal(null); setScannerConnected(false) }} title="New Stock OUT Transaction" size="xl">
         <form onSubmit={handleSubmit} className="space-y-5">
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -227,14 +231,34 @@ export default function StockOut() {
                 <span className="text-xs font-bold text-slate-600 uppercase tracking-wide">Items</span>
                 {!form.warehouseId && <span className="ml-2 text-xs text-slate-400">Pilih warehouse dulu</span>}
               </div>
-              <button
-                type="button"
-                onClick={() => setShowScanner(true)}
-                disabled={!form.warehouseId}
-                className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-brand hover:border-brand/40 hover:bg-brand/5 px-2.5 py-1 rounded border border-slate-200 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                <ScanLine size={13} /> Scan QR
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setScannerConnected(v => !v)
+                    if (!scannerConnected) toast.success('Scanner eksternal terhubung', { icon: '🔌' })
+                    else toast('Scanner diputus', { icon: '🔌' })
+                  }}
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded border text-xs font-medium transition-colors ${
+                    scannerConnected
+                      ? 'bg-green-50 border-green-300 text-green-700 hover:bg-green-100'
+                      : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300 hover:text-slate-700'
+                  }`}
+                >
+                  {scannerConnected
+                    ? <><span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" /> Connected</>
+                    : <><ScanBarcode size={12} /> Hubungkan Scanner</>
+                  }
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowScanner(true)}
+                  disabled={!form.warehouseId}
+                  className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-brand hover:border-brand/40 hover:bg-brand/5 px-2.5 py-1 rounded border border-slate-200 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <ScanLine size={13} /> Scan QR
+                </button>
+              </div>
             </div>
 
             {/* Input row */}
