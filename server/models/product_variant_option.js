@@ -25,6 +25,7 @@ module.exports = (sequelize, DataTypes) => {
         notEmpty: { msg: 'Option value is required' },
       },
     },
+    position: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
   }, {
     sequelize,
     modelName: 'ProductVariantOption',

@@ -11,8 +11,16 @@ import toast from 'react-hot-toast'
 import {
   ArrowLeft, Save, Trash2, Plus, X, ImageIcon, Upload,
   Loader2, RefreshCw, Hash, Layers, ChevronRight, Package,
-  AlertCircle, Check, SkipForward, QrCode, Pencil,
+  AlertCircle, Check, SkipForward, QrCode, Pencil, GripVertical,
 } from 'lucide-react'
+import {
+  DndContext, closestCenter, PointerSensor, useSensor, useSensors,
+} from '@dnd-kit/core'
+import {
+  SortableContext, horizontalListSortingStrategy,
+  useSortable, arrayMove,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -96,22 +104,80 @@ function ImageUploader({ image, imageUrl, onChange, onClear }) {
 
 // ── Variant Builder ───────────────────────────────────────────────────────────
 
+function SortableOptionTag({ opt, typeId, onDelete }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: opt.id })
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    zIndex:  isDragging ? 50 : 'auto',
+  }
+  return (
+    <span
+      ref={setNodeRef}
+      style={style}
+      className="inline-flex items-center gap-1 pl-1.5 pr-1.5 py-1 rounded-full text-xs font-semibold bg-white border border-slate-200 text-slate-700 shadow-sm select-none"
+    >
+      <span
+        {...attributes}
+        {...listeners}
+        className="cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-400 px-0.5 touch-none"
+      >
+        <GripVertical size={10} />
+      </span>
+      {opt.value}
+      <button
+        type="button"
+        onClick={() => onDelete({ typeId, optionId: opt.id })}
+        className="text-slate-300 hover:text-red-400 hover:bg-red-50 rounded-full p-0.5 transition-colors"
+      >
+        <X size={9} />
+      </button>
+    </span>
+  )
+}
+
 function VariantBuilder({ productId }) {
   const qc = useQueryClient()
   const [addingType, setAddingType]     = useState(false)
   const [newTypeName, setNewTypeName]   = useState('')
   const [addingOptFor, setAddingOptFor] = useState(null)
   const [newOptValue, setNewOptValue]   = useState('')
+  const [localOptions, setLocalOptions] = useState({}) // typeId -> opts array (optimistic)
+
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
 
   const { data: types = [], isLoading } = useQuery({
     queryKey: ['variant-types', productId],
     queryFn:  () => productVariantsApi.getTypes(productId),
   })
 
+  // Sync server data into local state
+  useEffect(() => {
+    const map = {}
+    types.forEach(t => { map[t.id] = t.ProductVariantOptions ?? [] })
+    setLocalOptions(map)
+  }, [types])
+
   const createType   = useMutation({ mutationFn: name => productVariantsApi.createType(productId, { name }), onSuccess: () => { qc.invalidateQueries(['variant-types', productId]); setAddingType(false); setNewTypeName('') }, onError: e => toast.error(e.response?.data?.message || 'Gagal') })
   const deleteType   = useMutation({ mutationFn: tid  => productVariantsApi.deleteType(productId, tid), onSuccess: () => { qc.invalidateQueries(['variant-types', productId]); qc.invalidateQueries(['product-skus', productId]) }, onError: e => toast.error(e.response?.data?.message || 'Gagal') })
   const createOption = useMutation({ mutationFn: ({ typeId, value }) => productVariantsApi.createOption(productId, typeId, { value }), onSuccess: () => { qc.invalidateQueries(['variant-types', productId]); setAddingOptFor(null); setNewOptValue('') }, onError: e => toast.error(e.response?.data?.message || 'Gagal') })
   const deleteOption = useMutation({ mutationFn: ({ typeId, optionId }) => productVariantsApi.deleteOption(productId, typeId, optionId), onSuccess: () => { qc.invalidateQueries(['variant-types', productId]); qc.invalidateQueries(['product-skus', productId]) }, onError: e => toast.error(e.response?.data?.message || 'Gagal') })
+  const reorder      = useMutation({ mutationFn: ({ typeId, order }) => productVariantsApi.reorderOptions(productId, typeId, order), onError: e => { toast.error('Gagal menyimpan urutan'); qc.invalidateQueries(['variant-types', productId]) } })
+
+  const handleDragEnd = (typeId, event) => {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+
+    setLocalOptions(prev => {
+      const opts    = prev[typeId] ?? []
+      const oldIdx  = opts.findIndex(o => o.id === active.id)
+      const newIdx  = opts.findIndex(o => o.id === over.id)
+      const reordered = arrayMove(opts, oldIdx, newIdx)
+      reorder.mutate({ typeId, order: reordered.map(o => o.id) })
+      return { ...prev, [typeId]: reordered }
+    })
+  }
 
   if (isLoading) return <div className="flex items-center gap-2 text-sm text-slate-400 py-2"><Loader2 size={14} className="animate-spin" /> Memuat variant…</div>
 
@@ -125,33 +191,38 @@ function VariantBuilder({ productId }) {
         </div>
       )}
 
-      {types.map(type => (
-        <div key={type.id} className="group flex items-start gap-3 p-4 rounded-xl border border-slate-100 bg-slate-50/60 hover:border-slate-200 transition-colors">
-          <div className="flex-1 min-w-0">
-            <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400 mb-2.5">{type.name}</p>
-            <div className="flex flex-wrap gap-1.5">
-              {type.ProductVariantOptions?.map(opt => (
-                <span key={opt.id} className="inline-flex items-center gap-1 pl-3 pr-1.5 py-1 rounded-full text-xs font-semibold bg-white border border-slate-200 text-slate-700 shadow-sm">
-                  {opt.value}
-                  <button type="button" onClick={() => deleteOption.mutate({ typeId: type.id, optionId: opt.id })} className="text-slate-300 hover:text-red-400 hover:bg-red-50 rounded-full p-0.5 transition-colors"><X size={9} /></button>
-                </span>
-              ))}
-              {addingOptFor === type.id ? (
-                <form className="inline-flex items-center gap-1.5" onSubmit={e => { e.preventDefault(); if (newOptValue.trim()) createOption.mutate({ typeId: type.id, value: newOptValue.trim() }) }}>
-                  <input autoFocus value={newOptValue} onChange={e => setNewOptValue(e.target.value)} onKeyDown={e => { if (e.key === 'Escape') { setAddingOptFor(null); setNewOptValue('') } }} onBlur={() => { if (!newOptValue.trim()) setAddingOptFor(null) }} placeholder="Nama opsi…" className="px-2.5 py-1 text-xs rounded-full border border-brand/40 focus:outline-none focus:border-brand/70 bg-white w-28 shadow-sm" />
-                  <button type="submit" disabled={!newOptValue.trim() || createOption.isPending} className="p-1.5 rounded-full bg-brand text-white disabled:opacity-40">{createOption.isPending ? <Loader2 size={10} className="animate-spin" /> : <Plus size={10} />}</button>
-                  <button type="button" onClick={() => { setAddingOptFor(null); setNewOptValue('') }} className="p-1.5 rounded-full text-slate-300 hover:text-slate-500 hover:bg-slate-100"><X size={10} /></button>
-                </form>
-              ) : (
-                <button type="button" onClick={() => { setAddingOptFor(type.id); setNewOptValue('') }} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium text-slate-400 border border-dashed border-slate-300 hover:border-brand/50 hover:text-brand bg-transparent transition-colors">
-                  <Plus size={10} /> tambah opsi
-                </button>
-              )}
+      {types.map(type => {
+        const opts = localOptions[type.id] ?? type.ProductVariantOptions ?? []
+        return (
+          <div key={type.id} className="group flex items-start gap-3 p-4 rounded-xl border border-slate-100 bg-slate-50/60 hover:border-slate-200 transition-colors">
+            <div className="flex-1 min-w-0">
+              <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400 mb-2.5">{type.name}</p>
+              <div className="flex flex-wrap gap-1.5">
+                <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={e => handleDragEnd(type.id, e)}>
+                  <SortableContext items={opts.map(o => o.id)} strategy={horizontalListSortingStrategy}>
+                    {opts.map(opt => (
+                      <SortableOptionTag key={opt.id} opt={opt} typeId={type.id} onDelete={deleteOption.mutate} />
+                    ))}
+                  </SortableContext>
+                </DndContext>
+
+                {addingOptFor === type.id ? (
+                  <form className="inline-flex items-center gap-1.5" onSubmit={e => { e.preventDefault(); if (newOptValue.trim()) createOption.mutate({ typeId: type.id, value: newOptValue.trim() }) }}>
+                    <input autoFocus value={newOptValue} onChange={e => setNewOptValue(e.target.value)} onKeyDown={e => { if (e.key === 'Escape') { setAddingOptFor(null); setNewOptValue('') } }} onBlur={() => { if (!newOptValue.trim()) setAddingOptFor(null) }} placeholder="Nama opsi…" className="px-2.5 py-1 text-xs rounded-full border border-brand/40 focus:outline-none focus:border-brand/70 bg-white w-28 shadow-sm" />
+                    <button type="submit" disabled={!newOptValue.trim() || createOption.isPending} className="p-1.5 rounded-full bg-brand text-white disabled:opacity-40">{createOption.isPending ? <Loader2 size={10} className="animate-spin" /> : <Plus size={10} />}</button>
+                    <button type="button" onClick={() => { setAddingOptFor(null); setNewOptValue('') }} className="p-1.5 rounded-full text-slate-300 hover:text-slate-500 hover:bg-slate-100"><X size={10} /></button>
+                  </form>
+                ) : (
+                  <button type="button" onClick={() => { setAddingOptFor(type.id); setNewOptValue('') }} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium text-slate-400 border border-dashed border-slate-300 hover:border-brand/50 hover:text-brand bg-transparent transition-colors">
+                    <Plus size={10} /> tambah opsi
+                  </button>
+                )}
+              </div>
             </div>
+            <button type="button" onClick={() => { if (confirm(`Hapus tipe "${type.name}" beserta semua opsinya?`)) deleteType.mutate(type.id) }} className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-slate-300 hover:text-red-400 hover:bg-red-50 transition-all flex-shrink-0 mt-0.5"><Trash2 size={13} /></button>
           </div>
-          <button type="button" onClick={() => { if (confirm(`Hapus tipe "${type.name}" beserta semua opsinya?`)) deleteType.mutate(type.id) }} className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-slate-300 hover:text-red-400 hover:bg-red-50 transition-all flex-shrink-0 mt-0.5"><Trash2 size={13} /></button>
-        </div>
-      ))}
+        )
+      })}
 
       {addingType ? (
         <form onSubmit={e => { e.preventDefault(); if (newTypeName.trim()) createType.mutate(newTypeName.trim()) }} className="flex items-center gap-2">

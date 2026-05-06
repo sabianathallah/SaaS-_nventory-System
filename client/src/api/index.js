@@ -41,8 +41,9 @@ export const productVariantsApi = {
   getTypes:     (pid)           => api.get(`/products/${pid}/variant-types`).then(r => r.data),
   createType:   (pid, data)     => api.post(`/products/${pid}/variant-types`, data).then(r => r.data),
   deleteType:   (pid, tid)      => api.delete(`/products/${pid}/variant-types/${tid}`).then(r => r.data),
-  createOption: (pid, tid, data) => api.post(`/products/${pid}/variant-types/${tid}/options`, data).then(r => r.data),
-  deleteOption: (pid, tid, oid)  => api.delete(`/products/${pid}/variant-types/${tid}/options/${oid}`).then(r => r.data),
+  createOption:  (pid, tid, data)  => api.post(`/products/${pid}/variant-types/${tid}/options`, data).then(r => r.data),
+  deleteOption:  (pid, tid, oid)   => api.delete(`/products/${pid}/variant-types/${tid}/options/${oid}`).then(r => r.data),
+  reorderOptions:(pid, tid, order) => api.patch(`/products/${pid}/variant-types/${tid}/options/reorder`, { order }).then(r => r.data),
 }
 
 export const productSkusApi = {

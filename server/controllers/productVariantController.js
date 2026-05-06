@@ -11,8 +11,8 @@ class ProductVariantController {
 
       const types = await ProductVariantType.findAll({
         where: { ProductId: req.params.productId },
-        include: [{ model: ProductVariantOption, attributes: ['id', 'value'] }],
-        order: [['createdAt', 'ASC'], [ProductVariantOption, 'value', 'ASC']],
+        include: [{ model: ProductVariantOption, attributes: ['id', 'value', 'position'] }],
+        order: [['createdAt', 'ASC'], [ProductVariantOption, 'position', 'ASC']],
       });
       res.status(200).json(types);
     } catch (err) { next(err); }
@@ -65,9 +65,13 @@ class ProductVariantController {
       });
       if (!variantType) throw { name: 'NotFound', message: 'Variant type not found' };
 
+      const maxPosition = await ProductVariantOption.max('position', {
+        where: { ProductVariantTypeId: variantType.id },
+      });
       const option = await ProductVariantOption.create({
         ProductVariantTypeId: variantType.id,
         value: req.body.value,
+        position: (maxPosition ?? -1) + 1,
       });
       res.status(201).json(option);
     } catch (err) { next(err); }
@@ -94,6 +98,33 @@ class ProductVariantController {
       if (!option) throw { name: 'NotFound', message: 'Variant option not found' };
       await option.destroy();
       res.status(200).json({ message: 'Variant option deleted successfully' });
+    } catch (err) { next(err); }
+  }
+
+  // PATCH /products/:productId/variant-types/:typeId/options/reorder
+  // body: { order: [id, id, id, ...] }
+  static async reorderOptions(req, res, next) {
+    try {
+      const variantType = await ProductVariantType.findOne({
+        where: { id: req.params.typeId, ProductId: req.params.productId },
+      });
+      if (!variantType) throw { name: 'NotFound', message: 'Variant type not found' };
+
+      const { order } = req.body; // array of option ids in new order
+      if (!Array.isArray(order) || order.length === 0) {
+        throw { name: 'BadRequest', message: 'order must be a non-empty array of ids' };
+      }
+
+      await Promise.all(
+        order.map((id, index) =>
+          ProductVariantOption.update(
+            { position: index },
+            { where: { id, ProductVariantTypeId: variantType.id } }
+          )
+        )
+      );
+
+      res.status(200).json({ message: 'Reordered successfully' });
     } catch (err) { next(err); }
   }
 }

@@ -10,8 +10,9 @@ router.put('/:typeId', ProductVariantController.updateVariantType);
 router.delete('/:typeId', ProductVariantController.deleteVariantType);
 
 // Variant Options (nested under type)
-router.post('/:typeId/options',              ProductVariantController.createVariantOption);
-router.put('/:typeId/options/:optionId',     ProductVariantController.updateVariantOption);
-router.delete('/:typeId/options/:optionId',  ProductVariantController.deleteVariantOption);
+router.post('/:typeId/options',                    ProductVariantController.createVariantOption);
+router.patch('/:typeId/options/reorder',           ProductVariantController.reorderOptions);
+router.put('/:typeId/options/:optionId',           ProductVariantController.updateVariantOption);
+router.delete('/:typeId/options/:optionId',        ProductVariantController.deleteVariantOption);
 
 module.exports = router;
