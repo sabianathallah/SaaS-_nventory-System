@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { stockOutApi, warehousesApi, stockInApi } from '../api'
+import { stockOutApi, warehousesApi, stockInApi, productsApi, stocksApi } from '../api'
 import { useAuth } from '../context/AuthContext'
 import QRScanner from '../components/QRScanner'
 import { useExternalScanner } from '../hooks/useExternalScanner'
@@ -39,13 +39,13 @@ export default function StockOutDetail() {
 
   const { data: productsForManual } = useQuery({
     queryKey: ['products', { limit: 200 }],
-    queryFn:  () => import('../api').then(m => m.productsApi.list({ limit: 200 })),
+    queryFn:  () => productsApi.list({ limit: 200 }),
     enabled:  canManualOutput && isNew,
   })
 
   const { data: stocks } = useQuery({
     queryKey: ['stocks', { WarehouseId: form.warehouseId, limit: 200 }],
-    queryFn:  () => import('../api').then(m => m.stocksApi.list({ WarehouseId: form.warehouseId, limit: 200 })),
+    queryFn:  () => stocksApi.list({ WarehouseId: form.warehouseId, limit: 200 }),
     enabled:  !!form.warehouseId && isNew,
   })
 

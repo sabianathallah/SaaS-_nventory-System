@@ -155,7 +155,6 @@ export default function OpnameDetail() {
   }
 
   const handleScan = async (code) => {
-    setShowScanner(false)
     try {
       const sku       = await stockInApi.resolveSku(code)
       const productId = String(sku.ProductId ?? sku.Product?.id)
@@ -251,10 +250,10 @@ export default function OpnameDetail() {
           )}
         </div>
 
-        <div className="card p-5 mb-5 grid grid-cols-3 gap-4 text-sm">
+        <div className="card p-5 mb-5 grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm">
           <div><p className="label mb-1">Warehouse</p><p className="font-semibold text-slate-700">{session.Warehouse?.name ?? '—'}</p></div>
           <div><p className="label mb-1">Dimulai</p><p className="font-mono text-slate-600">{new Date(session.started_at).toLocaleDateString('id-ID')}</p></div>
-          <div>
+          <div className="col-span-2 sm:col-span-1">
             <p className="label mb-1">Status</p>
             <p className={`font-semibold ${session.status === 'closed' ? 'text-success' : 'text-slate-400'}`}>
               {session.status === 'closed' ? '✓ Closed' : '✕ Cancelled'}
@@ -267,13 +266,14 @@ export default function OpnameDetail() {
             <div className="px-5 py-3 bg-slate-50 border-b border-slate-200">
               <span className="text-xs font-bold text-slate-600 uppercase tracking-wide">Hasil Hitung Opname ({items.length})</span>
             </div>
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto">
+            <table className="w-full min-w-[400px] text-sm">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-100">
                   <th className="th py-2 text-left">Produk</th>
-                  <th className="th py-2 text-right w-28">Sistem</th>
-                  <th className="th py-2 text-right w-28">Aktual</th>
-                  <th className="th py-2 text-right w-28">Selisih</th>
+                  <th className="th py-2 text-right w-24">Sistem</th>
+                  <th className="th py-2 text-right w-24">Aktual</th>
+                  <th className="th py-2 text-right w-24">Selisih</th>
                 </tr>
               </thead>
               <tbody>
@@ -295,6 +295,7 @@ export default function OpnameDetail() {
                 })}
               </tbody>
             </table>
+            </div>
           </div>
         ) : (
           <div className="card p-10 text-center text-slate-400 text-sm">Tidak ada data opname tersimpan.</div>
@@ -407,7 +408,7 @@ export default function OpnameDetail() {
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-5 mb-5">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-5">
         {/* LEFT: Search + product list */}
         <div className="space-y-2">
           <div className="flex items-center gap-2">
@@ -514,15 +515,15 @@ export default function OpnameDetail() {
       </div>
 
       {/* Footer actions */}
-      <div className="flex items-center gap-3 pt-4 border-t border-slate-100">
-        <button onClick={() => setConfirmMode('cancel')} className="btn-danger text-sm px-4">Batalkan Sesi</button>
+      <div className="flex flex-wrap items-center gap-2 pt-4 border-t border-slate-100">
+        <button onClick={() => setConfirmMode('cancel')} className="btn-danger text-sm px-3">Batalkan Sesi</button>
         <div className="flex-1" />
         <button onClick={() => navigate('/opname')} className="btn-secondary text-sm">Tutup</button>
         <button
           onClick={() => setConfirmMode('close')}
-          className="text-sm px-4 py-2 rounded-lg font-medium flex items-center gap-1.5 bg-success-light text-success border border-success/20 hover:bg-success hover:text-white transition-colors"
+          className="text-sm px-3 py-2 rounded-lg font-medium flex items-center gap-1.5 bg-success-light text-success border border-success/20 hover:bg-success hover:text-white transition-colors"
         >
-          <CheckCircle size={14} /> Close Session
+          <CheckCircle size={14} /> Close
         </button>
         <button onClick={handleSubmitClick} className="btn-primary text-sm">
           Submit ({itemsToSubmit.length})
@@ -530,7 +531,7 @@ export default function OpnameDetail() {
       </div>
 
       {showScanner && (
-        <QRScanner onScan={handleScan} onClose={() => setShowScanner(false)} hint="Scan barcode produk untuk menghitung stok opname" />
+        <QRScanner onScan={handleScan} onClose={() => setShowScanner(false)} autoClose={false} hint="Scan semua produk lalu tutup untuk menyimpan" />
       )}
     </div>
   )
