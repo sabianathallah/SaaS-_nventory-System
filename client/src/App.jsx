@@ -14,8 +14,10 @@ import Suppliers from './pages/Suppliers'
 import StockIn from './pages/StockIn'
 import StockInDetail from './pages/StockInDetail'
 import StockOut from './pages/StockOut'
+import StockOutDetail from './pages/StockOutDetail'
 import Movements from './pages/Movements'
 import Opname from './pages/Opname'
+import OpnameDetail from './pages/OpnameDetail'
 import Users from './pages/Users'
 import Companies from './pages/Companies'
 import Catalog from './pages/Catalog'
@@ -66,8 +68,11 @@ function AppRoutes() {
                 <Route path="/stock-in/new"       element={<PageVisibleRoute pageKey="stock-in"><StockInDetail /></PageVisibleRoute>} />
                 <Route path="/stock-in/:id"       element={<PageVisibleRoute pageKey="stock-in"><StockInDetail /></PageVisibleRoute>} />
                 <Route path="/stock-out"          element={<PageVisibleRoute pageKey="stock-out"><StockOut /></PageVisibleRoute>} />
+                <Route path="/stock-out/new"      element={<PageVisibleRoute pageKey="stock-out"><StockOutDetail /></PageVisibleRoute>} />
+                <Route path="/stock-out/:id"      element={<PageVisibleRoute pageKey="stock-out"><StockOutDetail /></PageVisibleRoute>} />
                 <Route path="/movements"          element={<PageVisibleRoute pageKey="movements"><Movements /></PageVisibleRoute>} />
                 <Route path="/opname"             element={<PageVisibleRoute pageKey="opname"><Opname /></PageVisibleRoute>} />
+                <Route path="/opname/:id"         element={<PageVisibleRoute pageKey="opname"><OpnameDetail /></PageVisibleRoute>} />
                 <Route path="/users"              element={<PageVisibleRoute pageKey="users"><Users /></PageVisibleRoute>} />
                 <Route path="/companies"          element={<PageVisibleRoute pageKey="companies"><Companies /></PageVisibleRoute>} />
                 <Route path="/vendors"            element={<PageVisibleRoute pageKey="vendors"><Vendors /></PageVisibleRoute>} />

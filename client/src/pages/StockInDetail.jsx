@@ -318,18 +318,11 @@ export default function StockInDetail() {
     })
   }
 
-  // QR scan handler — both roles add directly (qty+1 jika SKU sudah ada)
-  // canManualInput (admin): scanner menutup setelah scan
-  // !canManualInput (staff): scanner tetap terbuka, bisa scan banyak sekaligus
   const handleScan = async (code) => {
     try {
       const sku = await stockInApi.resolveSku(code)
       addItem({ sku, quantity: 1, price: Number(sku.price) || 0 })
-      if (canManualInput) {
-        setShowScanner(false)
-        toast.success(`Ditambahkan: ${sku.Product?.name} ${skuLabel(sku)}`)
-      }
-      // staff: scanner tetap terbuka, feedback ditampilkan oleh QRScanner
+      // Scanner tetap terbuka untuk semua role — feedback via lastScanned di QRScanner
     } catch {
       toast.error(`SKU "${code}" tidak ditemukan`)
     }
@@ -531,10 +524,8 @@ export default function StockInDetail() {
         <QRScanner
           onScan={handleScan}
           onClose={() => setShowScanner(false)}
-          autoClose={canManualInput}
-          hint={canManualInput
-            ? 'Scan QR code SKU produk'
-            : 'Scan semua item lalu tutup & simpan'}
+          autoClose={false}
+          hint="Scan semua item lalu tutup & simpan"
         />
       )}
     </div>
