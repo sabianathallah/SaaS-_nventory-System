@@ -67,17 +67,25 @@ export default function OpnameDetail() {
   useEffect(() => {
     if (session?.status !== 'open' || fillInitialized) return
     if (!existingItems?.data) return
-    setLocalItems(existingItems.data.map(item => ({
-      id:           item.id,
-      productId:    String(item.ProductId),
-      productName:  item.Product?.name ?? `#${item.ProductId}`,
-      skuCode:      item.Product?.sku ?? '',
-      variantLabel: '',
-      systemQty:    item.system_qty,
-      qty:          item.scanned_qty,
-      saved:        true,
-      dirty:        false,
-    })))
+    setLocalItems(existingItems.data.map(item => {
+      const sku = item.ProductSKU
+      const variantLabel = sku?.ProductVariantOptions?.length
+        ? sku.ProductVariantOptions.map(o => o.value).join(' / ')
+        : ''
+      return {
+        id:           item.id,
+        productId:    String(item.ProductId),
+        skuId:        item.ProductSKUId ? String(item.ProductSKUId) : null,
+        skuKey:       item.ProductSKUId ? `sku-${item.ProductSKUId}` : `prod-${item.ProductId}`,
+        productName:  item.Product?.name ?? `#${item.ProductId}`,
+        skuCode:      sku?.sku_code ?? item.Product?.sku ?? '',
+        variantLabel,
+        systemQty:    item.system_qty,
+        qty:          item.scanned_qty,
+        saved:        true,
+        dirty:        false,
+      }
+    }))
     setFillInitialized(true)
     setFillMode(canManual ? 'manual' : 'scan')
   }, [session?.status, fillInitialized, existingItems?.data, canManual])
@@ -114,6 +122,7 @@ export default function OpnameDetail() {
           await opnameItemsApi.create({
             StockOpnameSessionId: id,
             ProductId:            item.productId,
+            ProductSKUId:         item.skuId || undefined,
             actualQty:            Number(item.qty),
           })
         } else if (item.dirty) {
@@ -138,13 +147,16 @@ export default function OpnameDetail() {
   // ── Fill helpers ──────────────────────────────────────────────────────────────
   const addProduct = (stock) => {
     const productId = String(stock.ProductId)
-    if (localItems.find(i => i.productId === productId)) {
+    const skuKey = `prod-${productId}`
+    if (localItems.find(i => i.skuKey === skuKey)) {
       toast.error('Produk sudah ada di daftar hitung')
       return
     }
     setLocalItems(prev => [...prev, {
       id: null, saved: false, dirty: false,
       productId,
+      skuId:        null,
+      skuKey,
       productName:  stock.Product?.name ?? `#${productId}`,
       skuCode:      stock.Product?.sku ?? '',
       variantLabel: '',
@@ -158,10 +170,12 @@ export default function OpnameDetail() {
     try {
       const sku       = await stockInApi.resolveSku(code)
       const productId = String(sku.ProductId ?? sku.Product?.id)
+      const skuId     = String(sku.id)
+      const skuKey    = `sku-${skuId}`
       const systemQty = stocks?.data?.find(s => String(s.ProductId) === productId)?.quantity ?? 0
       const label     = skuLabel(sku)
       setLocalItems(prev => {
-        const idx = prev.findIndex(i => i.productId === productId)
+        const idx = prev.findIndex(i => i.skuKey === skuKey)
         if (idx >= 0) {
           const next = [...prev]
           next[idx] = { ...next[idx], qty: (Number(next[idx].qty) || 0) + 1, dirty: true }
@@ -170,6 +184,8 @@ export default function OpnameDetail() {
         return [...prev, {
           id: null, saved: false, dirty: false,
           productId,
+          skuId,
+          skuKey,
           productName:  sku.Product?.name ?? code,
           skuCode:      sku.sku_code ?? code,
           variantLabel: label,
@@ -185,14 +201,14 @@ export default function OpnameDetail() {
 
   useExternalScanner(handleScan, session?.status === 'open' && scannerConnected)
 
-  const updateQty = (productId, val) =>
+  const updateQty = (skuKey, val) =>
     setLocalItems(prev => prev.map(i =>
-      i.productId === productId ? { ...i, qty: val, dirty: true } : i
+      i.skuKey === skuKey ? { ...i, qty: val, dirty: true } : i
     ))
 
   const removeItem = async (item) => {
     if (item.saved && item.id) {
-      setLocalItems(prev => prev.filter(i => i.productId !== item.productId))
+      setLocalItems(prev => prev.filter(i => i.skuKey !== item.skuKey))
       try {
         await opnameItemsApi.remove(item.id)
         qc.invalidateQueries(['opname-items', id])
@@ -201,7 +217,7 @@ export default function OpnameDetail() {
         setLocalItems(prev => [...prev, item])
       }
     } else {
-      setLocalItems(prev => prev.filter(i => i.productId !== item.productId))
+      setLocalItems(prev => prev.filter(i => i.skuKey !== item.skuKey))
     }
   }
 
@@ -322,7 +338,8 @@ export default function OpnameDetail() {
         </div>
         <button
           type="button"
-          onClick={() => {
+          onClick={(e) => {
+            e.currentTarget.blur() // lepas fokus agar Enter dari scanner tidak memicu tombol ini
             setScannerConnected(v => !v)
             if (!scannerConnected) toast.success('Scanner eksternal terhubung', { icon: '🔌' })
             else toast('Scanner diputus', { icon: '🔌' })
@@ -349,7 +366,7 @@ export default function OpnameDetail() {
           </p>
           <div className="bg-white rounded-lg border border-slate-200 p-3 max-h-40 overflow-y-auto space-y-1.5 mb-3">
             {itemsToSubmit.map(i => (
-              <div key={i.productId} className="flex items-center justify-between text-xs">
+              <div key={i.skuKey} className="flex items-center justify-between text-xs">
                 <span className="text-slate-700 truncate">{i.productName}</span>
                 <div className="flex items-center gap-3 ml-2 shrink-0">
                   <span className="text-slate-400">sistem: {i.systemQty}</span>
@@ -435,7 +452,7 @@ export default function OpnameDetail() {
               )}
               {filteredStocks.map(s => {
                 const productId = String(s.ProductId)
-                const already   = localItems.some(i => i.productId === productId)
+                const already   = localItems.some(i => i.skuKey === `prod-${productId}`)
                 const clickable = fillMode === 'manual' && !already
                 return (
                   <button
@@ -478,7 +495,7 @@ export default function OpnameDetail() {
                   {fillMode === 'scan' ? 'Scan barcode untuk mulai menghitung' : 'Pilih produk dari kiri'}
                 </p>
               ) : localItems.map(item => (
-                <div key={item.productId} className={`px-3 py-2.5 flex items-center gap-2 ${item.dirty ? 'bg-amber-50/60' : ''}`}>
+                <div key={item.skuKey} className={`px-3 py-2.5 flex items-center gap-2 ${item.dirty ? 'bg-amber-50/60' : ''}`}>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5">
                       <p className="text-sm font-medium text-slate-800 truncate">{item.productName}</p>
@@ -497,7 +514,7 @@ export default function OpnameDetail() {
                       type="number" min="0"
                       className="input w-16 text-center py-1 text-sm font-mono font-bold"
                       value={item.qty}
-                      onChange={e => updateQty(item.productId, e.target.value)}
+                      onChange={e => updateQty(item.skuKey, e.target.value)}
                       readOnly={fillMode === 'scan' && !canManual}
                     />
                     <button

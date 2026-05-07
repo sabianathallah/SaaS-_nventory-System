@@ -44,6 +44,7 @@ export const productVariantsApi = {
   createOption:  (pid, tid, data)  => api.post(`/products/${pid}/variant-types/${tid}/options`, data).then(r => r.data),
   deleteOption:  (pid, tid, oid)   => api.delete(`/products/${pid}/variant-types/${tid}/options/${oid}`).then(r => r.data),
   reorderOptions:(pid, tid, order) => api.patch(`/products/${pid}/variant-types/${tid}/options/reorder`, { order }).then(r => r.data),
+  reorderTypes:  (pid, order)      => api.patch(`/products/${pid}/variant-types/reorder`, { order }).then(r => r.data),
 }
 
 export const productSkusApi = {
@@ -107,9 +108,10 @@ export const formAnakPackingApi = {
 }
 
 export const rolePermissionsApi = {
-  getAll:         (params) => api.get('/role-permissions', { params }).then(r => r.data),
-  update:         (role, permissions) => api.put(`/role-permissions/${role}`, { permissions }).then(r => r.data),
-  resetToDefault: (role)   => api.delete(`/role-permissions/${role}`).then(r => r.data),
+  getAll:      (params)              => api.get('/role-permissions', { params }).then(r => r.data),
+  createRole:  (roleName, perms)     => api.post('/role-permissions', { roleName, permissions: perms }).then(r => r.data),
+  update:      (role, permissions)   => api.put(`/role-permissions/${role}`, { permissions }).then(r => r.data),
+  deleteRole:  (role)                => api.delete(`/role-permissions/${role}`).then(r => r.data),
 }
 
 export const systemApi = {

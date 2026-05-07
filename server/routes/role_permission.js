@@ -6,8 +6,9 @@ const checkRoles = require('../middlewares/checkRoles');
 
 const ADMIN_ROLES = checkRoles('SUPER_ADMIN', 'ADMIN', 'COMPANY_ADMIN');
 
-router.get('/',           ADMIN_ROLES, RolePermissionController.getAll);
-router.put('/:role',      ADMIN_ROLES, RolePermissionController.update);
-router.delete('/:role',   ADMIN_ROLES, RolePermissionController.resetToDefault);
+router.get('/',         ADMIN_ROLES, RolePermissionController.getAll);
+router.post('/',        ADMIN_ROLES, RolePermissionController.createRole);
+router.put('/:role',    ADMIN_ROLES, RolePermissionController.update);
+router.delete('/:role', ADMIN_ROLES, RolePermissionController.deleteRole);
 
 module.exports = router;

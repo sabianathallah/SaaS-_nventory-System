@@ -1,5 +1,5 @@
 'use strict';
-const { Stock_Opname_Item, Stock_Opname_Session, Product, Stock } = require('../models');
+const { Stock_Opname_Item, Stock_Opname_Session, Product, ProductSKU, ProductVariantOption, ProductVariantType, Stock } = require('../models');
 const { companyFilter } = require('../helpers/tenancy');
 const { paginate, buildFilter, paginatedResponse } = require('../helpers/queryHelper');
 
@@ -15,7 +15,10 @@ class StockOpnameItemController {
                 where: filter,
                 include: [
                     { model: Stock_Opname_Session, attributes: ['id', 'status', 'started_at'], where: companyFilter(req), required: true },
-                    { model: Product, attributes: ['id', 'name', 'sku'] }
+                    { model: Product, attributes: ['id', 'name', 'sku'] },
+                    { model: ProductSKU, attributes: ['id', 'sku_code'], required: false,
+                      include: [{ model: ProductVariantOption, attributes: ['id', 'value'], through: { attributes: [] },
+                        include: [{ model: ProductVariantType, attributes: ['id', 'name'] }] }] },
                 ],
                 limit, offset,
                 distinct: true
@@ -29,7 +32,10 @@ class StockOpnameItemController {
             const item = await Stock_Opname_Item.findByPk(req.params.id, {
                 include: [
                     { model: Stock_Opname_Session, attributes: ['id', 'status', 'started_at'], where: companyFilter(req), required: true },
-                    { model: Product, attributes: ['id', 'name', 'sku'] }
+                    { model: Product, attributes: ['id', 'name', 'sku'] },
+                    { model: ProductSKU, attributes: ['id', 'sku_code'], required: false,
+                      include: [{ model: ProductVariantOption, attributes: ['id', 'value'], through: { attributes: [] },
+                        include: [{ model: ProductVariantType, attributes: ['id', 'name'] }] }] },
                 ]
             });
             if (!item) throw { name: 'NotFound', message: 'Stock opname item not found' };
@@ -46,7 +52,7 @@ class StockOpnameItemController {
             const body = { ...req.body };
             const SessionId = body.SessionId || body.StockOpnameSessionId;
             const scanned_qty = body.scanned_qty ?? body.actualQty;
-            const { ProductId } = body;
+            const { ProductId, ProductSKUId } = body;
 
             if (!SessionId || !ProductId || scanned_qty == null) {
                 return res.status(400).json({ message: 'SessionId, ProductId, dan actualQty wajib diisi' });
@@ -68,6 +74,7 @@ class StockOpnameItemController {
             const item = await Stock_Opname_Item.create({
                 SessionId,
                 ProductId,
+                ProductSKUId: ProductSKUId || null,
                 scanned_qty: scanned,
                 system_qty,
                 difference,

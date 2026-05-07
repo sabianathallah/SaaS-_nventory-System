@@ -12,7 +12,7 @@ class ProductVariantController {
       const types = await ProductVariantType.findAll({
         where: { ProductId: req.params.productId },
         include: [{ model: ProductVariantOption, attributes: ['id', 'value', 'position'] }],
-        order: [['createdAt', 'ASC'], [ProductVariantOption, 'position', 'ASC']],
+        order: [['position', 'ASC'], ['createdAt', 'ASC'], [ProductVariantOption, 'position', 'ASC']],
       });
       res.status(200).json(types);
     } catch (err) { next(err); }
@@ -95,9 +95,33 @@ class ProductVariantController {
       const option = await ProductVariantOption.findOne({
         where: { id: req.params.optionId, ProductVariantTypeId: req.params.typeId },
       });
-      if (!option) throw { name: 'NotFound', message: 'Variant option not found' };
-      await option.destroy();
+      if (option) await option.destroy();
       res.status(200).json({ message: 'Variant option deleted successfully' });
+    } catch (err) { next(err); }
+  }
+
+  // PATCH /products/:productId/variant-types/reorder
+  // body: { order: [id, id, ...] }
+  static async reorderTypes(req, res, next) {
+    try {
+      const product = await Product.findOne({ where: { id: req.params.productId, ...companyFilter(req) } });
+      if (!product) throw { name: 'NotFound', message: 'Product not found' };
+
+      const { order } = req.body;
+      if (!Array.isArray(order) || order.length === 0) {
+        throw { name: 'BadRequest', message: 'order must be a non-empty array of ids' };
+      }
+
+      await Promise.all(
+        order.map((id, index) =>
+          ProductVariantType.update(
+            { position: index },
+            { where: { id, ProductId: req.params.productId } }
+          )
+        )
+      );
+
+      res.status(200).json({ message: 'Reordered successfully' });
     } catch (err) { next(err); }
   }
 

@@ -4,10 +4,11 @@ const router = express.Router({ mergeParams: true }); // mergeParams agar :produ
 const ProductVariantController = require('../controllers/productVariantController');
 
 // Variant Types
-router.get('/',        ProductVariantController.getVariantTypes);
-router.post('/',       ProductVariantController.createVariantType);
-router.put('/:typeId', ProductVariantController.updateVariantType);
-router.delete('/:typeId', ProductVariantController.deleteVariantType);
+router.get('/',              ProductVariantController.getVariantTypes);
+router.post('/',             ProductVariantController.createVariantType);
+router.patch('/reorder',     ProductVariantController.reorderTypes);
+router.put('/:typeId',       ProductVariantController.updateVariantType);
+router.delete('/:typeId',    ProductVariantController.deleteVariantType);
 
 // Variant Options (nested under type)
 router.post('/:typeId/options',                    ProductVariantController.createVariantOption);
