@@ -1,20 +1,16 @@
 'use strict';
 const express = require('express');
 const router  = express.Router();
-const PackingJobController = require('../controllers/packingJobController');
-const checkRoles = require('../middlewares/checkRoles');
+const PackingJobController  = require('../controllers/packingJobController');
+const requirePermission     = require('../middlewares/requirePermission');
 
-const READ_ROLES  = checkRoles('HEAD_PACKING','TIM_PACKING','OPERASIONAL','CEO','COMPANY_ADMIN','ADMIN');
-const HEAD_ROLES  = checkRoles('HEAD_PACKING','COMPANY_ADMIN','ADMIN');
-const PACK_ROLES  = checkRoles('TIM_PACKING','COMPANY_ADMIN','ADMIN');
+router.get('/workers', requirePermission('packing.verify'), PackingJobController.getWorkers);
+router.get('/',        requirePermission('packing.view'),   PackingJobController.getAll);
+router.get('/:id',     requirePermission('packing.view'),   PackingJobController.getById);
+router.post('/',       requirePermission('packing.verify'), PackingJobController.create);
 
-router.get('/workers', HEAD_ROLES, PackingJobController.getWorkers);
-router.get('/',    READ_ROLES, PackingJobController.getAll);
-router.get('/:id', READ_ROLES, PackingJobController.getById);
-router.post('/',   HEAD_ROLES, PackingJobController.create);
-
-router.post('/:id/start',  PACK_ROLES, PackingJobController.start);
-router.post('/:id/submit', PACK_ROLES, PackingJobController.submit);
-router.post('/:id/verify', HEAD_ROLES, PackingJobController.verify);
+router.post('/:id/start',  requirePermission('packing.jobs'),   PackingJobController.start);
+router.post('/:id/submit', requirePermission('packing.jobs'),   PackingJobController.submit);
+router.post('/:id/verify', requirePermission('packing.verify'), PackingJobController.verify);
 
 module.exports = router;

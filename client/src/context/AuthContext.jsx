@@ -1,5 +1,6 @@
-import { createContext, useContext, useState, useCallback } from 'react'
+import { createContext, useContext, useState, useCallback, useEffect } from 'react'
 import { login as loginApi } from '../api'
+import api from '../api/axios'
 
 const AuthContext = createContext(null)
 
@@ -7,6 +8,20 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(() => {
     try { return JSON.parse(localStorage.getItem('user')) } catch { return null }
   })
+
+  // Refresh permissions on app load so stale localStorage data is corrected
+  useEffect(() => {
+    if (!user) return
+    const token = localStorage.getItem('token')
+    if (!token) return
+    api.get('/me/permissions')
+      .then(res => {
+        const updated = { ...user, permissions: res.data.permissions }
+        localStorage.setItem('user', JSON.stringify(updated))
+        setUser(updated)
+      })
+      .catch(() => {}) // silently ignore — offline or expired token
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const signIn = useCallback(async (email, password) => {
     const res = await loginApi({ email, password })
@@ -22,21 +37,22 @@ export function AuthProvider({ children }) {
     setUser(null)
   }, [])
 
-  // Check if user has a specific permission key
   const hasPermission = useCallback((key) => {
     if (!user) return false
-    // SUPER_ADMIN always has everything
-    if (user.role === 'SUPER_ADMIN') return true
+    if (user.role === 'SUPER_ADMIN' || user.role === 'ADMIN') return true
     return Array.isArray(user.permissions) && user.permissions.includes(key)
   }, [user])
 
-  const isSuperAdmin  = user?.role === 'SUPER_ADMIN'
-  const isAdmin       = ['SUPER_ADMIN', 'ADMIN', 'COMPANY_ADMIN'].includes(user?.role)
-  const isOperasional = ['SUPER_ADMIN', 'ADMIN', 'COMPANY_ADMIN', 'OPERASIONAL'].includes(user?.role)
-  const isHeadPacking = ['SUPER_ADMIN', 'ADMIN', 'COMPANY_ADMIN', 'HEAD_PACKING'].includes(user?.role)
-  const isTimPacking  = ['SUPER_ADMIN', 'ADMIN', 'COMPANY_ADMIN', 'TIM_PACKING'].includes(user?.role)
-  const isHR          = ['SUPER_ADMIN', 'ADMIN', 'COMPANY_ADMIN', 'HR'].includes(user?.role)
-  const canViewPacking = ['SUPER_ADMIN','ADMIN','COMPANY_ADMIN','OPERASIONAL','HEAD_PACKING','TIM_PACKING','HR','CEO'].includes(user?.role)
+  const isSuperAdmin   = user?.role === 'SUPER_ADMIN'
+  const isAdmin        = ['SUPER_ADMIN', 'ADMIN', 'COMPANY_ADMIN'].includes(user?.role)
+  const isOperasional  = ['SUPER_ADMIN', 'ADMIN', 'COMPANY_ADMIN', 'OPERASIONAL'].includes(user?.role)
+  const isHeadPacking  = ['SUPER_ADMIN', 'ADMIN', 'COMPANY_ADMIN', 'HEAD_PACKING'].includes(user?.role)
+  const isTimPacking   = ['SUPER_ADMIN', 'ADMIN', 'COMPANY_ADMIN', 'TIM_PACKING'].includes(user?.role)
+  const isHR           = ['SUPER_ADMIN', 'ADMIN', 'COMPANY_ADMIN', 'HR'].includes(user?.role)
+  const canViewPacking = user
+    ? (user.role === 'SUPER_ADMIN' || user.role === 'ADMIN' ||
+       Array.isArray(user.permissions) && user.permissions.includes('packing.view'))
+    : false
 
   return (
     <AuthContext.Provider value={{

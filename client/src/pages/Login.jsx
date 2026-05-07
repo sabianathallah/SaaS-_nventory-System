@@ -7,12 +7,6 @@ import logoPreface from '../assets/logo-preface.jpeg'
 
 const RED = '#C8102E'
 
-const DEMOS = [
-  { email: 'superadmin@inventory.local', role: 'Super Admin' },
-  { email: 'admin@inventory.local',      role: 'Admin' },
-  { email: 'staff@inventory.local',      role: 'Staff' },
-]
-
 export default function Login() {
   const { signIn }  = useAuth()
   const navigate    = useNavigate()
@@ -152,46 +146,6 @@ export default function Login() {
             </button>
           </form>
 
-          {/* Demo accounts */}
-          <div className="mt-7 pt-6 border-t border-slate-100">
-            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-3">Akun Demo</p>
-            <div className="space-y-2">
-              {DEMOS.map(({ email, role }) => (
-                <button
-                  key={email}
-                  type="button"
-                  onClick={() => setForm({ email, password: 'password123' })}
-                  className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-lg bg-slate-50 border border-slate-200 text-left transition-all group"
-                  onMouseEnter={e => {
-                    e.currentTarget.style.borderColor = `${RED}66`
-                    e.currentTarget.style.background = '#FFF1F1'
-                  }}
-                  onMouseLeave={e => {
-                    e.currentTarget.style.borderColor = ''
-                    e.currentTarget.style.background = ''
-                  }}
-                >
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-semibold text-slate-700 truncate">{email}</p>
-                    <p className="text-[10px] text-slate-400 mt-0.5">Password: password123</p>
-                  </div>
-                  {/* Role badge — inline style */}
-                  <span
-                    className="inline-flex px-2 py-0.5 rounded text-[10px] font-bold border flex-shrink-0"
-                    style={
-                      role === 'Super Admin'
-                        ? { background: '#FFF1F1', color: RED, borderColor: '#FECACA' }
-                        : role === 'Admin'
-                        ? { background: '#DBEAFE', color: '#2563EB', borderColor: '#BFDBFE' }
-                        : { background: '#F1F5F9', color: '#64748B', borderColor: '#E2E8F0' }
-                    }
-                  >
-                    {role}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </div>
         </div>
       </div>
     </div>

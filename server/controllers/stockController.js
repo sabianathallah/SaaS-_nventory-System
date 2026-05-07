@@ -1,5 +1,5 @@
 'use strict';
-const { Stock, Product, Warehouse } = require('../models');
+const { Stock, Product, Warehouse, ProductSKU } = require('../models');
 const { companyFilter, companyId } = require('../helpers/tenancy');
 const { paginate, buildFilter, paginatedResponse } = require('../helpers/queryHelper');
 
@@ -14,7 +14,8 @@ class StockController {
             const { rows, count } = await Stock.findAndCountAll({
                 where: { ...companyFilter(req), ...filter },
                 include: [
-                    { model: Product,   attributes: ['id', 'name', 'sku'] },
+                    { model: Product,   attributes: ['id', 'name', 'sku'],
+                      include: [{ model: ProductSKU, attributes: ['id', 'sku_code'], required: false }] },
                     { model: Warehouse, attributes: ['id', 'name'] }
                 ],
                 limit, offset,

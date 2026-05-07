@@ -30,6 +30,8 @@ const packingJobRouter      = require('./packing_job');
 const formAnakPackingRouter    = require('./form_anak_packing');
 const rolePermissionRouter     = require('./role_permission')
 const systemSettingRouter      = require('./system_setting');
+const { RolePermission } = require('../models');
+const { DEFAULT_PERMISSIONS } = require('../helpers/permissions');
 
 // Public routes
 router.post('/login', LoginController.login);
@@ -37,6 +39,19 @@ router.post('/refresh-token', LoginController.refreshToken);
 
 // Protected routes
 router.use(authentication);
+
+// Refresh permissions without re-login
+router.get('/me/permissions', async (req, res, next) => {
+  try {
+    const { role, companyId } = req.user;
+    let record = await RolePermission.findOne({ where: { role, companyId } });
+    if (!record && companyId) {
+      record = await RolePermission.findOne({ where: { role, companyId: null } });
+    }
+    const permissions = record ? record.permissions : (DEFAULT_PERMISSIONS[role] ?? []);
+    res.json({ role, permissions });
+  } catch (err) { next(err); }
+});
 
 router.use('/dashboard',  dashboardRouter);
 router.use('/categories', categoryRouter);

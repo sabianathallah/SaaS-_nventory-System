@@ -19,6 +19,7 @@ export default function StockOutDetail() {
   const isNew      = !id || id === 'new'
 
   const canManualOutput = hasPermission('stock.out.manual_input')
+  const canScanOut      = hasPermission('stock.out.scan')
 
   const [form, setForm]             = useState(EMPTY_FORM)
   const [manualItem, setManualItem] = useState({ productId: '', quantity: '' })
@@ -96,7 +97,7 @@ export default function StockOutDetail() {
     }
   }
 
-  useExternalScanner(handleScan, isNew && scannerConnected)
+  useExternalScanner(handleScan, isNew && scannerConnected && canScanOut)
 
   const handleSubmit = (e) => {
     e.preventDefault()
@@ -183,24 +184,27 @@ export default function StockOutDetail() {
             </p>
           )}
         </div>
-        <button
-          type="button"
-          onClick={() => {
-            setScannerConnected(v => !v)
-            if (!scannerConnected) toast.success('Scanner eksternal terhubung', { icon: '🔌' })
-            else toast('Scanner diputus', { icon: '🔌' })
-          }}
-          className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${
-            scannerConnected
-              ? 'bg-green-50 border-green-300 text-green-700 hover:bg-green-100'
-              : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300 hover:text-slate-700'
-          }`}
-        >
-          {scannerConnected
-            ? <><span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" /> Connected</>
-            : <><ScanBarcode size={14} /> Hubungkan Scanner</>
-          }
-        </button>
+        {canScanOut && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.currentTarget.blur()
+              setScannerConnected(v => !v)
+              if (!scannerConnected) toast.success('Scanner eksternal terhubung', { icon: '🔌' })
+              else toast('Scanner diputus', { icon: '🔌' })
+            }}
+            className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${
+              scannerConnected
+                ? 'bg-green-50 border-green-300 text-green-700 hover:bg-green-100'
+                : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300 hover:text-slate-700'
+            }`}
+          >
+            {scannerConnected
+              ? <><span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" /> Connected</>
+              : <><ScanBarcode size={14} /> Hubungkan Scanner</>
+            }
+          </button>
+        )}
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-5">
@@ -232,14 +236,16 @@ export default function StockOutDetail() {
             <PackageMinus size={13} className="text-danger flex-shrink-0" />
             <span className="text-xs font-bold text-slate-600 uppercase tracking-wide">Items</span>
             {!form.warehouseId && <span className="text-xs text-slate-400 truncate">— pilih warehouse dulu</span>}
-            <button
-              type="button"
-              onClick={() => setShowScanner(true)}
-              disabled={!form.warehouseId}
-              className="ml-auto flex-shrink-0 flex items-center gap-1.5 text-xs text-slate-500 hover:text-red-700 px-2.5 py-1.5 rounded hover:bg-red-50 border border-slate-200 hover:border-red-200 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              <ScanLine size={13} /> Scan QR
-            </button>
+            {canScanOut && (
+              <button
+                type="button"
+                onClick={() => setShowScanner(true)}
+                disabled={!form.warehouseId}
+                className="ml-auto flex-shrink-0 flex items-center gap-1.5 text-xs text-slate-500 hover:text-red-700 px-2.5 py-1.5 rounded hover:bg-red-50 border border-slate-200 hover:border-red-200 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <ScanLine size={13} /> Scan QR
+              </button>
+            )}
           </div>
 
           {/* Input row */}
