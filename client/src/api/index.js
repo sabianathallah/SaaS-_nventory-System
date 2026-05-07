@@ -73,7 +73,11 @@ export const movementsApi = {
 export const opnameSessionsApi = crud('/stock-opname-sessions')
 export const opnameItemsApi    = crud('/stock-opname-items')
 export const usersApi          = crud('/users')
-export const companiesApi      = crud('/companies')
+export const companiesApi      = {
+  ...crud('/companies'),
+  create: (data) => api.post('/companies', toPayload(data)).then(r => r.data),
+  update: (id, data) => api.put(`/companies/${id}`, toPayload(data)).then(r => r.data),
+}
 
 // ── Packing Module ────────────────────────────────────────────────────────────
 export const vendorsApi = crud('/vendors')

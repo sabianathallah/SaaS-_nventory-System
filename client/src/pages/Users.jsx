@@ -7,7 +7,7 @@ import { Table, Pagination } from '../components/Table'
 import Modal from '../components/Modal'
 import SearchBar from '../components/SearchBar'
 import toast from 'react-hot-toast'
-import { Plus, Pencil, Trash2, UserCircle2, ShieldCheck, RotateCcw, Save, Check, X } from 'lucide-react'
+import { Plus, Pencil, Trash2, UserCircle2, ShieldCheck, RotateCcw, Save, Check, X, Eye, EyeOff } from 'lucide-react'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -100,6 +100,7 @@ function UsersTab({ isSuperAdmin, allRoles }) {
   const [search, setSearch] = useState('')
   const [modal, setModal]   = useState(null)
   const [form, setForm]     = useState({ name: '', email: '', password: '', role: 'OPERASIONAL', companyId: '' })
+  const [showPwd, setShowPwd] = useState(false)
 
   const { data, isLoading } = useQuery({
     queryKey: ['users', { page, name: search }],
@@ -214,8 +215,14 @@ function UsersTab({ isSuperAdmin, allRoles }) {
               <label className="label">
                 Password {modal?.mode === 'edit' && <span className="text-slate-400 font-normal text-xs">(kosongkan = tidak berubah)</span>}
               </label>
-              <input className="input" type="password" value={form.password} onChange={set('password')}
-                placeholder="••••••••" {...(modal?.mode === 'create' && { required: true })} />
+              <div className="relative">
+                <input className="input pr-10" type={showPwd ? 'text' : 'password'} value={form.password} onChange={set('password')}
+                  placeholder="••••••••" {...(modal?.mode === 'create' && { required: true })} />
+                <button type="button" onClick={() => setShowPwd(v => !v)} tabIndex={-1}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors">
+                  {showPwd ? <EyeOff size={15} /> : <Eye size={15} />}
+                </button>
+              </div>
             </div>
             <div>
               <label className="label">Role <span className="text-danger">*</span></label>
