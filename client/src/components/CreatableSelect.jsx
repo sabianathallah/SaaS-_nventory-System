@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { Plus, Check, X, ChevronDown, Loader2 } from 'lucide-react'
+import { Plus, Check, X, ChevronDown, Loader2, Search } from 'lucide-react'
 
 /**
  * Dropdown yang bisa:
@@ -27,12 +27,14 @@ export default function CreatableSelect({
   createLabel = 'Add New',
   error = false,
 }) {
-  const [open, setOpen]       = useState(false)
-  const [creating, setCreating] = useState(false) // mode inline-create
-  const [newName, setNewName] = useState('')
-  const [saving, setSaving]   = useState(false)
-  const inputRef = useRef(null)
-  const wrapRef  = useRef(null)
+  const [open, setOpen]         = useState(false)
+  const [creating, setCreating] = useState(false)
+  const [newName, setNewName]   = useState('')
+  const [saving, setSaving]     = useState(false)
+  const [search, setSearch]     = useState('')
+  const inputRef  = useRef(null)
+  const searchRef = useRef(null)
+  const wrapRef   = useRef(null)
 
   const selected = options.find(o => String(o.id) === String(value))
 
@@ -43,20 +45,30 @@ export default function CreatableSelect({
         setOpen(false)
         setCreating(false)
         setNewName('')
+        setSearch('')
       }
     }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
-  // Focus input saat masuk mode create
+  // Focus search saat dropdown buka, focus create-input saat mode create
+  useEffect(() => {
+    if (open && !creating) searchRef.current?.focus()
+  }, [open, creating])
+
   useEffect(() => {
     if (creating) inputRef.current?.focus()
   }, [creating])
 
+  const filtered = search.trim()
+    ? options.filter(o => o.name.toLowerCase().includes(search.trim().toLowerCase()))
+    : options
+
   const handleSelect = (id) => {
     onChange(id)
     setOpen(false)
+    setSearch('')
   }
 
   const handleCreate = async () => {
@@ -91,7 +103,7 @@ export default function CreatableSelect({
       {/* Trigger */}
       <button
         type="button"
-        onClick={() => { setOpen(v => !v); setCreating(false) }}
+        onClick={() => { setOpen(v => !v); setCreating(false); setSearch('') }}
         className={`select w-full flex items-center justify-between text-left transition-all ${
           error ? 'border-red-400 bg-red-50/30 focus:border-red-500' : ''
         }`}
@@ -110,19 +122,40 @@ export default function CreatableSelect({
       {open && (
         <div className="absolute z-50 mt-1 w-full rounded-lg border border-slate-200 bg-white shadow-lg overflow-hidden">
 
+          {/* Search input */}
+          <div className="px-2 pt-2 pb-1 border-b border-slate-100">
+            <div className="flex items-center gap-1.5 px-2 py-1.5 rounded-md bg-slate-50 border border-slate-200 focus-within:border-brand/50 focus-within:bg-white transition-colors">
+              <Search size={12} className="text-slate-400 flex-shrink-0" />
+              <input
+                ref={searchRef}
+                type="text"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                onKeyDown={e => e.key === 'Escape' && setOpen(false)}
+                placeholder="Cari…"
+                className="flex-1 text-sm bg-transparent outline-none text-slate-700 placeholder-slate-400 min-w-0"
+              />
+              {search && (
+                <button type="button" onClick={() => setSearch('')} className="text-slate-300 hover:text-slate-500">
+                  <X size={11} />
+                </button>
+              )}
+            </div>
+          </div>
+
           {/* List opsi yang ada */}
           <div className="max-h-48 overflow-y-auto">
-            {options.length === 0 && (
-              <p className="px-3 py-2 text-xs text-slate-400">Belum ada data</p>
+            {filtered.length === 0 && (
+              <p className="px-3 py-2 text-xs text-slate-400">{search ? 'Tidak ditemukan' : 'Belum ada data'}</p>
             )}
-            {options.map(o => (
+            {filtered.map(o => (
               <button
                 key={o.id}
                 type="button"
                 onClick={() => handleSelect(o.id)}
                 className="w-full flex items-center justify-between px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
               >
-                <span>{o.name}</span>
+                <span className="text-left">{o.name}</span>
                 {String(o.id) === String(value) && <Check size={13} className="text-brand flex-shrink-0" />}
               </button>
             ))}
