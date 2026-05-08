@@ -3,21 +3,12 @@ const { Model } = require('sequelize');
 module.exports = (sequelize, DataTypes) => {
   class RolePermission extends Model {
     static associate(models) {
-      RolePermission.belongsTo(models.Company, {
-        foreignKey: 'companyId',
-        as: 'company',
-        onDelete: 'CASCADE',
-        onUpdate: 'CASCADE',
-      });
+      RolePermission.belongsTo(models.Role, { foreignKey: 'roleId', as: 'role' });
     }
   }
   RolePermission.init({
-    role: { type: DataTypes.STRING, allowNull: false },
-    permissions: { type: DataTypes.JSON, allowNull: false, defaultValue: [] },
-    companyId: { type: DataTypes.INTEGER, allowNull: true },
-  }, {
-    sequelize,
-    modelName: 'RolePermission',
-  });
+    roleId:        { type: DataTypes.INTEGER, allowNull: false },
+    permissionKey: { type: DataTypes.STRING(100), allowNull: false },
+  }, { sequelize, modelName: 'RolePermission' });
   return RolePermission;
 };

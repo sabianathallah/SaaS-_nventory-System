@@ -111,11 +111,15 @@ export const formAnakPackingApi = {
   get:  (id)     => api.get(`/form-anak-packing/${id}`).then(r => r.data),
 }
 
-export const rolePermissionsApi = {
-  getAll:      (params)              => api.get('/role-permissions', { params }).then(r => r.data),
-  createRole:  (roleName, perms)     => api.post('/role-permissions', { roleName, permissions: perms }).then(r => r.data),
-  update:      (role, permissions)   => api.put(`/role-permissions/${role}`, { permissions }).then(r => r.data),
-  deleteRole:  (role)                => api.delete(`/role-permissions/${role}`).then(r => r.data),
+export const rolesApi = {
+  getAll:  (params)                => api.get('/roles', { params }).then(r => r.data),
+  create:  (name, displayName)     => api.post('/roles', { name, displayName }).then(r => r.data),
+  update:  (id, displayName, permissions) => api.put(`/roles/${id}`, { displayName, permissions }).then(r => r.data),
+  destroy: (id)                    => api.delete(`/roles/${id}`).then(r => r.data),
+}
+
+export const permissionsApi = {
+  getAll: () => api.get('/permissions').then(r => r.data),
 }
 
 export const systemApi = {
