@@ -17,7 +17,7 @@ const PAGE_GROUPS = [
       { key: 'products',   label: 'Products',   icon: Package },
       { key: 'catalog',    label: 'Katalog',    icon: BookOpen },
       { key: 'warehouses', label: 'Warehouses', icon: Warehouse },
-      { key: 'suppliers',  label: 'Suppliers',  icon: Truck },
+      { key: 'suppliers',  label: 'Vendor',  icon: Truck },
     ],
   },
   {

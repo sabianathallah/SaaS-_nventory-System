@@ -25,7 +25,7 @@ const NAV_GROUPS = [
       { to: '/products',   icon: Package,   label: 'Produk',   pageKey: 'products' },
       { to: '/catalog',    icon: BookOpen,  label: 'Katalog dan Koleksi',    pageKey: 'catalog' },
       { to: '/warehouses', icon: Warehouse, label: 'Gudang', pageKey: 'warehouses' },
-      { to: '/suppliers',  icon: Truck,     label: 'Pemasok',  pageKey: 'suppliers' },
+      { to: '/suppliers',  icon: Truck,     label: 'Vendor',  pageKey: 'suppliers' },
     ],
   },
   {
@@ -67,7 +67,7 @@ const NAV_GROUPS = [
 
 const PAGE_TITLES = {
   '/': 'Dashboard', '/products': 'Produk', '/catalog': 'Katalog dan Koleksi',
-  '/warehouses': 'Gudang', '/suppliers': 'Pemasok',
+  '/warehouses': 'Gudang', '/suppliers': 'Vendor',
   '/stock-in': 'Penerimaan Stok', '/stock-in/new': 'Penerimaan Stok Baru', '/stock-out': 'Pengeluaran Stok', '/movements': 'Pergerakan',
   '/opname': 'Stock Opname', '/users': 'Pengguna', '/companies': 'Perusahaan',
   '/vendors': 'Vendor', '/incoming-goods': 'Barang Masuk', '/surat-jalan': 'Surat Jalan',
