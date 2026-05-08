@@ -129,6 +129,7 @@ class ProductVariantController {
   // body: { order: [id, id, id, ...] }
   static async reorderOptions(req, res, next) {
     try {
+      console.log('[reorderOptions] params:', req.params, 'body:', req.body);
       const variantType = await ProductVariantType.findOne({
         where: { id: req.params.typeId, ProductId: req.params.productId },
       });
