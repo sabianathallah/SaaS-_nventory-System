@@ -1,6 +1,6 @@
 [build]
 builder = "NIXPACKS"
-buildCommand = "npm ci"
+buildCommand = "npm install --prefer-offline"
 
 [deploy]
 startCommand = "npm run start:prod"
