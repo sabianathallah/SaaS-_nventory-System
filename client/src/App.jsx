@@ -38,6 +38,12 @@ function PublicRoute({ children }) {
   return !user ? children : <Navigate to="/" replace />
 }
 
+function StaffGuardRoute({ children }) {
+  const { isStaff, hasPermission } = useAuth()
+  if (isStaff && !hasPermission('inventory.manage')) return <Navigate to="/products" replace />
+  return children
+}
+
 function PageVisibleRoute({ pageKey, children }) {
   const { isSuperAdmin } = useAuth()
   const { isPageVisible } = usePageVisibility()
@@ -57,30 +63,30 @@ function AppRoutes() {
               <Routes>
                 <Route path="/"           element={<Dashboard />} />
                 <Route path="/products"           element={<PageVisibleRoute pageKey="products"><Products /></PageVisibleRoute>} />
-                <Route path="/products/new"       element={<PageVisibleRoute pageKey="products"><ProductEdit /></PageVisibleRoute>} />
+                <Route path="/products/new"       element={<StaffGuardRoute><PageVisibleRoute pageKey="products"><ProductEdit /></PageVisibleRoute></StaffGuardRoute>} />
                 <Route path="/products/:id"       element={<PageVisibleRoute pageKey="products"><ProductDetail /></PageVisibleRoute>} />
-                <Route path="/products/:id/edit"  element={<PageVisibleRoute pageKey="products"><ProductEdit /></PageVisibleRoute>} />
-                <Route path="/catalog"            element={<PageVisibleRoute pageKey="catalog"><Catalog /></PageVisibleRoute>} />
-                <Route path="/warehouses"                  element={<PageVisibleRoute pageKey="warehouses"><Warehouses /></PageVisibleRoute>} />
-                <Route path="/warehouses/:id/products"     element={<PageVisibleRoute pageKey="warehouses"><WarehouseProducts /></PageVisibleRoute>} />
-                <Route path="/suppliers"          element={<PageVisibleRoute pageKey="suppliers"><Suppliers /></PageVisibleRoute>} />
-                <Route path="/stock-in"           element={<PageVisibleRoute pageKey="stock-in"><StockIn /></PageVisibleRoute>} />
-                <Route path="/stock-in/new"       element={<PageVisibleRoute pageKey="stock-in"><StockInDetail /></PageVisibleRoute>} />
-                <Route path="/stock-in/:id"       element={<PageVisibleRoute pageKey="stock-in"><StockInDetail /></PageVisibleRoute>} />
-                <Route path="/stock-out"          element={<PageVisibleRoute pageKey="stock-out"><StockOut /></PageVisibleRoute>} />
-                <Route path="/stock-out/new"      element={<PageVisibleRoute pageKey="stock-out"><StockOutDetail /></PageVisibleRoute>} />
-                <Route path="/stock-out/:id"      element={<PageVisibleRoute pageKey="stock-out"><StockOutDetail /></PageVisibleRoute>} />
-                <Route path="/movements"          element={<PageVisibleRoute pageKey="movements"><Movements /></PageVisibleRoute>} />
-                <Route path="/opname"             element={<PageVisibleRoute pageKey="opname"><Opname /></PageVisibleRoute>} />
-                <Route path="/opname/:id"         element={<PageVisibleRoute pageKey="opname"><OpnameDetail /></PageVisibleRoute>} />
-                <Route path="/users"              element={<PageVisibleRoute pageKey="users"><Users /></PageVisibleRoute>} />
-                <Route path="/companies"          element={<PageVisibleRoute pageKey="companies"><Companies /></PageVisibleRoute>} />
-                <Route path="/vendors"            element={<PageVisibleRoute pageKey="vendors"><Vendors /></PageVisibleRoute>} />
-                <Route path="/incoming-goods"     element={<PageVisibleRoute pageKey="incoming-goods"><IncomingGoods /></PageVisibleRoute>} />
-                <Route path="/surat-jalan"        element={<PageVisibleRoute pageKey="surat-jalan"><SuratJalan /></PageVisibleRoute>} />
-                <Route path="/packing-jobs"       element={<PageVisibleRoute pageKey="packing-jobs"><PackingJobs /></PageVisibleRoute>} />
-                <Route path="/form-anak-packing"  element={<PageVisibleRoute pageKey="form-anak-packing"><FormAnakPacking /></PageVisibleRoute>} />
-                <Route path="/page-visibility"    element={<PageVisibility />} />
+                <Route path="/products/:id/edit"  element={<StaffGuardRoute><PageVisibleRoute pageKey="products"><ProductEdit /></PageVisibleRoute></StaffGuardRoute>} />
+                <Route path="/catalog"            element={<StaffGuardRoute><PageVisibleRoute pageKey="catalog"><Catalog /></PageVisibleRoute></StaffGuardRoute>} />
+                <Route path="/warehouses"                  element={<StaffGuardRoute><PageVisibleRoute pageKey="warehouses"><Warehouses /></PageVisibleRoute></StaffGuardRoute>} />
+                <Route path="/warehouses/:id/products"     element={<StaffGuardRoute><PageVisibleRoute pageKey="warehouses"><WarehouseProducts /></PageVisibleRoute></StaffGuardRoute>} />
+                <Route path="/suppliers"          element={<StaffGuardRoute><PageVisibleRoute pageKey="suppliers"><Suppliers /></PageVisibleRoute></StaffGuardRoute>} />
+                <Route path="/stock-in"           element={<StaffGuardRoute><PageVisibleRoute pageKey="stock-in"><StockIn /></PageVisibleRoute></StaffGuardRoute>} />
+                <Route path="/stock-in/new"       element={<StaffGuardRoute><PageVisibleRoute pageKey="stock-in"><StockInDetail /></PageVisibleRoute></StaffGuardRoute>} />
+                <Route path="/stock-in/:id"       element={<StaffGuardRoute><PageVisibleRoute pageKey="stock-in"><StockInDetail /></PageVisibleRoute></StaffGuardRoute>} />
+                <Route path="/stock-out"          element={<StaffGuardRoute><PageVisibleRoute pageKey="stock-out"><StockOut /></PageVisibleRoute></StaffGuardRoute>} />
+                <Route path="/stock-out/new"      element={<StaffGuardRoute><PageVisibleRoute pageKey="stock-out"><StockOutDetail /></PageVisibleRoute></StaffGuardRoute>} />
+                <Route path="/stock-out/:id"      element={<StaffGuardRoute><PageVisibleRoute pageKey="stock-out"><StockOutDetail /></PageVisibleRoute></StaffGuardRoute>} />
+                <Route path="/movements"          element={<StaffGuardRoute><PageVisibleRoute pageKey="movements"><Movements /></PageVisibleRoute></StaffGuardRoute>} />
+                <Route path="/opname"             element={<StaffGuardRoute><PageVisibleRoute pageKey="opname"><Opname /></PageVisibleRoute></StaffGuardRoute>} />
+                <Route path="/opname/:id"         element={<StaffGuardRoute><PageVisibleRoute pageKey="opname"><OpnameDetail /></PageVisibleRoute></StaffGuardRoute>} />
+                <Route path="/users"              element={<StaffGuardRoute><PageVisibleRoute pageKey="users"><Users /></PageVisibleRoute></StaffGuardRoute>} />
+                <Route path="/companies"          element={<StaffGuardRoute><PageVisibleRoute pageKey="companies"><Companies /></PageVisibleRoute></StaffGuardRoute>} />
+                <Route path="/vendors"            element={<StaffGuardRoute><PageVisibleRoute pageKey="vendors"><Vendors /></PageVisibleRoute></StaffGuardRoute>} />
+                <Route path="/incoming-goods"     element={<StaffGuardRoute><PageVisibleRoute pageKey="incoming-goods"><IncomingGoods /></PageVisibleRoute></StaffGuardRoute>} />
+                <Route path="/surat-jalan"        element={<StaffGuardRoute><PageVisibleRoute pageKey="surat-jalan"><SuratJalan /></PageVisibleRoute></StaffGuardRoute>} />
+                <Route path="/packing-jobs"       element={<StaffGuardRoute><PageVisibleRoute pageKey="packing-jobs"><PackingJobs /></PageVisibleRoute></StaffGuardRoute>} />
+                <Route path="/form-anak-packing"  element={<StaffGuardRoute><PageVisibleRoute pageKey="form-anak-packing"><FormAnakPacking /></PageVisibleRoute></StaffGuardRoute>} />
+                <Route path="/page-visibility"    element={<StaffGuardRoute><PageVisibility /></StaffGuardRoute>} />
               </Routes>
             </Layout>
           </PageVisibilityProvider>

@@ -49,6 +49,7 @@ export function AuthProvider({ children }) {
   const isHeadPacking  = false
   const isTimPacking   = ['SUPER_ADMIN', 'ADMIN', 'COMPANY_ADMIN', 'TIM_PACKING'].includes(user?.role)
   const isHR           = false
+  const isStaff        = user?.role === 'STAFF'
   const canViewPacking = user
     ? (user.role === 'SUPER_ADMIN' || user.role === 'ADMIN' ||
        Array.isArray(user.permissions) && user.permissions.includes('packing.view'))
@@ -57,7 +58,7 @@ export function AuthProvider({ children }) {
   return (
     <AuthContext.Provider value={{
       user, signIn, signOut, hasPermission,
-      isSuperAdmin, isAdmin, isOperasional, isHeadPacking, isTimPacking, isHR, canViewPacking,
+      isSuperAdmin, isAdmin, isOperasional, isHeadPacking, isTimPacking, isHR, isStaff, canViewPacking,
     }}>
       {children}
     </AuthContext.Provider>

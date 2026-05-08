@@ -219,7 +219,7 @@ const ART_PER_PAGE = 4
 const WH_PER_PAGE  = 2
 
 export default function Dashboard() {
-  const { user } = useAuth()
+  const { user, isStaff } = useAuth()
   const [artPage, setArtPage] = useState(0)
   const [whPage,  setWhPage]  = useState(0)
 
@@ -282,33 +282,37 @@ export default function Dashboard() {
       </div>
 
       {/* ── Top stats ───────────────────────────────────────── */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className={`grid grid-cols-1 gap-4 ${isStaff ? '' : 'sm:grid-cols-3'}`}>
         <StatCard
           label="Total Produk"
           value={fmtNum(totalProducts)}
           icon={Package}
           loading={isLoading}
         />
-        <StatCard
-          label="Total Stock"
-          value={fmtNum(totalStock)}
-          sub="unit · dari semua SKU"
-          icon={BoxesIcon}
-          accent="#3B82F6"
-          loading={isLoading}
-        />
-        <StatCard
-          label="Total Nilai Inventaris"
-          value={fmtRp(totalValue)}
-          sub={isLoading ? '' : fmtRpFull(totalValue)}
-          icon={Wallet}
-          accent="#10B981"
-          loading={isLoading}
-        />
+        {!isStaff && (
+          <StatCard
+            label="Total Stock"
+            value={fmtNum(totalStock)}
+            sub="unit · dari semua SKU"
+            icon={BoxesIcon}
+            accent="#3B82F6"
+            loading={isLoading}
+          />
+        )}
+        {!isStaff && (
+          <StatCard
+            label="Total Nilai Inventaris"
+            value={fmtRp(totalValue)}
+            sub={isLoading ? '' : fmtRpFull(totalValue)}
+            icon={Wallet}
+            accent="#10B981"
+            loading={isLoading}
+          />
+        )}
       </div>
 
       {/* ── Middle: Article breakdown + Warehouse chart ─────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      {!isStaff && <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
 
         {/* Stock & Value per Koleksi */}
         <div className="card p-5">
@@ -450,10 +454,10 @@ export default function Dashboard() {
             </>
           )}
         </div>
-      </div>
+      </div>}
 
       {/* ── Bottom: Warehouse × Article + Movements ─────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+      {!isStaff && <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
 
         {/* Warehouse × Article breakdown */}
         <div className="lg:col-span-3 card p-5">
@@ -498,7 +502,7 @@ export default function Dashboard() {
             </div>
           )}
         </div>
-      </div>
+      </div>}
 
     </div>
   )

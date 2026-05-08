@@ -43,10 +43,11 @@ const DEFAULT_PERMISSIONS = {
   TIM_PACKING:   ['packing.view', 'packing.jobs'],
   HR:            ['admin.users', 'reports.dashboard'],
   CEO:           ['inventory.view', 'stock.view', 'packing.view', 'reports.dashboard'],
+  STAFF:         ['inventory.view'],
 };
 
 // Roles whose permissions can be edited by admin
-const EDITABLE_ROLES = ['COMPANY_ADMIN', 'OPERASIONAL', 'TIM_PACKING'];
+const EDITABLE_ROLES = ['COMPANY_ADMIN', 'OPERASIONAL', 'TIM_PACKING', 'STAFF'];
 
 // Roles that are fully protected — cannot be created, edited, or deleted
 const SYSTEM_ROLES = ['SUPER_ADMIN', 'ADMIN'];

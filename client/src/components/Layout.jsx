@@ -17,12 +17,12 @@ const BRAND_HOVER = '#D93248'
 const NAV_GROUPS = [
   {
     label: 'Ringkasan',
-    items: [{ to: '/', icon: LayoutDashboard, label: 'Dashboard' }],
+    items: [{ to: '/', icon: LayoutDashboard, label: 'Dashboard', staffVisible: true }],
   },
   {
     label: 'Inventori',
     items: [
-      { to: '/products',   icon: Package,   label: 'Produk',   pageKey: 'products' },
+      { to: '/products',   icon: Package,   label: 'Produk',   pageKey: 'products', staffVisible: true },
       { to: '/catalog',    icon: BookOpen,  label: 'Kategori dan Koleksi',    pageKey: 'catalog' },
       { to: '/warehouses', icon: Warehouse, label: 'Gudang', pageKey: 'warehouses' },
       { to: '/suppliers',  icon: Truck,     label: 'Vendor',  pageKey: 'suppliers' },
@@ -76,7 +76,7 @@ const PAGE_TITLES = {
 }
 
 export default function Layout({ children }) {
-  const { user, signOut, isAdmin, isSuperAdmin, isOperasional, isHeadPacking, canViewPacking } = useAuth()
+  const { user, signOut, isAdmin, isSuperAdmin, isOperasional, isHeadPacking, isStaff, canViewPacking } = useAuth()
   const { isPageVisible } = usePageVisibility()
   const navigate  = useNavigate()
   const location  = useLocation()
@@ -121,12 +121,14 @@ export default function Layout({ children }) {
           {NAV_GROUPS.map((group) => {
             if (group.adminOnly && !isAdmin) return null
             if (group.packingOnly && !canViewPacking) return null
+            if (isStaff && group.adminOnly) return null
 
             const navItems = group.items.reduce((acc, item) => {
               if (item.adminOnly && !isAdmin) return acc
               if (item.superOnly && !isSuperAdmin) return acc
               if (item.operasionalOnly && !isOperasional) return acc
               if (item.headPackingOnly && !isHeadPacking) return acc
+              if (isStaff && !item.staffVisible) return acc
 
               const hidden = !!(item.pageKey && !isPageVisible(item.pageKey))
               // Non-SUPER_ADMIN: filter out hidden pages entirely

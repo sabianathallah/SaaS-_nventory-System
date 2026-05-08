@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate, useParams, Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { productsApi, productSkusApi } from '../api'
+import { useAuth } from '../context/AuthContext'
 import toast from 'react-hot-toast'
 import QrModal from '../components/QrModal'
 import {
@@ -14,6 +15,8 @@ import {
 function SkuTableView({ productId, productName }) {
   const navigate = useNavigate()
   const [qrSku, setQrSku] = useState(null)
+  const { hasPermission } = useAuth()
+  const canManage = hasPermission('inventory.manage')
 
   const { data: skus = [], isLoading } = useQuery({
     queryKey: ['product-skus', productId],
@@ -33,13 +36,15 @@ function SkuTableView({ productId, productName }) {
       <p className="text-xs text-slate-400 mt-1 mb-4">
         Tentukan variant produk terlebih dahulu, lalu buat SKU untuk setiap kombinasi.
       </p>
-      <button
-        type="button"
-        onClick={() => navigate(`/products/${productId}/edit`)}
-        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-brand text-white text-sm font-medium hover:bg-brand/90 transition-colors"
-      >
-        <Plus size={14} /> Buat SKU
-      </button>
+      {canManage && (
+        <button
+          type="button"
+          onClick={() => navigate(`/products/${productId}/edit`)}
+          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-brand text-white text-sm font-medium hover:bg-brand/90 transition-colors"
+        >
+          <Plus size={14} /> Buat SKU
+        </button>
+      )}
     </div>
   )
 
@@ -137,6 +142,8 @@ export default function ProductDetail() {
   const { id }   = useParams()
   const navigate = useNavigate()
   const qc       = useQueryClient()
+  const { hasPermission } = useAuth()
+  const canManage = hasPermission('inventory.manage')
 
   const { data: product, isLoading } = useQuery({
     queryKey: ['product', id],
@@ -182,24 +189,26 @@ export default function ProductDetail() {
           <ChevronRight size={14} className="text-slate-200" />
           <h1 className="text-sm font-bold text-slate-800 flex-1 truncate">{product.name}</h1>
 
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => { if (confirm(`Hapus "${product.name}"? Tindakan ini tidak bisa dibatalkan.`)) del.mutate() }}
-              disabled={del.isPending}
-              className="btn-secondary text-red-500 hover:bg-red-50 hover:border-red-200 text-sm"
-            >
-              {del.isPending ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
-              Hapus
-            </button>
-            <button
-              type="button"
-              onClick={() => navigate(`/products/${id}/edit`)}
-              className="btn-primary text-sm"
-            >
-              <Pencil size={14} /> Ubah
-            </button>
-          </div>
+          {canManage && (
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => { if (confirm(`Hapus "${product.name}"? Tindakan ini tidak bisa dibatalkan.`)) del.mutate() }}
+                disabled={del.isPending}
+                className="btn-secondary text-red-500 hover:bg-red-50 hover:border-red-200 text-sm"
+              >
+                {del.isPending ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                Hapus
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate(`/products/${id}/edit`)}
+                className="btn-primary text-sm"
+              >
+                <Pencil size={14} /> Ubah
+              </button>
+            </div>
+          )}
         </div>
       </div>
 

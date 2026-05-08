@@ -345,9 +345,10 @@ function ProductRow({ product, expanded, onToggle, onDelete, onNavigate, onOpenQ
 export default function Products() {
   const navigate = useNavigate()
   const qc       = useQueryClient()
-  const { isSuperAdmin } = useAuth()
+  const { isSuperAdmin, hasPermission } = useAuth()
   const { selectedCompany } = useSelectedCompany()
-  const blocked = isSuperAdmin && !selectedCompany
+  const blocked    = isSuperAdmin && !selectedCompany
+  const canManage  = hasPermission('inventory.manage')
 
   const [page, setPage]         = useState(1)
   const [search, setSearch]     = useState('')
@@ -447,7 +448,7 @@ export default function Products() {
             {exporting ? <Loader2 size={14} className="animate-spin" /> : <FileSpreadsheet size={14} />}
             Export Excel
           </button>
-          {!blocked && (
+          {!blocked && canManage && (
             <button onClick={() => navigate('/products/new')} className="btn-primary">
               <Plus size={15} /> Tambah Produk
             </button>
@@ -529,7 +530,7 @@ export default function Products() {
                       onToggle={() => toggleExpand(p.id)}
                       onNavigate={() => navigate(`/products/${p.id}`)}
                       onDelete={product => setDelModal(product)}
-                      disabled={blocked}
+                      disabled={blocked || !canManage}
                       onOpenQr={setQrTarget}
                     />
                   ))}

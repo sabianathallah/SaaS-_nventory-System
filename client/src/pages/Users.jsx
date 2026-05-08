@@ -12,7 +12,7 @@ import { Plus, Pencil, Trash2, UserCircle2, ShieldCheck, RotateCcw, Save, Check,
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const SYSTEM_ROLES    = ['SUPER_ADMIN', 'ADMIN']
-const EDITABLE_ROLES  = ['COMPANY_ADMIN', 'OPERASIONAL', 'TIM_PACKING']
+const EDITABLE_ROLES  = ['COMPANY_ADMIN', 'OPERASIONAL', 'TIM_PACKING', 'STAFF']
 const ALL_SYSTEM_KEYS = [...SYSTEM_ROLES, ...EDITABLE_ROLES]
 
 const ROLE_BADGE = {
@@ -21,12 +21,14 @@ const ROLE_BADGE = {
   COMPANY_ADMIN: <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-blue-100 text-blue-700 uppercase tracking-wide">Company Admin</span>,
   OPERASIONAL:   <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-teal-100 text-teal-700 uppercase tracking-wide">Operasional</span>,
   TIM_PACKING:   <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-violet-100 text-violet-700 uppercase tracking-wide">Tim Packing</span>,
+  STAFF:         <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-100 text-amber-700 uppercase tracking-wide">Staff</span>,
 }
 
 const ROLE_COLORS = {
   COMPANY_ADMIN: '#3B82F6',
   OPERASIONAL:   '#14B8A6',
   TIM_PACKING:   '#8B5CF6',
+  STAFF:         '#F59E0B',
 }
 
 const CUSTOM_COLOR_PALETTE = ['#F97316', '#10B981', '#06B6D4', '#EF4444', '#84CC16', '#F59E0B', '#6366F1']
@@ -35,7 +37,7 @@ function roleLabel(key) {
   const labels = {
     SUPER_ADMIN: 'Super Admin', ADMIN: 'Admin', COMPANY_ADMIN: 'Company Admin',
     OPERASIONAL: 'Operasional', HEAD_PACKING: 'Head Packing', TIM_PACKING: 'Tim Packing',
-    HR: 'HR', CEO: 'CEO',
+    HR: 'HR', CEO: 'CEO', STAFF: 'Staff',
   }
   return labels[key] ?? key.split('_').map(w => w.charAt(0) + w.slice(1).toLowerCase()).join(' ')
 }
