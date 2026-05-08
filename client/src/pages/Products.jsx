@@ -236,7 +236,7 @@ function ProductRow({ product, expanded, onToggle, onDelete, onNavigate, onOpenQ
           </div>
         </td>
 
-        {/* Kategori */}
+        {/* Tipe */}
         <td className="td w-32">
           {product.Category
             ? <span className="badge-teal">{product.Category.name}</span>
@@ -382,7 +382,7 @@ export default function Products() {
         WarehouseId: whFilter || undefined,
         sortBy: sort.col, sortOrder: sort.dir,
       })
-      const headers = ['No', 'Nama Produk', 'Unit', 'Kategori', 'Total SKU', 'Total Stok', 'Harga Min (Rp)', 'Harga Max (Rp)']
+      const headers = ['No', 'Nama Produk', 'Unit', 'Tipe', 'Total SKU', 'Total Stok', 'Harga Min (Rp)', 'Harga Max (Rp)']
       const rows = result.data.map((p, i) => {
         const skus   = p.ProductSKUs ?? []
         const prices = skus.map(s => Number(s.price || 0)).filter(Boolean)
@@ -443,7 +443,7 @@ export default function Products() {
         <div className="flex items-center gap-2 flex-wrap">
           <Filter size={13} className={activeFilters ? 'text-brand' : 'text-slate-400'} />
           <select className="select w-40" value={catFilter} onChange={e => { setCat(e.target.value); setPage(1) }}>
-            <option value="">Semua kategori</option>
+            <option value="">Semua tipe</option>
             {catOptions.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
           <select className="select w-40" value={artFilter} onChange={e => { setArt(e.target.value); setPage(1) }}>
@@ -481,7 +481,7 @@ export default function Products() {
                   <tr className="border-b border-slate-100">
                     <th className="th w-10 pr-0" />
                     <SortTh label="Produk"  col="name"       sort={sort} onSort={handleSort} />
-                    <th className="th w-32">Kategori</th>
+                    <th className="th w-32">Tipe</th>
                     <th className="th w-24">SKU</th>
                     <th className="th w-44">Harga</th>
                     <SortTh label="Stok"    col="totalStock" sort={sort} onSort={handleSort} className="w-28 text-right" />

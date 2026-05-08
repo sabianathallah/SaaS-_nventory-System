@@ -222,7 +222,7 @@ export default function ProductDetail() {
 
               <div className="flex flex-wrap gap-4">
                 <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Kategori</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Tipe</p>
                   {product.Category
                     ? <span className="badge-teal">{product.Category.name}</span>
                     : <span className="text-slate-300 text-xs">—</span>}

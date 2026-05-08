@@ -142,7 +142,7 @@ export default function WarehouseProducts() {
     setExporting(true)
     try {
       const result = await productsApi.list({ limit: 9999, WarehouseId: id, sortBy: sort.col, sortOrder: sort.dir })
-      const headers = ['No', 'Nama Produk', 'Unit', 'Kategori', 'Total SKU', 'Total Stok', 'Harga Min (Rp)', 'Harga Max (Rp)', 'Nilai Stok (Rp)']
+      const headers = ['No', 'Nama Produk', 'Unit', 'Tipe', 'Total SKU', 'Total Stok', 'Harga Min (Rp)', 'Harga Max (Rp)', 'Nilai Stok (Rp)']
       const exRows = result.data.map((p, i) => {
         const skus   = p.ProductSKUs ?? []
         const prices = skus.map(s => Number(s.price || 0)).filter(Boolean)
@@ -240,7 +240,7 @@ export default function WarehouseProducts() {
                 <thead>
                   <tr className="border-b border-slate-100">
                     <SortTh label="Produk"   col="name"       sort={sort} onSort={handleSort} />
-                    <th className="th">Kategori</th>
+                    <th className="th">Tipe</th>
                     <th className="th">Variant</th>
                     <th className="th">SKU</th>
                     <th className="th">Harga</th>
@@ -278,7 +278,7 @@ export default function WarehouseProducts() {
                           </div>
                         </td>
 
-                        {/* Kategori */}
+                        {/* Tipe */}
                         <td className="td">
                           {p.Category
                             ? <span className="badge-teal">{p.Category.name}</span>
