@@ -20,5 +20,8 @@
       "headers": [{ "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }]
     }
   ],
-  "rewrites": [{ "source": "/((?!api).*)", "destination": "/index.html" }]
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "https://api.prefacesystem.com/$1" },
+    { "source": "/((?!api).*)", "destination": "/index.html" }
+  ]
 }
