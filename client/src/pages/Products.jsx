@@ -201,13 +201,11 @@ function ProductRow({ product, expanded, onToggle, onDelete, onNavigate, onOpenQ
   const stock  = Number(product.totalStock ?? 0)
   const skuCnt = skus.length
 
-  const handleRowClick = () => skuCnt > 0 ? onToggle() : onNavigate()
-  const handleQrClick  = (e) => {
+  const handleRowClick = () => onToggle()
+  const handleQrClick = (e) => {
     e.stopPropagation()
     if (skuCnt === 0) {
       toast('Belum ada SKU — buat SKU terlebih dahulu untuk menggunakan QR.', { icon: '⚠️' })
-    } else {
-      onNavigate()
     }
   }
 
@@ -221,12 +219,9 @@ function ProductRow({ product, expanded, onToggle, onDelete, onNavigate, onOpenQ
         <td className="td w-10 pr-0">
           <button
             onClick={handleRowClick}
-            className={`w-6 h-6 rounded flex items-center justify-center transition-colors
-              ${skuCnt > 0 ? 'text-slate-400 hover:text-slate-700 hover:bg-slate-200/60' : 'text-slate-300 hover:text-slate-500 hover:bg-slate-100'} cursor-pointer`}
+            className="w-6 h-6 rounded flex items-center justify-center transition-colors text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 cursor-pointer"
           >
-            {skuCnt > 0 && expanded
-              ? <ChevronDown size={14} />
-              : <ChevronRight size={14} />}
+            {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
           </button>
         </td>
 
@@ -285,18 +280,16 @@ function ProductRow({ product, expanded, onToggle, onDelete, onNavigate, onOpenQ
         {/* Actions */}
         <td className="td w-20">
           <div className="flex items-center justify-end gap-1">
-            <button
-              type="button"
-              onClick={handleQrClick}
-              className={`p-1.5 rounded-lg transition-colors ${
-                skuCnt === 0
-                  ? 'text-slate-300 hover:text-amber-500 hover:bg-amber-50'
-                  : 'text-slate-300 hover:text-violet-500 hover:bg-violet-50 opacity-0 group-hover:opacity-100'
-              }`}
-              title={skuCnt === 0 ? 'Belum ada SKU' : 'QR Code'}
-            >
-              <QrCode size={12} />
-            </button>
+            {skuCnt === 0 && (
+              <button
+                type="button"
+                onClick={handleQrClick}
+                className="p-1.5 rounded-lg transition-colors text-slate-300 hover:text-amber-500 hover:bg-amber-50"
+                title="Belum ada SKU"
+              >
+                <QrCode size={12} />
+              </button>
+            )}
             {!disabled && (
               <>
                 <button
@@ -321,9 +314,27 @@ function ProductRow({ product, expanded, onToggle, onDelete, onNavigate, onOpenQ
         </td>
       </tr>
 
-      {/* Expanded SKU rows */}
-      {expanded && skuCnt > 0 && (
-        <SkuRows product={product} onOpenQr={onOpenQr} />
+      {/* Expanded rows */}
+      {expanded && (
+        skuCnt > 0
+          ? <SkuRows product={product} onOpenQr={onOpenQr} />
+          : <tr>
+              <td colSpan={8} className="border-b border-slate-100 bg-slate-50/60">
+                <div className="ml-14 mr-4 py-4 flex items-center gap-4">
+                  <div className="flex-1">
+                    <p className="text-xs font-semibold text-slate-500">Belum ada SKU</p>
+                    <p className="text-[11px] text-slate-400 mt-0.5">Tambahkan variant dan buat SKU melalui halaman edit produk.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={e => { e.stopPropagation(); onNavigate() }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand text-white text-xs font-medium hover:bg-brand/90 transition-colors flex-shrink-0"
+                  >
+                    <Plus size={11} /> Buat SKU
+                  </button>
+                </div>
+              </td>
+            </tr>
       )}
     </>
   )
