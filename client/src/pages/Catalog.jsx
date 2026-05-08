@@ -244,17 +244,17 @@ export default function Catalog() {
 
   const addCat = useMutation({
     mutationFn: name => categoriesApi.create({ name }),
-    onSuccess:  () => { qc.invalidateQueries({ queryKey: ['categories'] }); toast.success('Tipe ditambahkan') },
-    onError:    e  => toast.error(e.response?.data?.message || 'Gagal menambah tipe'),
+    onSuccess:  () => { qc.invalidateQueries({ queryKey: ['categories'] }); toast.success('Kategori ditambahkan') },
+    onError:    e  => toast.error(e.response?.data?.message || 'Gagal menambah kategori'),
   })
   const saveCat = useMutation({
     mutationFn: ([id, name]) => categoriesApi.update(id, { name }),
-    onSuccess:  () => { qc.invalidateQueries({ queryKey: ['categories'] }); toast.success('Tipe diperbarui') },
+    onSuccess:  () => { qc.invalidateQueries({ queryKey: ['categories'] }); toast.success('Kategori diperbarui') },
     onError:    e  => toast.error(e.response?.data?.message || 'Gagal memperbarui'),
   })
   const delCat = useMutation({
     mutationFn: id => categoriesApi.remove(id),
-    onSuccess:  () => { qc.invalidateQueries({ queryKey: ['categories'] }); toast.success('Tipe dihapus') },
+    onSuccess:  () => { qc.invalidateQueries({ queryKey: ['categories'] }); toast.success('Kategori dihapus') },
     onError:    e  => toast.error(e.response?.data?.message || 'Gagal menghapus — mungkin masih dipakai produk'),
   })
 
@@ -289,8 +289,8 @@ export default function Catalog() {
   return (
     <div className="px-6 py-6 max-w-3xl mx-auto space-y-6">
       <div>
-        <h2 className="text-xl font-bold text-slate-800">Artikel dan Koleksi</h2>
-        <p className="text-sm text-slate-400 mt-0.5">Kelola tipe dan koleksi produk</p>
+        <h2 className="text-xl font-bold text-slate-800">Kategori dan Koleksi</h2>
+        <p className="text-sm text-slate-400 mt-0.5">Kelola kategori dan koleksi produk</p>
       </div>
 
       {blocked && (
@@ -304,12 +304,12 @@ export default function Catalog() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <CatalogTable
-          title="Tipe"
+          title="Kategori"
           icon={Tag}
           data={catData?.data}
           pagination={catData?.pagination}
           isLoading={catLoading}
-          placeholder="Nama tipe baru…"
+          placeholder="Nama kategori baru…"
           search={catSearch}
           onSearch={v => { setCatSearch(v); setCatPage(1) }}
           onPageChange={setCatPage}

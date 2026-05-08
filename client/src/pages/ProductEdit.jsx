@@ -499,7 +499,7 @@ export default function ProductEdit() {
 
   const createCategory = useMutation({
     mutationFn: name => categoriesApi.create({ name }),
-    onSuccess: (c) => { qc.invalidateQueries({ queryKey: ['categories'] }); toast.success(`Tipe "${c.name}" ditambahkan`); return c },
+    onSuccess: (c) => { qc.invalidateQueries({ queryKey: ['categories'] }); toast.success(`Kategori "${c.name}" ditambahkan`); return c },
     onError: e => { toast.error(e.response?.data?.message || 'Gagal'); throw e },
   })
   const createArticle = useMutation({
@@ -512,7 +512,7 @@ export default function ProductEdit() {
     e.preventDefault()
     if (!form.unit) { setUnitError(true); toast.error('Pilih satuan terlebih dahulu'); return }
     setUnitError(false)
-    if (!form.CategoryId) { setCatError(true); toast.error('Pilih tipe terlebih dahulu'); return }
+    if (!form.CategoryId) { setCatError(true); toast.error('Pilih kategori terlebih dahulu'); return }
     setCatError(false)
     const payload = { ...form }
     if (!payload.ArticleId) payload.ArticleId = null
@@ -610,7 +610,7 @@ export default function ProductEdit() {
         {/* Normal edit (not setup) */}
         {!isSetup && (
           <>
-            <Section icon={Package} title="Informasi Produk" subtitle="Nama, tipe, koleksi, dan foto produk">
+            <Section icon={Package} title="Informasi Produk" subtitle="Nama, kategori, koleksi, dan foto produk">
               <form id="product-form" onSubmit={handleSubmit}>
                 <div className="grid grid-cols-3 gap-6">
                   <div className="col-span-1">
@@ -623,7 +623,7 @@ export default function ProductEdit() {
                       <input autoFocus={isNew} required className="input" placeholder="Masukkan nama produk" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
                     </div>
                     <CreatableSelect label="Unit / Satuan" required error={unitError} value={form.unit} onChange={val => { setForm(f => ({ ...f, unit: val })); setUnitError(false) }} options={unitOptions} placeholder="Pilih atau buat satuan…" createLabel="Satuan Baru" onCreateNew={async name => { const o = { id: name, name }; setUnitOptions(p => [...p, o]); return o }} />
-                    <CreatableSelect label="Tipe" required error={catError} value={form.CategoryId} onChange={val => { setForm(f => ({ ...f, CategoryId: val })); setCatError(false) }} options={catOptions} placeholder="Pilih atau buat tipe…" createLabel="Add New Tipe" onCreateNew={name => createCategory.mutateAsync(name)} />
+                    <CreatableSelect label="Kategori" required error={catError} value={form.CategoryId} onChange={val => { setForm(f => ({ ...f, CategoryId: val })); setCatError(false) }} options={catOptions} placeholder="Pilih atau buat kategori…" createLabel="Tambah Kategori" onCreateNew={name => createCategory.mutateAsync(name)} />
                     <CreatableSelect label="Koleksi (opsional)" value={form.ArticleId} onChange={artId => setForm(f => ({ ...f, ArticleId: artId }))} options={artOptions} placeholder="Pilih atau buat koleksi…" createLabel="Add New Koleksi" onCreateNew={name => createArticle.mutateAsync(name)} />
                   </div>
                 </div>
