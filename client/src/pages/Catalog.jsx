@@ -65,7 +65,7 @@ function EditableRow({ item, onSave, onDelete, disabled }) {
             </button>
           </div>
         ) : (
-          <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="flex items-center justify-end gap-1">
             {!disabled && (
               <>
                 <button
