@@ -4,11 +4,13 @@ import { categoriesApi, articlesApi } from '../api'
 import { Pagination } from '../components/Table'
 import SearchBar from '../components/SearchBar'
 import toast from 'react-hot-toast'
-import { Plus, Pencil, Trash2, Check, X, Loader2, Tag, BookOpen } from 'lucide-react'
+import { Plus, Pencil, Trash2, Check, X, Loader2, Tag, BookOpen, Building2 } from 'lucide-react'
+import { useAuth } from '../context/AuthContext'
+import { useSelectedCompany } from '../context/SelectedCompanyContext'
 
 // ── Inline-editable row ────────────────────────────────────────────────────────
 
-function EditableRow({ item, onSave, onDelete }) {
+function EditableRow({ item, onSave, onDelete, disabled }) {
   const [editing, setEditing] = useState(false)
   const [name, setName]       = useState(item.name)
   const [saving, setSaving]   = useState(false)
@@ -64,20 +66,24 @@ function EditableRow({ item, onSave, onDelete }) {
           </div>
         ) : (
           <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-            <button
-              onClick={() => setEditing(true)}
-              className="p-1.5 rounded text-slate-400 hover:text-brand hover:bg-brand/5 transition-colors"
-              title="Edit"
-            >
-              <Pencil size={13} />
-            </button>
-            <button
-              onClick={() => onDelete(item.id, item.name)}
-              className="p-1.5 rounded text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"
-              title="Hapus"
-            >
-              <Trash2 size={13} />
-            </button>
+            {!disabled && (
+              <>
+                <button
+                  onClick={() => setEditing(true)}
+                  className="p-1.5 rounded text-slate-400 hover:text-brand hover:bg-brand/5 transition-colors"
+                  title="Edit"
+                >
+                  <Pencil size={13} />
+                </button>
+                <button
+                  onClick={() => onDelete(item.id, item.name)}
+                  className="p-1.5 rounded text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                  title="Hapus"
+                >
+                  <Trash2 size={13} />
+                </button>
+              </>
+            )}
           </div>
         )}
       </td>
@@ -87,7 +93,7 @@ function EditableRow({ item, onSave, onDelete }) {
 
 // ── Add row ────────────────────────────────────────────────────────────────────
 
-function AddRow({ onAdd, placeholder }) {
+function AddRow({ onAdd, placeholder, disabled }) {
   const [open, setOpen] = useState(false)
   const [name, setName] = useState('')
   const [saving, setSaving] = useState(false)
@@ -108,12 +114,14 @@ function AddRow({ onAdd, placeholder }) {
   if (!open) return (
     <tr>
       <td colSpan={2} className="px-4 py-2">
-        <button
-          onClick={() => setOpen(true)}
-          className="flex items-center gap-1.5 text-sm text-brand hover:text-brand/80 font-medium transition-colors"
-        >
-          <Plus size={14} /> Tambah baru
-        </button>
+        {!disabled && (
+          <button
+            onClick={() => setOpen(true)}
+            className="flex items-center gap-1.5 text-sm text-brand hover:text-brand/80 font-medium transition-colors"
+          >
+            <Plus size={14} /> Tambah baru
+          </button>
+        )}
       </td>
     </tr>
   )
@@ -156,7 +164,7 @@ function AddRow({ onAdd, placeholder }) {
 
 // ── Section table ──────────────────────────────────────────────────────────────
 
-function CatalogTable({ title, icon: Icon, data, pagination, isLoading, onAdd, onSave, onDelete, placeholder, search, onSearch, onPageChange }) {
+function CatalogTable({ title, icon: Icon, data, pagination, isLoading, onAdd, onSave, onDelete, placeholder, search, onSearch, onPageChange, disabled }) {
   const items = data ?? []
   const total = pagination?.total ?? items.length
 
@@ -202,9 +210,10 @@ function CatalogTable({ title, icon: Icon, data, pagination, isLoading, onAdd, o
                 item={item}
                 onSave={onSave}
                 onDelete={onDelete}
+                disabled={disabled}
               />
             ))}
-            <AddRow onAdd={onAdd} placeholder={placeholder} />
+            <AddRow onAdd={onAdd} placeholder={placeholder} disabled={disabled} />
           </tbody>
         </table>
       )}
@@ -218,6 +227,9 @@ function CatalogTable({ title, icon: Icon, data, pagination, isLoading, onAdd, o
 
 export default function Catalog() {
   const qc = useQueryClient()
+  const { isSuperAdmin } = useAuth()
+  const { selectedCompany } = useSelectedCompany()
+  const blocked = isSuperAdmin && !selectedCompany
 
   const [catPage, setCatPage] = useState(1)
   const [catSearch, setCatSearch] = useState('')
@@ -281,6 +293,15 @@ export default function Catalog() {
         <p className="text-sm text-slate-400 mt-0.5">Kelola kategori dan artikel produk</p>
       </div>
 
+      {blocked && (
+        <div className="flex items-center gap-3 px-4 py-3.5 rounded-xl border border-amber-200 bg-amber-50 text-amber-800">
+          <Building2 size={16} className="text-amber-500 flex-shrink-0" />
+          <p className="text-sm font-medium">
+            Pilih perusahaan di bagian atas terlebih dahulu untuk bisa menambah atau mengubah data katalog.
+          </p>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <CatalogTable
           title="Kategori"
@@ -295,6 +316,7 @@ export default function Catalog() {
           onAdd={name => addCat.mutateAsync(name)}
           onSave={(id, name) => saveCat.mutateAsync([id, name])}
           onDelete={confirmDelete(delCat.mutate)}
+          disabled={blocked}
         />
 
         <CatalogTable
@@ -310,6 +332,7 @@ export default function Catalog() {
           onAdd={name => addArt.mutateAsync(name)}
           onSave={(id, name) => saveArt.mutateAsync([id, name])}
           onDelete={confirmDelete(delArt.mutate)}
+          disabled={blocked}
         />
       </div>
     </div>

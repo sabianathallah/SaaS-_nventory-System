@@ -406,9 +406,8 @@ function PermissionsTab({ companyId }) {
             const active  = role === selectedRole
             const hasDirt = isDirty(role)
             return (
-              <button
+              <div
                 key={role}
-                onClick={() => setSelectedRole(role)}
                 className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-sm font-medium transition-all text-left group relative ${
                   active
                     ? 'bg-white text-slate-900 shadow-sm'
@@ -416,11 +415,23 @@ function PermissionsTab({ companyId }) {
                 }`}
               >
                 {active && <span className="absolute left-0 top-1 bottom-1 w-0.5 rounded-r" style={{ background: color }} />}
-                <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: color, opacity: active ? 1 : 0.6 }} />
-                <span className="flex-1 truncate">{roleLabel(role)}</span>
-                {isCustom && !hasDirt && <span className="text-[9px] text-slate-400 font-medium shrink-0">kustom</span>}
-                {hasDirt && <span className="w-1.5 h-1.5 rounded-full bg-amber-400 flex-shrink-0" title="Belum disimpan" />}
-              </button>
+                <button
+                  onClick={() => setSelectedRole(role)}
+                  className="flex items-center gap-2.5 flex-1 min-w-0 text-left"
+                >
+                  <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: color, opacity: active ? 1 : 0.6 }} />
+                  <span className="flex-1 truncate">{roleLabel(role)}</span>
+                  {isCustom && !hasDirt && <span className="text-[9px] text-slate-400 font-medium shrink-0">kustom</span>}
+                  {hasDirt && <span className="w-1.5 h-1.5 rounded-full bg-amber-400 flex-shrink-0" title="Belum disimpan" />}
+                </button>
+                <button
+                  onClick={e => { e.stopPropagation(); setConfirmDelete(role) }}
+                  className="opacity-0 group-hover:opacity-100 p-0.5 rounded text-slate-300 hover:text-red-500 hover:bg-red-50 transition-all flex-shrink-0"
+                  title={isCustom ? 'Hapus role' : 'Reset ke default'}
+                >
+                  <Trash2 size={11} />
+                </button>
+              </div>
             )
           })}
         </nav>
@@ -459,24 +470,36 @@ function PermissionsTab({ companyId }) {
         </div>
 
         {/* Confirm delete role */}
-        {confirmDelete && (
-          <div className="mx-6 mt-4 p-4 rounded-xl border border-red-200 bg-red-50/50 flex items-center gap-4">
-            <div className="flex-1 text-sm">
-              <p className="font-semibold text-slate-800">Hapus role "<span className="text-red-700">{roleLabel(confirmDelete)}</span>"?</p>
-              <p className="text-xs text-slate-500 mt-0.5">User yang memakai role ini tidak akan bisa login dengan benar. Pastikan sudah dipindah rolenya.</p>
+        {confirmDelete && (() => {
+          const isCustomDel = serverRoles.find(r => r.key === confirmDelete)?.isCustom ?? false
+          return (
+            <div className="mx-6 mt-4 p-4 rounded-xl border border-red-200 bg-red-50/50 flex items-center gap-4">
+              <div className="flex-1 text-sm">
+                {isCustomDel ? (
+                  <>
+                    <p className="font-semibold text-slate-800">Hapus role "<span className="text-red-700">{roleLabel(confirmDelete)}</span>"?</p>
+                    <p className="text-xs text-slate-500 mt-0.5">User yang memakai role ini tidak akan bisa login dengan benar. Pastikan sudah dipindah rolenya.</p>
+                  </>
+                ) : (
+                  <>
+                    <p className="font-semibold text-slate-800">Reset permission "<span className="text-red-700">{roleLabel(confirmDelete)}</span>" ke default?</p>
+                    <p className="text-xs text-slate-500 mt-0.5">Semua perubahan permission untuk role ini akan dihapus dan dikembalikan ke pengaturan bawaan.</p>
+                  </>
+                )}
+              </div>
+              <div className="flex gap-2 shrink-0">
+                <button onClick={() => setConfirmDelete(null)} className="btn-secondary text-xs px-3">Batal</button>
+                <button
+                  onClick={() => deleteMut.mutate(confirmDelete)}
+                  disabled={deleteMut.isPending}
+                  className="btn-danger text-xs px-3"
+                >
+                  {deleteMut.isPending ? '…' : isCustomDel ? 'Hapus' : 'Reset'}
+                </button>
+              </div>
             </div>
-            <div className="flex gap-2 shrink-0">
-              <button onClick={() => setConfirmDelete(null)} className="btn-secondary text-xs px-3">Batal</button>
-              <button
-                onClick={() => deleteMut.mutate(confirmDelete)}
-                disabled={deleteMut.isPending}
-                className="btn-danger text-xs px-3"
-              >
-                {deleteMut.isPending ? '…' : 'Hapus'}
-              </button>
-            </div>
-          </div>
-        )}
+          )
+        })()}
 
         {/* Permission list */}
         <div className="flex-1 overflow-y-auto px-6 py-4 space-y-6">

@@ -10,8 +10,10 @@ import { exportExcel } from '../utils/exportExcel'
 import {
   Plus, Trash2, ImageIcon, Filter, ChevronRight, ChevronDown,
   Package, ArrowUpDown, ArrowUp, ArrowDown, QrCode, Pencil,
-  Loader2, Tag, FileSpreadsheet,
+  Loader2, Tag, FileSpreadsheet, Building2,
 } from 'lucide-react'
+import { useAuth } from '../context/AuthContext'
+import { useSelectedCompany } from '../context/SelectedCompanyContext'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -193,7 +195,7 @@ function SkuRows({ product, onOpenQr }) {
 
 // ── Product Row ───────────────────────────────────────────────────────────────
 
-function ProductRow({ product, expanded, onToggle, onDelete, onNavigate, onOpenQr }) {
+function ProductRow({ product, expanded, onToggle, onDelete, onNavigate, onOpenQr, disabled }) {
   const skus   = product.ProductSKUs ?? []
   const range  = priceRange(skus)
   const stock  = Number(product.totalStock ?? 0)
@@ -274,22 +276,26 @@ function ProductRow({ product, expanded, onToggle, onDelete, onNavigate, onOpenQ
         {/* Actions */}
         <td className="td w-16">
           <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-            <button
-              type="button"
-              onClick={e => { e.stopPropagation(); onNavigate() }}
-              className="p-1.5 rounded-lg text-slate-300 hover:text-slate-600 hover:bg-slate-100 transition-colors"
-              title="Edit produk"
-            >
-              <Pencil size={12} />
-            </button>
-            <button
-              type="button"
-              onClick={e => { e.stopPropagation(); onDelete(product) }}
-              className="p-1.5 rounded-lg text-slate-300 hover:text-red-400 hover:bg-red-50 transition-colors"
-              title="Hapus produk"
-            >
-              <Trash2 size={12} />
-            </button>
+            {!disabled && (
+              <>
+                <button
+                  type="button"
+                  onClick={e => { e.stopPropagation(); onNavigate() }}
+                  className="p-1.5 rounded-lg text-slate-300 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+                  title="Edit produk"
+                >
+                  <Pencil size={12} />
+                </button>
+                <button
+                  type="button"
+                  onClick={e => { e.stopPropagation(); onDelete(product) }}
+                  className="p-1.5 rounded-lg text-slate-300 hover:text-red-400 hover:bg-red-50 transition-colors"
+                  title="Hapus produk"
+                >
+                  <Trash2 size={12} />
+                </button>
+              </>
+            )}
           </div>
         </td>
       </tr>
@@ -307,6 +313,9 @@ function ProductRow({ product, expanded, onToggle, onDelete, onNavigate, onOpenQ
 export default function Products() {
   const navigate = useNavigate()
   const qc       = useQueryClient()
+  const { isSuperAdmin } = useAuth()
+  const { selectedCompany } = useSelectedCompany()
+  const blocked = isSuperAdmin && !selectedCompany
 
   const [page, setPage]         = useState(1)
   const [search, setSearch]     = useState('')
@@ -406,11 +415,22 @@ export default function Products() {
             {exporting ? <Loader2 size={14} className="animate-spin" /> : <FileSpreadsheet size={14} />}
             Export Excel
           </button>
-          <button onClick={() => navigate('/products/new')} className="btn-primary">
-            <Plus size={15} /> Tambah Produk
-          </button>
+          {!blocked && (
+            <button onClick={() => navigate('/products/new')} className="btn-primary">
+              <Plus size={15} /> Tambah Produk
+            </button>
+          )}
         </div>
       </div>
+
+      {blocked && (
+        <div className="flex items-center gap-3 px-4 py-3.5 rounded-xl border border-amber-200 bg-amber-50 text-amber-800 mb-4">
+          <Building2 size={16} className="text-amber-500 flex-shrink-0" />
+          <p className="text-sm font-medium">
+            Pilih perusahaan di bagian atas terlebih dahulu untuk bisa menambah, mengubah, atau menghapus produk.
+          </p>
+        </div>
+      )}
 
       {/* Filter bar */}
       <div className="flex flex-wrap items-center gap-3 mb-4">
@@ -477,6 +497,7 @@ export default function Products() {
                       onToggle={() => toggleExpand(p.id)}
                       onNavigate={() => navigate(`/products/${p.id}`)}
                       onDelete={product => setDelModal(product)}
+                      disabled={blocked}
                       onOpenQr={setQrTarget}
                     />
                   ))}

@@ -19,7 +19,9 @@ function companyFilter(req) {
  */
 function companyId(req) {
     if (req.user.role === 'SUPER_ADMIN') {
-        return req.body.companyId || null;
+        const fromBody  = req.body?.companyId;
+        const fromQuery = req.query?.companyId ? parseInt(req.query.companyId) : null;
+        return fromBody || fromQuery || null;
     }
     return req.user.companyId;
 }
