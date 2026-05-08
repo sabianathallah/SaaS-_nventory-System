@@ -56,8 +56,8 @@ export default function StockOutDetail() {
   const createMutation = useMutation({
     mutationFn: d => stockOutApi.create(d),
     onSuccess: (data) => {
-      qc.invalidateQueries(['stock-out'])
-      qc.invalidateQueries(['stocks'])
+      qc.invalidateQueries({ queryKey: ['stock-out'] })
+      qc.invalidateQueries({ queryKey: ['stocks'] })
       toast.success('Stock OUT berhasil dicatat')
       navigate(`/stock-out/${data.id}`)
     },

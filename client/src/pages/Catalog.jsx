@@ -244,17 +244,17 @@ export default function Catalog() {
 
   const addCat = useMutation({
     mutationFn: name => categoriesApi.create({ name }),
-    onSuccess:  () => { qc.invalidateQueries(['categories']); toast.success('Tipe ditambahkan') },
+    onSuccess:  () => { qc.invalidateQueries({ queryKey: ['categories'] }); toast.success('Tipe ditambahkan') },
     onError:    e  => toast.error(e.response?.data?.message || 'Gagal menambah tipe'),
   })
   const saveCat = useMutation({
     mutationFn: ([id, name]) => categoriesApi.update(id, { name }),
-    onSuccess:  () => { qc.invalidateQueries(['categories']); toast.success('Tipe diperbarui') },
+    onSuccess:  () => { qc.invalidateQueries({ queryKey: ['categories'] }); toast.success('Tipe diperbarui') },
     onError:    e  => toast.error(e.response?.data?.message || 'Gagal memperbarui'),
   })
   const delCat = useMutation({
     mutationFn: id => categoriesApi.remove(id),
-    onSuccess:  () => { qc.invalidateQueries(['categories']); toast.success('Tipe dihapus') },
+    onSuccess:  () => { qc.invalidateQueries({ queryKey: ['categories'] }); toast.success('Tipe dihapus') },
     onError:    e  => toast.error(e.response?.data?.message || 'Gagal menghapus — mungkin masih dipakai produk'),
   })
 
@@ -266,17 +266,17 @@ export default function Catalog() {
 
   const addArt = useMutation({
     mutationFn: name => articlesApi.create({ name }),
-    onSuccess:  () => { qc.invalidateQueries(['articles']); toast.success('Koleksi ditambahkan') },
+    onSuccess:  () => { qc.invalidateQueries({ queryKey: ['articles'] }); toast.success('Koleksi ditambahkan') },
     onError:    e  => toast.error(e.response?.data?.message || 'Gagal menambah koleksi'),
   })
   const saveArt = useMutation({
     mutationFn: ([id, name]) => articlesApi.update(id, { name }),
-    onSuccess:  () => { qc.invalidateQueries(['articles']); toast.success('Koleksi diperbarui') },
+    onSuccess:  () => { qc.invalidateQueries({ queryKey: ['articles'] }); toast.success('Koleksi diperbarui') },
     onError:    e  => toast.error(e.response?.data?.message || 'Gagal memperbarui'),
   })
   const delArt = useMutation({
     mutationFn: id => articlesApi.remove(id),
-    onSuccess:  () => { qc.invalidateQueries(['articles']); toast.success('Koleksi dihapus') },
+    onSuccess:  () => { qc.invalidateQueries({ queryKey: ['articles'] }); toast.success('Koleksi dihapus') },
     onError:    e  => toast.error(e.response?.data?.message || 'Gagal menghapus — mungkin masih dipakai produk'),
   })
 

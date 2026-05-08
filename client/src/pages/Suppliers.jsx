@@ -22,12 +22,12 @@ export default function Suppliers() {
 
   const save = useMutation({
     mutationFn: d => modal.data ? suppliersApi.update(modal.data.id, d) : suppliersApi.create(d),
-    onSuccess: () => { qc.invalidateQueries(['suppliers']); toast.success(modal.data ? 'Vendor diperbarui' : 'Vendor dibuat'); setModal(null) },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['suppliers'] }); toast.success(modal.data ? 'Vendor diperbarui' : 'Vendor dibuat'); setModal(null) },
     onError: e => toast.error(e.response?.data?.message || 'Error'),
   })
   const del = useMutation({
     mutationFn: id => suppliersApi.remove(id),
-    onSuccess: () => { qc.invalidateQueries(['suppliers']); toast.success('Vendor dihapus'); setModal(null) },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['suppliers'] }); toast.success('Vendor dihapus'); setModal(null) },
     onError: e => toast.error(e.response?.data?.message || 'Error'),
   })
 

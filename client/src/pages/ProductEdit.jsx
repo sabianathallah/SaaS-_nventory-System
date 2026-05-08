@@ -208,12 +208,12 @@ function VariantBuilder({ productId }) {
     setLocalTypes(types)
   }, [types])
 
-  const createType    = useMutation({ mutationFn: name => productVariantsApi.createType(productId, { name }), onSuccess: () => { qc.invalidateQueries(['variant-types', productId]); setAddingType(false); setNewTypeName('') }, onError: e => toast.error(e.response?.data?.message || 'Gagal') })
-  const deleteType    = useMutation({ mutationFn: tid  => productVariantsApi.deleteType(productId, tid), onSuccess: () => { qc.invalidateQueries(['variant-types', productId]); qc.invalidateQueries(['product-skus', productId]) }, onError: e => toast.error(e.response?.data?.message || 'Gagal') })
-  const createOption  = useMutation({ mutationFn: ({ typeId, value }) => productVariantsApi.createOption(productId, typeId, { value }), onSuccess: () => { qc.invalidateQueries(['variant-types', productId]); setAddingOptFor(null); setNewOptValue('') }, onError: e => toast.error(e.response?.data?.message || 'Gagal') })
-  const deleteOption  = useMutation({ mutationFn: ({ typeId, optionId }) => { setDeletingId(optionId); return productVariantsApi.deleteOption(productId, typeId, optionId) }, onSuccess: () => { setDeletingId(null); qc.invalidateQueries(['variant-types', productId]); qc.invalidateQueries(['product-skus', productId]) }, onError: e => { setDeletingId(null); toast.error(e.response?.data?.message || 'Gagal') } })
-  const reorderOpts   = useMutation({ mutationFn: ({ typeId, order }) => productVariantsApi.reorderOptions(productId, typeId, order), onError: e => { toast.error('Gagal menyimpan urutan'); qc.invalidateQueries(['variant-types', productId]) } })
-  const reorderTypes  = useMutation({ mutationFn: order => productVariantsApi.reorderTypes(productId, order), onError: e => { toast.error('Gagal menyimpan urutan'); qc.invalidateQueries(['variant-types', productId]) } })
+  const createType    = useMutation({ mutationFn: name => productVariantsApi.createType(productId, { name }), onSuccess: () => { qc.invalidateQueries({ queryKey: ['variant-types', productId] }); setAddingType(false); setNewTypeName('') }, onError: e => toast.error(e.response?.data?.message || 'Gagal') })
+  const deleteType    = useMutation({ mutationFn: tid  => productVariantsApi.deleteType(productId, tid), onSuccess: () => { qc.invalidateQueries({ queryKey: ['variant-types', productId] }); qc.invalidateQueries({ queryKey: ['product-skus', productId] }) }, onError: e => toast.error(e.response?.data?.message || 'Gagal') })
+  const createOption  = useMutation({ mutationFn: ({ typeId, value }) => productVariantsApi.createOption(productId, typeId, { value }), onSuccess: () => { qc.invalidateQueries({ queryKey: ['variant-types', productId] }); setAddingOptFor(null); setNewOptValue('') }, onError: e => toast.error(e.response?.data?.message || 'Gagal') })
+  const deleteOption  = useMutation({ mutationFn: ({ typeId, optionId }) => { setDeletingId(optionId); return productVariantsApi.deleteOption(productId, typeId, optionId) }, onSuccess: () => { setDeletingId(null); qc.invalidateQueries({ queryKey: ['variant-types', productId] }); qc.invalidateQueries({ queryKey: ['product-skus', productId] }) }, onError: e => { setDeletingId(null); toast.error(e.response?.data?.message || 'Gagal') } })
+  const reorderOpts   = useMutation({ mutationFn: ({ typeId, order }) => productVariantsApi.reorderOptions(productId, typeId, order), onError: e => { toast.error('Gagal menyimpan urutan'); qc.invalidateQueries({ queryKey: ['variant-types', productId] }) } })
+  const reorderTypes  = useMutation({ mutationFn: order => productVariantsApi.reorderTypes(productId, order), onError: e => { toast.error('Gagal menyimpan urutan'); qc.invalidateQueries({ queryKey: ['variant-types', productId] }) } })
 
   const handleOptionDragEnd = (typeId, event) => {
     const { active, over } = event
@@ -312,13 +312,13 @@ function SkuTable({ productId, productName }) {
 
   const updateSku = useMutation({
     mutationFn: ({ skuId, data }) => productSkusApi.update(productId, skuId, data),
-    onSuccess: (_, { skuId }) => { qc.invalidateQueries(['product-skus', productId]); setEdits(p => { const n = { ...p }; delete n[skuId]; return n }) },
+    onSuccess: (_, { skuId }) => { qc.invalidateQueries({ queryKey: ['product-skus', productId] }); setEdits(p => { const n = { ...p }; delete n[skuId]; return n }) },
     onError: e => toast.error(e.response?.data?.message || 'Gagal menyimpan SKU'),
   })
-  const deleteSku = useMutation({ mutationFn: sid => productSkusApi.delete(productId, sid), onSuccess: () => qc.invalidateQueries(['product-skus', productId]), onError: e => toast.error(e.response?.data?.message || 'Gagal') })
+  const deleteSku = useMutation({ mutationFn: sid => productSkusApi.delete(productId, sid), onSuccess: () => qc.invalidateQueries({ queryKey: ['product-skus', productId] }), onError: e => toast.error(e.response?.data?.message || 'Gagal') })
   const createSku = useMutation({
     mutationFn: data => productSkusApi.create(productId, data),
-    onSuccess: () => { qc.invalidateQueries(['product-skus', productId]); setShowManual(false); setManual(EMPTY_MANUAL); toast.success('SKU ditambahkan') },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['product-skus', productId] }); setShowManual(false); setManual(EMPTY_MANUAL); toast.success('SKU ditambahkan') },
     onError: e => toast.error(e.response?.data?.message || 'Gagal menambah SKU'),
   })
 
@@ -336,7 +336,7 @@ function SkuTable({ productId, productName }) {
     if (!hasVariants) {
       if (skus.length > 0) { toast('SKU sudah ada', { icon: '✓' }); return }
       setGenerating(true)
-      try { await productSkusApi.create(productId, {}); qc.invalidateQueries(['product-skus', productId]); toast.success('SKU dibuat') }
+      try { await productSkusApi.create(productId, {}); qc.invalidateQueries({ queryKey: ['product-skus', productId] }); toast.success('SKU dibuat') }
       catch (e) { toast.error(e.response?.data?.message || 'Gagal') }
       finally { setGenerating(false) }
       return
@@ -345,7 +345,7 @@ function SkuTable({ productId, productName }) {
     const missing = combos.filter(c => !existingKeys.has(c.map(o => o.optionId).sort().join(',')))
     if (!missing.length) { toast('Semua kombinasi SKU sudah ada', { icon: '✓' }); return }
     setGenerating(true)
-    try { for (const c of missing) await productSkusApi.create(productId, { variantOptionIds: c.map(o => o.optionId) }); qc.invalidateQueries(['product-skus', productId]); toast.success(`${missing.length} SKU baru dibuat`) }
+    try { for (const c of missing) await productSkusApi.create(productId, { variantOptionIds: c.map(o => o.optionId) }); qc.invalidateQueries({ queryKey: ['product-skus', productId] }); toast.success(`${missing.length} SKU baru dibuat`) }
     catch (e) { toast.error(e.response?.data?.message || 'Gagal') }
     finally { setGenerating(false) }
   }
@@ -478,12 +478,12 @@ export default function ProductEdit() {
   const save = useMutation({
     mutationFn: (data) => isNew ? productsApi.create(data) : productsApi.update(id, data),
     onSuccess: (saved) => {
-      qc.invalidateQueries(['products'])
+      qc.invalidateQueries({ queryKey: ['products'] })
       if (isNew) {
         toast.success('Produk berhasil dibuat')
         navigate(`/products/${saved.id}/edit?setup=true`, { replace: true })
       } else {
-        qc.invalidateQueries(['product', id])
+        qc.invalidateQueries({ queryKey: ['product', id] })
         toast.success('Perubahan disimpan')
         navigate(`/products/${id}`)
       }
@@ -493,18 +493,18 @@ export default function ProductEdit() {
 
   const saveSimpleSku = useMutation({
     mutationFn: () => productSkusApi.create(id, { price: Number(simpleForm.price) || 0, qty: Number(simpleForm.qty) || 0 }),
-    onSuccess: () => { qc.invalidateQueries(['products']); toast.success('Produk berhasil disimpan'); navigate(`/products/${id}`) },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['products'] }); toast.success('Produk berhasil disimpan'); navigate(`/products/${id}`) },
     onError: e => toast.error(e.response?.data?.message || 'Gagal menyimpan harga'),
   })
 
   const createCategory = useMutation({
     mutationFn: name => categoriesApi.create({ name }),
-    onSuccess: (c) => { qc.invalidateQueries(['categories']); toast.success(`Tipe "${c.name}" ditambahkan`); return c },
+    onSuccess: (c) => { qc.invalidateQueries({ queryKey: ['categories'] }); toast.success(`Tipe "${c.name}" ditambahkan`); return c },
     onError: e => { toast.error(e.response?.data?.message || 'Gagal'); throw e },
   })
   const createArticle = useMutation({
     mutationFn: name => articlesApi.create({ name }),
-    onSuccess: (a) => { qc.invalidateQueries(['articles']); toast.success(`Koleksi "${a.name}" ditambahkan`); return a },
+    onSuccess: (a) => { qc.invalidateQueries({ queryKey: ['articles'] }); toast.success(`Koleksi "${a.name}" ditambahkan`); return a },
     onError: e => { toast.error(e.response?.data?.message || 'Gagal'); throw e },
   })
 

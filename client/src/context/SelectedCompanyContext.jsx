@@ -9,12 +9,16 @@ function readSession() {
 }
 
 export function SelectedCompanyProvider({ children }) {
-  const [selectedCompany, setSelectedCompanyState] = useState(readSession)
+  const [selectedCompany, setSelectedCompanyState] = useState(() => {
+    const company = readSession()
+    setAxiosCompanyScope(company?.id ?? null) // set synchronously before first render
+    return company
+  })
 
-  // Sync axios on mount (handles page refresh)
+  // Keep in sync if sessionStorage changes externally (e.g. other tabs)
   useEffect(() => {
     setAxiosCompanyScope(selectedCompany?.id ?? null)
-  }, []) // eslint-disable-line
+  }, [selectedCompany])
 
   const setSelectedCompany = (company) => {
     setSelectedCompanyState(company)

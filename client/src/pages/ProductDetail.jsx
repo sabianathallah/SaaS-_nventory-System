@@ -136,7 +136,7 @@ export default function ProductDetail() {
   const del = useMutation({
     mutationFn: () => productsApi.remove(id),
     onSuccess: () => {
-      qc.invalidateQueries(['products'])
+      qc.invalidateQueries({ queryKey: ['products'] })
       toast.success('Produk dihapus')
       navigate('/products', { replace: true })
     },

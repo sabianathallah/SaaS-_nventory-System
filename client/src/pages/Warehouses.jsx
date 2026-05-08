@@ -24,12 +24,12 @@ export default function Warehouses() {
 
   const save = useMutation({
     mutationFn: d => modal.data ? warehousesApi.update(modal.data.id, d) : warehousesApi.create(d),
-    onSuccess: () => { qc.invalidateQueries(['warehouses']); toast.success(modal.data ? 'Warehouse updated' : 'Warehouse created'); setModal(null) },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['warehouses'] }); toast.success(modal.data ? 'Warehouse updated' : 'Warehouse created'); setModal(null) },
     onError: e => toast.error(e.response?.data?.message || 'Error'),
   })
   const del = useMutation({
     mutationFn: id => warehousesApi.remove(id),
-    onSuccess: () => { qc.invalidateQueries(['warehouses']); toast.success('Warehouse deleted'); setModal(null) },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['warehouses'] }); toast.success('Warehouse deleted'); setModal(null) },
     onError: e => toast.error(e.response?.data?.message || 'Error'),
   })
 

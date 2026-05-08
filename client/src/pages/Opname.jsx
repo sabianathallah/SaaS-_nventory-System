@@ -41,7 +41,7 @@ export default function Opname() {
   const create = useMutation({
     mutationFn: d => opnameSessionsApi.create(d),
     onSuccess: (data) => {
-      qc.invalidateQueries(['opname'])
+      qc.invalidateQueries({ queryKey: ['opname'] })
       toast.success('Session dibuat')
       setModal(null)
       navigate(`/opname/${data.id}`)
@@ -52,9 +52,9 @@ export default function Opname() {
   const closeSession = useMutation({
     mutationFn: id => opnameSessionsApi.update(id, { status: 'closed' }),
     onSuccess: () => {
-      qc.invalidateQueries(['opname'])
-      qc.invalidateQueries(['stocks'])
-      qc.invalidateQueries(['movements'])
+      qc.invalidateQueries({ queryKey: ['opname'] })
+      qc.invalidateQueries({ queryKey: ['stocks'] })
+      qc.invalidateQueries({ queryKey: ['movements'] })
       toast.success('Session ditutup — stok disesuaikan')
       setModal(null)
     },

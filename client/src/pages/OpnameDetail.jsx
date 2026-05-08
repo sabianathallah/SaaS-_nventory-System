@@ -94,7 +94,7 @@ export default function OpnameDetail() {
   const cancelSession = useMutation({
     mutationFn: () => opnameSessionsApi.update(id, { status: 'cancelled' }),
     onSuccess: () => {
-      qc.invalidateQueries(['opname'])
+      qc.invalidateQueries({ queryKey: ['opname'] })
       toast.success('Session dibatalkan')
       navigate('/opname')
     },
@@ -104,10 +104,10 @@ export default function OpnameDetail() {
   const closeSession = useMutation({
     mutationFn: () => opnameSessionsApi.update(id, { status: 'closed' }),
     onSuccess: () => {
-      qc.invalidateQueries(['opname'])
-      qc.invalidateQueries(['opname-session', id])
-      qc.invalidateQueries(['stocks'])
-      qc.invalidateQueries(['movements'])
+      qc.invalidateQueries({ queryKey: ['opname'] })
+      qc.invalidateQueries({ queryKey: ['opname-session', id] })
+      qc.invalidateQueries({ queryKey: ['stocks'] })
+      qc.invalidateQueries({ queryKey: ['movements'] })
       toast.success('Session ditutup — stok disesuaikan')
       setScannerConnected(false)
       setConfirmMode(null)
@@ -134,7 +134,7 @@ export default function OpnameDetail() {
       }
     },
     onSuccess: () => {
-      qc.invalidateQueries(['opname-items', id])
+      qc.invalidateQueries({ queryKey: ['opname-items', id] })
       toast.success('Hasil opname disimpan')
       setLocalItems([])
       setFillInitialized(false)
@@ -211,7 +211,7 @@ export default function OpnameDetail() {
       setLocalItems(prev => prev.filter(i => i.skuKey !== item.skuKey))
       try {
         await opnameItemsApi.remove(item.id)
-        qc.invalidateQueries(['opname-items', id])
+        qc.invalidateQueries({ queryKey: ['opname-items', id] })
       } catch {
         toast.error('Gagal menghapus item')
         setLocalItems(prev => [...prev, item])

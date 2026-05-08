@@ -38,12 +38,12 @@ export default function Companies() {
 
   const save = useMutation({
     mutationFn: d => modal.data ? companiesApi.update(modal.data.id, d) : companiesApi.create(d),
-    onSuccess: () => { qc.invalidateQueries(['companies']); toast.success(modal.data ? 'Company updated' : 'Company created'); setModal(null) },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['companies'] }); toast.success(modal.data ? 'Company updated' : 'Company created'); setModal(null) },
     onError: e => toast.error(e.response?.data?.message || 'Error'),
   })
   const del = useMutation({
     mutationFn: id => companiesApi.remove(id),
-    onSuccess: () => { qc.invalidateQueries(['companies']); toast.success('Company deleted'); setModal(null) },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['companies'] }); toast.success('Company deleted'); setModal(null) },
     onError: e => toast.error(e.response?.data?.message || 'Error'),
   })
 

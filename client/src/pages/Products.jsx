@@ -362,7 +362,7 @@ export default function Products() {
 
   const del = useMutation({
     mutationFn: id => productsApi.remove(id),
-    onSuccess: () => { qc.invalidateQueries(['products']); toast.success('Produk dihapus'); setDelModal(null) },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['products'] }); toast.success('Produk dihapus'); setDelModal(null) },
     onError:   e  => toast.error(e.response?.data?.message || 'Gagal menghapus'),
   })
 
