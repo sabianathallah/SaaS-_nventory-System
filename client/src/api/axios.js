@@ -1,4 +1,5 @@
 import axios from 'axios'
+import toast from 'react-hot-toast'
 
 const api = axios.create({ baseURL: import.meta.env.VITE_API_URL || '/api' })
 
@@ -37,9 +38,12 @@ api.interceptors.response.use(
   (res) => res,
   (err) => {
     if (err.response?.status === 401) {
+      const msg = err.response?.data?.message ?? ''
+      const isExpired = msg.toLowerCase().includes('expired')
       localStorage.removeItem('token')
       localStorage.removeItem('user')
-      window.location.href = '/login'
+      toast.error(isExpired ? 'Sesi berakhir, silakan login kembali.' : 'Tidak terautentikasi.')
+      setTimeout(() => { window.location.href = '/login' }, 1500)
     }
     return Promise.reject(err)
   }
