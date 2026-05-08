@@ -2,15 +2,20 @@
 const { Product, ProductVariantType, ProductVariantOption } = require('../models');
 const { companyFilter, companyId } = require('../helpers/tenancy');
 
+// Express 5 nested routers don't always merge params — extract from URL as fallback
+function pid(req) { return req.params.productId || req.originalUrl.match(/\/products\/(\d+)\//)?.[1]; }
+function tid(req) { return req.params.typeId    || req.originalUrl.match(/\/variant-types\/(\d+)\//)?.[1]; }
+
 class ProductVariantController {
   // GET /products/:productId/variant-types
   static async getVariantTypes(req, res, next) {
     try {
-      const product = await Product.findOne({ where: { id: req.params.productId, ...companyFilter(req) } });
+      const productId = pid(req);
+      const product = await Product.findOne({ where: { id: productId, ...companyFilter(req) } });
       if (!product) throw { name: 'NotFound', message: 'Product not found' };
 
       const types = await ProductVariantType.findAll({
-        where: { ProductId: req.params.productId },
+        where: { ProductId: productId },
         include: [{ model: ProductVariantOption, attributes: ['id', 'value', 'position'] }],
         order: [['position', 'ASC'], ['createdAt', 'ASC'], [ProductVariantOption, 'position', 'ASC']],
       });
@@ -21,7 +26,8 @@ class ProductVariantController {
   // POST /products/:productId/variant-types
   static async createVariantType(req, res, next) {
     try {
-      const product = await Product.findOne({ where: { id: req.params.productId, ...companyFilter(req) } });
+      const productId = pid(req);
+      const product = await Product.findOne({ where: { id: productId, ...companyFilter(req) } });
       if (!product) throw { name: 'NotFound', message: 'Product not found' };
 
       const variantType = await ProductVariantType.create({
@@ -37,7 +43,7 @@ class ProductVariantController {
   static async updateVariantType(req, res, next) {
     try {
       const variantType = await ProductVariantType.findOne({
-        where: { id: req.params.typeId, ProductId: req.params.productId },
+        where: { id: tid(req), ProductId: pid(req) },
       });
       if (!variantType) throw { name: 'NotFound', message: 'Variant type not found' };
       await variantType.update({ name: req.body.name });
@@ -49,7 +55,7 @@ class ProductVariantController {
   static async deleteVariantType(req, res, next) {
     try {
       const variantType = await ProductVariantType.findOne({
-        where: { id: req.params.typeId, ProductId: req.params.productId },
+        where: { id: tid(req), ProductId: pid(req) },
       });
       if (!variantType) throw { name: 'NotFound', message: 'Variant type not found' };
       await variantType.destroy();
@@ -61,7 +67,7 @@ class ProductVariantController {
   static async createVariantOption(req, res, next) {
     try {
       const variantType = await ProductVariantType.findOne({
-        where: { id: req.params.typeId, ProductId: req.params.productId },
+        where: { id: tid(req), ProductId: pid(req) },
       });
       if (!variantType) throw { name: 'NotFound', message: 'Variant type not found' };
 
@@ -104,7 +110,8 @@ class ProductVariantController {
   // body: { order: [id, id, ...] }
   static async reorderTypes(req, res, next) {
     try {
-      const product = await Product.findOne({ where: { id: req.params.productId, ...companyFilter(req) } });
+      const productId = pid(req);
+      const product = await Product.findOne({ where: { id: productId, ...companyFilter(req) } });
       if (!product) throw { name: 'NotFound', message: 'Product not found' };
 
       const { order } = req.body;
@@ -116,7 +123,7 @@ class ProductVariantController {
         order.map((id, index) =>
           ProductVariantType.update(
             { position: index },
-            { where: { id, ProductId: req.params.productId } }
+            { where: { id, ProductId: productId } }
           )
         )
       );
@@ -129,9 +136,8 @@ class ProductVariantController {
   // body: { order: [id, id, id, ...] }
   static async reorderOptions(req, res, next) {
     try {
-      console.log('[reorderOptions] params:', req.params, 'body:', req.body);
       const variantType = await ProductVariantType.findOne({
-        where: { id: req.params.typeId, ProductId: req.params.productId },
+        where: { id: tid(req), ProductId: pid(req) },
       });
       if (!variantType) throw { name: 'NotFound', message: 'Variant type not found' };
 
