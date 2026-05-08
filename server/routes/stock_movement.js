@@ -1,14 +1,15 @@
 'use strict';
 const express = require('express');
-const router = express.Router();
-const StockMovementController = require('../controllers/stockMovementController');
+const router  = express.Router();
+const C       = require('../controllers/stockMovementController');
+const rp      = require('../middlewares/requirePermission');
 
-router.get('/summary', StockMovementController.getSummary);
-router.get('/chart', StockMovementController.getChart);
-router.get('/export/csv', StockMovementController.exportCsv);
-router.get('/', StockMovementController.getAll);
-router.get('/:id', StockMovementController.getById);
-router.post('/', StockMovementController.create);
-router.delete('/:id', StockMovementController.delete);
+router.get('/summary',    rp('stock.view'),   C.getSummary);
+router.get('/chart',      rp('stock.view'),   C.getChart);
+router.get('/export/csv', rp('stock.view'),   C.exportCsv);
+router.get('/',           rp('stock.view'),   C.getAll);
+router.get('/:id',        rp('stock.view'),   C.getById);
+router.post('/',          rp('stock.manage'), C.create);
+router.delete('/:id',     rp('stock.manage'), C.delete);
 
 module.exports = router;

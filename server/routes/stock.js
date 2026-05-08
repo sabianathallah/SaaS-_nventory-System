@@ -1,12 +1,13 @@
 'use strict';
 const express = require('express');
-const router = express.Router();
-const StockController = require('../controllers/stockController');
+const router  = express.Router();
+const C       = require('../controllers/stockController');
+const rp      = require('../middlewares/requirePermission');
 
-router.get('/', StockController.getAll);
-router.get('/:id', StockController.getById);
-router.post('/', StockController.create);
-router.put('/:id', StockController.update);
-router.delete('/:id', StockController.delete);
+router.get('/',    rp('stock.view'),   C.getAll);
+router.get('/:id', rp('stock.view'),   C.getById);
+router.post('/',   rp('stock.manage'), C.create);
+router.put('/:id', rp('stock.manage'), C.update);
+router.delete('/:id', rp('stock.manage'), C.delete);
 
 module.exports = router;

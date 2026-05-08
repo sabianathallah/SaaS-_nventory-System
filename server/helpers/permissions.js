@@ -1,6 +1,11 @@
 'use strict';
 
 const ALL_PERMISSIONS = [
+  // Dashboard
+  { key: 'dashboard.view_stock',     label: 'Dashboard: Lihat Data Stok',               group: 'Dashboard' },
+  { key: 'dashboard.view_value',     label: 'Dashboard: Lihat Nilai Inventaris',         group: 'Dashboard' },
+  { key: 'dashboard.view_analytics', label: 'Dashboard: Lihat Grafik & Breakdown',       group: 'Dashboard' },
+  { key: 'dashboard.view_movements', label: 'Dashboard: Lihat Pergerakan Terbaru',       group: 'Dashboard' },
   // Inventory
   { key: 'inventory.view',          label: 'Lihat Produk & Katalog',                     group: 'Inventory' },
   { key: 'inventory.manage',        label: 'Kelola Produk (Tambah/Edit/Hapus)',           group: 'Inventory' },
@@ -10,9 +15,9 @@ const ALL_PERMISSIONS = [
   { key: 'stock.in.scan',           label: 'Stock In: Input via Scan Barcode',            group: 'Stok' },
   { key: 'stock.in.manual_input',   label: 'Stock In: Input Manual (tanpa barcode)',      group: 'Stok' },
   { key: 'stock.in.delete_item',    label: 'Stock In: Hapus Item yang Sudah Tersimpan',   group: 'Stok' },
-  { key: 'stock.out.scan',           label: 'Stock Out: Input via Scan Barcode',          group: 'Stok' },
+  { key: 'stock.out.scan',          label: 'Stock Out: Input via Scan Barcode',           group: 'Stok' },
   { key: 'stock.out.manual_input',  label: 'Stock Out: Input Manual (tanpa barcode)',     group: 'Stok' },
-  { key: 'stock.opname.scan',        label: 'Stock Opname: Hitung via Scan Barcode',      group: 'Stok' },
+  { key: 'stock.opname.scan',       label: 'Stock Opname: Hitung via Scan Barcode',       group: 'Stok' },
   { key: 'stock.opname.manual_input',label: 'Stock Opname: Input Manual (tanpa barcode)',group: 'Stok' },
   // Penerimaan Barang Vendor
   { key: 'packing.view',            label: 'Lihat Modul Penerimaan & Packing',            group: 'Penerimaan Barang Vendor' },
@@ -33,6 +38,7 @@ const DEFAULT_PERMISSIONS = {
   ADMIN:         ALL_KEYS,
   COMPANY_ADMIN: ALL_KEYS,
   OPERASIONAL:   [
+    'dashboard.view_stock', 'dashboard.view_value', 'dashboard.view_analytics', 'dashboard.view_movements',
     'inventory.view', 'inventory.manage',
     'stock.view', 'stock.manage',
     'stock.in.scan', 'stock.out.scan', 'stock.opname.scan',
@@ -42,7 +48,10 @@ const DEFAULT_PERMISSIONS = {
   HEAD_PACKING:  ['packing.view', 'packing.incoming', 'packing.jobs', 'packing.verify', 'reports.dashboard'],
   TIM_PACKING:   ['packing.view', 'packing.jobs'],
   HR:            ['admin.users', 'reports.dashboard'],
-  CEO:           ['inventory.view', 'stock.view', 'packing.view', 'reports.dashboard'],
+  CEO:           [
+    'dashboard.view_stock', 'dashboard.view_value', 'dashboard.view_analytics', 'dashboard.view_movements',
+    'inventory.view', 'stock.view', 'packing.view', 'reports.dashboard',
+  ],
   STAFF:         ['inventory.view'],
 };
 

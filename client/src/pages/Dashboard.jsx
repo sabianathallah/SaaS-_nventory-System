@@ -219,9 +219,14 @@ const ART_PER_PAGE = 4
 const WH_PER_PAGE  = 2
 
 export default function Dashboard() {
-  const { user, isStaff } = useAuth()
+  const { user, hasPermission } = useAuth()
   const [artPage, setArtPage] = useState(0)
   const [whPage,  setWhPage]  = useState(0)
+
+  const canViewStock     = hasPermission('dashboard.view_stock')
+  const canViewValue     = hasPermission('dashboard.view_value')
+  const canViewAnalytics = hasPermission('dashboard.view_analytics')
+  const canViewMovements = hasPermission('dashboard.view_movements')
 
   const { data: stats, isLoading } = useQuery({
     queryKey: ['dashboard-stats'],
@@ -282,37 +287,24 @@ export default function Dashboard() {
       </div>
 
       {/* ── Top stats ───────────────────────────────────────── */}
-      <div className={`grid grid-cols-1 gap-4 ${isStaff ? '' : 'sm:grid-cols-3'}`}>
-        <StatCard
-          label="Total Produk"
-          value={fmtNum(totalProducts)}
-          icon={Package}
-          loading={isLoading}
-        />
-        {!isStaff && (
-          <StatCard
-            label="Total Stock"
-            value={fmtNum(totalStock)}
-            sub="unit · dari semua SKU"
-            icon={BoxesIcon}
-            accent="#3B82F6"
-            loading={isLoading}
-          />
-        )}
-        {!isStaff && (
-          <StatCard
-            label="Total Nilai Inventaris"
-            value={fmtRp(totalValue)}
-            sub={isLoading ? '' : fmtRpFull(totalValue)}
-            icon={Wallet}
-            accent="#10B981"
-            loading={isLoading}
-          />
-        )}
-      </div>
+      {(() => {
+        const count = 1 + (canViewStock ? 1 : 0) + (canViewValue ? 1 : 0)
+        const cols  = count === 3 ? 'sm:grid-cols-3' : count === 2 ? 'sm:grid-cols-2' : ''
+        return (
+          <div className={`grid grid-cols-1 gap-4 ${cols}`}>
+            <StatCard label="Total Produk" value={fmtNum(totalProducts)} icon={Package} loading={isLoading} />
+            {canViewStock && (
+              <StatCard label="Total Stock" value={fmtNum(totalStock)} sub="unit · dari semua SKU" icon={BoxesIcon} accent="#3B82F6" loading={isLoading} />
+            )}
+            {canViewValue && (
+              <StatCard label="Total Nilai Inventaris" value={fmtRp(totalValue)} sub={isLoading ? '' : fmtRpFull(totalValue)} icon={Wallet} accent="#10B981" loading={isLoading} />
+            )}
+          </div>
+        )
+      })()}
 
       {/* ── Middle: Article breakdown + Warehouse chart ─────── */}
-      {!isStaff && <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      {canViewAnalytics && <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
 
         {/* Stock & Value per Koleksi */}
         <div className="card p-5">
@@ -348,7 +340,7 @@ export default function Dashboard() {
                         </div>
                         <div className="text-right flex-shrink-0">
                           <p className="text-sm font-bold tabular-nums text-slate-800">{fmtNum(art.totalStock)} <span className="text-xs font-normal text-slate-400">unit</span></p>
-                          <p className="text-xs font-semibold text-emerald-600">{fmtRp(art.totalValue)}</p>
+                          {canViewValue && <p className="text-xs font-semibold text-emerald-600">{fmtRp(art.totalValue)}</p>}
                         </div>
                       </div>
                       <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
@@ -457,10 +449,10 @@ export default function Dashboard() {
       </div>}
 
       {/* ── Bottom: Warehouse × Article + Movements ─────────── */}
-      {!isStaff && <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+      {(canViewAnalytics || canViewMovements) && <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
 
         {/* Warehouse × Article breakdown */}
-        <div className="lg:col-span-3 card p-5">
+        {canViewAnalytics && <div className="lg:col-span-3 card p-5">
           <div className="flex items-center gap-2 mb-4">
             <LayoutGrid size={14} className="text-slate-500" />
             <h3 className="text-sm font-bold text-slate-800">Breakdown Stock per Gudang × Koleksi</h3>
@@ -486,10 +478,10 @@ export default function Dashboard() {
               ))}
             </div>
           )}
-        </div>
+        </div>}
 
         {/* Recent movements */}
-        <div className="lg:col-span-2 card p-5">
+        {canViewMovements && <div className="lg:col-span-2 card p-5">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-sm font-bold text-slate-800">Pergerakan Terbaru</h3>
             <span className="badge-muted text-[10px]">{todayMovements} total pergerakan barang hari ini</span>
@@ -501,7 +493,7 @@ export default function Dashboard() {
               {(movements?.data ?? []).map(m => <MovementRow key={m.id} m={m} />)}
             </div>
           )}
-        </div>
+        </div>}
       </div>}
 
     </div>
