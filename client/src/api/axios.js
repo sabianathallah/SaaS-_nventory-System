@@ -15,7 +15,7 @@ function getCompanyId() {
 }
 
 // Routes that belong to Administration and should NEVER be company-scoped
-const ADMIN_PATHS = ['/users', '/companies', '/role-permissions', '/system', '/me']
+const ADMIN_PATHS = ['/users', '/companies', '/roles', '/permissions', '/system', '/me']
 
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('token')
