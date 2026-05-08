@@ -289,7 +289,7 @@ export default function Catalog() {
   return (
     <div className="px-6 py-6 max-w-3xl mx-auto space-y-6">
       <div>
-        <h2 className="text-xl font-bold text-slate-800">Katalog dan Koleksi</h2>
+        <h2 className="text-xl font-bold text-slate-800">Artikel dan Koleksi</h2>
         <p className="text-sm text-slate-400 mt-0.5">Kelola tipe dan koleksi produk</p>
       </div>
 
@@ -297,7 +297,7 @@ export default function Catalog() {
         <div className="flex items-center gap-3 px-4 py-3.5 rounded-xl border border-amber-200 bg-amber-50 text-amber-800">
           <Building2 size={16} className="text-amber-500 flex-shrink-0" />
           <p className="text-sm font-medium">
-            Pilih perusahaan di bagian atas terlebih dahulu untuk bisa menambah atau mengubah data katalog.
+            Pilih perusahaan di bagian atas terlebih dahulu untuk bisa menambah atau mengubah data artikel dan koleksi.
           </p>
         </div>
       )}
