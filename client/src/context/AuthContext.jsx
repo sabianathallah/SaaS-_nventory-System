@@ -46,9 +46,9 @@ export function AuthProvider({ children }) {
   const isSuperAdmin   = user?.role === 'SUPER_ADMIN'
   const isAdmin        = ['SUPER_ADMIN', 'ADMIN', 'COMPANY_ADMIN'].includes(user?.role)
   const isOperasional  = ['SUPER_ADMIN', 'ADMIN', 'COMPANY_ADMIN', 'OPERASIONAL'].includes(user?.role)
-  const isHeadPacking  = ['SUPER_ADMIN', 'ADMIN', 'COMPANY_ADMIN', 'HEAD_PACKING'].includes(user?.role)
+  const isHeadPacking  = false
   const isTimPacking   = ['SUPER_ADMIN', 'ADMIN', 'COMPANY_ADMIN', 'TIM_PACKING'].includes(user?.role)
-  const isHR           = ['SUPER_ADMIN', 'ADMIN', 'COMPANY_ADMIN', 'HR'].includes(user?.role)
+  const isHR           = false
   const canViewPacking = user
     ? (user.role === 'SUPER_ADMIN' || user.role === 'ADMIN' ||
        Array.isArray(user.permissions) && user.permissions.includes('packing.view'))

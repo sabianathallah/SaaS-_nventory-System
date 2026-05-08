@@ -46,7 +46,7 @@ const DEFAULT_PERMISSIONS = {
 };
 
 // Roles whose permissions can be edited by admin
-const EDITABLE_ROLES = ['COMPANY_ADMIN', 'OPERASIONAL', 'HEAD_PACKING', 'TIM_PACKING', 'HR', 'CEO'];
+const EDITABLE_ROLES = ['COMPANY_ADMIN', 'OPERASIONAL', 'TIM_PACKING'];
 
 // Roles that are fully protected — cannot be created, edited, or deleted
 const SYSTEM_ROLES = ['SUPER_ADMIN', 'ADMIN'];

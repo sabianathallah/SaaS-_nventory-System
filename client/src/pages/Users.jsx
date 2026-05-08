@@ -12,7 +12,7 @@ import { Plus, Pencil, Trash2, UserCircle2, ShieldCheck, RotateCcw, Save, Check,
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const SYSTEM_ROLES    = ['SUPER_ADMIN', 'ADMIN']
-const EDITABLE_ROLES  = ['COMPANY_ADMIN', 'OPERASIONAL', 'HEAD_PACKING', 'TIM_PACKING', 'HR', 'CEO']
+const EDITABLE_ROLES  = ['COMPANY_ADMIN', 'OPERASIONAL', 'TIM_PACKING']
 const ALL_SYSTEM_KEYS = [...SYSTEM_ROLES, ...EDITABLE_ROLES]
 
 const ROLE_BADGE = {
@@ -20,19 +20,13 @@ const ROLE_BADGE = {
   ADMIN:         <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-orange-100 text-orange-700 uppercase tracking-wide">Admin</span>,
   COMPANY_ADMIN: <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-blue-100 text-blue-700 uppercase tracking-wide">Company Admin</span>,
   OPERASIONAL:   <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-teal-100 text-teal-700 uppercase tracking-wide">Operasional</span>,
-  HEAD_PACKING:  <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-purple-100 text-purple-700 uppercase tracking-wide">Head Packing</span>,
   TIM_PACKING:   <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-violet-100 text-violet-700 uppercase tracking-wide">Tim Packing</span>,
-  HR:            <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-pink-100 text-pink-700 uppercase tracking-wide">HR</span>,
-  CEO:           <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-700 uppercase tracking-wide">CEO</span>,
 }
 
 const ROLE_COLORS = {
   COMPANY_ADMIN: '#3B82F6',
   OPERASIONAL:   '#14B8A6',
-  HEAD_PACKING:  '#A855F7',
   TIM_PACKING:   '#8B5CF6',
-  HR:            '#EC4899',
-  CEO:           '#F59E0B',
 }
 
 const CUSTOM_COLOR_PALETTE = ['#F97316', '#10B981', '#06B6D4', '#EF4444', '#84CC16', '#F59E0B', '#6366F1']
