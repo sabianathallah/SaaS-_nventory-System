@@ -1,19 +1,8 @@
 'use strict';
-const { Op } = require('sequelize');
 
-/**
- * Returns a Sequelize WHERE clause fragment for company scoping.
- * - SUPER_ADMIN: sees all, or filter by ?companyId= query param
- *   When filtering by companyId, also includes orphaned records (companyId IS NULL)
- * - Everyone else: scoped to their own companyId
- */
 function companyFilter(req) {
     if (req.user.role === 'SUPER_ADMIN') {
-        if (req.query.companyId) {
-            const cid = parseInt(req.query.companyId);
-            return { companyId: { [Op.or]: [cid, null] } };
-        }
-        return {};
+        return req.query.companyId ? { companyId: parseInt(req.query.companyId) } : {};
     }
     return { companyId: req.user.companyId };
 }
