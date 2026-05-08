@@ -504,7 +504,7 @@ export default function ProductEdit() {
   })
   const createArticle = useMutation({
     mutationFn: name => articlesApi.create({ name }),
-    onSuccess: (a) => { qc.invalidateQueries(['articles']); toast.success(`Artikel "${a.name}" ditambahkan`); return a },
+    onSuccess: (a) => { qc.invalidateQueries(['articles']); toast.success(`Koleksi "${a.name}" ditambahkan`); return a },
     onError: e => { toast.error(e.response?.data?.message || 'Gagal'); throw e },
   })
 
@@ -610,7 +610,7 @@ export default function ProductEdit() {
         {/* Normal edit (not setup) */}
         {!isSetup && (
           <>
-            <Section icon={Package} title="Informasi Produk" subtitle="Nama, kategori, artikel, dan foto produk">
+            <Section icon={Package} title="Informasi Produk" subtitle="Nama, kategori, koleksi, dan foto produk">
               <form id="product-form" onSubmit={handleSubmit}>
                 <div className="grid grid-cols-3 gap-6">
                   <div className="col-span-1">
@@ -624,7 +624,7 @@ export default function ProductEdit() {
                     </div>
                     <CreatableSelect label="Unit / Satuan" required error={unitError} value={form.unit} onChange={val => { setForm(f => ({ ...f, unit: val })); setUnitError(false) }} options={unitOptions} placeholder="Pilih atau buat satuan…" createLabel="Satuan Baru" onCreateNew={async name => { const o = { id: name, name }; setUnitOptions(p => [...p, o]); return o }} />
                     <CreatableSelect label="Kategori" required error={catError} value={form.CategoryId} onChange={val => { setForm(f => ({ ...f, CategoryId: val })); setCatError(false) }} options={catOptions} placeholder="Pilih atau buat kategori…" createLabel="Add New Category" onCreateNew={name => createCategory.mutateAsync(name)} />
-                    <CreatableSelect label="Artikel (opsional)" value={form.ArticleId} onChange={artId => setForm(f => ({ ...f, ArticleId: artId }))} options={artOptions} placeholder="Pilih atau buat artikel…" createLabel="Add New Article" onCreateNew={name => createArticle.mutateAsync(name)} />
+                    <CreatableSelect label="Koleksi (opsional)" value={form.ArticleId} onChange={artId => setForm(f => ({ ...f, ArticleId: artId }))} options={artOptions} placeholder="Pilih atau buat koleksi…" createLabel="Add New Koleksi" onCreateNew={name => createArticle.mutateAsync(name)} />
                   </div>
                 </div>
               </form>

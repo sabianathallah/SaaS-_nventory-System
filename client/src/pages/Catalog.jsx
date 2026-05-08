@@ -266,17 +266,17 @@ export default function Catalog() {
 
   const addArt = useMutation({
     mutationFn: name => articlesApi.create({ name }),
-    onSuccess:  () => { qc.invalidateQueries(['articles']); toast.success('Artikel ditambahkan') },
-    onError:    e  => toast.error(e.response?.data?.message || 'Gagal menambah artikel'),
+    onSuccess:  () => { qc.invalidateQueries(['articles']); toast.success('Koleksi ditambahkan') },
+    onError:    e  => toast.error(e.response?.data?.message || 'Gagal menambah koleksi'),
   })
   const saveArt = useMutation({
     mutationFn: ([id, name]) => articlesApi.update(id, { name }),
-    onSuccess:  () => { qc.invalidateQueries(['articles']); toast.success('Artikel diperbarui') },
+    onSuccess:  () => { qc.invalidateQueries(['articles']); toast.success('Koleksi diperbarui') },
     onError:    e  => toast.error(e.response?.data?.message || 'Gagal memperbarui'),
   })
   const delArt = useMutation({
     mutationFn: id => articlesApi.remove(id),
-    onSuccess:  () => { qc.invalidateQueries(['articles']); toast.success('Artikel dihapus') },
+    onSuccess:  () => { qc.invalidateQueries(['articles']); toast.success('Koleksi dihapus') },
     onError:    e  => toast.error(e.response?.data?.message || 'Gagal menghapus — mungkin masih dipakai produk'),
   })
 
@@ -289,8 +289,8 @@ export default function Catalog() {
   return (
     <div className="px-6 py-6 max-w-3xl mx-auto space-y-6">
       <div>
-        <h2 className="text-xl font-bold text-slate-800">Katalog dan Artikel</h2>
-        <p className="text-sm text-slate-400 mt-0.5">Kelola kategori dan artikel produk</p>
+        <h2 className="text-xl font-bold text-slate-800">Katalog dan Koleksi</h2>
+        <p className="text-sm text-slate-400 mt-0.5">Kelola kategori dan koleksi produk</p>
       </div>
 
       {blocked && (
@@ -320,12 +320,12 @@ export default function Catalog() {
         />
 
         <CatalogTable
-          title="Artikel"
+          title="Koleksi"
           icon={BookOpen}
           data={artData?.data}
           pagination={artData?.pagination}
           isLoading={artLoading}
-          placeholder="Nama artikel baru…"
+          placeholder="Nama koleksi baru…"
           search={artSearch}
           onSearch={v => { setArtSearch(v); setArtPage(1) }}
           onPageChange={setArtPage}

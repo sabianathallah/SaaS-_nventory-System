@@ -447,7 +447,7 @@ export default function Products() {
             {catOptions.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
           <select className="select w-40" value={artFilter} onChange={e => { setArt(e.target.value); setPage(1) }}>
-            <option value="">Semua artikel</option>
+            <option value="">Semua koleksi</option>
             {artOptions.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
           </select>
           <select className="select w-44" value={whFilter} onChange={e => { setWh(e.target.value); setPage(1) }}>

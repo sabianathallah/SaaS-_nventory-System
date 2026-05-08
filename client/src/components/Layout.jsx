@@ -23,7 +23,7 @@ const NAV_GROUPS = [
     label: 'Inventori',
     items: [
       { to: '/products',   icon: Package,   label: 'Produk',   pageKey: 'products' },
-      { to: '/catalog',    icon: BookOpen,  label: 'Katalog dan Artikel',    pageKey: 'catalog' },
+      { to: '/catalog',    icon: BookOpen,  label: 'Katalog dan Koleksi',    pageKey: 'catalog' },
       { to: '/warehouses', icon: Warehouse, label: 'Gudang', pageKey: 'warehouses' },
       { to: '/suppliers',  icon: Truck,     label: 'Pemasok',  pageKey: 'suppliers' },
     ],
@@ -66,7 +66,7 @@ const NAV_GROUPS = [
 ]
 
 const PAGE_TITLES = {
-  '/': 'Dashboard', '/products': 'Produk', '/catalog': 'Katalog dan Artikel',
+  '/': 'Dashboard', '/products': 'Produk', '/catalog': 'Katalog dan Koleksi',
   '/warehouses': 'Gudang', '/suppliers': 'Pemasok',
   '/stock-in': 'Penerimaan Stok', '/stock-in/new': 'Penerimaan Stok Baru', '/stock-out': 'Pengeluaran Stok', '/movements': 'Pergerakan',
   '/opname': 'Stock Opname', '/users': 'Pengguna', '/companies': 'Perusahaan',

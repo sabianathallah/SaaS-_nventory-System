@@ -116,7 +116,7 @@ function WarehouseArticleGroup({ warehouse, rows }) {
         <div className="flex items-center gap-2">
           <span className="text-sm font-bold tabular-nums text-slate-800">{fmtNum(warehouse.totalStock)}</span>
           <span className="text-xs text-slate-400">unit</span>
-          <span className="badge-muted text-[10px]">{articles.length} artikel</span>
+          <span className="badge-muted text-[10px]">{articles.length} koleksi</span>
         </div>
       </button>
 
@@ -310,12 +310,12 @@ export default function Dashboard() {
       {/* ── Middle: Article breakdown + Warehouse chart ─────── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
 
-        {/* Stock & Value per Artikel */}
+        {/* Stock & Value per Koleksi */}
         <div className="card p-5">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <Tag size={14} className="text-slate-500" />
-              <h3 className="text-sm font-bold text-slate-800">Stock & Nilai per Artikel</h3>
+              <h3 className="text-sm font-bold text-slate-800">Stock & Nilai per Koleksi</h3>
             </div>
             {stockByArticle.length > 0 && (
               <span className="text-[10px] text-slate-400 tabular-nums">
@@ -329,7 +329,7 @@ export default function Dashboard() {
               {[1,2,3,4].map(i => <div key={i} className="h-10 bg-slate-100 rounded-lg animate-pulse" />)}
             </div>
           ) : stockByArticle.length === 0 ? (
-            <p className="text-sm text-slate-300 text-center py-8">Belum ada data artikel</p>
+            <p className="text-sm text-slate-300 text-center py-8">Belum ada data koleksi</p>
           ) : (
             <>
               <div className="divide-y divide-slate-50">
@@ -459,7 +459,7 @@ export default function Dashboard() {
         <div className="lg:col-span-3 card p-5">
           <div className="flex items-center gap-2 mb-4">
             <LayoutGrid size={14} className="text-slate-500" />
-            <h3 className="text-sm font-bold text-slate-800">Breakdown Stock per Gudang × Artikel</h3>
+            <h3 className="text-sm font-bold text-slate-800">Breakdown Stock per Gudang × Koleksi</h3>
           </div>
 
           {isLoading ? (
@@ -472,7 +472,7 @@ export default function Dashboard() {
             </div>
           ) : (
             <div>
-              <p className="text-xs text-slate-400 mb-3">Klik gudang untuk melihat breakdown per artikel</p>
+              <p className="text-xs text-slate-400 mb-3">Klik gudang untuk melihat breakdown per koleksi</p>
               {warehouseGroups.map(wh => (
                 <WarehouseArticleGroup
                   key={wh.warehouseId}
