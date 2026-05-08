@@ -301,16 +301,14 @@ function PermissionsTab({ companyId }) {
 
   const deleteMut = useMutation({
     mutationFn: (role) => rolePermissionsApi.deleteRole(role),
-    onSuccess: (res, role) => {
-      qc.invalidateQueries({ queryKey: ['role-permissions'] })
+    onSuccess: (_, role) => {
+      qc.setQueryData(['role-permissions', companyId], (old) =>
+        old ? { ...old, roles: (old.roles ?? []).filter(r => r.key !== role) } : old
+      )
       setDirty(d => { const n = { ...d }; delete n[role]; return n })
       setConfirmDelete(null)
-      if (res.deleted) {
-        toast.success(`Role "${roleLabel(role)}" dihapus`)
-        setSelectedRole(EDITABLE_ROLES[0])
-      } else {
-        toast.success(`Permission ${roleLabel(role)} direset ke default`)
-      }
+      toast.success(`Role "${roleLabel(role)}" dihapus`)
+      if (selectedRole === role) setSelectedRole(EDITABLE_ROLES[0])
     },
     onError: e => toast.error(e.response?.data?.message || 'Error'),
   })
@@ -353,7 +351,6 @@ function PermissionsTab({ companyId }) {
   const activePerms = getPerms(selectedRole)
   const activeCount = activePerms.length
   const isCustomSelected = serverRoles.find(r => r.key === selectedRole)?.isCustom ?? false
-  const isCustomDel = confirmDelete ? (serverRoles.find(r => r.key === confirmDelete)?.isCustom ?? false) : false
 
   return (
     <div className="flex gap-0 rounded-2xl overflow-hidden border border-slate-200 shadow-sm" style={{ minHeight: 520 }}>
@@ -428,7 +425,7 @@ function PermissionsTab({ companyId }) {
                 <button
                   onClick={e => { e.stopPropagation(); setConfirmDelete(role) }}
                   className="opacity-0 group-hover:opacity-100 p-0.5 rounded text-slate-300 hover:text-red-500 hover:bg-red-50 transition-all flex-shrink-0"
-                  title={isCustom ? 'Hapus role' : 'Reset ke default'}
+                  title="Hapus role"
                 >
                   <Trash2 size={11} />
                 </button>
@@ -474,17 +471,8 @@ function PermissionsTab({ companyId }) {
         {confirmDelete && (
           <div className="mx-6 mt-4 p-4 rounded-xl border border-red-200 bg-red-50/50 flex items-center gap-4">
             <div className="flex-1 text-sm">
-              {isCustomDel ? (
-                <>
-                  <p className="font-semibold text-slate-800">Hapus role "<span className="text-red-700">{roleLabel(confirmDelete)}</span>"?</p>
-                  <p className="text-xs text-slate-500 mt-0.5">User yang memakai role ini tidak akan bisa login dengan benar. Pastikan sudah dipindah rolenya.</p>
-                </>
-              ) : (
-                <>
-                  <p className="font-semibold text-slate-800">Reset permission "<span className="text-red-700">{roleLabel(confirmDelete)}</span>" ke default?</p>
-                  <p className="text-xs text-slate-500 mt-0.5">Semua perubahan permission untuk role ini akan dihapus dan dikembalikan ke pengaturan bawaan.</p>
-                </>
-              )}
+              <p className="font-semibold text-slate-800">Hapus role "<span className="text-red-700">{roleLabel(confirmDelete)}</span>"?</p>
+              <p className="text-xs text-slate-500 mt-0.5">User yang memakai role ini tidak akan bisa login dengan benar. Pastikan sudah dipindah rolenya.</p>
             </div>
             <div className="flex gap-2 shrink-0">
               <button onClick={() => setConfirmDelete(null)} className="btn-secondary text-xs px-3">Batal</button>
@@ -493,7 +481,7 @@ function PermissionsTab({ companyId }) {
                 disabled={deleteMut.isPending}
                 className="btn-danger text-xs px-3"
               >
-                {deleteMut.isPending ? '…' : isCustomDel ? 'Hapus' : 'Reset'}
+                {deleteMut.isPending ? '…' : 'Hapus'}
               </button>
             </div>
           </div>

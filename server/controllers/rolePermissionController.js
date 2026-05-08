@@ -105,13 +105,7 @@ class RolePermissionController {
       const cid = resolveCompanyId(req);
       await RolePermission.destroy({ where: { role, companyId: cid } });
 
-      if (EDITABLE_ROLES.includes(role)) {
-        // System role → reset ke default
-        res.json({ role, permissions: DEFAULT_PERMISSIONS[role] ?? [], reset: true });
-      } else {
-        // Custom role → benar-benar dihapus
-        res.json({ role, deleted: true });
-      }
+      res.json({ role, deleted: true });
     } catch (err) { next(err); }
   }
 }
