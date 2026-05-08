@@ -353,6 +353,7 @@ function PermissionsTab({ companyId }) {
   const activePerms = getPerms(selectedRole)
   const activeCount = activePerms.length
   const isCustomSelected = serverRoles.find(r => r.key === selectedRole)?.isCustom ?? false
+  const isCustomDel = confirmDelete ? (serverRoles.find(r => r.key === confirmDelete)?.isCustom ?? false) : false
 
   return (
     <div className="flex gap-0 rounded-2xl overflow-hidden border border-slate-200 shadow-sm" style={{ minHeight: 520 }}>
@@ -470,36 +471,33 @@ function PermissionsTab({ companyId }) {
         </div>
 
         {/* Confirm delete role */}
-        {confirmDelete && (() => {
-          const isCustomDel = serverRoles.find(r => r.key === confirmDelete)?.isCustom ?? false
-          return (
-            <div className="mx-6 mt-4 p-4 rounded-xl border border-red-200 bg-red-50/50 flex items-center gap-4">
-              <div className="flex-1 text-sm">
-                {isCustomDel ? (
-                  <>
-                    <p className="font-semibold text-slate-800">Hapus role "<span className="text-red-700">{roleLabel(confirmDelete)}</span>"?</p>
-                    <p className="text-xs text-slate-500 mt-0.5">User yang memakai role ini tidak akan bisa login dengan benar. Pastikan sudah dipindah rolenya.</p>
-                  </>
-                ) : (
-                  <>
-                    <p className="font-semibold text-slate-800">Reset permission "<span className="text-red-700">{roleLabel(confirmDelete)}</span>" ke default?</p>
-                    <p className="text-xs text-slate-500 mt-0.5">Semua perubahan permission untuk role ini akan dihapus dan dikembalikan ke pengaturan bawaan.</p>
-                  </>
-                )}
-              </div>
-              <div className="flex gap-2 shrink-0">
-                <button onClick={() => setConfirmDelete(null)} className="btn-secondary text-xs px-3">Batal</button>
-                <button
-                  onClick={() => deleteMut.mutate(confirmDelete)}
-                  disabled={deleteMut.isPending}
-                  className="btn-danger text-xs px-3"
-                >
-                  {deleteMut.isPending ? '…' : isCustomDel ? 'Hapus' : 'Reset'}
-                </button>
-              </div>
+        {confirmDelete && (
+          <div className="mx-6 mt-4 p-4 rounded-xl border border-red-200 bg-red-50/50 flex items-center gap-4">
+            <div className="flex-1 text-sm">
+              {isCustomDel ? (
+                <>
+                  <p className="font-semibold text-slate-800">Hapus role "<span className="text-red-700">{roleLabel(confirmDelete)}</span>"?</p>
+                  <p className="text-xs text-slate-500 mt-0.5">User yang memakai role ini tidak akan bisa login dengan benar. Pastikan sudah dipindah rolenya.</p>
+                </>
+              ) : (
+                <>
+                  <p className="font-semibold text-slate-800">Reset permission "<span className="text-red-700">{roleLabel(confirmDelete)}</span>" ke default?</p>
+                  <p className="text-xs text-slate-500 mt-0.5">Semua perubahan permission untuk role ini akan dihapus dan dikembalikan ke pengaturan bawaan.</p>
+                </>
+              )}
             </div>
-          )
-        })()}
+            <div className="flex gap-2 shrink-0">
+              <button onClick={() => setConfirmDelete(null)} className="btn-secondary text-xs px-3">Batal</button>
+              <button
+                onClick={() => deleteMut.mutate(confirmDelete)}
+                disabled={deleteMut.isPending}
+                className="btn-danger text-xs px-3"
+              >
+                {deleteMut.isPending ? '…' : isCustomDel ? 'Hapus' : 'Reset'}
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Permission list */}
         <div className="flex-1 overflow-y-auto px-6 py-4 space-y-6">
