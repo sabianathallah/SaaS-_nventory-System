@@ -15,25 +15,29 @@ class RolePermissionController {
   static async getAll(req, res, next) {
     try {
       const cid = resolveCompanyId(req);
-      const rows = await RolePermission.findAll({ where: { companyId: cid } });
+      let rows = await RolePermission.findAll({ where: { companyId: cid } });
 
-      const result = {};
-
-      // System editable roles — use DB value if exists, otherwise default
-      for (const role of EDITABLE_ROLES) {
-        const found = rows.find(r => r.role === role);
-        result[role] = found ? found.permissions : (DEFAULT_PERMISSIONS[role] ?? []);
+      // Lazy-init: seed EDITABLE_ROLES on first access (empty DB)
+      const editableInDb = rows.filter(r => EDITABLE_ROLES.includes(r.role));
+      if (editableInDb.length === 0) {
+        await RolePermission.bulkCreate(
+          EDITABLE_ROLES.map(role => ({ role, permissions: DEFAULT_PERMISSIONS[role] ?? [], companyId: cid })),
+          { ignoreDuplicates: true }
+        );
+        rows = await RolePermission.findAll({ where: { companyId: cid } });
       }
 
-      // Custom roles — any DB row that is not a system role
-      const customRows = rows.filter(r => !ALL_SYSTEM.includes(r.role));
-      for (const row of customRows) {
+      const editableRows = rows.filter(r => EDITABLE_ROLES.includes(r.role));
+      const customRows   = rows.filter(r => !ALL_SYSTEM.includes(r.role));
+
+      const result = {};
+      for (const row of [...editableRows, ...customRows]) {
         result[row.role] = row.permissions;
       }
 
       const roles = [
-        ...EDITABLE_ROLES.map(key => ({ key, isCustom: false })),
-        ...customRows.map(r => ({ key: r.role, isCustom: true })),
+        ...editableRows.map(r => ({ key: r.role, isCustom: false })),
+        ...customRows.map(r  => ({ key: r.role,  isCustom: true  })),
       ];
 
       res.json({ permissions: result, allPermissions: ALL_PERMISSIONS, roles });

@@ -302,13 +302,14 @@ function PermissionsTab({ companyId }) {
   const deleteMut = useMutation({
     mutationFn: (role) => rolePermissionsApi.deleteRole(role),
     onSuccess: (_, role) => {
-      qc.setQueryData(['role-permissions', companyId], (old) =>
-        old ? { ...old, roles: (old.roles ?? []).filter(r => r.key !== role) } : old
-      )
+      qc.invalidateQueries({ queryKey: ['role-permissions'] })
       setDirty(d => { const n = { ...d }; delete n[role]; return n })
       setConfirmDelete(null)
       toast.success(`Role "${roleLabel(role)}" dihapus`)
-      if (selectedRole === role) setSelectedRole(EDITABLE_ROLES[0])
+      if (selectedRole === role) {
+        const next = serverRoles.find(r => r.key !== role)?.key ?? null
+        setSelectedRole(next)
+      }
     },
     onError: e => toast.error(e.response?.data?.message || 'Error'),
   })
