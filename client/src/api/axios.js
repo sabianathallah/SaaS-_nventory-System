@@ -6,6 +6,14 @@ const api = axios.create({ baseURL: import.meta.env.VITE_API_URL || '/api' })
 let _scopedCompanyId = null
 export function setAxiosCompanyScope(id) { _scopedCompanyId = id }
 
+function getCompanyId() {
+  if (_scopedCompanyId) return _scopedCompanyId
+  try {
+    const c = JSON.parse(sessionStorage.getItem('selectedCompany'))
+    return c?.id ?? null
+  } catch { return null }
+}
+
 // Routes that belong to Administration and should NEVER be company-scoped
 const ADMIN_PATHS = ['/users', '/companies', '/role-permissions', '/system', '/me']
 
@@ -13,11 +21,12 @@ api.interceptors.request.use((config) => {
   const token = localStorage.getItem('token')
   if (token) config.headers.Authorization = `Bearer ${token}`
 
-  if (_scopedCompanyId) {
+  const companyId = getCompanyId()
+  if (companyId) {
     const url = config.url || ''
     const isAdminPath = ADMIN_PATHS.some(p => url.startsWith(p))
     if (!isAdminPath) {
-      config.params = { ...(config.params || {}), companyId: _scopedCompanyId }
+      config.params = { ...(config.params || {}), companyId }
     }
   }
 
