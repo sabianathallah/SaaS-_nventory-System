@@ -201,6 +201,16 @@ function ProductRow({ product, expanded, onToggle, onDelete, onNavigate, onOpenQ
   const stock  = Number(product.totalStock ?? 0)
   const skuCnt = skus.length
 
+  const handleRowClick = () => skuCnt > 0 ? onToggle() : onNavigate()
+  const handleQrClick  = (e) => {
+    e.stopPropagation()
+    if (skuCnt === 0) {
+      toast('Belum ada SKU — buat SKU terlebih dahulu untuk menggunakan QR.', { icon: '⚠️' })
+    } else {
+      onNavigate()
+    }
+  }
+
   return (
     <>
       <tr
@@ -210,19 +220,18 @@ function ProductRow({ product, expanded, onToggle, onDelete, onNavigate, onOpenQ
         {/* Expand toggle */}
         <td className="td w-10 pr-0">
           <button
-            onClick={onToggle}
+            onClick={handleRowClick}
             className={`w-6 h-6 rounded flex items-center justify-center transition-colors
-              ${skuCnt > 0 ? 'text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 cursor-pointer' : 'text-slate-200 cursor-default'}`}
-            disabled={skuCnt === 0}
+              ${skuCnt > 0 ? 'text-slate-400 hover:text-slate-700 hover:bg-slate-200/60' : 'text-slate-300 hover:text-slate-500 hover:bg-slate-100'} cursor-pointer`}
           >
-            {expanded
+            {skuCnt > 0 && expanded
               ? <ChevronDown size={14} />
               : <ChevronRight size={14} />}
           </button>
         </td>
 
         {/* Product */}
-        <td className="td cursor-pointer" onClick={onToggle}>
+        <td className="td cursor-pointer" onClick={handleRowClick}>
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-lg overflow-hidden border border-slate-200 flex-shrink-0 bg-slate-100">
               {product.imageUrl
@@ -274,14 +283,26 @@ function ProductRow({ product, expanded, onToggle, onDelete, onNavigate, onOpenQ
         </td>
 
         {/* Actions */}
-        <td className="td w-16">
-          <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        <td className="td w-20">
+          <div className="flex items-center justify-end gap-1">
+            <button
+              type="button"
+              onClick={handleQrClick}
+              className={`p-1.5 rounded-lg transition-colors ${
+                skuCnt === 0
+                  ? 'text-slate-300 hover:text-amber-500 hover:bg-amber-50'
+                  : 'text-slate-300 hover:text-violet-500 hover:bg-violet-50 opacity-0 group-hover:opacity-100'
+              }`}
+              title={skuCnt === 0 ? 'Belum ada SKU' : 'QR Code'}
+            >
+              <QrCode size={12} />
+            </button>
             {!disabled && (
               <>
                 <button
                   type="button"
                   onClick={e => { e.stopPropagation(); onNavigate() }}
-                  className="p-1.5 rounded-lg text-slate-300 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+                  className="p-1.5 rounded-lg text-slate-300 hover:text-slate-600 hover:bg-slate-100 transition-colors opacity-0 group-hover:opacity-100"
                   title="Edit produk"
                 >
                   <Pencil size={12} />
@@ -289,7 +310,7 @@ function ProductRow({ product, expanded, onToggle, onDelete, onNavigate, onOpenQ
                 <button
                   type="button"
                   onClick={e => { e.stopPropagation(); onDelete(product) }}
-                  className="p-1.5 rounded-lg text-slate-300 hover:text-red-400 hover:bg-red-50 transition-colors"
+                  className="p-1.5 rounded-lg text-slate-300 hover:text-red-400 hover:bg-red-50 transition-colors opacity-0 group-hover:opacity-100"
                   title="Hapus produk"
                 >
                   <Trash2 size={12} />

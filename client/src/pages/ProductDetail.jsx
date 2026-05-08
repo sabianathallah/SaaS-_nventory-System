@@ -6,12 +6,13 @@ import toast from 'react-hot-toast'
 import QrModal from '../components/QrModal'
 import {
   ArrowLeft, Trash2, ChevronRight, ImageIcon, Loader2,
-  Hash, Layers, Pencil, QrCode, Package, Tag,
+  Hash, Layers, Pencil, QrCode, Package, Tag, Plus,
 } from 'lucide-react'
 
 // ── SKU Table read-only ───────────────────────────────────────────────────────
 
 function SkuTableView({ productId, productName }) {
+  const navigate = useNavigate()
   const [qrSku, setQrSku] = useState(null)
 
   const { data: skus = [], isLoading } = useQuery({
@@ -27,9 +28,18 @@ function SkuTableView({ productId, productName }) {
 
   if (!skus.length) return (
     <div className="text-center py-10 rounded-xl border-2 border-dashed border-slate-200">
-      <Hash size={28} className="mx-auto text-slate-200 mb-2" />
-      <p className="text-sm font-semibold text-slate-400">Belum ada SKU</p>
-      <p className="text-xs text-slate-300 mt-1">Tambahkan SKU melalui halaman Edit Produk</p>
+      <Hash size={28} className="mx-auto text-slate-300 mb-3" />
+      <p className="text-sm font-semibold text-slate-500">Belum ada SKU</p>
+      <p className="text-xs text-slate-400 mt-1 mb-4">
+        Tentukan variant produk terlebih dahulu, lalu buat SKU untuk setiap kombinasi.
+      </p>
+      <button
+        type="button"
+        onClick={() => navigate(`/products/${productId}/edit`)}
+        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-brand text-white text-sm font-medium hover:bg-brand/90 transition-colors"
+      >
+        <Plus size={14} /> Buat SKU
+      </button>
     </div>
   )
 
