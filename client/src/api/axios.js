@@ -7,7 +7,7 @@ let _scopedCompanyId = null
 export function setAxiosCompanyScope(id) { _scopedCompanyId = id }
 
 // Routes that belong to Administration and should NEVER be company-scoped
-const ADMIN_PATHS = ['/users', '/companies', '/role-permissions', '/system']
+const ADMIN_PATHS = ['/users', '/companies', '/role-permissions', '/system', '/me']
 
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('token')
