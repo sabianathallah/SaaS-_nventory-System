@@ -238,7 +238,7 @@ export default function Catalog() {
 
   // ── Categories ─────────────────────────────────────────────────────────────
   const { data: catData, isLoading: catLoading } = useQuery({
-    queryKey: ['categories', { page: catPage, name: catSearch }],
+    queryKey: ['categories', { page: catPage, name: catSearch, companyId: selectedCompany?.id }],
     queryFn:  () => categoriesApi.list({ page: catPage, limit: 8, name: catSearch || undefined }),
   })
 
@@ -260,7 +260,7 @@ export default function Catalog() {
 
   // ── Articles ───────────────────────────────────────────────────────────────
   const { data: artData, isLoading: artLoading } = useQuery({
-    queryKey: ['articles', { page: artPage, name: artSearch }],
+    queryKey: ['articles', { page: artPage, name: artSearch, companyId: selectedCompany?.id }],
     queryFn:  () => articlesApi.list({ page: artPage, limit: 8, name: artSearch || undefined }),
   })
 
