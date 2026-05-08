@@ -17,11 +17,12 @@ class RolePermissionController {
       const cid = resolveCompanyId(req);
       let rows = await RolePermission.findAll({ where: { companyId: cid } });
 
-      // Lazy-init: seed EDITABLE_ROLES on first access (empty DB)
-      const editableInDb = rows.filter(r => EDITABLE_ROLES.includes(r.role));
-      if (editableInDb.length === 0) {
+      // Lazy-init: seed any EDITABLE_ROLES missing from DB
+      const rolesInDb = new Set(rows.map(r => r.role));
+      const missingRoles = EDITABLE_ROLES.filter(r => !rolesInDb.has(r));
+      if (missingRoles.length > 0) {
         await RolePermission.bulkCreate(
-          EDITABLE_ROLES.map(role => ({ role, permissions: DEFAULT_PERMISSIONS[role] ?? [], companyId: cid })),
+          missingRoles.map(role => ({ role, permissions: DEFAULT_PERMISSIONS[role] ?? [], companyId: cid })),
           { ignoreDuplicates: true }
         );
         rows = await RolePermission.findAll({ where: { companyId: cid } });
