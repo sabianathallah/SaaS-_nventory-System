@@ -3,16 +3,21 @@ const express = require('express');
 const router  = express.Router();
 const C       = require('../controllers/stockInHeaderController');
 const rp      = require('../middlewares/requirePermission');
+const { requireAnyPermission: rpAny } = require('../middlewares/requirePermission');
 
-router.get('/resolve-sku',           rp('stock.manage'), C.resolveSku);
-router.get('/',                      rp('stock.view'),   C.getAll);
-router.get('/:id',                   rp('stock.view'),   C.getById);
-router.post('/',                     rp('stock.manage'), C.create);
+const canInputIn  = rpAny('stock.manage', 'stock.in.scan', 'stock.in.manual_input');
+const canEditIn   = rpAny('stock.manage', 'stock.in.manual_input');
+const canDeleteIn = rpAny('stock.manage', 'stock.in.delete_item');
+
+router.get('/resolve-sku',           rpAny('stock.manage', 'stock.in.scan', 'stock.in.manual_input'), C.resolveSku);
+router.get('/',                      rp('stock.view'),  C.getAll);
+router.get('/:id',                   rp('stock.view'),  C.getById);
+router.post('/',                     canInputIn,        C.create);
 router.put('/:id',                   rp('stock.manage'), C.update);
 router.delete('/:id',                rp('stock.manage'), C.delete);
 
-router.post('/:id/items',            rp('stock.manage'), C.addItem);
-router.put('/:id/items/:itemId',     rp('stock.manage'), C.updateItem);
-router.delete('/:id/items/:itemId',  rp('stock.manage'), C.removeItem);
+router.post('/:id/items',            canInputIn,   C.addItem);
+router.put('/:id/items/:itemId',     canEditIn,    C.updateItem);
+router.delete('/:id/items/:itemId',  canDeleteIn,  C.removeItem);
 
 module.exports = router;

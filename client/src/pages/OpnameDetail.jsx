@@ -21,8 +21,8 @@ export default function OpnameDetail() {
   const qc       = useQueryClient()
   const { hasPermission } = useAuth()
 
-  const canManual = hasPermission('stock.opname.manual_input')
-  const canScan   = hasPermission('stock.opname.scan')
+  const canManual = hasPermission('stock.opname.manual_input') || hasPermission('stock.manage')
+  const canScan   = hasPermission('stock.opname.scan')         || hasPermission('stock.manage')
 
   const [localItems, setLocalItems]             = useState([])
   const [fillMode, setFillMode]                 = useState('manual')

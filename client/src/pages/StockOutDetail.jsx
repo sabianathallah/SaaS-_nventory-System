@@ -18,8 +18,8 @@ export default function StockOutDetail() {
   const { hasPermission } = useAuth()
   const isNew      = !id || id === 'new'
 
-  const canManualOutput = hasPermission('stock.out.manual_input')
-  const canScanOut      = hasPermission('stock.out.scan')
+  const canManualOutput = hasPermission('stock.out.manual_input') || hasPermission('stock.manage')
+  const canScanOut      = hasPermission('stock.out.scan')         || hasPermission('stock.manage')
 
   const [form, setForm]             = useState(EMPTY_FORM)
   const [manualItem, setManualItem] = useState({ productId: '', quantity: '' })

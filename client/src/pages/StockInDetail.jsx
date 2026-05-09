@@ -277,8 +277,8 @@ export default function StockInDetail() {
   const isNew           = !id || id === 'new'
 
   // Granular permission flags
-  const canManualInput = hasPermission('stock.in.manual_input')
-  const canDeleteItem  = hasPermission('stock.in.delete_item')
+  const canManualInput = hasPermission('stock.in.manual_input') || hasPermission('stock.manage')
+  const canDeleteItem  = hasPermission('stock.in.delete_item')  || hasPermission('stock.manage')
 
   const [form, setForm]             = useState({ date: fmtDate(), WarehouseId: '', note: '' })
   const [pendingItems, setPending]  = useState([])
