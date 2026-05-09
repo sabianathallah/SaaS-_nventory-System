@@ -248,6 +248,7 @@ function RolesTab({ roles, allPermissions, onRolesChange }) {
 
   const [selectedId, setSelectedId] = useState(roles[0]?.id ?? null)
   const [dirty, setDirty]           = useState({})
+  const [editingName, setEditingName] = useState(false)
   const [showCreate, setShowCreate] = useState(false)
   const [newName, setNewName]       = useState('')
   const [newDisplay, setNewDisplay] = useState('')
@@ -391,7 +392,7 @@ function RolesTab({ roles, allPermissions, onRolesChange }) {
                   active ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:bg-white/60 hover:text-slate-800'
                 }`}>
                 {active && <span className="absolute left-0 top-1 bottom-1 w-0.5 rounded-r" style={{ background: color }} />}
-                <button onClick={() => setSelectedId(role.id)} className="flex items-center gap-2.5 flex-1 min-w-0 text-left">
+                <button onClick={() => { setSelectedId(role.id); setEditingName(false) }} className="flex items-center gap-2.5 flex-1 min-w-0 text-left">
                   <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: color, opacity: active ? 1 : 0.6 }} />
                   <span className="flex-1 truncate">{getName(role.id)}</span>
                   {!role.isSystem && !hasDirt && <span className="text-[9px] text-slate-400 font-medium shrink-0">kustom</span>}
@@ -426,9 +427,10 @@ function RolesTab({ roles, allPermissions, onRolesChange }) {
             <div className="flex-1 min-w-0">
               {selectedRole.isSystem ? (
                 <p className="font-bold text-slate-900 leading-tight">{selectedRole.displayName}</p>
-              ) : (
+              ) : editingName ? (
                 <input
-                  className="font-bold text-slate-900 text-sm leading-tight bg-transparent border-b border-transparent hover:border-slate-300 focus:border-red-400 focus:outline-none w-full transition-colors py-0.5"
+                  autoFocus
+                  className="font-bold text-slate-900 text-sm leading-tight bg-white border border-red-400 rounded-lg px-2 py-0.5 focus:outline-none w-full"
                   value={getName(selectedRole.id)}
                   onChange={e => {
                     const val = e.target.value
@@ -438,8 +440,19 @@ function RolesTab({ roles, allPermissions, onRolesChange }) {
                       setDirtyNames(d => ({ ...d, [selectedRole.id]: val }))
                     }
                   }}
+                  onBlur={() => setEditingName(false)}
+                  onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') setEditingName(false) }}
                   placeholder="Nama role…"
                 />
+              ) : (
+                <div className="flex items-center gap-1.5 group/name">
+                  <p className="font-bold text-slate-900 leading-tight">{getName(selectedRole.id)}</p>
+                  <button type="button" onClick={() => setEditingName(true)}
+                    className="opacity-0 group-hover/name:opacity-100 p-0.5 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all flex-shrink-0"
+                    title="Edit nama role">
+                    <Pencil size={11} />
+                  </button>
+                </div>
               )}
               <p className="text-xs text-slate-400">{activePerms.length} permission aktif</p>
             </div>
