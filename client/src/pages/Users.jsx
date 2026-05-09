@@ -260,7 +260,8 @@ function RolesTab({ roles, allPermissions, onRolesChange }) {
     onSuccess: (_, { id }) => {
       qc.invalidateQueries({ queryKey: ['roles'] })
       setDirty(d => { const n = { ...d }; delete n[id]; return n })
-      toast.success('Permission disimpan')
+      setDirtyNames(d => { const n = { ...d }; delete n[id]; return n })
+      toast.success('Role disimpan')
       onRolesChange()
     },
     onError: e => toast.error(e.response?.data?.message || 'Error'),
@@ -271,6 +272,7 @@ function RolesTab({ roles, allPermissions, onRolesChange }) {
     onSuccess: (_, id) => {
       qc.invalidateQueries({ queryKey: ['roles'] })
       setDirty(d => { const n = { ...d }; delete n[id]; return n })
+      setDirtyNames(d => { const n = { ...d }; delete n[id]; return n })
       setConfirmDelete(null)
       toast.success('Role dihapus')
       if (selectedId === id) setSelectedId(roles.find(r => r.id !== id)?.id ?? null)
@@ -291,8 +293,11 @@ function RolesTab({ roles, allPermissions, onRolesChange }) {
     onError: e => toast.error(e.response?.data?.message || 'Error'),
   })
 
+  const [dirtyNames, setDirtyNames] = useState({})
+
   const getPerms    = (id) => dirty[id] ?? roles.find(r => r.id === id)?.permissions ?? []
-  const isDirty     = (id) => !!dirty[id]
+  const getName     = (id) => dirtyNames[id] ?? roles.find(r => r.id === id)?.displayName ?? ''
+  const isDirty     = (id) => !!dirty[id] || dirtyNames[id] !== undefined
   const activePerms = selectedRole ? getPerms(selectedRole.id) : []
   const activeColor = selectedRole ? roleColor(selectedRole.name) : '#94A3B8'
 
@@ -388,7 +393,7 @@ function RolesTab({ roles, allPermissions, onRolesChange }) {
                 {active && <span className="absolute left-0 top-1 bottom-1 w-0.5 rounded-r" style={{ background: color }} />}
                 <button onClick={() => setSelectedId(role.id)} className="flex items-center gap-2.5 flex-1 min-w-0 text-left">
                   <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: color, opacity: active ? 1 : 0.6 }} />
-                  <span className="flex-1 truncate">{role.displayName}</span>
+                  <span className="flex-1 truncate">{getName(role.id)}</span>
                   {!role.isSystem && !hasDirt && <span className="text-[9px] text-slate-400 font-medium shrink-0">kustom</span>}
                   {hasDirt && <span className="w-1.5 h-1.5 rounded-full bg-amber-400 flex-shrink-0" title="Belum disimpan" />}
                 </button>
@@ -419,7 +424,23 @@ function RolesTab({ roles, allPermissions, onRolesChange }) {
               <ShieldCheck size={15} style={{ color: activeColor }} />
             </span>
             <div className="flex-1 min-w-0">
-              <p className="font-bold text-slate-900 leading-tight">{selectedRole.displayName}</p>
+              {selectedRole.isSystem ? (
+                <p className="font-bold text-slate-900 leading-tight">{selectedRole.displayName}</p>
+              ) : (
+                <input
+                  className="font-bold text-slate-900 text-sm leading-tight bg-transparent border-b border-transparent hover:border-slate-300 focus:border-red-400 focus:outline-none w-full transition-colors py-0.5"
+                  value={getName(selectedRole.id)}
+                  onChange={e => {
+                    const val = e.target.value
+                    if (val === (roles.find(r => r.id === selectedRole.id)?.displayName ?? '')) {
+                      setDirtyNames(d => { const n = { ...d }; delete n[selectedRole.id]; return n })
+                    } else {
+                      setDirtyNames(d => ({ ...d, [selectedRole.id]: val }))
+                    }
+                  }}
+                  placeholder="Nama role…"
+                />
+              )}
               <p className="text-xs text-slate-400">{activePerms.length} permission aktif</p>
             </div>
             {isDirty(selectedRole.id) && (
@@ -570,12 +591,14 @@ function RolesTab({ roles, allPermissions, onRolesChange }) {
           {!selectedRole.isSystem && (
             <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-slate-200 bg-slate-50/50">
               {isDirty(selectedRole.id) && (
-                <button onClick={() => setDirty(d => { const n = { ...d }; delete n[selectedRole.id]; return n })}
-                  className="text-xs font-medium text-slate-500 hover:text-slate-700 px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors">
+                <button onClick={() => {
+                  setDirty(d => { const n = { ...d }; delete n[selectedRole.id]; return n })
+                  setDirtyNames(d => { const n = { ...d }; delete n[selectedRole.id]; return n })
+                }} className="text-xs font-medium text-slate-500 hover:text-slate-700 px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors">
                   Batalkan
                 </button>
               )}
-              <button onClick={() => updateMut.mutate({ id: selectedRole.id, displayName: selectedRole.displayName, permissions: getPerms(selectedRole.id) })}
+              <button onClick={() => updateMut.mutate({ id: selectedRole.id, displayName: getName(selectedRole.id), permissions: getPerms(selectedRole.id) })}
                 disabled={!isDirty(selectedRole.id) || updateMut.isPending}
                 className="flex items-center gap-1.5 text-sm font-semibold px-4 py-1.5 rounded-lg text-white transition-all disabled:opacity-40"
                 style={{ background: isDirty(selectedRole.id) ? activeColor : '#94A3B8' }}>
