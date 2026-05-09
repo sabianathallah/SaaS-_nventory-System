@@ -1,34 +1,42 @@
 'use strict';
 
 const ALL_PERMISSIONS = [
-  // Dashboard
-  { key: 'dashboard.view_stock',     label: 'Dashboard: Lihat Data Stok',               group: 'Dashboard' },
-  { key: 'dashboard.view_value',     label: 'Dashboard: Lihat Nilai Inventaris',         group: 'Dashboard' },
-  { key: 'dashboard.view_analytics', label: 'Dashboard: Lihat Grafik & Breakdown',       group: 'Dashboard' },
-  { key: 'dashboard.view_movements', label: 'Dashboard: Lihat Pergerakan Terbaru',       group: 'Dashboard' },
-  // Inventory
-  { key: 'inventory.view',          label: 'Lihat Produk & Katalog',                     group: 'Inventory' },
-  { key: 'inventory.manage',        label: 'Kelola Produk (Tambah/Edit/Hapus)',           group: 'Inventory' },
-  // Stok
-  { key: 'stock.view',              label: 'Lihat Stok & Pergerakan Stok',                group: 'Stok' },
-  { key: 'stock.manage',            label: 'Kelola Stock In / Out / Opname',              group: 'Stok' },
-  { key: 'stock.in.scan',           label: 'Stock In: Input via Scan Barcode',            group: 'Stok' },
-  { key: 'stock.in.manual_input',   label: 'Stock In: Input Manual (tanpa barcode)',      group: 'Stok' },
-  { key: 'stock.in.delete_item',    label: 'Stock In: Hapus Item yang Sudah Tersimpan',   group: 'Stok' },
-  { key: 'stock.out.scan',          label: 'Stock Out: Input via Scan Barcode',           group: 'Stok' },
-  { key: 'stock.out.manual_input',  label: 'Stock Out: Input Manual (tanpa barcode)',     group: 'Stok' },
-  { key: 'stock.opname.scan',       label: 'Stock Opname: Hitung via Scan Barcode',       group: 'Stok' },
-  { key: 'stock.opname.manual_input',label: 'Stock Opname: Input Manual (tanpa barcode)',group: 'Stok' },
-  // Penerimaan Barang Vendor
-  { key: 'packing.view',            label: 'Lihat Modul Penerimaan & Packing',            group: 'Penerimaan Barang Vendor' },
-  { key: 'packing.incoming',        label: 'Kelola Barang Masuk & Surat Jalan',           group: 'Penerimaan Barang Vendor' },
-  // Packing
-  { key: 'packing.jobs',            label: 'Buat & Kelola Packing Job',                   group: 'Packing' },
-  { key: 'packing.verify',          label: 'Verifikasi Packing & Buat FAP',               group: 'Packing' },
-  // Laporan
-  { key: 'reports.dashboard',       label: 'Lihat Dashboard & Laporan',                   group: 'Laporan' },
-  // Administrasi
-  { key: 'admin.users',             label: 'Kelola Users (CRUD)',                         group: 'Administrasi' },
+  // ── Dashboard ────────────────────────────────────────────────────────────────
+  { key: 'dashboard.manage',         label: 'Akses Penuh Dashboard',                     group: 'Dashboard',               isParent: true },
+  { key: 'dashboard.view_stock',     label: 'Lihat Data Stok',                           group: 'Dashboard',               parent: 'dashboard.manage' },
+  { key: 'dashboard.view_value',     label: 'Lihat Nilai Inventaris',                    group: 'Dashboard',               parent: 'dashboard.manage' },
+  { key: 'dashboard.view_analytics', label: 'Lihat Grafik & Breakdown',                  group: 'Dashboard',               parent: 'dashboard.manage' },
+  { key: 'dashboard.view_movements', label: 'Lihat Pergerakan Terbaru',                  group: 'Dashboard',               parent: 'dashboard.manage' },
+
+  // ── Inventory ────────────────────────────────────────────────────────────────
+  { key: 'inventory.manage',         label: 'Akses Penuh Inventory',                     group: 'Inventory',               isParent: true },
+  { key: 'inventory.view',           label: 'Lihat Produk & Katalog',                    group: 'Inventory',               parent: 'inventory.manage' },
+
+  // ── Stok ─────────────────────────────────────────────────────────────────────
+  { key: 'stock.manage',             label: 'Akses Penuh Stok',                          group: 'Stok',                    isParent: true },
+  { key: 'stock.view',               label: 'Lihat Stok & Pergerakan Stok',              group: 'Stok',                    parent: 'stock.manage' },
+  { key: 'stock.in.scan',            label: 'Stock In: Input via Scan Barcode',          group: 'Stok',                    parent: 'stock.manage' },
+  { key: 'stock.in.manual_input',    label: 'Stock In: Input Manual (tanpa barcode)',    group: 'Stok',                    parent: 'stock.manage' },
+  { key: 'stock.in.delete_item',     label: 'Stock In: Hapus Item yang Sudah Tersimpan', group: 'Stok',                    parent: 'stock.manage' },
+  { key: 'stock.out.scan',           label: 'Stock Out: Input via Scan Barcode',         group: 'Stok',                    parent: 'stock.manage' },
+  { key: 'stock.out.manual_input',   label: 'Stock Out: Input Manual (tanpa barcode)',   group: 'Stok',                    parent: 'stock.manage' },
+  { key: 'stock.opname.scan',        label: 'Stock Opname: Hitung via Scan Barcode',     group: 'Stok',                    parent: 'stock.manage' },
+  { key: 'stock.opname.manual_input',label: 'Stock Opname: Input Manual (tanpa barcode)',group: 'Stok',                    parent: 'stock.manage' },
+
+  // ── Penerimaan & Packing ─────────────────────────────────────────────────────
+  { key: 'packing.manage',           label: 'Akses Penuh Penerimaan & Packing',          group: 'Penerimaan & Packing',    isParent: true },
+  { key: 'packing.view',             label: 'Lihat Modul Penerimaan & Packing',          group: 'Penerimaan & Packing',    parent: 'packing.manage' },
+  { key: 'packing.incoming',         label: 'Kelola Barang Masuk & Surat Jalan',         group: 'Penerimaan & Packing',    parent: 'packing.manage' },
+  { key: 'packing.jobs',             label: 'Buat & Kelola Packing Job',                 group: 'Penerimaan & Packing',    parent: 'packing.manage' },
+  { key: 'packing.verify',           label: 'Verifikasi Packing & Buat FAP',             group: 'Penerimaan & Packing',    parent: 'packing.manage' },
+
+  // ── Laporan ──────────────────────────────────────────────────────────────────
+  { key: 'reports.manage',           label: 'Akses Penuh Laporan',                       group: 'Laporan',                 isParent: true },
+  { key: 'reports.dashboard',        label: 'Lihat Dashboard & Laporan',                 group: 'Laporan',                 parent: 'reports.manage' },
+
+  // ── Administrasi ─────────────────────────────────────────────────────────────
+  { key: 'admin.manage',             label: 'Akses Penuh Administrasi',                  group: 'Administrasi',            isParent: true },
+  { key: 'admin.users',              label: 'Kelola Users (CRUD)',                       group: 'Administrasi',            parent: 'admin.manage' },
 ];
 
 const ALL_KEYS = ALL_PERMISSIONS.map(p => p.key);
@@ -37,28 +45,28 @@ const DEFAULT_PERMISSIONS = {
   SUPER_ADMIN:   ALL_KEYS,
   ADMIN:         ALL_KEYS,
   COMPANY_ADMIN: ALL_KEYS,
-  OPERASIONAL:   [
-    'dashboard.view_stock', 'dashboard.view_value', 'dashboard.view_analytics', 'dashboard.view_movements',
-    'inventory.view', 'inventory.manage',
-    'stock.view', 'stock.manage',
+  OPERASIONAL: [
+    'dashboard.manage',
+    'inventory.manage',
+    'stock.view',
     'stock.in.scan', 'stock.out.scan', 'stock.opname.scan',
-    'packing.view', 'packing.incoming',
-    'reports.dashboard',
+    'packing.manage',
+    'reports.manage',
   ],
-  HEAD_PACKING:  ['packing.view', 'packing.incoming', 'packing.jobs', 'packing.verify', 'reports.dashboard'],
-  TIM_PACKING:   ['packing.view', 'packing.jobs'],
-  HR:            ['admin.users', 'reports.dashboard'],
-  CEO:           [
-    'dashboard.view_stock', 'dashboard.view_value', 'dashboard.view_analytics', 'dashboard.view_movements',
-    'inventory.view', 'stock.view', 'packing.view', 'reports.dashboard',
+  HEAD_PACKING: ['packing.manage', 'reports.manage'],
+  TIM_PACKING:  ['packing.view', 'packing.jobs'],
+  HR:           ['admin.manage', 'reports.manage'],
+  CEO: [
+    'dashboard.manage',
+    'inventory.view',
+    'stock.view',
+    'packing.view',
+    'reports.manage',
   ],
-  STAFF:         ['inventory.view'],
+  STAFF: ['inventory.view'],
 };
 
-// Roles whose permissions can be edited by admin
 const EDITABLE_ROLES = ['COMPANY_ADMIN', 'OPERASIONAL', 'TIM_PACKING', 'STAFF'];
-
-// Roles that are fully protected — cannot be created, edited, or deleted
-const SYSTEM_ROLES = ['SUPER_ADMIN', 'ADMIN'];
+const SYSTEM_ROLES   = ['SUPER_ADMIN', 'ADMIN'];
 
 module.exports = { ALL_PERMISSIONS, DEFAULT_PERMISSIONS, EDITABLE_ROLES, SYSTEM_ROLES };

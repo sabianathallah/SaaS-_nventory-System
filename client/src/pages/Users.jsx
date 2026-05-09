@@ -7,7 +7,7 @@ import { Table, Pagination } from '../components/Table'
 import Modal from '../components/Modal'
 import SearchBar from '../components/SearchBar'
 import toast from 'react-hot-toast'
-import { Plus, Pencil, Trash2, UserCircle2, ShieldCheck, Save, Check, X, Eye, EyeOff } from 'lucide-react'
+import { Plus, Pencil, Trash2, UserCircle2, ShieldCheck, Save, Check, Eye, EyeOff } from 'lucide-react'
 
 // ── Role badge helpers ────────────────────────────────────────────────────────
 
@@ -44,13 +44,18 @@ function roleColor(name) {
   return PRESET[name] ?? COLOR_PALETTE[roleColorIndex(name)]
 }
 
-// ── Toggle ────────────────────────────────────────────────────────────────────
+// ── PermCheckbox ──────────────────────────────────────────────────────────────
 
-function Toggle({ checked, onChange }) {
+function PermCheckbox({ state, onChange }) {
   return (
-    <button type="button" role="switch" aria-checked={checked} onClick={onChange}
-      className={`relative inline-flex h-5 w-9 flex-shrink-0 items-center rounded-full transition-colors duration-200 focus:outline-none ${checked ? 'bg-green-500' : 'bg-slate-300'}`}>
-      <span className={`inline-block h-3.5 w-3.5 rounded-full bg-white shadow-sm transform transition-transform duration-200 ${checked ? 'translate-x-[18px]' : 'translate-x-[3px]'}`} />
+    <button type="button" onClick={onChange}
+      className={`w-4 h-4 rounded flex-shrink-0 flex items-center justify-center border transition-colors ${
+        state === 'checked'       ? 'bg-green-500 border-green-500' :
+        state === 'indeterminate' ? 'bg-amber-400 border-amber-400' :
+        'border-slate-300 bg-white hover:border-slate-400'
+      }`}>
+      {state === 'checked'       && <Check size={9} className="text-white" strokeWidth={3} />}
+      {state === 'indeterminate' && <span className="w-2 h-0.5 bg-white rounded-full" />}
     </button>
   )
 }
@@ -281,16 +286,47 @@ function RolesTab({ roles, allPermissions, onRolesChange }) {
     onError: e => toast.error(e.response?.data?.message || 'Error'),
   })
 
-  const groups = [...new Set(allPermissions.map(p => p.group))]
-
   const getPerms    = (id) => dirty[id] ?? roles.find(r => r.id === id)?.permissions ?? []
   const isDirty     = (id) => !!dirty[id]
   const activePerms = selectedRole ? getPerms(selectedRole.id) : []
   const activeColor = selectedRole ? roleColor(selectedRole.name) : '#94A3B8'
 
-  const togglePerm = (id, key) => {
-    const cur  = getPerms(id)
-    const next = cur.includes(key) ? cur.filter(k => k !== key) : [...cur, key]
+  const groups      = [...new Set(allPermissions.map(p => p.group))]
+  const childrenOf  = (parentKey) => allPermissions.filter(p => p.parent === parentKey)
+
+  const parentState = (parentKey) => {
+    const children = childrenOf(parentKey)
+    const hasParent = activePerms.includes(parentKey)
+    if (!children.length) return hasParent ? 'checked' : 'unchecked'
+    const checkedCount = children.filter(c => activePerms.includes(c.key)).length
+    if (hasParent || checkedCount === children.length) return 'checked'
+    if (checkedCount > 0) return 'indeterminate'
+    return 'unchecked'
+  }
+
+  const toggleParent = (id, parentPerm) => {
+    const children = childrenOf(parentPerm.key)
+    const childKeys = children.map(c => c.key)
+    const cur = getPerms(id)
+    const hasAny = cur.includes(parentPerm.key) || childKeys.some(k => cur.includes(k))
+    const next = hasAny
+      ? cur.filter(k => k !== parentPerm.key && !childKeys.includes(k))
+      : [...new Set([...cur, parentPerm.key, ...childKeys])]
+    setDirty(d => ({ ...d, [id]: next }))
+  }
+
+  const toggleChild = (id, childKey, parentKey) => {
+    const children = childrenOf(parentKey)
+    const childKeys = children.map(c => c.key)
+    const cur = getPerms(id)
+    let next
+    if (cur.includes(childKey)) {
+      next = cur.filter(k => k !== childKey && k !== parentKey)
+    } else {
+      const withChild = [...new Set([...cur, childKey])]
+      const allNowChecked = childKeys.every(k => withChild.includes(k))
+      next = allNowChecked ? [...new Set([...withChild, parentKey])] : withChild
+    }
     setDirty(d => ({ ...d, [id]: next }))
   }
 
@@ -416,34 +452,105 @@ function RolesTab({ roles, allPermissions, onRolesChange }) {
               </div>
             ) : (
               groups.map(group => {
-                const groupPerms = allPermissions.filter(p => p.group === group)
-                const allOn = groupPerms.every(p => activePerms.includes(p.key))
+                const groupPerms    = allPermissions.filter(p => p.group === group)
+                const parentPerms   = groupPerms.filter(p => p.isParent)
+                const standalones   = groupPerms.filter(p => !p.isParent && !p.parent)
+                const allGroupKeys  = groupPerms.map(p => p.key)
+                const allOn         = allGroupKeys.every(k => activePerms.includes(k))
                 return (
                   <div key={group}>
-                    <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center justify-between mb-2">
                       <p className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">{group}</p>
                       <button onClick={() => {
-                        const keys = groupPerms.map(p => p.key)
                         const cur  = getPerms(selectedRole.id)
-                        const next = allOn ? cur.filter(k => !keys.includes(k)) : [...new Set([...cur, ...keys])]
+                        const next = allOn
+                          ? cur.filter(k => !allGroupKeys.includes(k))
+                          : [...new Set([...cur, ...allGroupKeys])]
                         setDirty(d => ({ ...d, [selectedRole.id]: next }))
                       }} className="text-[10px] font-semibold text-slate-400 hover:text-slate-600 transition-colors">
                         {allOn ? 'Nonaktifkan semua' : 'Aktifkan semua'}
                       </button>
                     </div>
-                    <div className="space-y-0 rounded-xl overflow-hidden border border-slate-100">
-                      {groupPerms.map((perm, idx) => {
+
+                    <div className="rounded-xl overflow-hidden border border-slate-100">
+                      {parentPerms.map((parent, pi) => {
+                        const children  = childrenOf(parent.key)
+                        const pState    = parentState(parent.key)
+                        const isLast    = pi === parentPerms.length - 1 && !standalones.length
+                        return (
+                          <div key={parent.key}>
+                            {/* Parent row */}
+                            <div
+                              className={`flex items-center gap-3 px-4 py-3 bg-slate-50 hover:bg-slate-100/60 transition-colors cursor-pointer ${!isLast || children.length ? 'border-b border-slate-100' : ''}`}
+                              onClick={() => toggleParent(selectedRole.id, parent)}>
+                              <div onClick={e => e.stopPropagation()}>
+                                <PermCheckbox state={pState} onChange={() => toggleParent(selectedRole.id, parent)} />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-bold text-slate-700 leading-tight">{parent.label}</p>
+                                {children.length > 0 && (
+                                  <p className="text-[10px] text-slate-400 mt-0.5">
+                                    {children.filter(c => activePerms.includes(c.key)).length} / {children.length} sub-permission aktif
+                                  </p>
+                                )}
+                              </div>
+                              <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                                pState === 'checked'       ? 'bg-green-100 text-green-700' :
+                                pState === 'indeterminate' ? 'bg-amber-100 text-amber-700' :
+                                'bg-slate-100 text-slate-400'
+                              }`}>
+                                {pState === 'checked' ? 'Aktif' : pState === 'indeterminate' ? 'Sebagian' : 'Nonaktif'}
+                              </span>
+                            </div>
+
+                            {/* Children rows */}
+                            {children.map((child, ci) => {
+                              const checked = activePerms.includes(child.key)
+                              const isLastChild = ci === children.length - 1
+                              const isLastRow = isLastChild && (isLast)
+                              return (
+                                <div key={child.key}
+                                  className={`flex items-center gap-3 pl-10 pr-4 py-3 bg-white hover:bg-slate-50/60 transition-colors cursor-pointer ${!isLastRow || !isLast ? 'border-b border-slate-100' : ''}`}
+                                  onClick={() => toggleChild(selectedRole.id, child.key, parent.key)}>
+                                  <div onClick={e => e.stopPropagation()}>
+                                    <PermCheckbox
+                                      state={checked ? 'checked' : 'unchecked'}
+                                      onChange={() => toggleChild(selectedRole.id, child.key, parent.key)}
+                                    />
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-sm text-slate-700 leading-tight">{child.label}</p>
+                                  </div>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        )
+                      })}
+
+                      {standalones.map((perm, idx) => {
                         const checked = activePerms.includes(perm.key)
+                        const isLast  = idx === standalones.length - 1
                         return (
                           <div key={perm.key}
-                            className={`flex items-center gap-4 px-4 py-3.5 bg-white hover:bg-slate-50/60 transition-colors cursor-pointer ${idx < groupPerms.length - 1 ? 'border-b border-slate-100' : ''}`}
-                            onClick={() => togglePerm(selectedRole.id, perm.key)}>
+                            className={`flex items-center gap-3 px-4 py-3 bg-white hover:bg-slate-50/60 transition-colors cursor-pointer ${!isLast ? 'border-b border-slate-100' : ''}`}
+                            onClick={() => {
+                              const cur  = getPerms(selectedRole.id)
+                              const next = cur.includes(perm.key) ? cur.filter(k => k !== perm.key) : [...cur, perm.key]
+                              setDirty(d => ({ ...d, [selectedRole.id]: next }))
+                            }}>
+                            <div onClick={e => e.stopPropagation()}>
+                              <PermCheckbox
+                                state={checked ? 'checked' : 'unchecked'}
+                                onChange={() => {
+                                  const cur  = getPerms(selectedRole.id)
+                                  const next = cur.includes(perm.key) ? cur.filter(k => k !== perm.key) : [...cur, perm.key]
+                                  setDirty(d => ({ ...d, [selectedRole.id]: next }))
+                                }}
+                              />
+                            </div>
                             <div className="flex-1 min-w-0">
                               <p className="text-sm font-semibold text-slate-800 leading-tight">{perm.label}</p>
-                            </div>
-                            <div className="flex items-center gap-2.5 flex-shrink-0" onClick={e => e.stopPropagation()}>
-                              {checked ? <Check size={12} className="text-green-500" /> : <X size={12} className="text-slate-300" />}
-                              <Toggle checked={checked} onChange={() => togglePerm(selectedRole.id, perm.key)} />
                             </div>
                           </div>
                         )
