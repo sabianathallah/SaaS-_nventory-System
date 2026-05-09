@@ -42,7 +42,7 @@ module.exports = {
       if (toRemove.length) {
         await queryInterface.sequelize.query(
           `DELETE FROM "RolePermissions"
-           WHERE "roleId" = :roleId AND "permissionKey" = ANY(:toRemove)`,
+           WHERE "roleId" = :roleId AND "permissionKey" IN (:toRemove)`,
           { replacements: { roleId, toRemove } }
         );
       }
