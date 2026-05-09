@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { incomingGoodsApi, vendorsApi, productsApi } from '../api'
 import { useAuth } from '../context/AuthContext'
 import PageHeader from '../components/PageHeader'
+import SearchableSelect from '../components/SearchableSelect'
 import { Table, Pagination } from '../components/Table'
 import Modal from '../components/Modal'
 import toast from 'react-hot-toast'
@@ -188,10 +189,13 @@ export default function IncomingGoods() {
         subtitle={`${data?.pagination?.total ?? 0} dokumen`}
         action={
           <div className="flex items-center gap-2">
-            <select className="select w-48" value={statusFilter} onChange={e => { setStatusFilter(e.target.value); setPage(1) }}>
-              <option value="">Semua Status</option>
-              {Object.entries(STATUS_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-            </select>
+            <SearchableSelect
+              value={statusFilter}
+              onChange={v => { setStatusFilter(v); setPage(1) }}
+              options={[{ value: '', label: 'Semua Status' }, ...Object.entries(STATUS_LABEL).map(([v, l]) => ({ value: v, label: l }))]}
+              placeholder="Semua Status"
+              className="w-48"
+            />
             {isOperasional && (
               <button onClick={() => { setForm(EMPTY_FORM); setItems([]); setModal('create') }} className="btn-primary">
                 <Plus size={14} /> Baru
@@ -212,10 +216,13 @@ export default function IncomingGoods() {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="label">Vendor <span className="text-danger">*</span></label>
-              <select className="select" value={form.VendorId} onChange={setF('VendorId')} required>
-                <option value="">Pilih vendor…</option>
-                {vendors?.data?.map(v => <option key={v.id} value={v.id}>{v.name} ({v.vendorCode})</option>)}
-              </select>
+              <SearchableSelect
+                value={form.VendorId}
+                onChange={v => setForm(prev => ({ ...prev, VendorId: v }))}
+                options={[{ value: '', label: 'Pilih vendor…' }, ...(vendors?.data ?? []).map(v => ({ value: v.id, label: `${v.name} (${v.vendorCode})` }))]}
+                placeholder="Pilih vendor…"
+                required
+              />
             </div>
             <div>
               <label className="label">Tanggal Terima <span className="text-danger">*</span></label>
@@ -239,10 +246,13 @@ export default function IncomingGoods() {
             </div>
             <div className="p-3 bg-white flex flex-wrap gap-2 border-b border-slate-100">
               <div className="flex gap-1.5 flex-1 min-w-[180px]">
-                <select className="select flex-1" value={newItem.ProductId} onChange={setNI('ProductId')}>
-                  <option value="">Pilih produk…</option>
-                  {products?.data?.map(p => <option key={p.id} value={p.id}>{p.name} ({p.sku})</option>)}
-                </select>
+                <SearchableSelect
+                  value={newItem.ProductId}
+                  onChange={v => setNewItem(prev => ({ ...prev, ProductId: v }))}
+                  options={[{ value: '', label: 'Pilih produk…' }, ...(products?.data ?? []).map(p => ({ value: p.id, label: `${p.name} (${p.sku})` }))]}
+                  placeholder="Pilih produk…"
+                  className="flex-1"
+                />
                 <button
                   type="button"
                   onClick={() => setShowScanner(true)}

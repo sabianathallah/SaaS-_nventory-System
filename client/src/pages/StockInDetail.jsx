@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { stockInApi, warehousesApi, productsApi, productSkusApi } from '../api'
 import { useAuth } from '../context/AuthContext'
 import QRScanner from '../components/QRScanner'
+import SearchableSelect from '../components/SearchableSelect'
 import { useExternalScanner } from '../hooks/useExternalScanner'
 import toast from 'react-hot-toast'
 import { exportExcel } from '../utils/exportExcel'
@@ -116,22 +117,19 @@ function ProductSkuPicker({ onSelect }) {
         {/* SKU dropdown */}
         <div>
           <label className="label mb-1">Varian / SKU</label>
-          <select
-            className="select"
+          <SearchableSelect
             value={selSku?.id ?? ''}
-            onChange={e => {
-              const found = (skus ?? []).find(s => String(s.id) === e.target.value)
+            onChange={v => {
+              const found = (skus ?? []).find(s => String(s.id) === String(v))
               if (found) selectSku(found)
             }}
+            options={[
+              { value: '', label: selProduct ? 'Pilih varian…' : '← Pilih produk dulu' },
+              ...(skus ?? []).map(s => ({ value: s.id, label: `${skuLabel(s) || s.sku_code} — Rp ${fmt(s.price)}` })),
+            ]}
+            placeholder={selProduct ? 'Pilih varian…' : '← Pilih produk dulu'}
             disabled={!selProduct || !skus}
-          >
-            <option value="">{selProduct ? 'Pilih varian…' : '← Pilih produk dulu'}</option>
-            {(skus ?? []).map(s => (
-              <option key={s.id} value={s.id}>
-                {skuLabel(s) || s.sku_code} — Rp {fmt(s.price)}
-              </option>
-            ))}
-          </select>
+          />
         </div>
       </div>
 
@@ -452,11 +450,13 @@ export default function StockInDetail() {
             </div>
             <div>
               <label className="label">Warehouse <span className="text-red-500">*</span></label>
-              <select className="select" value={form.WarehouseId}
-                onChange={e => setForm(f => ({ ...f, WarehouseId: e.target.value }))} required>
-                <option value="">Pilih warehouse…</option>
-                {warehouses?.data?.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
-              </select>
+              <SearchableSelect
+                value={form.WarehouseId}
+                onChange={v => setForm(f => ({ ...f, WarehouseId: v }))}
+                options={[{ value: '', label: 'Pilih warehouse…' }, ...(warehouses?.data ?? []).map(w => ({ value: w.id, label: w.name }))]}
+                placeholder="Pilih warehouse…"
+                required
+              />
             </div>
             <div>
               <label className="label">Notes</label>

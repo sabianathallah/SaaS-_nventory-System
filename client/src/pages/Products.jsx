@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { productsApi, categoriesApi, articlesApi, warehousesApi, productSkusApi } from '../api'
 import SearchBar from '../components/SearchBar'
+import SearchableSelect from '../components/SearchableSelect'
 import { Pagination } from '../components/Table'
 import QrModal from '../components/QrModal'
 import toast from 'react-hot-toast'
@@ -475,18 +476,27 @@ export default function Products() {
         />
         <div className="flex items-center gap-2 flex-wrap">
           <Filter size={13} className={activeFilters ? 'text-brand' : 'text-slate-400'} />
-          <select className="select w-40" value={catFilter} onChange={e => { setCat(e.target.value); setPage(1) }}>
-            <option value="">Semua tipe</option>
-            {catOptions.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </select>
-          <select className="select w-40" value={artFilter} onChange={e => { setArt(e.target.value); setPage(1) }}>
-            <option value="">Semua koleksi</option>
-            {artOptions.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-          </select>
-          <select className="select w-44" value={whFilter} onChange={e => { setWh(e.target.value); setPage(1) }}>
-            <option value="">Semua gudang</option>
-            {whOptions.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
-          </select>
+          <SearchableSelect
+            value={catFilter}
+            onChange={v => { setCat(v); setPage(1) }}
+            options={[{ value: '', label: 'Semua tipe' }, ...catOptions.map(c => ({ value: c.id, label: c.name }))]}
+            placeholder="Semua tipe"
+            className="w-40"
+          />
+          <SearchableSelect
+            value={artFilter}
+            onChange={v => { setArt(v); setPage(1) }}
+            options={[{ value: '', label: 'Semua koleksi' }, ...artOptions.map(a => ({ value: a.id, label: a.name }))]}
+            placeholder="Semua koleksi"
+            className="w-40"
+          />
+          <SearchableSelect
+            value={whFilter}
+            onChange={v => { setWh(v); setPage(1) }}
+            options={[{ value: '', label: 'Semua gudang' }, ...whOptions.map(w => ({ value: w.id, label: w.name }))]}
+            placeholder="Semua gudang"
+            className="w-44"
+          />
           {activeFilters > 0 && (
             <button
               onClick={() => { setCat(''); setArt(''); setWh(''); setPage(1) }}

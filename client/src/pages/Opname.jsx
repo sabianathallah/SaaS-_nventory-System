@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { opnameSessionsApi, warehousesApi } from '../api'
 import PageHeader from '../components/PageHeader'
+import SearchableSelect from '../components/SearchableSelect'
 import { Table, Pagination } from '../components/Table'
 import Modal from '../components/Modal'
 import toast from 'react-hot-toast'
@@ -119,16 +120,25 @@ export default function Opname() {
       {/* Filters + Table */}
       <div className="card overflow-hidden">
         <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/50 flex flex-wrap items-center gap-3">
-          <select className="select w-36 text-sm" value={statusFilter} onChange={e => { setStatusFilter(e.target.value); setPage(1) }}>
-            <option value="">All status</option>
-            <option value="open">Open</option>
-            <option value="closed">Closed</option>
-            {showCancelled && <option value="cancelled">Cancelled</option>}
-          </select>
-          <select className="select w-44 text-sm" value={whFilter} onChange={e => { setWhFilter(e.target.value); setPage(1) }}>
-            <option value="">All warehouses</option>
-            {warehouses?.data?.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
-          </select>
+          <SearchableSelect
+            value={statusFilter}
+            onChange={v => { setStatusFilter(v); setPage(1) }}
+            options={[
+              { value: '', label: 'All status' },
+              { value: 'open', label: 'Open' },
+              { value: 'closed', label: 'Closed' },
+              ...(showCancelled ? [{ value: 'cancelled', label: 'Cancelled' }] : []),
+            ]}
+            placeholder="All status"
+            className="w-36 text-sm"
+          />
+          <SearchableSelect
+            value={whFilter}
+            onChange={v => { setWhFilter(v); setPage(1) }}
+            options={[{ value: '', label: 'All warehouses' }, ...(warehouses?.data ?? []).map(w => ({ value: w.id, label: w.name }))]}
+            placeholder="All warehouses"
+            className="w-44 text-sm"
+          />
           <label className="flex items-center gap-2 text-xs text-slate-500 ml-auto cursor-pointer select-none">
             <input type="checkbox" className="rounded" checked={showCancelled} onChange={e => setShowCancelled(e.target.checked)} />
             Tampilkan Cancelled
@@ -143,10 +153,13 @@ export default function Opname() {
         <form onSubmit={e => { e.preventDefault(); create.mutate({ WarehouseId: form.warehouseId, notes: form.notes }) }} className="space-y-4">
           <div>
             <label className="label">Gudang <span className="text-danger">*</span></label>
-            <select className="select" value={form.warehouseId} onChange={e => setForm(f => ({ ...f, warehouseId: e.target.value }))} required>
-              <option value="">Pilih gudang…</option>
-              {warehouses?.data?.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
-            </select>
+            <SearchableSelect
+              value={form.warehouseId}
+              onChange={v => setForm(f => ({ ...f, warehouseId: v }))}
+              options={[{ value: '', label: 'Pilih gudang…' }, ...(warehouses?.data ?? []).map(w => ({ value: w.id, label: w.name }))]}
+              placeholder="Pilih gudang…"
+              required
+            />
           </div>
           <div>
             <label className="label">Catatan</label>

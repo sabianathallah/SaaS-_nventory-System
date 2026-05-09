@@ -5,6 +5,7 @@ import PageHeader from '../components/PageHeader'
 import { Table, Pagination } from '../components/Table'
 import Modal from '../components/Modal'
 import SearchBar from '../components/SearchBar'
+import SearchableSelect from '../components/SearchableSelect'
 import toast from 'react-hot-toast'
 import { Plus, Pencil, Trash2, Building2, Upload, ImageIcon } from 'lucide-react'
 
@@ -130,11 +131,16 @@ export default function Companies() {
             </div>
             <div>
               <label className="label">Status</label>
-              <select className="select" value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))}>
-                <option value="active">Active</option>
-                <option value="inactive">Inactive</option>
-                <option value="suspended">Suspended</option>
-              </select>
+              <SearchableSelect
+                value={form.status}
+                onChange={v => setForm(f => ({ ...f, status: v }))}
+                options={[
+                  { value: 'active', label: 'Active' },
+                  { value: 'inactive', label: 'Inactive' },
+                  { value: 'suspended', label: 'Suspended' },
+                ]}
+                placeholder="Pilih status…"
+              />
             </div>
             <div className="col-span-2">
               <label className="label">Logo</label>

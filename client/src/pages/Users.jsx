@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { usersApi, companiesApi, rolesApi, permissionsApi } from '../api'
+import SearchableSelect from '../components/SearchableSelect'
 import { useAuth } from '../context/AuthContext'
 import PageHeader from '../components/PageHeader'
 import { Table, Pagination } from '../components/Table'
@@ -192,19 +193,23 @@ function UsersTab({ isSuperAdmin, roles }) {
             </div>
             <div>
               <label className="label">Role <span className="text-danger">*</span></label>
-              <select className="select" value={form.role} onChange={set('role')}>
-                {assignableRoles.map(r => (
-                  <option key={r.id} value={r.name}>{r.displayName}</option>
-                ))}
-              </select>
+              <SearchableSelect
+                value={form.role}
+                onChange={v => setForm(f => ({ ...f, role: v }))}
+                options={assignableRoles.map(r => ({ value: r.name, label: r.displayName }))}
+                placeholder="Pilih role…"
+                required
+              />
             </div>
             {isSuperAdmin && (
               <div className="col-span-2">
                 <label className="label">Company</label>
-                <select className="select" value={form.companyId} onChange={set('companyId')}>
-                  <option value="">— Tidak ada —</option>
-                  {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
+                <SearchableSelect
+                  value={form.companyId}
+                  onChange={v => setForm(f => ({ ...f, companyId: v }))}
+                  options={[{ value: '', label: '— Tidak ada —' }, ...companies.map(c => ({ value: c.id, label: c.name }))]}
+                  placeholder="— Tidak ada —"
+                />
               </div>
             )}
             <div className="col-span-2 flex items-center gap-2">

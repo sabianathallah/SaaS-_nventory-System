@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { stockOutApi, warehousesApi, stockInApi, productsApi, stocksApi } from '../api'
 import { useAuth } from '../context/AuthContext'
 import QRScanner from '../components/QRScanner'
+import SearchableSelect from '../components/SearchableSelect'
 import { useExternalScanner } from '../hooks/useExternalScanner'
 import toast from 'react-hot-toast'
 import { ArrowLeft, PackageMinus, ScanLine, Plus, Trash2, Save, ScanBarcode } from 'lucide-react'
@@ -213,15 +214,13 @@ export default function StockOutDetail() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="label">Warehouse <span className="text-red-500">*</span></label>
-              <select
-                className="select"
+              <SearchableSelect
                 value={form.warehouseId}
-                onChange={e => setForm(f => ({ ...f, warehouseId: e.target.value, items: [] }))}
+                onChange={v => setForm(f => ({ ...f, warehouseId: v, items: [] }))}
+                options={[{ value: '', label: 'Pilih warehouse…' }, ...(warehouses?.data ?? []).map(w => ({ value: w.id, label: w.name }))]}
+                placeholder="Pilih warehouse…"
                 required
-              >
-                <option value="">Pilih warehouse…</option>
-                {warehouses?.data?.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
-              </select>
+              />
             </div>
             <div>
               <label className="label">Catatan</label>
@@ -252,18 +251,20 @@ export default function StockOutDetail() {
           <div className="p-4 border-b border-slate-100">
             {canManualOutput ? (
               <div className="flex flex-col sm:flex-row gap-2">
-                <select
-                  className="select flex-1"
+                <SearchableSelect
                   value={manualItem.productId}
-                  onChange={e => setManualItem(i => ({ ...i, productId: e.target.value }))}
+                  onChange={v => setManualItem(i => ({ ...i, productId: v }))}
+                  options={[
+                    { value: '', label: 'Pilih produk…' },
+                    ...(productsForManual?.data ?? []).map(p => {
+                      const avail = getAvail(p.id)
+                      return { value: p.id, label: `${p.name}${avail !== null ? ` (${avail} tersedia)` : ''}` }
+                    }),
+                  ]}
+                  placeholder="Pilih produk…"
                   disabled={!form.warehouseId}
-                >
-                  <option value="">Pilih produk…</option>
-                  {productsForManual?.data?.map(p => {
-                    const avail = getAvail(p.id)
-                    return <option key={p.id} value={p.id}>{p.name}{avail !== null ? ` (${avail} tersedia)` : ''}</option>
-                  })}
-                </select>
+                  className="flex-1"
+                />
                 <div className="flex gap-2">
                   <input
                     className="input flex-1 sm:w-24"

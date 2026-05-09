@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import { movementsApi, warehousesApi, productsApi } from '../api'
 import PageHeader from '../components/PageHeader'
+import SearchableSelect from '../components/SearchableSelect'
 import { Table, Pagination } from '../components/Table'
 import { exportExcel } from '../utils/exportExcel'
 import toast from 'react-hot-toast'
@@ -189,25 +190,32 @@ export default function Movements() {
             />
           </div>
 
-          {/* Type */}
-          <select className="select w-36 text-sm" value={typeFilter} onChange={e => { setType(e.target.value); setPage(1) }}>
-            <option value="">All types</option>
-            <option value="IN">IN</option>
-            <option value="OUT">OUT</option>
-            <option value="ADJUSTMENT">Adjustment</option>
-          </select>
-
-          {/* Warehouse */}
-          <select className="select w-44 text-sm" value={whFilter} onChange={e => { setWh(e.target.value); setPage(1) }}>
-            <option value="">All warehouses</option>
-            {warehouses?.data?.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
-          </select>
-
-          {/* Product */}
-          <select className="select w-48 text-sm" value={prodFilter} onChange={e => { setProd(e.target.value); setPage(1) }}>
-            <option value="">All products</option>
-            {products?.data?.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-          </select>
+          <SearchableSelect
+            value={typeFilter}
+            onChange={v => { setType(v); setPage(1) }}
+            options={[
+              { value: '', label: 'All types' },
+              { value: 'IN', label: 'IN' },
+              { value: 'OUT', label: 'OUT' },
+              { value: 'ADJUSTMENT', label: 'Adjustment' },
+            ]}
+            placeholder="All types"
+            className="w-36 text-sm"
+          />
+          <SearchableSelect
+            value={whFilter}
+            onChange={v => { setWh(v); setPage(1) }}
+            options={[{ value: '', label: 'All warehouses' }, ...(warehouses?.data ?? []).map(w => ({ value: w.id, label: w.name }))]}
+            placeholder="All warehouses"
+            className="w-44 text-sm"
+          />
+          <SearchableSelect
+            value={prodFilter}
+            onChange={v => { setProd(v); setPage(1) }}
+            options={[{ value: '', label: 'All products' }, ...(products?.data ?? []).map(p => ({ value: p.id, label: p.name }))]}
+            placeholder="All products"
+            className="w-48 text-sm"
+          />
 
           <button onClick={resetFilters} className="text-xs text-slate-400 hover:text-slate-600 underline ml-auto">Reset</button>
         </div>
