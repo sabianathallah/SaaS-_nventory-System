@@ -1,6 +1,25 @@
 'use strict';
-const { User } = require('../models');
+const { User, Company, Role } = require('../models');
+const { Op } = require('sequelize');
 const { paginate, buildFilter, paginatedResponse } = require('../helpers/queryHelper');
+
+const USER_INCLUDE = [
+    { model: Company, as: 'company', attributes: ['id', 'name', 'logo'], required: false },
+];
+
+async function attachRoleDisplayNames(users) {
+    const roleNames = [...new Set(users.map(u => u.role).filter(Boolean))];
+    if (!roleNames.length) return users;
+    const roles = await Role.findAll({
+        where: { name: { [Op.in]: roleNames }, companyId: null },
+        attributes: ['name', 'displayName'],
+    });
+    const map = Object.fromEntries(roles.map(r => [r.name, r.displayName]));
+    return users.map(u => ({
+        ...u.toJSON(),
+        roleDisplayName: map[u.role] ?? u.role,
+    }));
+}
 
 class UserController {
     static async getAll(req, res, next) {
@@ -14,18 +33,24 @@ class UserController {
             const { rows, count } = await User.findAndCountAll({
                 where: filter,
                 attributes: { exclude: ['password'] },
+                include: USER_INCLUDE,
                 order: [['name', 'ASC']],
                 limit, offset
             });
-            res.status(200).json(paginatedResponse(rows, count, page, limit));
+            const enriched = await attachRoleDisplayNames(rows);
+            res.status(200).json(paginatedResponse(enriched, count, page, limit));
         } catch (err) { next(err); }
     }
 
     static async getById(req, res, next) {
         try {
-            const user = await User.findByPk(req.params.id, { attributes: { exclude: ['password'] } });
+            const user = await User.findByPk(req.params.id, {
+                attributes: { exclude: ['password'] },
+                include: USER_INCLUDE,
+            });
             if (!user) throw { name: 'NotFound', message: 'User not found' };
-            res.status(200).json(user);
+            const [enriched] = await attachRoleDisplayNames([user]);
+            res.status(200).json(enriched);
         } catch (err) { next(err); }
     }
 

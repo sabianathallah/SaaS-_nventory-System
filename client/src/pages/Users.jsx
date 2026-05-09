@@ -123,12 +123,12 @@ function UsersTab({ isSuperAdmin, roles }) {
       key: 'role', label: 'Role', width: 160,
       render: r => {
         const rd = roleMap[r.role]
-        return <RoleBadge name={r.role} displayName={rd?.displayName ?? r.role} />
+        return <RoleBadge name={r.role} displayName={rd?.displayName ?? r.roleDisplayName ?? r.role} />
       },
     },
     {
       key: 'company', label: 'Company',
-      render: r => <span className="text-slate-500 text-sm">{r.Company?.name ?? r.company?.name ?? '—'}</span>,
+      render: r => <span className="text-slate-500 text-sm">{r.company?.name ?? '—'}</span>,
     },
     {
       key: 'status', label: 'Status', width: 90,
