@@ -30,6 +30,11 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: false,
       defaultValue: DataTypes.NOW
     },
+    purpose: {
+      type: DataTypes.STRING(100),
+      allowNull: false,
+      defaultValue: 'Lainnya',
+    },
     notes: DataTypes.STRING,
     companyId: { type: DataTypes.INTEGER, allowNull: true },
     createdBy: {

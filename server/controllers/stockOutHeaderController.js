@@ -63,6 +63,10 @@ class StockOutHeaderController {
                 await t.rollback();
                 return res.status(400).json({ message: 'WarehouseId wajib dipilih' });
             }
+            if (!headerData.purpose) {
+                await t.rollback();
+                return res.status(400).json({ message: 'Tujuan stock out wajib dipilih' });
+            }
 
             for (const item of items) {
                 const { ProductId, quantity } = item;

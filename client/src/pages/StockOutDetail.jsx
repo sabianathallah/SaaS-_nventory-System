@@ -10,7 +10,19 @@ import toast from 'react-hot-toast'
 import { ArrowLeft, PackageMinus, ScanLine, Plus, Trash2, Save, ScanBarcode } from 'lucide-react'
 
 const fmt = (n) => Number(n ?? 0).toLocaleString('id-ID')
-const EMPTY_FORM = { warehouseId: '', note: '', items: [] }
+const PURPOSES = [
+  'Penjualan',
+  'Endorse',
+  'Photoshoot',
+  'R&D',
+  'Pemakaian Internal',
+  'Hadiah / Gift',
+  'Sample',
+  'Retur Vendor',
+  'Lainnya',
+]
+
+const EMPTY_FORM = { warehouseId: '', purpose: '', purposeDetail: '', note: '', items: [] }
 
 export default function StockOutDetail() {
   const { id }     = useParams()
@@ -102,9 +114,13 @@ export default function StockOutDetail() {
 
   const handleSubmit = (e) => {
     e.preventDefault()
+    if (!form.purpose) return toast.error('Pilih tujuan stock out')
+    if (form.purpose === 'Lainnya' && !form.purposeDetail.trim()) return toast.error('Jelaskan tujuan lainnya')
     if (!form.items.length) return toast.error('Tambahkan minimal 1 item')
+    const purpose = form.purpose === 'Lainnya' ? `Lainnya: ${form.purposeDetail.trim()}` : form.purpose
     createMutation.mutate({
       WarehouseId: form.warehouseId,
+      purpose,
       note:        form.note,
       items:       form.items.map(i => ({ ProductId: i.productId, quantity: i.quantity })),
     })
@@ -131,10 +147,16 @@ export default function StockOutDetail() {
           </div>
         </div>
 
-        <div className="card p-5 mb-5 grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm">
+        <div className="card p-5 mb-5 grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
           <div><p className="label mb-1">Warehouse</p><p className="font-semibold text-slate-700">{detail.Warehouse?.name ?? '—'}</p></div>
           <div><p className="label mb-1">Tanggal</p><p className="font-mono text-slate-600">{new Date(detail.createdAt).toLocaleDateString('id-ID')}</p></div>
-          <div className="col-span-2 sm:col-span-1"><p className="label mb-1">Catatan</p><p className="text-slate-500">{detail.note || '—'}</p></div>
+          <div>
+            <p className="label mb-1">Tujuan</p>
+            <span className="inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-violet-50 text-violet-700 border border-violet-100">
+              {detail.purpose ?? '—'}
+            </span>
+          </div>
+          <div><p className="label mb-1">Catatan</p><p className="text-slate-500">{detail.notes || detail.note || '—'}</p></div>
         </div>
 
         {items.length > 0 && (
@@ -222,6 +244,29 @@ export default function StockOutDetail() {
                 required
               />
             </div>
+            <div>
+              <label className="label">Tujuan <span className="text-red-500">*</span></label>
+              <select
+                className="input"
+                value={form.purpose}
+                onChange={e => setForm(f => ({ ...f, purpose: e.target.value, purposeDetail: '' }))}
+                required
+              >
+                <option value="">Pilih tujuan…</option>
+                {PURPOSES.map(p => <option key={p} value={p}>{p}</option>)}
+              </select>
+            </div>
+            {form.purpose === 'Lainnya' && (
+              <div className="sm:col-span-2">
+                <label className="label">Jelaskan tujuan <span className="text-red-500">*</span></label>
+                <input
+                  className="input"
+                  placeholder="Contoh: Sponsorship event, Donasi, dll…"
+                  value={form.purposeDetail}
+                  onChange={e => setForm(f => ({ ...f, purposeDetail: e.target.value }))}
+                />
+              </div>
+            )}
             <div>
               <label className="label">Catatan</label>
               <input className="input" placeholder="Catatan (opsional)…" value={form.note}
