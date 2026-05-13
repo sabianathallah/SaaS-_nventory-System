@@ -119,6 +119,7 @@ class StockInHeaderController {
             transaction: t,
           });
           await stock.increment('quantity', { by: Number(quantity), transaction: t });
+          await sku.increment('qty', { by: Number(quantity), transaction: t });
 
           await Stock_Movement.create({
             ProductId: sku.ProductId, WarehouseId,
@@ -192,6 +193,7 @@ class StockInHeaderController {
           transaction: t,
         });
         await stock.increment('quantity', { by: Number(quantity), transaction: t });
+        await sku.increment('qty', { by: Number(quantity), transaction: t });
         await Stock_Movement.create({
           ProductId: sku.ProductId, WarehouseId: header.WarehouseId,
           type: 'IN', quantity: Number(quantity),
@@ -231,6 +233,7 @@ class StockInHeaderController {
             transaction: t,
           });
           await stock.increment('quantity', { by: delta, transaction: t });
+          await sku.increment('qty', { by: delta, transaction: t });
           await Stock_Movement.create({
             ProductId: sku.ProductId, WarehouseId: header.WarehouseId,
             type: delta > 0 ? 'IN' : 'OUT', quantity: Math.abs(delta),
@@ -265,6 +268,7 @@ class StockInHeaderController {
           if (stock) {
             await stock.decrement('quantity', { by: item.quantity, transaction: t });
           }
+          await sku.decrement('qty', { by: item.quantity, transaction: t });
           await Stock_Movement.create({
             ProductId: sku.ProductId, WarehouseId: header.WarehouseId,
             type: 'OUT', quantity: item.quantity,
