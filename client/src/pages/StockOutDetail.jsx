@@ -1,15 +1,16 @@
-import { useState } from 'react'
+import { useState, useMemo, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { stockOutApi, warehousesApi, stockInApi, productsApi, stocksApi } from '../api'
+import { stockOutApi, warehousesApi, stockInApi, productsApi, productSkusApi, stocksApi } from '../api'
 import { useAuth } from '../context/AuthContext'
 import QRScanner from '../components/QRScanner'
 import SearchableSelect from '../components/SearchableSelect'
 import { useExternalScanner } from '../hooks/useExternalScanner'
 import toast from 'react-hot-toast'
-import { ArrowLeft, PackageMinus, ScanLine, Plus, Trash2, Save, ScanBarcode } from 'lucide-react'
+import { ArrowLeft, PackageMinus, ScanLine, Plus, Trash2, Save, ScanBarcode, ChevronDown, Package } from 'lucide-react'
 
 const fmt = (n) => Number(n ?? 0).toLocaleString('id-ID')
+
 const PURPOSES = [
   'Penjualan',
   'Endorse',
@@ -22,7 +23,166 @@ const PURPOSES = [
   'Lainnya',
 ]
 
+const skuLabel = (sku) => {
+  const opts = sku?.ProductVariantOptions ?? []
+  if (!opts.length) return sku?.sku_code ?? ''
+  return opts.map(o => o.value).join(' / ')
+}
+
 const EMPTY_FORM = { warehouseId: '', purpose: '', purposeDetail: '', note: '', items: [] }
+
+// ── Product → SKU picker untuk Stock OUT ────────────────────────────────────────
+function ProductSkuPicker({ onSelect, warehouseId, stocks }) {
+  const [search, setSearch]         = useState('')
+  const [open, setOpen]             = useState(false)
+  const [selProduct, setSelProduct] = useState(null)
+  const [selSku, setSelSku]         = useState(null)
+  const [qty, setQty]               = useState(1)
+  const inputRef = useRef(null)
+
+  const { data: products } = useQuery({
+    queryKey: ['products', { limit: 500 }],
+    queryFn:  () => productsApi.list({ limit: 500 }),
+  })
+
+  const { data: skus } = useQuery({
+    queryKey: ['product-skus', selProduct?.id],
+    queryFn:  () => productSkusApi.list(selProduct.id),
+    enabled:  !!selProduct,
+  })
+
+  const filtered = useMemo(() => {
+    const list = products?.data ?? []
+    if (!search.trim()) return list
+    const q = search.toLowerCase()
+    return list.filter(p => p.name.toLowerCase().includes(q))
+  }, [products, search])
+
+  const getAvail = (productId) =>
+    stocks?.data?.find(s => String(s.ProductId) === String(productId))?.quantity ?? null
+
+  const selectProduct = (prod) => {
+    setSelProduct(prod)
+    setSearch(prod.name)
+    setSelSku(null)
+    setOpen(false)
+    inputRef.current?.blur()
+  }
+
+  const handleAdd = () => {
+    if (!selSku) return toast.error('Pilih SKU / varian terlebih dahulu')
+    if (!qty || Number(qty) <= 0) return toast.error('Qty harus lebih dari 0')
+    const avail = getAvail(selProduct.id)
+    if (avail !== null && Number(qty) > avail) {
+      return toast.error(`Stok tidak cukup. Tersedia: ${avail}`)
+    }
+    onSelect({
+      skuId:        selSku.id,
+      productId:    selProduct.id,
+      productName:  selProduct.name,
+      variantLabel: skuLabel(selSku),
+      quantity:     Number(qty),
+      available:    avail,
+    })
+    setSearch(''); setSelProduct(null); setSelSku(null); setQty(1)
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        {/* Product search */}
+        <div className="relative">
+          <label className="label mb-1">Produk</label>
+          <div
+            className="input flex items-center gap-2 cursor-text"
+            onClick={() => { setOpen(true); inputRef.current?.focus() }}
+          >
+            <input
+              ref={inputRef}
+              className="flex-1 bg-transparent outline-none text-sm placeholder-slate-400 min-w-0"
+              placeholder="Cari nama produk…"
+              value={search}
+              onChange={e => { setSearch(e.target.value); setOpen(true); setSelProduct(null); setSelSku(null) }}
+              onFocus={() => setOpen(true)}
+              onBlur={() => setTimeout(() => setOpen(false), 150)}
+            />
+            <ChevronDown size={13} className="text-slate-400 flex-shrink-0" />
+          </div>
+          {open && filtered.length > 0 && (
+            <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg z-20 max-h-52 overflow-y-auto">
+              {filtered.map(p => {
+                const avail = getAvail(p.id)
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onMouseDown={() => selectProduct(p)}
+                    className="w-full text-left px-3 py-2 hover:bg-slate-50 border-b border-slate-50 last:border-0 flex items-center gap-2"
+                  >
+                    {p.imageUrl
+                      ? <img src={p.imageUrl} className="w-7 h-7 rounded object-cover flex-shrink-0" />
+                      : <div className="w-7 h-7 rounded bg-slate-100 flex items-center justify-center flex-shrink-0"><Package size={12} className="text-slate-300" /></div>
+                    }
+                    <span className="text-sm text-slate-800 flex-1 truncate">{p.name}</span>
+                    {avail !== null && (
+                      <span className={`text-xs font-mono shrink-0 ${avail === 0 ? 'text-red-400' : 'text-slate-400'}`}>
+                        {avail} stok
+                      </span>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* SKU dropdown */}
+        <div>
+          <label className="label mb-1">Varian / SKU</label>
+          <SearchableSelect
+            value={selSku?.id ?? ''}
+            onChange={v => {
+              const found = (skus ?? []).find(s => String(s.id) === String(v))
+              if (found) setSelSku(found)
+            }}
+            options={[
+              { value: '', label: selProduct ? 'Pilih varian…' : '← Pilih produk dulu' },
+              ...(skus ?? []).map(s => ({ value: s.id, label: skuLabel(s) || s.sku_code })),
+            ]}
+            placeholder={selProduct ? 'Pilih varian…' : '← Pilih produk dulu'}
+            disabled={!selProduct || !skus}
+          />
+        </div>
+      </div>
+
+      {/* Qty + Add row */}
+      {selSku && (
+        <div className="flex items-center gap-2 bg-red-50 border border-red-100 rounded-lg px-3 py-2.5">
+          {selProduct?.imageUrl
+            ? <img src={selProduct.imageUrl} className="w-9 h-9 rounded object-cover flex-shrink-0 border border-slate-200" />
+            : <div className="w-9 h-9 rounded bg-slate-100 flex items-center justify-center flex-shrink-0"><Package size={14} className="text-slate-300" /></div>
+          }
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-slate-800 truncate">{selProduct?.name}</p>
+            <p className="text-xs text-slate-500">{skuLabel(selSku)}</p>
+            {warehouseId && getAvail(selProduct?.id) !== null && (
+              <p className="text-xs text-slate-400">Tersedia: {getAvail(selProduct?.id)}</p>
+            )}
+          </div>
+          <input
+            type="number" min="1" placeholder="Qty"
+            className="input w-20 text-center"
+            value={qty}
+            onChange={e => setQty(e.target.value)}
+          />
+          <button type="button" onClick={handleAdd} className="btn-primary flex-shrink-0">
+            <Plus size={14} /> Tambah
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
 
 export default function StockOutDetail() {
   const { id }     = useParams()
@@ -34,10 +194,9 @@ export default function StockOutDetail() {
   const canManualOutput = hasPermission('stock.out.manual_input') || hasPermission('stock.manage')
   const canScanOut      = hasPermission('stock.out.scan')         || hasPermission('stock.manage')
 
-  const [form, setForm]             = useState(EMPTY_FORM)
-  const [manualItem, setManualItem] = useState({ productId: '', quantity: '' })
-  const [showScanner, setShowScanner]           = useState(false)
-  const [scannerConnected, setScannerConnected] = useState(false)
+  const [form, setForm]                             = useState(EMPTY_FORM)
+  const [showScanner, setShowScanner]               = useState(false)
+  const [scannerConnected, setScannerConnected]     = useState(false)
 
   const { data: detail, isLoading } = useQuery({
     queryKey: ['stock-out', id],
@@ -51,20 +210,11 @@ export default function StockOutDetail() {
     enabled:  isNew,
   })
 
-  const { data: productsForManual } = useQuery({
-    queryKey: ['products', { limit: 200 }],
-    queryFn:  () => productsApi.list({ limit: 200 }),
-    enabled:  canManualOutput && isNew,
-  })
-
   const { data: stocks } = useQuery({
     queryKey: ['stocks', { WarehouseId: form.warehouseId, limit: 200 }],
     queryFn:  () => stocksApi.list({ WarehouseId: form.warehouseId, limit: 200 }),
     enabled:  !!form.warehouseId && isNew,
   })
-
-  const getAvail = (productId) =>
-    stocks?.data?.find(s => String(s.ProductId) === String(productId))?.quantity ?? null
 
   const createMutation = useMutation({
     mutationFn: d => stockOutApi.create(d),
@@ -77,14 +227,17 @@ export default function StockOutDetail() {
     onError: e => toast.error(e.response?.data?.message || 'Error'),
   })
 
-  const addManualItem = () => {
-    if (!manualItem.productId || !manualItem.quantity) return toast.error('Pilih produk dan masukkan qty')
-    const qty   = Number(manualItem.quantity)
-    const avail = getAvail(manualItem.productId)
-    if (avail !== null && qty > avail) return toast.error(`Hanya ${avail} unit tersedia di gudang ini`)
-    const prod = productsForManual?.data?.find(p => String(p.id) === String(manualItem.productId))
-    setForm(f => ({ ...f, items: [...f.items, { productId: manualItem.productId, productName: prod?.name, quantity: qty, available: avail }] }))
-    setManualItem({ productId: '', quantity: '' })
+  const addItem = ({ skuId, productId, productName, variantLabel, quantity, available }) => {
+    setForm(f => {
+      const key = skuId ? `sku-${skuId}` : `prod-${productId}`
+      const idx = f.items.findIndex(i => i.key === key)
+      if (idx >= 0) {
+        const next = [...f.items]
+        next[idx] = { ...next[idx], quantity: next[idx].quantity + quantity }
+        return { ...f, items: next }
+      }
+      return { ...f, items: [...f.items, { key, skuId, productId, productName, variantLabel, quantity, available }] }
+    })
   }
 
   const handleScan = async (code) => {
@@ -93,18 +246,12 @@ export default function StockOutDetail() {
     try {
       const sku       = await stockInApi.resolveSku(code)
       const productId = String(sku.ProductId ?? sku.Product?.id)
-      const avail     = getAvail(productId)
+      const skuId     = String(sku.id)
+      const avail     = stocks?.data?.find(s => String(s.ProductId) === productId)?.quantity ?? null
       const name      = sku.Product?.name ?? code
-      setForm(f => {
-        const idx = f.items.findIndex(i => i.productId === productId)
-        if (idx >= 0) {
-          const next = [...f.items]
-          next[idx] = { ...next[idx], quantity: next[idx].quantity + 1 }
-          return { ...f, items: next }
-        }
-        return { ...f, items: [...f.items, { productId, productName: name, quantity: 1, available: avail }] }
-      })
-      toast.success(`${name} +1`)
+      const label     = skuLabel(sku)
+      addItem({ skuId, productId, productName: name, variantLabel: label, quantity: 1, available: avail })
+      toast.success(`${name}${label ? ` · ${label}` : ''} +1`)
     } catch {
       toast.error(`SKU "${code}" tidak ditemukan`)
     }
@@ -121,8 +268,12 @@ export default function StockOutDetail() {
     createMutation.mutate({
       WarehouseId: form.warehouseId,
       purpose,
-      note:        form.note,
-      items:       form.items.map(i => ({ ProductId: i.productId, quantity: i.quantity })),
+      note:  form.note,
+      items: form.items.map(i => ({
+        ProductSKUId: i.skuId   ? Number(i.skuId)   : undefined,
+        ProductId:    i.skuId   ? undefined          : Number(i.productId),
+        quantity:     i.quantity,
+      })),
     })
   }
 
@@ -131,7 +282,7 @@ export default function StockOutDetail() {
     if (isLoading) return <div className="p-8 text-slate-400 text-sm">Memuat…</div>
     if (!detail)   return <div className="p-8 text-red-500 text-sm">Stock OUT tidak ditemukan.</div>
 
-    const items = detail.Stock_Out_Items ?? detail.items ?? []
+    const items = detail.movements ?? detail.Stock_Out_Items ?? detail.items ?? []
 
     return (
       <div className="px-6 py-6 max-w-4xl">
@@ -166,23 +317,32 @@ export default function StockOutDetail() {
               <span className="text-xs font-bold text-slate-600 uppercase tracking-wide">Items ({items.length})</span>
             </div>
             <div className="overflow-x-auto">
-            <table className="w-full min-w-[300px] text-sm">
+            <table className="w-full min-w-[400px] text-sm">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200">
                   <th className="th py-2 text-left">Produk</th>
+                  <th className="th py-2 text-left">Varian / SKU</th>
                   <th className="th py-2 text-right w-28">Qty</th>
                 </tr>
               </thead>
               <tbody>
-                {items.map((item, idx) => (
-                  <tr key={item.id ?? idx} className="tr border-b border-slate-100 hover:bg-slate-50/50">
-                    <td className="td py-3">
-                      <p className="font-semibold text-slate-800">{item.Product?.name ?? `#${item.ProductId}`}</p>
-                      {item.Product?.sku && <p className="text-xs font-mono text-slate-400">{item.Product.sku}</p>}
-                    </td>
-                    <td className="td py-3 text-right font-mono font-bold text-danger">{fmt(item.quantity)}</td>
-                  </tr>
-                ))}
+                {items.map((item, idx) => {
+                  const sku  = item.ProductSKU
+                  const opts = sku?.ProductVariantOptions ?? []
+                  const variant = opts.map(o => o.value).join(' / ') || sku?.sku_code || '—'
+                  return (
+                    <tr key={item.id ?? idx} className="tr border-b border-slate-100 hover:bg-slate-50/50">
+                      <td className="td py-3">
+                        <p className="font-semibold text-slate-800">{item.Product?.name ?? `#${item.ProductId}`}</p>
+                        <p className="text-xs font-mono text-slate-400">{item.Product?.sku}</p>
+                      </td>
+                      <td className="td py-3">
+                        <span className="text-sm text-slate-600">{sku ? variant : '—'}</span>
+                      </td>
+                      <td className="td py-3 text-right font-mono font-bold text-danger">{fmt(item.quantity)}</td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
             </div>
@@ -295,34 +455,15 @@ export default function StockOutDetail() {
           {/* Input row */}
           <div className="p-4 border-b border-slate-100">
             {canManualOutput ? (
-              <div className="flex flex-col sm:flex-row gap-2">
-                <SearchableSelect
-                  value={manualItem.productId}
-                  onChange={v => setManualItem(i => ({ ...i, productId: v }))}
-                  options={[
-                    { value: '', label: 'Pilih produk…' },
-                    ...(productsForManual?.data ?? []).map(p => {
-                      const avail = getAvail(p.id)
-                      return { value: p.id, label: `${p.name}${avail !== null ? ` (${avail} tersedia)` : ''}` }
-                    }),
-                  ]}
-                  placeholder="Pilih produk…"
-                  disabled={!form.warehouseId}
-                  className="flex-1"
+              !form.warehouseId ? (
+                <p className="text-sm text-slate-400 py-2">← Pilih warehouse terlebih dahulu</p>
+              ) : (
+                <ProductSkuPicker
+                  onSelect={addItem}
+                  warehouseId={form.warehouseId}
+                  stocks={stocks}
                 />
-                <div className="flex gap-2">
-                  <input
-                    className="input flex-1 sm:w-24"
-                    type="number" min="1" placeholder="Qty"
-                    value={manualItem.quantity}
-                    onChange={e => setManualItem(i => ({ ...i, quantity: e.target.value }))}
-                    disabled={!form.warehouseId}
-                  />
-                  <button type="button" onClick={addManualItem} className="btn-primary px-4" disabled={!form.warehouseId}>
-                    <Plus size={14} />
-                  </button>
-                </div>
-              </div>
+              )
             ) : (
               <div className="flex items-center gap-3 py-3 px-1">
                 <div className="w-10 h-10 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-center flex-shrink-0">
@@ -346,7 +487,8 @@ export default function StockOutDetail() {
             <table className="w-full min-w-[400px] text-sm">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-100">
-                  <th className="th py-2">Produk</th>
+                  <th className="th py-2 text-left">Produk</th>
+                  <th className="th py-2 text-left">Varian / SKU</th>
                   <th className="th py-2 text-right w-28">Qty</th>
                   <th className="th py-2 text-right w-24">Tersedia</th>
                   <th className="th py-2 w-10"></th>
@@ -354,8 +496,9 @@ export default function StockOutDetail() {
               </thead>
               <tbody>
                 {form.items.map((it, idx) => (
-                  <tr key={idx} className="tr border-b border-slate-50">
-                    <td className="td py-2">{it.productName}</td>
+                  <tr key={it.key} className="tr border-b border-slate-50">
+                    <td className="td py-2 font-medium text-slate-800">{it.productName}</td>
+                    <td className="td py-2 text-slate-500 text-xs">{it.variantLabel || '—'}</td>
                     <td className="td py-1.5 text-right">
                       {canManualOutput ? (
                         <input

@@ -1,5 +1,5 @@
 'use strict';
-const { sequelize, Stock_Out_Header, Stock_Movement, Stock, User, Product, Warehouse } = require('../models');
+const { sequelize, Stock_Out_Header, Stock_Movement, Stock, User, Product, ProductSKU, ProductVariantOption, Warehouse } = require('../models');
 const { companyFilter, companyId } = require('../helpers/tenancy');
 const { paginate, buildFilter, paginatedResponse } = require('../helpers/queryHelper');
 
@@ -40,7 +40,9 @@ class StockOutHeaderController {
                 where: { ReferenceId: header.id, type: 'OUT', ...companyFilter(req) },
                 include: [
                     { model: Product,   attributes: ['id', 'name', 'sku', 'unit'] },
-                    { model: Warehouse, attributes: ['id', 'name'] }
+                    { model: Warehouse, attributes: ['id', 'name'] },
+                    { model: ProductSKU, attributes: ['id', 'sku_code'], required: false,
+                      include: [{ model: ProductVariantOption, attributes: ['id', 'value'], through: { attributes: [] } }] },
                 ]
             });
             res.status(200).json({ ...header.toJSON(), movements });
@@ -68,16 +70,24 @@ class StockOutHeaderController {
                 return res.status(400).json({ message: 'Tujuan stock out wajib dipilih' });
             }
 
+            // Resolve ProductId from ProductSKUId when not provided directly
+            const resolvedItems = [];
             for (const item of items) {
-                const { ProductId, quantity } = item;
+                let { ProductId, ProductSKUId, quantity } = item;
                 const WarehouseId = item.WarehouseId || headerWhId;
+                if (!ProductId && ProductSKUId) {
+                    const sku = await ProductSKU.findByPk(ProductSKUId, { transaction: t });
+                    if (!sku) { await t.rollback(); return res.status(400).json({ message: `ProductSKU id=${ProductSKUId} tidak ditemukan` }); }
+                    ProductId = sku.ProductId;
+                }
                 if (!ProductId || !WarehouseId || !quantity || quantity <= 0) {
                     await t.rollback();
-                    return res.status(400).json({ message: 'Setiap item harus memiliki ProductId dan quantity > 0' });
+                    return res.status(400).json({ message: 'Setiap item harus memiliki ProductId/ProductSKUId dan quantity > 0' });
                 }
                 const stock = await Stock.findOne({ where: { ProductId, WarehouseId }, transaction: t });
                 if (!stock) { await t.rollback(); return res.status(400).json({ message: `Stok tidak ditemukan untuk ProductId=${ProductId} di WarehouseId=${WarehouseId}` }); }
                 if (stock.quantity < quantity) { await t.rollback(); return res.status(400).json({ message: `Stok tidak cukup untuk ProductId=${ProductId}. Tersedia: ${stock.quantity}, diminta: ${quantity}` }); }
+                resolvedItems.push({ ...item, ProductId, ProductSKUId: ProductSKUId || null, WarehouseId });
             }
 
             const header = await Stock_Out_Header.create(
@@ -91,14 +101,13 @@ class StockOutHeaderController {
                 { transaction: t }
             );
             const movements = [];
-            for (const item of items) {
-                const { ProductId, quantity, note } = item;
-                const WarehouseId = item.WarehouseId || headerWhId;
+            for (const item of resolvedItems) {
+                const { ProductId, ProductSKUId, quantity, note, WarehouseId } = item;
                 const stock = await Stock.findOne({ where: { ProductId, WarehouseId }, transaction: t });
                 await stock.decrement('quantity', { by: quantity, transaction: t });
 
                 movements.push(await Stock_Movement.create({
-                    ProductId, WarehouseId, type: 'OUT', quantity,
+                    ProductId, ProductSKUId, WarehouseId, type: 'OUT', quantity,
                     ReferenceId: header.id, note: note || null, companyId: cid
                 }, { transaction: t }));
             }

@@ -20,6 +20,11 @@ module.exports = (sequelize, DataTypes) => {
         onDelete: 'CASCADE',
         onUpdate: 'CASCADE'
       });
+      Stock_Movement.belongsTo(models.ProductSKU, {
+        foreignKey: { name: 'ProductSKUId', allowNull: true },
+        onDelete: 'SET NULL',
+        onUpdate: 'CASCADE'
+      });
     }
   }
   Stock_Movement.init({
@@ -52,6 +57,7 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: true,
       validate: { min: 0 }
     },
+    ProductSKUId: { type: DataTypes.INTEGER, allowNull: true },
     ReferenceId: DataTypes.BIGINT,
     note: DataTypes.TEXT,
     companyId: { type: DataTypes.INTEGER, allowNull: true }

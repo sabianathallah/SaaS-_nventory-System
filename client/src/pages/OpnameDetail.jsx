@@ -1,9 +1,10 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { opnameSessionsApi, opnameItemsApi, stocksApi, stockInApi } from '../api'
+import { opnameSessionsApi, opnameItemsApi, stocksApi, stockInApi, productSkusApi } from '../api'
 import { useAuth } from '../context/AuthContext'
 import QRScanner from '../components/QRScanner'
+import SearchableSelect from '../components/SearchableSelect'
 import { useExternalScanner } from '../hooks/useExternalScanner'
 import toast from 'react-hot-toast'
 import { exportExcel } from '../utils/exportExcel'
@@ -31,6 +32,7 @@ export default function OpnameDetail() {
   const [scannerConnected, setScannerConnected] = useState(false)
   const [fillInitialized, setFillInitialized]   = useState(false)
   const [confirmMode, setConfirmMode]           = useState(null) // 'submit' | 'cancel' | 'close'
+  const [skuPicker, setSkuPicker]               = useState(null) // { stock } — produk yang sedang dipilih SKU-nya
 
   const { data: session, isLoading: sessionLoading } = useQuery({
     queryKey: ['opname-session', id],
@@ -146,24 +148,33 @@ export default function OpnameDetail() {
 
   // ── Fill helpers ──────────────────────────────────────────────────────────────
   const addProduct = (stock) => {
+    // Buka SKU picker untuk produk ini; penambahan ke localItems setelah SKU dipilih
+    setSkuPicker({ stock })
+    setSearch('')
+  }
+
+  const addProductWithSku = (stock, sku) => {
     const productId = String(stock.ProductId)
-    const skuKey = `prod-${productId}`
+    const skuKey    = sku ? `sku-${sku.id}` : `prod-${productId}`
     if (localItems.find(i => i.skuKey === skuKey)) {
-      toast.error('Produk sudah ada di daftar hitung')
+      toast.error('SKU ini sudah ada di daftar hitung')
+      setSkuPicker(null)
       return
     }
+    const opts = sku?.ProductVariantOptions ?? []
+    const variantLabel = opts.map(o => o.value).join(' / ')
     setLocalItems(prev => [...prev, {
       id: null, saved: false, dirty: false,
       productId,
-      skuId:        null,
+      skuId:        sku ? String(sku.id) : null,
       skuKey,
       productName:  stock.Product?.name ?? `#${productId}`,
-      skuCode:      stock.Product?.sku ?? '',
-      variantLabel: '',
+      skuCode:      sku?.sku_code ?? stock.Product?.sku ?? '',
+      variantLabel,
       systemQty:    stock.quantity,
       qty:          '',
     }])
-    setSearch('')
+    setSkuPicker(null)
   }
 
   const handleScan = async (code) => {
@@ -550,6 +561,80 @@ export default function OpnameDetail() {
       {showScanner && (
         <QRScanner onScan={handleScan} onClose={() => setShowScanner(false)} autoClose={false} hint="Scan semua produk lalu tutup untuk menyimpan" />
       )}
+
+      {/* SKU Picker Modal */}
+      {skuPicker && (
+        <SkuPickerModal
+          stock={skuPicker.stock}
+          onConfirm={(sku) => addProductWithSku(skuPicker.stock, sku)}
+          onClose={() => setSkuPicker(null)}
+        />
+      )}
+    </div>
+  )
+}
+
+// ── SKU Picker Modal (untuk opname manual) ───────────────────────────────────
+function SkuPickerModal({ stock, onConfirm, onClose }) {
+  const productId = stock.ProductId
+  const [selSkuId, setSelSkuId] = useState('')
+
+  const { data: skus, isLoading } = useQuery({
+    queryKey: ['product-skus', productId],
+    queryFn:  () => productSkusApi.list(productId),
+  })
+
+  const skuLabel = (sku) => {
+    const opts = sku?.ProductVariantOptions ?? []
+    if (!opts.length) return sku?.sku_code ?? ''
+    return opts.map(o => o.value).join(' / ')
+  }
+
+  const handleConfirm = () => {
+    if (skus && skus.length > 0 && !selSkuId) {
+      return toast.error('Pilih varian / SKU terlebih dahulu')
+    }
+    const sku = selSkuId ? skus?.find(s => String(s.id) === String(selSkuId)) : null
+    onConfirm(sku)
+  }
+
+  // Auto-confirm jika tidak ada SKU (produk tanpa varian)
+  useEffect(() => {
+    if (!isLoading && skus && skus.length === 0) {
+      onConfirm(null)
+    }
+  }, [isLoading, skus])
+
+  return (
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-5">
+        <p className="text-sm font-bold text-slate-800 mb-1">{stock.Product?.name}</p>
+        <p className="text-xs text-slate-400 mb-4">Pilih varian / SKU yang akan dihitung</p>
+
+        {isLoading ? (
+          <p className="text-sm text-slate-400 py-4 text-center">Memuat varian…</p>
+        ) : (
+          <div className="mb-4">
+            <label className="label mb-1">Varian / SKU</label>
+            <SearchableSelect
+              value={selSkuId}
+              onChange={v => setSelSkuId(v)}
+              options={[
+                { value: '', label: 'Tanpa varian (produk ini)' },
+                ...(skus ?? []).map(s => ({ value: s.id, label: skuLabel(s) || s.sku_code })),
+              ]}
+              placeholder="Pilih varian…"
+            />
+          </div>
+        )}
+
+        <div className="flex gap-2">
+          <button onClick={onClose} className="btn-secondary flex-1 justify-center text-sm">Batal</button>
+          <button onClick={handleConfirm} disabled={isLoading} className="btn-primary flex-1 justify-center text-sm">
+            Tambah ke Daftar
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
