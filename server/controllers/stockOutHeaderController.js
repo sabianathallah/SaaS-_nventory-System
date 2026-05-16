@@ -54,6 +54,7 @@ class StockOutHeaderController {
         try {
             const { items = [], ...headerData } = req.body;
             const cid = companyId(req);
+            console.error('[StockOut] body:', JSON.stringify({ items, headerData }));
             if (!items.length) { await t.rollback(); return res.status(400).json({ message: 'Items tidak boleh kosong' }); }
 
             // FE uses "note" singular at header; model column is "notes" plural.
