@@ -6,6 +6,8 @@ import { useAuth } from '../context/AuthContext'
 import QRScanner from '../components/QRScanner'
 import SearchableSelect from '../components/SearchableSelect'
 import { useExternalScanner } from '../hooks/useExternalScanner'
+import { useCompanyGuard } from '../hooks/useCompanyGuard'
+import CompanyRequiredBanner from '../components/CompanyRequiredBanner'
 import toast from 'react-hot-toast'
 import { exportExcel } from '../utils/exportExcel'
 import {
@@ -273,6 +275,7 @@ export default function StockInDetail() {
   const qc              = useQueryClient()
   const { hasPermission } = useAuth()
   const isNew           = !id || id === 'new'
+  const { needsCompany } = useCompanyGuard()
 
   // Granular permission flags
   const canManualInput = hasPermission('stock.in.manual_input') || hasPermission('stock.manage')
@@ -404,6 +407,18 @@ export default function StockInDetail() {
 
   // ── CREATE MODE ───────────────────────────────────────────────────────────────
   const grandTotal = pendingItems.reduce((s, p) => s + p.price * p.quantity, 0)
+
+  if (needsCompany) return (
+    <div className="px-6 py-6 max-w-4xl space-y-4">
+      <div className="flex items-center gap-3">
+        <button onClick={() => navigate('/stock-in')} className="p-1.5 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors">
+          <ArrowLeft size={16} />
+        </button>
+        <h1 className="text-lg font-bold text-slate-800">New Stock IN</h1>
+      </div>
+      <CompanyRequiredBanner action="membuat transaksi stock in" />
+    </div>
+  )
 
   return (
     <div className="px-6 py-6 max-w-4xl">

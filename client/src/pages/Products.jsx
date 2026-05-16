@@ -15,6 +15,8 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useSelectedCompany } from '../context/SelectedCompanyContext'
+import { useCompanyGuard } from '../hooks/useCompanyGuard'
+import CompanyRequiredBanner from '../components/CompanyRequiredBanner'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -348,6 +350,7 @@ export default function Products() {
   const qc       = useQueryClient()
   const { isSuperAdmin, hasPermission } = useAuth()
   const { selectedCompany } = useSelectedCompany()
+  const { needsCompany } = useCompanyGuard()
   const blocked    = isSuperAdmin && !selectedCompany
   const canManage  = hasPermission('inventory.manage')
 
@@ -437,6 +440,7 @@ export default function Products() {
 
   return (
     <div className="px-6 py-6 max-w-screen-xl mx-auto">
+      {needsCompany && <div className="mb-4"><CompanyRequiredBanner action="menambah produk" /></div>}
 
       {/* Header */}
       <div className="flex items-start justify-between mb-6">

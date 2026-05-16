@@ -3,6 +3,7 @@ import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { usePageVisibility } from '../context/PageVisibilityContext'
 import CompanySwitcher from './CompanySwitcher'
+import { useCompanyGuard } from '../hooks/useCompanyGuard'
 import {
   LayoutDashboard, Package, Warehouse, Truck,
   ArrowDownToLine, ArrowUpFromLine, ArrowLeftRight,
@@ -77,6 +78,7 @@ const PAGE_TITLES = {
 
 export default function Layout({ children }) {
   const { user, signOut, isAdmin, isSuperAdmin, isOperasional, isHeadPacking, isStaff, canViewPacking } = useAuth()
+  const { needsCompany } = useCompanyGuard()
   const { isPageVisible } = usePageVisibility()
   const navigate  = useNavigate()
   const location  = useLocation()
@@ -254,6 +256,16 @@ export default function Layout({ children }) {
             </div>
           </div>
         </header>
+
+        {/* Persistent company warning — only for SUPER_ADMIN without company selected */}
+        {needsCompany && (
+          <div className="bg-amber-50 border-b border-amber-200 px-4 md:px-6 py-2 flex items-center gap-2 text-xs text-amber-700 flex-shrink-0">
+            <span className="text-amber-500 font-bold">⚠</span>
+            <span>
+              Anda sedang melihat <strong>semua perusahaan</strong>. Pilih perusahaan spesifik di pojok kanan atas sebelum membuat transaksi, produk, gudang, atau vendor.
+            </span>
+          </div>
+        )}
 
         {/* Content */}
         <main className="flex-1 overflow-y-auto">

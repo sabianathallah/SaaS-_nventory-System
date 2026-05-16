@@ -8,6 +8,8 @@ import { Table, Pagination } from '../components/Table'
 import Modal from '../components/Modal'
 import toast from 'react-hot-toast'
 import { Plus, Eye, CheckCircle, ClipboardList } from 'lucide-react'
+import { useCompanyGuard } from '../hooks/useCompanyGuard'
+import CompanyRequiredBanner from '../components/CompanyRequiredBanner'
 
 const STATUS_BADGE = {
   open:      <span className="badge-amber">● Open</span>,
@@ -18,6 +20,7 @@ const STATUS_BADGE = {
 export default function Opname() {
   const qc       = useQueryClient()
   const navigate = useNavigate()
+  const { needsCompany } = useCompanyGuard()
 
   const [page, setPage]                   = useState(1)
   const [statusFilter, setStatusFilter]   = useState('')
@@ -103,11 +106,19 @@ export default function Opname() {
         title="Stock Opname"
         subtitle={`${data?.pagination?.total ?? 0} sessions`}
         action={
-          <button onClick={() => { setForm({ warehouseId: '', notes: '' }); setModal({ mode: 'create' }) }} className="btn-primary">
+          <button
+            onClick={() => {
+              if (needsCompany) return toast.error('Pilih perusahaan terlebih dahulu')
+              setForm({ warehouseId: '', notes: '' }); setModal({ mode: 'create' })
+            }}
+            className="btn-primary"
+            title={needsCompany ? 'Pilih perusahaan terlebih dahulu' : undefined}
+          >
             <Plus size={14} /> New Session
           </button>
         }
       />
+      {needsCompany && <CompanyRequiredBanner action="membuat sesi stock opname" />}
 
       {/* Summary Cards */}
       <div className="grid grid-cols-4 gap-4">

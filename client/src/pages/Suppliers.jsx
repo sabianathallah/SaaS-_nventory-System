@@ -7,9 +7,12 @@ import Modal from '../components/Modal'
 import SearchBar from '../components/SearchBar'
 import toast from 'react-hot-toast'
 import { Plus, Pencil, Trash2 } from 'lucide-react'
+import { useCompanyGuard } from '../hooks/useCompanyGuard'
+import CompanyRequiredBanner from '../components/CompanyRequiredBanner'
 
 export default function Suppliers() {
   const qc = useQueryClient()
+  const { needsCompany } = useCompanyGuard()
   const [page, setPage]     = useState(1)
   const [search, setSearch] = useState('')
   const [modal, setModal]   = useState(null)
@@ -46,8 +49,19 @@ export default function Suppliers() {
   return (
     <div className="px-6 py-6">
       <PageHeader title="Vendor" subtitle={`${data?.pagination?.total ?? 0} vendor`}
-        action={<button onClick={() => { setForm({ name: '', contact: '' }); setModal({ mode: 'create' }) }} className="btn-primary"><Plus size={14} />Vendor Baru</button>}
+        action={
+          <button
+            onClick={() => {
+              if (needsCompany) return toast.error('Pilih perusahaan terlebih dahulu')
+              setForm({ name: '', contact: '' }); setModal({ mode: 'create' })
+            }}
+            className="btn-primary"
+          >
+            <Plus size={14} />Vendor Baru
+          </button>
+        }
       />
+      {needsCompany && <div className="mb-4"><CompanyRequiredBanner action="menambah vendor" /></div>}
       <div className="card overflow-hidden">
         <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/50 flex items-center gap-3">
           <SearchBar value={search} onChange={v => { setSearch(v); setPage(1) }} placeholder="Cari vendor…" />
