@@ -58,8 +58,11 @@ function ProductSkuPicker({ onSelect, warehouseId, stocks }) {
     return list.filter(p => p.name.toLowerCase().includes(q))
   }, [products, search])
 
-  const getAvail = (productId) =>
-    stocks?.data?.find(s => String(s.ProductId) === String(productId))?.quantity ?? null
+  const getAvail = (productId) => {
+    if (!stocks?.data) return null              // belum dimuat — jangan tampilkan badge
+    const found = stocks.data.find(s => String(s.ProductId) === String(productId))
+    return found?.quantity ?? 0                 // tidak ada record = 0 stok
+  }
 
   const selectProduct = (prod) => {
     setSelProduct(prod)
@@ -165,8 +168,10 @@ function ProductSkuPicker({ onSelect, warehouseId, stocks }) {
           <div className="flex-1 min-w-0">
             <p className="text-sm font-semibold text-slate-800 truncate">{selProduct?.name}</p>
             <p className="text-xs text-slate-500">{skuLabel(selSku)}</p>
-            {warehouseId && getAvail(selProduct?.id) !== null && (
-              <p className="text-xs text-slate-400">Tersedia: {getAvail(selProduct?.id)}</p>
+            {warehouseId && selProduct && (
+              <p className={`text-xs ${getAvail(selProduct.id) === 0 ? 'text-red-400' : 'text-slate-400'}`}>
+                Tersedia: {getAvail(selProduct.id) ?? '…'}
+              </p>
             )}
           </div>
           <input
@@ -247,7 +252,8 @@ export default function StockOutDetail() {
       const sku       = await stockInApi.resolveSku(code)
       const productId = String(sku.ProductId ?? sku.Product?.id)
       const skuId     = String(sku.id)
-      const avail     = stocks?.data?.find(s => String(s.ProductId) === productId)?.quantity ?? null
+      const stockRec  = stocks?.data?.find(s => String(s.ProductId) === productId)
+      const avail     = stockRec?.quantity ?? 0
       const name      = sku.Product?.name ?? code
       const label     = skuLabel(sku)
       addItem({ skuId, productId, productName: name, variantLabel: label, quantity: 1, available: avail })
