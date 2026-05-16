@@ -84,7 +84,7 @@ class StockOutHeaderController {
                 }
                 if (!ProductId || !WarehouseId || !quantity || quantity <= 0) {
                     await t.rollback();
-                    return res.status(400).json({ message: 'Setiap item harus memiliki ProductId/ProductSKUId dan quantity > 0' });
+                    return res.status(400).json({ message: `DEBUG: ProductId=${ProductId} WarehouseId=${WarehouseId} quantity=${quantity} skuId=${ProductSKUId}` });
                 }
                 const stock = await Stock.findOne({ where: { ProductId, WarehouseId }, transaction: t });
                 if (!stock) { await t.rollback(); return res.status(400).json({ message: `Stok tidak ditemukan untuk ProductId=${ProductId} di WarehouseId=${WarehouseId}` }); }
