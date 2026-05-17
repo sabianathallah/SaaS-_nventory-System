@@ -110,6 +110,7 @@ class StockOutHeaderController {
 
                 if (ProductSKUId) {
                     const sku = await ProductSKU.findByPk(ProductSKUId, { transaction: t });
+                    console.log(`[StockOut] SKU decrement: id=${ProductSKUId} qty_before=${sku?.qty} by=${quantity}`);
                     if (sku) await sku.decrement('qty', { by: quantity, transaction: t });
                 }
 
