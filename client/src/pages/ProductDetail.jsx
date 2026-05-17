@@ -48,8 +48,8 @@ function SkuTableView({ productId, productName }) {
     </div>
   )
 
-  const totalQty   = skus.reduce((s, k) => s + Number(k.qty || 0), 0)
-  const totalNilai = skus.reduce((s, k) => s + Number(k.qty || 0) * Number(k.price || 0), 0)
+  const totalQty   = skus.reduce((s, k) => s + Number(k.effectiveQty ?? k.qty ?? 0), 0)
+  const totalNilai = skus.reduce((s, k) => s + Number(k.effectiveQty ?? k.qty ?? 0) * Number(k.price || 0), 0)
 
   const variantLabel = (sku) => {
     const opts = sku.ProductVariantOptions || []
@@ -83,7 +83,8 @@ function SkuTableView({ productId, productName }) {
           </thead>
           <tbody className="divide-y divide-slate-100">
             {skus.map(sku => {
-              const nilai = Number(sku.qty || 0) * Number(sku.price || 0)
+              const displayQty = Number(sku.effectiveQty ?? sku.qty ?? 0)
+              const nilai = displayQty * Number(sku.price || 0)
               return (
                 <tr key={sku.id} className="group hover:bg-slate-50/60 transition-colors">
                   <td className="td">{variantLabel(sku)}</td>
@@ -96,8 +97,8 @@ function SkuTableView({ productId, productName }) {
                     </span>
                   </td>
                   <td className="td text-right">
-                    <span className={`text-sm font-bold tabular-nums ${Number(sku.qty) === 0 ? 'text-red-500' : Number(sku.qty) < 5 ? 'text-amber-500' : 'text-slate-800'}`}>
-                      {Number(sku.qty || 0).toLocaleString('id-ID')}
+                    <span className={`text-sm font-bold tabular-nums ${displayQty === 0 ? 'text-red-500' : displayQty < 5 ? 'text-amber-500' : 'text-slate-800'}`}>
+                      {displayQty.toLocaleString('id-ID')}
                     </span>
                   </td>
                   <td className="td text-right">
@@ -124,7 +125,7 @@ function SkuTableView({ productId, productName }) {
               <td colSpan={2} className="px-4 py-2.5 text-xs font-semibold text-slate-500">{skus.length} SKU</td>
               <td className="px-4 py-2.5 text-xs text-slate-400 text-right">—</td>
               <td className="px-4 py-2.5 text-xs font-bold text-slate-700 text-right tabular-nums">{totalQty.toLocaleString('id-ID')}</td>
-              <td className="px-4 py-2.5 text-xs font-bold text-emerald-700 text-right tabular-nums">Rp {totalNilai.toLocaleString('id-ID')}</td>
+              <td className="px-4 py-2.5 text-xs font-bold text-emerald-700 text-right tabular-nums">Rp {Math.max(0, totalNilai).toLocaleString('id-ID')}</td>
               <td />
             </tr>
           </tfoot>

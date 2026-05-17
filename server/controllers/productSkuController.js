@@ -1,5 +1,5 @@
 'use strict';
-const { Product, ProductSKU, ProductVariantOption, ProductVariantType, ProductSKUVariantOption } = require('../models');
+const { sequelize, Product, ProductSKU, ProductVariantOption, ProductVariantType, ProductSKUVariantOption, Stock_Movement } = require('../models');
 const { companyFilter, companyId } = require('../helpers/tenancy');
 
 function generateSkuCode(productName, options = []) {
@@ -23,6 +23,19 @@ class ProductSkuController {
 
       const skus = await ProductSKU.findAll({
         where: { ProductId: req.params.productId },
+        attributes: {
+          include: [[
+            sequelize.literal(`(
+              "ProductSKU"."qty" - COALESCE((
+                SELECT SUM(sm.quantity)
+                FROM "Stock_Movements" sm
+                WHERE sm."ProductSKUId" = "ProductSKU"."id"
+                  AND sm.type = 'OUT'
+              ), 0)
+            )`),
+            'effectiveQty',
+          ]],
+        },
         include: [{
           model: ProductVariantOption,
           through: { attributes: [] },
