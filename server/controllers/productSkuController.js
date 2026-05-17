@@ -1,5 +1,6 @@
 'use strict';
-const { sequelize, Product, ProductSKU, ProductVariantOption, ProductVariantType, ProductSKUVariantOption, Stock_Movement } = require('../models');
+const { Op } = require('sequelize');
+const { Product, ProductSKU, ProductVariantOption, ProductVariantType, ProductSKUVariantOption, Stock_Movement } = require('../models');
 const { companyFilter, companyId } = require('../helpers/tenancy');
 
 function generateSkuCode(productName, options = []) {
@@ -23,19 +24,6 @@ class ProductSkuController {
 
       const skus = await ProductSKU.findAll({
         where: { ProductId: req.params.productId },
-        attributes: {
-          include: [[
-            sequelize.literal(`(
-              "ProductSKU"."qty" - COALESCE((
-                SELECT SUM(sm.quantity)
-                FROM "Stock_Movements" sm
-                WHERE sm."ProductSKUId" = "ProductSKU"."id"
-                  AND sm.type = 'OUT'
-              ), 0)
-            )`),
-            'effectiveQty',
-          ]],
-        },
         include: [{
           model: ProductVariantOption,
           through: { attributes: [] },
@@ -43,7 +31,24 @@ class ProductSkuController {
         }],
         order: [['createdAt', 'ASC']],
       });
-      res.status(200).json(skus);
+
+      const skuIds = skus.map(s => s.id);
+      const outMovements = skuIds.length ? await Stock_Movement.findAll({
+        where: { ProductSKUId: { [Op.in]: skuIds }, type: 'OUT' },
+        attributes: ['ProductSKUId', 'quantity'],
+      }) : [];
+
+      const outMap = {};
+      for (const m of outMovements) {
+        outMap[m.ProductSKUId] = (outMap[m.ProductSKUId] || 0) + Number(m.quantity);
+      }
+
+      const result = skus.map(s => ({
+        ...s.toJSON(),
+        qty: Math.max(0, Number(s.qty) - (outMap[s.id] || 0)),
+      }));
+
+      res.status(200).json(result);
     } catch (err) { next(err); }
   }
 
