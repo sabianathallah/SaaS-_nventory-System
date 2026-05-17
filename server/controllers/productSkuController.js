@@ -45,7 +45,7 @@ class ProductSkuController {
 
       const result = skus.map(s => ({
         ...s.toJSON(),
-        qty: Math.max(0, Number(s.qty) - (outMap[s.id] || 0)),
+        qty: Number(s.qty) - (outMap[s.id] || 0),
       }));
 
       res.status(200).json(result);
