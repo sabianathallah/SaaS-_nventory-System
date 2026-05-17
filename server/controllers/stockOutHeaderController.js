@@ -108,6 +108,11 @@ class StockOutHeaderController {
                 const stock = await Stock.findOne({ where: { ProductId, WarehouseId }, transaction: t });
                 await stock.decrement('quantity', { by: quantity, transaction: t });
 
+                if (ProductSKUId) {
+                    const sku = await ProductSKU.findByPk(ProductSKUId, { transaction: t });
+                    if (sku) await sku.decrement('qty', { by: quantity, transaction: t });
+                }
+
                 movements.push(await Stock_Movement.create({
                     ProductId, ProductSKUId, WarehouseId, type: 'OUT', quantity,
                     ReferenceId: header.id, note: note || null, companyId: cid
