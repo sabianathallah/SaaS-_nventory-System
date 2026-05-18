@@ -24,7 +24,7 @@ function calcLayout(w, h) {
   return { pad, qrMm, namePt, codePt }
 }
 
-export default function QrModal({ sku, skuName, onClose }) {
+export default function QrModal({ sku, productName, variantLabel, onClose }) {
   const qrRef = useRef(null)
   const [sizeId,  setSizeId]  = useState('40x30')
   const [customW, setCustomW] = useState('')
@@ -56,10 +56,14 @@ export default function QrModal({ sku, skuName, onClose }) {
     svgClone.setAttribute('height', '100%')
     const svgHtml = svgClone.outerHTML
 
+    const displayName = variantLabel
+      ? `${esc(productName)} - ${esc(variantLabel)}`
+      : esc(productName)
+
     const label = `<div class="label">
   <div class="qr">${svgHtml}</div>
   <div class="info">
-    ${skuName ? `<div class="name">${esc(skuName)}</div>` : ''}
+    ${displayName ? `<div class="name">${displayName}</div>` : ''}
     <div class="code">${esc(sku.sku_code)}</div>
   </div>
 </div>`
@@ -121,8 +125,10 @@ body{font-family:'Courier New',monospace;background:#fff;}
               <QRCode value={sku.sku_code} size={qrPx} />
             </div>
             <div className="text-center w-full">
-              {skuName && (
-                <p style={{ fontSize: namePx, fontWeight: 'bold', lineHeight: 1.2, wordBreak: 'break-word' }} className="text-slate-800">{skuName}</p>
+              {productName && (
+                <p style={{ fontSize: namePx, fontWeight: 'bold', lineHeight: 1.2, wordBreak: 'break-word' }} className="text-slate-800">
+                  {variantLabel ? `${productName} - ${variantLabel}` : productName}
+                </p>
               )}
               <p style={{ fontSize: codePx, lineHeight: 1.2 }} className="font-mono text-slate-400 break-all">{sku.sku_code}</p>
             </div>

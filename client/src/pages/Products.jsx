@@ -180,7 +180,7 @@ function SkuRows({ product, onOpenQr }) {
                 {/* QR */}
                 <div className="flex justify-end">
                   <button
-                    onClick={() => onOpenQr({ sku: sku, skuName: label ?? product.name })}
+                    onClick={() => onOpenQr({ sku: sku, productName: product.name, variantLabel: label })}
                     className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-white transition-colors"
                     title="Print QR"
                   >
@@ -568,7 +568,8 @@ export default function Products() {
       {qrTarget && (
         <QrModal
           sku={qrTarget.sku}
-          skuName={qrTarget.skuName}
+          productName={qrTarget.productName}
+          variantLabel={qrTarget.variantLabel}
           onClose={() => setQrTarget(null)}
         />
       )}
