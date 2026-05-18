@@ -264,11 +264,13 @@ export default function OpnameDetail() {
           {items.length > 0 && (
             <button
               onClick={() => {
-                const headers = ['No', 'Produk', 'SKU', 'Stok Sistem', 'Stok Aktual', 'Selisih']
-                const rows = items.map((item, i) => [
-                  i + 1, item.Product?.name ?? '—', item.Product?.sku ?? '—',
-                  item.system_qty, item.scanned_qty, item.difference ?? 0,
-                ])
+                const headers = ['No', 'Produk', 'SKU', 'Varian', 'Stok Sistem', 'Stok Aktual', 'Selisih']
+                const rows = items.map((item, i) => {
+                  const sku  = item.ProductSKU
+                  const opts = sku?.ProductVariantOptions ?? []
+                  const variant = opts.map(o => o.value).join(' / ') || '—'
+                  return [i + 1, item.Product?.name ?? '—', sku?.sku_code ?? item.Product?.sku ?? '—', variant, item.system_qty, item.scanned_qty, item.difference ?? 0]
+                })
                 exportExcel(`opname-sesi-${id}-${new Date().toISOString().slice(0, 10)}`, { headers, rows, sheetName: 'Hasil Opname' })
               }}
               className="btn-secondary text-sm flex items-center gap-1.5"

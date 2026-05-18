@@ -9,7 +9,8 @@ import { useExternalScanner } from '../hooks/useExternalScanner'
 import { useCompanyGuard } from '../hooks/useCompanyGuard'
 import CompanyRequiredBanner from '../components/CompanyRequiredBanner'
 import toast from 'react-hot-toast'
-import { ArrowLeft, PackageMinus, ScanLine, Plus, Trash2, Save, ScanBarcode, ChevronDown, Package } from 'lucide-react'
+import { ArrowLeft, PackageMinus, ScanLine, Plus, Trash2, Save, ScanBarcode, ChevronDown, Package, FileSpreadsheet } from 'lucide-react'
+import { exportExcel } from '../utils/exportExcel'
 
 const fmt = (n) => Number(n ?? 0).toLocaleString('id-ID')
 
@@ -293,6 +294,17 @@ export default function StockOutDetail() {
 
     const items = detail.movements ?? detail.Stock_Out_Items ?? detail.items ?? []
 
+    const handleExportExcel = () => {
+      const headers = ['No', 'Produk', 'SKU', 'Varian', 'Qty']
+      const rows = items.map((item, i) => {
+        const sku  = item.ProductSKU
+        const opts = sku?.ProductVariantOptions ?? []
+        const variant = opts.map(o => o.value).join(' / ') || '—'
+        return [i + 1, item.Product?.name ?? '—', sku?.sku_code ?? '—', variant, item.quantity]
+      })
+      exportExcel(`stock-out-${detail.id}-${new Date().toISOString().slice(0, 10)}`, { headers, rows, sheetName: 'Stock OUT' })
+    }
+
     return (
       <div className="px-6 py-6 max-w-4xl">
         <div className="flex items-center gap-3 mb-6">
@@ -305,6 +317,11 @@ export default function StockOutDetail() {
               {new Date(detail.createdAt).toLocaleDateString('id-ID', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}
             </p>
           </div>
+          {items.length > 0 && (
+            <button onClick={handleExportExcel} className="btn-secondary text-sm flex items-center gap-1.5">
+              <FileSpreadsheet size={14} /> Export Excel
+            </button>
+          )}
         </div>
 
         <div className="card p-5 mb-5 grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm">
