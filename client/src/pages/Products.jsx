@@ -250,6 +250,13 @@ function ProductRow({ product, expanded, onToggle, onDelete, onNavigate, onOpenQ
             : <span className="text-slate-300 text-xs">—</span>}
         </td>
 
+        {/* Koleksi */}
+        <td className="td w-32">
+          {product.Article
+            ? <span className="inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-violet-50 text-violet-700 border border-violet-100">{product.Article.name}</span>
+            : <span className="text-slate-300 text-xs">—</span>}
+        </td>
+
         {/* SKU count */}
         <td className="td w-24">
           {skuCnt > 0
@@ -419,12 +426,12 @@ export default function Products() {
         WarehouseId: whFilter || undefined,
         sortBy: sort.col, sortOrder: sort.dir,
       })
-      const headers = ['No', 'Nama Produk', 'Unit', 'Tipe', 'Total SKU', 'Total Stok', 'Harga Min (Rp)', 'Harga Max (Rp)']
+      const headers = ['No', 'Nama Produk', 'Unit', 'Tipe', 'Koleksi', 'Total SKU', 'Total Stok', 'Harga Min (Rp)', 'Harga Max (Rp)']
       const rows = result.data.map((p, i) => {
         const skus   = p.ProductSKUs ?? []
         const prices = skus.map(s => Number(s.price || 0)).filter(Boolean)
         return [
-          i + 1, p.name, p.unit ?? '', p.Category?.name ?? '',
+          i + 1, p.name, p.unit ?? '', p.Category?.name ?? '', p.Article?.name ?? '',
           skus.length, Number(p.totalStock ?? 0),
           prices.length ? Math.min(...prices) : '',
           prices.length ? Math.max(...prices) : '',
@@ -523,12 +530,13 @@ export default function Products() {
         ) : (
           <>
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[900px]">
+              <table className="w-full min-w-[1000px]">
                 <thead>
                   <tr className="border-b border-slate-100">
                     <th className="th w-10 pr-0" />
                     <SortTh label="Produk"  col="name"       sort={sort} onSort={handleSort} />
                     <th className="th w-32">Tipe</th>
+                    <th className="th w-32">Koleksi</th>
                     <th className="th w-24">SKU</th>
                     <th className="th w-44">Harga</th>
                     <SortTh label="Stok"    col="totalStock" sort={sort} onSort={handleSort} className="w-28 text-right" />
