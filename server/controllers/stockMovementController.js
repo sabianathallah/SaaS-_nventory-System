@@ -17,6 +17,14 @@ class StockMovementController {
             });
             const { rows, count } = await Stock_Movement.findAndCountAll({
                 where: { ...companyFilter(req), ...filter },
+                attributes: {
+                    include: [
+                        [
+                            literal(`(SELECT soh.purpose FROM "Stock_Out_Headers" soh WHERE soh.id = "Stock_Movement"."ReferenceId" AND "Stock_Movement"."type" = 'OUT')`),
+                            'purpose'
+                        ],
+                    ]
+                },
                 include: [
                     { model: Product,   attributes: ['id', 'name', 'sku', 'unit'] },
                     { model: Warehouse, attributes: ['id', 'name'] },
@@ -128,6 +136,14 @@ class StockMovementController {
             });
             const rows = await Stock_Movement.findAll({
                 where: { ...companyFilter(req), ...filter },
+                attributes: {
+                    include: [
+                        [
+                            literal(`(SELECT soh.purpose FROM "Stock_Out_Headers" soh WHERE soh.id = "Stock_Movement"."ReferenceId" AND "Stock_Movement"."type" = 'OUT')`),
+                            'purpose'
+                        ],
+                    ]
+                },
                 include: [
                     { model: Product,   attributes: ['name', 'sku'] },
                     { model: Warehouse, attributes: ['name'] },
@@ -140,13 +156,14 @@ class StockMovementController {
                 limit: 5000,
             });
 
-            const header = 'Date,Type,Product,SKU Produk,SKU Varian,Varian,Warehouse,Quantity,Note,Ref\n';
+            const header = 'Date,Type,Tujuan,Product,SKU Produk,SKU Varian,Varian,Warehouse,Quantity,Note,Ref\n';
             const body = rows.map(r => {
                 const opts    = r.ProductSKU?.ProductVariantOptions ?? [];
                 const variant = opts.map(o => o.value).join(' / ');
                 return [
                     new Date(r.createdAt).toISOString(),
                     r.type,
+                    `"${r.type === 'OUT' ? (r.getDataValue?.('purpose') ?? r.purpose ?? '') : ''}"`,
                     `"${r.Product?.name ?? ''}"`,
                     r.Product?.sku ?? '',
                     r.ProductSKU?.sku_code ?? '',

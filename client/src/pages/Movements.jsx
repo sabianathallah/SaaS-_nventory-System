@@ -84,7 +84,7 @@ export default function Movements() {
     setExporting(true)
     try {
       const result = await movementsApi.list({ ...filters, limit: 9999 })
-      const headers = ['No', 'Tanggal', 'Tipe', 'Produk', 'SKU Produk', 'Varian / SKU', 'Gudang', 'Qty', 'Keterangan', 'Ref #']
+      const headers = ['No', 'Tanggal', 'Tipe', 'Tujuan', 'Produk', 'SKU Produk', 'Varian / SKU', 'Gudang', 'Qty', 'Keterangan', 'Ref #']
       const rows = (result.data ?? []).map((m, i) => {
         const opts    = m.ProductSKU?.ProductVariantOptions ?? []
         const variant = opts.map(o => o.value).join(' / ') || m.ProductSKU?.sku_code || '—'
@@ -92,6 +92,7 @@ export default function Movements() {
           i + 1,
           new Date(m.createdAt).toLocaleString('id-ID'),
           m.type,
+          m.type === 'OUT' ? (m.purpose ?? '—') : '—',
           m.Product?.name ?? `#${m.ProductId}`,
           m.Product?.sku ?? '—',
           variant,
@@ -131,6 +132,12 @@ export default function Movements() {
           </div>
         )
       },
+    },
+    {
+      key: 'purpose', label: 'Tujuan', width: 130,
+      render: r => r.type === 'OUT' && r.purpose
+        ? <span className="inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-violet-50 text-violet-700 border border-violet-100 truncate max-w-[120px]">{r.purpose}</span>
+        : <span className="text-xs text-slate-300">—</span>,
     },
     {
       key: 'warehouse', label: 'Gudang', width: 130,

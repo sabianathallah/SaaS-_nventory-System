@@ -295,12 +295,21 @@ export default function StockOutDetail() {
     const items = detail.movements ?? detail.Stock_Out_Items ?? detail.items ?? []
 
     const handleExportExcel = () => {
-      const headers = ['No', 'Produk', 'SKU', 'Varian', 'Qty']
+      const headers = ['No', 'Produk', 'SKU', 'Varian', 'Qty', 'Tujuan', 'Gudang', 'Tanggal']
       const rows = items.map((item, i) => {
-        const sku  = item.ProductSKU
-        const opts = sku?.ProductVariantOptions ?? []
+        const sku     = item.ProductSKU
+        const opts    = sku?.ProductVariantOptions ?? []
         const variant = opts.map(o => o.value).join(' / ') || '—'
-        return [i + 1, item.Product?.name ?? '—', sku?.sku_code ?? '—', variant, item.quantity]
+        return [
+          i + 1,
+          item.Product?.name ?? '—',
+          sku?.sku_code ?? '—',
+          variant,
+          item.quantity,
+          detail.purpose ?? '—',
+          detail.Warehouse?.name ?? '—',
+          new Date(detail.createdAt).toLocaleDateString('id-ID'),
+        ]
       })
       exportExcel(`stock-out-${detail.id}-${new Date().toISOString().slice(0, 10)}`, { headers, rows, sheetName: 'Stock OUT' })
     }
