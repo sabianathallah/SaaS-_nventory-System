@@ -14,11 +14,23 @@ class StockOutHeaderController {
             });
             const { rows, count } = await Stock_Out_Header.findAndCountAll({
                 where: { ...companyFilter(req), ...filter },
+                attributes: {
+                    include: [
+                        [
+                            sequelize.literal(`(SELECT COUNT(*) FROM "Stock_Movements" WHERE "ReferenceId" = "Stock_Out_Header"."id" AND "type" = 'OUT')`),
+                            'itemCount'
+                        ],
+                        [
+                            sequelize.literal(`(SELECT COALESCE(SUM(quantity), 0) FROM "Stock_Movements" WHERE "ReferenceId" = "Stock_Out_Header"."id" AND "type" = 'OUT')`),
+                            'totalQty'
+                        ],
+                    ]
+                },
                 include: [
                     { model: User, foreignKey: 'createdBy', attributes: ['id', 'name'] },
                     { model: Warehouse, attributes: ['id', 'name'] },
                 ],
-                order: [['date', 'DESC']],
+                order: [['createdAt', 'DESC']],
                 limit, offset,
                 distinct: true
             });
