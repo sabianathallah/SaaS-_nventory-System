@@ -21,7 +21,10 @@ class ProductController {
                 const term = req.query.name.replace(/'/g, "''");
                 filter[Op.or] = [
                     { name: { [Op.iLike]: `%${term}%` } },
-                    sequelize.literal(`EXISTS (SELECT 1 FROM "ProductSKUs" WHERE "ProductSKUs"."ProductId" = "Product"."id" AND "ProductSKUs"."sku_code" ILIKE '%${term}%')`),
+                    sequelize.where(
+                        sequelize.literal(`(SELECT COUNT(*) FROM "ProductSKUs" WHERE "ProductSKUs"."ProductId" = "Product"."id" AND "ProductSKUs"."sku_code" ILIKE '%${term}%')`),
+                        { [Op.gt]: 0 }
+                    ),
                 ];
             }
 
