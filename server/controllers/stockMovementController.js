@@ -1,5 +1,5 @@
 'use strict';
-const { Stock_Movement, Product, Warehouse, sequelize } = require('../models');
+const { Stock_Movement, Product, ProductSKU, ProductVariantOption, Warehouse, sequelize } = require('../models');
 const { Op, fn, col, literal } = require('sequelize');
 const { companyFilter, companyId } = require('../helpers/tenancy');
 const { paginate, buildFilter, paginatedResponse } = require('../helpers/queryHelper');
@@ -18,8 +18,12 @@ class StockMovementController {
             const { rows, count } = await Stock_Movement.findAndCountAll({
                 where: { ...companyFilter(req), ...filter },
                 include: [
-                    { model: Product,   attributes: ['id', 'name', 'sku'] },
-                    { model: Warehouse, attributes: ['id', 'name'] }
+                    { model: Product,   attributes: ['id', 'name', 'sku', 'unit'] },
+                    { model: Warehouse, attributes: ['id', 'name'] },
+                    {
+                        model: ProductSKU, attributes: ['id', 'sku_code'], required: false,
+                        include: [{ model: ProductVariantOption, attributes: ['id', 'value'], through: { attributes: [] } }]
+                    },
                 ],
                 order: [['createdAt', 'DESC']],
                 limit, offset,
@@ -126,22 +130,33 @@ class StockMovementController {
                 where: { ...companyFilter(req), ...filter },
                 include: [
                     { model: Product,   attributes: ['name', 'sku'] },
-                    { model: Warehouse, attributes: ['name'] }
+                    { model: Warehouse, attributes: ['name'] },
+                    {
+                        model: ProductSKU, attributes: ['sku_code'], required: false,
+                        include: [{ model: ProductVariantOption, attributes: ['value'], through: { attributes: [] } }]
+                    },
                 ],
                 order: [['createdAt', 'DESC']],
                 limit: 5000,
             });
 
-            const header = 'Date,Type,Product,SKU,Warehouse,Quantity,Ref\n';
-            const body = rows.map(r => [
-                new Date(r.createdAt).toISOString(),
-                r.type,
-                `"${r.Product?.name ?? ''}"`,
-                r.Product?.sku ?? '',
-                `"${r.Warehouse?.name ?? ''}"`,
-                r.quantity,
-                r.ReferenceId ?? '',
-            ].join(',')).join('\n');
+            const header = 'Date,Type,Product,SKU Produk,SKU Varian,Varian,Warehouse,Quantity,Note,Ref\n';
+            const body = rows.map(r => {
+                const opts    = r.ProductSKU?.ProductVariantOptions ?? [];
+                const variant = opts.map(o => o.value).join(' / ');
+                return [
+                    new Date(r.createdAt).toISOString(),
+                    r.type,
+                    `"${r.Product?.name ?? ''}"`,
+                    r.Product?.sku ?? '',
+                    r.ProductSKU?.sku_code ?? '',
+                    `"${variant}"`,
+                    `"${r.Warehouse?.name ?? ''}"`,
+                    r.quantity,
+                    `"${r.note ?? ''}"`,
+                    r.ReferenceId ?? '',
+                ].join(',')
+            }).join('\n');
 
             res.setHeader('Content-Type', 'text/csv');
             res.setHeader('Content-Disposition', 'attachment; filename="movements.csv"');

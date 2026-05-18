@@ -84,16 +84,23 @@ export default function Movements() {
     setExporting(true)
     try {
       const result = await movementsApi.list({ ...filters, limit: 9999 })
-      const headers = ['No', 'Tanggal', 'Tipe', 'Produk', 'Warehouse', 'Qty', 'Ref #']
-      const rows = (result.data ?? []).map((m, i) => [
-        i + 1,
-        new Date(m.createdAt).toLocaleString('id-ID'),
-        m.type,
-        m.Product?.name ?? `#${m.ProductId}`,
-        m.Warehouse?.name ?? '—',
-        m.quantity,
-        m.ReferenceId ?? '—',
-      ])
+      const headers = ['No', 'Tanggal', 'Tipe', 'Produk', 'SKU Produk', 'Varian / SKU', 'Gudang', 'Qty', 'Keterangan', 'Ref #']
+      const rows = (result.data ?? []).map((m, i) => {
+        const opts    = m.ProductSKU?.ProductVariantOptions ?? []
+        const variant = opts.map(o => o.value).join(' / ') || m.ProductSKU?.sku_code || '—'
+        return [
+          i + 1,
+          new Date(m.createdAt).toLocaleString('id-ID'),
+          m.type,
+          m.Product?.name ?? `#${m.ProductId}`,
+          m.Product?.sku ?? '—',
+          variant,
+          m.Warehouse?.name ?? '—',
+          m.quantity,
+          m.note ?? '—',
+          m.ReferenceId ?? '—',
+        ]
+      })
       exportExcel(`pergerakan-${dateFrom ?? 'all'}-to-${dateTo ?? 'all'}`, { headers, rows, sheetName: 'Pergerakan Stok' })
     } catch {
       toast.error('Gagal export Excel')
@@ -103,21 +110,48 @@ export default function Movements() {
   }
 
   const columns = [
-    { key: 'type',      label: 'Tipe',      width: 110, render: r => TYPE_BADGE[r.type] ?? <span className="badge-muted">{r.type}</span> },
-    { key: 'product',   label: 'Produk',   render: r => (
-      <div>
-        <p className="font-semibold text-slate-800">{r.Product?.name ?? `#${r.ProductId}`}</p>
-        <p className="text-xs font-mono text-slate-400">{r.Product?.sku}</p>
-      </div>
-    )},
-    { key: 'warehouse', label: 'Gudang', render: r => <span className="text-slate-500">{r.Warehouse?.name ?? '—'}</span> },
-    { key: 'quantity',  label: 'Qty',       width: 90,  render: r => (
-      <span className={`font-mono font-bold text-sm ${r.type === 'IN' ? 'text-success' : r.type === 'OUT' ? 'text-danger' : 'text-warning'}`}>
-        {r.type === 'OUT' ? '−' : '+'}{r.quantity}
-      </span>
-    )},
-    { key: 'ref',  label: 'Ref #', width: 80,  render: r => <span className="font-mono text-xs text-slate-400">#{r.ReferenceId ?? '—'}</span> },
-    { key: 'date', label: 'Tanggal',  width: 140, render: r => <span className="text-xs text-slate-400">{new Date(r.createdAt).toLocaleString()}</span> },
+    {
+      key: 'date', label: 'Tanggal', width: 130,
+      render: r => <span className="text-xs text-slate-400">{new Date(r.createdAt).toLocaleString('id-ID')}</span>,
+    },
+    {
+      key: 'type', label: 'Tipe', width: 100,
+      render: r => TYPE_BADGE[r.type] ?? <span className="badge-muted">{r.type}</span>,
+    },
+    {
+      key: 'product', label: 'Produk',
+      render: r => {
+        const opts    = r.ProductSKU?.ProductVariantOptions ?? []
+        const variant = opts.map(o => o.value).join(' / ') || r.ProductSKU?.sku_code
+        return (
+          <div>
+            <p className="font-semibold text-slate-800">{r.Product?.name ?? `#${r.ProductId}`}</p>
+            <p className="text-xs font-mono text-slate-400">{r.Product?.sku}</p>
+            {variant && <p className="text-xs text-slate-500 mt-0.5">{variant}</p>}
+          </div>
+        )
+      },
+    },
+    {
+      key: 'warehouse', label: 'Gudang', width: 130,
+      render: r => <span className="text-slate-500 text-sm">{r.Warehouse?.name ?? '—'}</span>,
+    },
+    {
+      key: 'quantity', label: 'Qty', width: 80,
+      render: r => (
+        <span className={`font-mono font-bold text-sm ${r.type === 'IN' ? 'text-success' : r.type === 'OUT' ? 'text-danger' : 'text-warning'}`}>
+          {r.type === 'OUT' ? '−' : r.type === 'IN' ? '+' : ''}{Math.abs(r.quantity)}
+        </span>
+      ),
+    },
+    {
+      key: 'note', label: 'Keterangan',
+      render: r => <span className="text-xs text-slate-400 truncate max-w-[160px] block">{r.note || '—'}</span>,
+    },
+    {
+      key: 'ref', label: 'Ref #', width: 80,
+      render: r => <span className="font-mono text-xs text-slate-400">#{r.ReferenceId ?? '—'}</span>,
+    },
   ]
 
   const net      = summary?.net ?? 0
