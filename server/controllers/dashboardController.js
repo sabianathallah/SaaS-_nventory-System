@@ -90,7 +90,23 @@ class DashboardController {
         WHERE DATE(sm."createdAt" AT TIME ZONE 'Asia/Jakarta') = CURRENT_DATE ${todayClause}
       `, opts);
 
-      // ── 6. Stock per warehouse × article (from Stock table) ───────
+      // ── 6. Low stock items (total stock ≤ 5 across all warehouses) ──
+      const lowStockItems = await sequelize.query(`
+        SELECT
+          p.id                                           AS "productId",
+          p.name                                         AS "productName",
+          p.sku                                          AS "productSku",
+          COALESCE(SUM(s.quantity), 0)::int              AS "totalStock"
+        FROM "Products" p
+        LEFT JOIN "Stocks" s ON s."ProductId" = p.id
+        WHERE 1=1 ${clause}
+        GROUP BY p.id, p.name, p.sku
+        HAVING COALESCE(SUM(s.quantity), 0) <= 5
+        ORDER BY "totalStock" ASC, p.name ASC
+        LIMIT 10
+      `, opts);
+
+      // ── 7. Stock per warehouse × article (from Stock table) ───────
       const stockByWarehouseAndArticle = await sequelize.query(`
         SELECT
           w.id                                         AS "warehouseId",
@@ -137,6 +153,13 @@ class DashboardController {
         })),
 
         todayMovements: todayRow.val ?? 0,
+
+        lowStockItems: lowStockItems.map(r => ({
+          productId:   r.productId,
+          productName: r.productName,
+          productSku:  r.productSku,
+          totalStock:  n(r.totalStock),
+        })),
       });
     } catch (err) { next(err); }
   }

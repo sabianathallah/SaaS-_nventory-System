@@ -36,10 +36,17 @@ export default function Warehouses() {
     onError: e => toast.error(e.response?.data?.message || 'Error'),
   })
 
+  const fmt = (n) => Number(n ?? 0).toLocaleString('id-ID')
+
   const columns = [
-    { key: 'id',       label: '#',         width: 60,  render: r => <span className="font-mono text-xs text-slate-400">{r.id}</span> },
-    { key: 'name',     label: 'Gudang',             render: r => <span className="font-semibold text-slate-800">{r.name}</span> },
-    { key: 'location', label: 'Lokasi',              render: r => <span className="text-slate-500 text-sm">{r.location}</span> },
+    { key: 'name',     label: 'Gudang',    render: r => <span className="font-semibold text-slate-800">{r.name}</span> },
+    { key: 'location', label: 'Lokasi',    render: r => <span className="text-slate-500 text-sm">{r.location || '—'}</span> },
+    { key: 'products', label: 'Produk',  width: 90,  render: r => (
+      <span className="text-sm font-semibold text-slate-700">{fmt(r.productCount ?? 0)}</span>
+    )},
+    { key: 'stock',    label: 'Total Stok', width: 110, render: r => (
+      <span className="font-mono font-bold text-sm text-brand">{fmt(r.totalStock ?? 0)} <span className="text-xs font-normal text-slate-400">unit</span></span>
+    )},
     { key: 'actions',  label: '', width: 120, render: r => (
       <div className="flex items-center gap-1 justify-end">
         <button

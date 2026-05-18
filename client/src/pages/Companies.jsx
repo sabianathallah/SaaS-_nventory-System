@@ -80,8 +80,11 @@ export default function Companies() {
   const columns = [
     { key: 'name',    label: 'Perusahaan', render: r => (
       <div className="flex items-center gap-2.5">
-        <div className="w-8 h-8 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center flex-shrink-0">
-          <Building2 size={14} className="text-slate-400" />
+        <div className="w-10 h-10 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center flex-shrink-0 overflow-hidden">
+          {r.logo
+            ? <img src={r.logo} alt={r.name} className="w-full h-full object-contain p-1" />
+            : <Building2 size={14} className="text-slate-400" />
+          }
         </div>
         <div>
           <p className="font-semibold text-slate-800">{r.name}</p>

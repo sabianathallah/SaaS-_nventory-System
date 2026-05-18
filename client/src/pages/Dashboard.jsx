@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import {
   Package, BoxesIcon, Wallet, Warehouse,
   ChevronDown, ChevronRight, Tag, TrendingUp,
-  ArrowUpRight, ArrowDownRight, LayoutGrid, ChevronLeft,
+  ArrowUpRight, ArrowDownRight, LayoutGrid, ChevronLeft, AlertTriangle,
 } from 'lucide-react'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip,
@@ -247,6 +247,7 @@ export default function Dashboard() {
     stockByArticle          = [],
     stockByWarehouse        = [],
     stockByWarehouseAndArticle = [],
+    lowStockItems           = [],
   } = stats ?? {}
 
   // Sliced data for paginated cards
@@ -302,6 +303,32 @@ export default function Dashboard() {
           </div>
         )
       })()}
+
+      {/* ── Low Stock Alert ─────────────────────────────────── */}
+      {canViewStock && !isLoading && lowStockItems.length > 0 && (
+        <div className="card p-4 border-amber-200 bg-amber-50/40">
+          <div className="flex items-center gap-2 mb-3">
+            <AlertTriangle size={14} className="text-amber-500 flex-shrink-0" />
+            <h3 className="text-sm font-bold text-amber-700">Peringatan Stok Menipis</h3>
+            <span className="text-[10px] bg-amber-100 text-amber-600 font-bold px-2 py-0.5 rounded-full border border-amber-200">
+              {lowStockItems.length} produk
+            </span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+            {lowStockItems.map(item => (
+              <div key={item.productId} className="flex items-center justify-between bg-white rounded-lg px-3 py-2 border border-amber-100">
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold text-slate-700 truncate">{item.productName}</p>
+                  <p className="text-[10px] font-mono text-slate-400">{item.productSku}</p>
+                </div>
+                <span className={`text-sm font-bold font-mono flex-shrink-0 ml-2 ${item.totalStock <= 0 ? 'text-danger' : 'text-amber-500'}`}>
+                  {item.totalStock}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* ── Middle: Article breakdown + Warehouse chart ─────── */}
       {canViewAnalytics && <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
