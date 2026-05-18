@@ -45,7 +45,6 @@ module.exports = (sequelize, DataTypes) => {
       validate: {
         notNull: { msg: 'Quantity is required' },
         notEmpty: { msg: 'Quantity is required' },
-        min: 0
       }
     },
     companyId: { type: DataTypes.INTEGER, allowNull: true }

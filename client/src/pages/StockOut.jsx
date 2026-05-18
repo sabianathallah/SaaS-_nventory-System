@@ -18,7 +18,7 @@ export default function StockOut() {
   const columns = [
     { key: 'id',        label: '#',       width: 60,  render: r => <span className="font-mono text-xs text-slate-400">{r.id}</span> },
     { key: 'warehouse', label: 'Gudang',              render: r => <span className="font-semibold text-slate-800">{r.Warehouse?.name ?? '—'}</span> },
-    { key: 'note',      label: 'Catatan',             render: r => <span className="text-xs text-slate-400">{r.note || '—'}</span> },
+    { key: 'notes',     label: 'Catatan',             render: r => <span className="text-xs text-slate-400">{r.notes || '—'}</span> },
     { key: 'date',      label: 'Tanggal',             render: r => <span className="text-xs text-slate-400">{new Date(r.createdAt).toLocaleDateString('id-ID')}</span> },
     { key: 'actions',   label: '', width: 130, render: r => (
       <button onClick={() => navigate(`/stock-out/${r.id}`)} className="btn-secondary text-[10px] px-2 py-0.5 flex items-center gap-1 rounded">

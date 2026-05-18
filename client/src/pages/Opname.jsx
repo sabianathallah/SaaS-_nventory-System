@@ -37,15 +37,19 @@ export default function Opname() {
     queryKey: ['warehouses', { limit: 100 }],
     queryFn:  () => warehousesApi.list({ limit: 100 }),
   })
+  const { data: countOpen }      = useQuery({ queryKey: ['opname-count', 'open'],      queryFn: () => opnameSessionsApi.list({ limit: 1, status: 'open' }) })
+  const { data: countClosed }    = useQuery({ queryKey: ['opname-count', 'closed'],    queryFn: () => opnameSessionsApi.list({ limit: 1, status: 'closed' }) })
+  const { data: countCancelled } = useQuery({ queryKey: ['opname-count', 'cancelled'], queryFn: () => opnameSessionsApi.list({ limit: 1, status: 'cancelled' }) })
 
-  const openCount      = data?.data?.filter(s => s.status === 'open').length      ?? 0
-  const closedCount    = data?.data?.filter(s => s.status === 'closed').length    ?? 0
-  const cancelledCount = data?.data?.filter(s => s.status === 'cancelled').length ?? 0
+  const openCount      = countOpen?.pagination?.total      ?? 0
+  const closedCount    = countClosed?.pagination?.total    ?? 0
+  const cancelledCount = countCancelled?.pagination?.total ?? 0
 
   const create = useMutation({
     mutationFn: d => opnameSessionsApi.create(d),
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ['opname'] })
+      qc.invalidateQueries({ queryKey: ['opname-count'] })
       toast.success('Session dibuat')
       setModal(null)
       navigate(`/opname/${data.id}`)
@@ -57,6 +61,7 @@ export default function Opname() {
     mutationFn: id => opnameSessionsApi.update(id, { status: 'closed' }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['opname'] })
+      qc.invalidateQueries({ queryKey: ['opname-count'] })
       qc.invalidateQueries({ queryKey: ['stocks'] })
       qc.invalidateQueries({ queryKey: ['movements'] })
       toast.success('Session ditutup — stok disesuaikan')

@@ -1,5 +1,5 @@
 'use strict';
-const { sequelize, Stock_Opname_Session, Stock_Opname_Item, Stock, Stock_Movement, Warehouse, User, Product } = require('../models');
+const { sequelize, Stock_Opname_Session, Stock_Opname_Item, Stock, Stock_Movement, Warehouse, User, Product, ProductSKU } = require('../models');
 const { companyFilter, companyId } = require('../helpers/tenancy');
 const { paginate, buildFilter, paginatedResponse } = require('../helpers/queryHelper');
 
@@ -81,13 +81,24 @@ class StockOpnameSessionController {
                     const diff = item.difference ?? (item.scanned_qty - item.system_qty);
                     if (diff === 0) continue;
                     const stock = await Stock.findOne({ where: { ProductId: item.ProductId, WarehouseId: session.warehouseId }, transaction: t });
-                    if (stock) await stock.update({ quantity: Math.max(0, stock.quantity + diff) }, { transaction: t });
+                    // Set to physically-counted value — opname is the source of truth regardless of
+                    // movements that occurred after the item's system_qty snapshot was taken.
+                    if (stock) await stock.update({ quantity: item.scanned_qty }, { transaction: t });
+
+                    // Keep ProductSKU.qty in sync if this item was tracked at SKU level
+                    if (item.ProductSKUId) {
+                        const sku = await ProductSKU.findByPk(item.ProductSKUId, { transaction: t });
+                        if (sku) await sku.update({ qty: sku.qty + diff }, { transaction: t });
+                    }
                     await Stock_Movement.create({
-                        ProductId: item.ProductId, WarehouseId: session.warehouseId,
-                        type: 'ADJUSTMENT', quantity: Math.abs(diff),
-                        ReferenceId: session.id,
-                        note: `Opname koreksi: ${diff > 0 ? '+' : ''}${diff}`,
-                        companyId: session.companyId
+                        ProductId:    item.ProductId,
+                        WarehouseId:  session.warehouseId,
+                        ProductSKUId: item.ProductSKUId ?? null,
+                        type:         'ADJUSTMENT',
+                        quantity:     diff,   // signed: negative = shrinkage, positive = surplus
+                        ReferenceId:  session.id,
+                        note:         `Opname koreksi: ${diff > 0 ? '+' : ''}${diff}`,
+                        companyId:    session.companyId
                     }, { transaction: t });
                 }
             }

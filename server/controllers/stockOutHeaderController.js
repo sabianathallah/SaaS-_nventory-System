@@ -88,7 +88,6 @@ class StockOutHeaderController {
                 }
                 const stock = await Stock.findOne({ where: { ProductId, WarehouseId }, transaction: t });
                 if (!stock) { await t.rollback(); return res.status(400).json({ message: `Stok tidak ditemukan untuk ProductId=${ProductId} di WarehouseId=${WarehouseId}` }); }
-                if (stock.quantity < quantity) { await t.rollback(); return res.status(400).json({ message: `Stok tidak cukup untuk ProductId=${ProductId}. Tersedia: ${stock.quantity}, diminta: ${quantity}` }); }
                 resolvedItems.push({ ...item, ProductId, ProductSKUId: ProductSKUId || null, WarehouseId });
             }
 
@@ -107,6 +106,11 @@ class StockOutHeaderController {
                 const { ProductId, ProductSKUId, quantity, note, WarehouseId } = item;
                 const stock = await Stock.findOne({ where: { ProductId, WarehouseId }, transaction: t });
                 await stock.decrement('quantity', { by: quantity, transaction: t });
+
+                if (ProductSKUId) {
+                    const sku = await ProductSKU.findByPk(ProductSKUId, { transaction: t });
+                    if (sku) await sku.decrement('qty', { by: quantity, transaction: t });
+                }
 
                 movements.push(await Stock_Movement.create({
                     ProductId, ProductSKUId, WarehouseId, type: 'OUT', quantity,

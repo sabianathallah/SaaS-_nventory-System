@@ -288,8 +288,9 @@ class StockInHeaderController {
     try {
       const { code } = req.query;
       if (!code) return res.status(400).json({ message: 'code query param required' });
+      const cid = req.user.role === 'SUPER_ADMIN' ? undefined : req.user.companyId;
       const sku = await ProductSKU.findOne({
-        where: { sku_code: code },
+        where: { sku_code: code, ...(cid != null ? { companyId: cid } : {}) },
         include: [
           { model: Product, attributes: ['id', 'name', 'imageUrl', 'unit'] },
           {

@@ -97,6 +97,7 @@ export default function OpnameDetail() {
     mutationFn: () => opnameSessionsApi.update(id, { status: 'cancelled' }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['opname'] })
+      qc.invalidateQueries({ queryKey: ['opname-count'] })
       toast.success('Session dibatalkan')
       navigate('/opname')
     },
@@ -284,6 +285,16 @@ export default function OpnameDetail() {
             <p className="label mb-1">Status</p>
             <p className={`font-semibold ${session.status === 'closed' ? 'text-success' : 'text-slate-400'}`}>
               {session.status === 'closed' ? '✓ Closed' : '✕ Cancelled'}
+            </p>
+          </div>
+          <div>
+            <p className="label mb-1">Total Produk</p>
+            <p className="font-bold text-slate-800">{items.length} <span className="font-normal text-slate-400">item</span></p>
+          </div>
+          <div>
+            <p className="label mb-1">Total Selisih</p>
+            <p className={`font-bold font-mono ${items.reduce((s, i) => s + (i.difference ?? 0), 0) < 0 ? 'text-danger' : items.reduce((s, i) => s + (i.difference ?? 0), 0) > 0 ? 'text-success' : 'text-slate-400'}`}>
+              {items.reduce((s, i) => s + (i.difference ?? 0), 0) > 0 ? '+' : ''}{items.reduce((s, i) => s + (i.difference ?? 0), 0)}
             </p>
           </div>
         </div>

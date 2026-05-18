@@ -55,7 +55,7 @@ module.exports = (sequelize, DataTypes) => {
     quantity: {
       type: DataTypes.INTEGER,
       allowNull: true,
-      validate: { min: 0 }
+      // Negative values allowed for ADJUSTMENT movements (opname shrinkage)
     },
     ProductSKUId: { type: DataTypes.INTEGER, allowNull: true },
     ReferenceId: DataTypes.BIGINT,

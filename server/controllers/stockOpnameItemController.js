@@ -60,6 +60,7 @@ class StockOpnameItemController {
 
             const session = await Stock_Opname_Session.findByPk(SessionId);
             if (!session) return res.status(404).json({ message: 'Opname session tidak ditemukan' });
+            if (session.status !== 'open') return res.status(400).json({ message: 'Tidak bisa menambah item ke sesi yang sudah ditutup atau dibatalkan' });
 
             let system_qty = body.system_qty;
             if (system_qty == null) {

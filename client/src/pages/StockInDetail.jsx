@@ -388,6 +388,18 @@ export default function StockInDetail() {
           <div><p className="label mb-1">Warehouse</p><p className="font-semibold text-slate-700">{detail.Warehouse?.name ?? '—'}</p></div>
           <div><p className="label mb-1">Tanggal</p><p className="font-mono text-slate-600">{new Date(detail.date).toLocaleDateString('id-ID')}</p></div>
           <div><p className="label mb-1">Notes</p><p className="text-slate-500">{detail.note || '—'}</p></div>
+          <div>
+            <p className="label mb-1">Total Produk</p>
+            <p className="font-bold text-slate-800">{items.length} <span className="font-normal text-slate-400">item</span></p>
+          </div>
+          <div>
+            <p className="label mb-1">Total Qty</p>
+            <p className="font-bold text-slate-800">{fmt(items.reduce((s, i) => s + i.quantity, 0))} <span className="font-normal text-slate-400">unit</span></p>
+          </div>
+          <div>
+            <p className="label mb-1">Grand Total</p>
+            <p className="font-bold text-slate-800 font-mono">Rp {fmt(grandTotal)}</p>
+          </div>
         </div>
 
         <div className="card mb-4">

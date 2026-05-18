@@ -79,7 +79,7 @@ function ProductSkuPicker({ onSelect, warehouseId, stocks }) {
     if (!qty || Number(qty) <= 0) return toast.error('Qty harus lebih dari 0')
     const avail = getAvail(selProduct.id)
     if (avail !== null && Number(qty) > avail) {
-      return toast.error(`Stok tidak cukup. Tersedia: ${avail}`)
+      toast(`Stok akan menjadi negatif. Tersedia: ${avail}`, { icon: '⚠️' })
     }
     onSelect({
       skuId:        selSku.id,
@@ -307,7 +307,7 @@ export default function StockOutDetail() {
           </div>
         </div>
 
-        <div className="card p-5 mb-5 grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
+        <div className="card p-5 mb-5 grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm">
           <div><p className="label mb-1">Warehouse</p><p className="font-semibold text-slate-700">{detail.Warehouse?.name ?? '—'}</p></div>
           <div><p className="label mb-1">Tanggal</p><p className="font-mono text-slate-600">{new Date(detail.createdAt).toLocaleDateString('id-ID')}</p></div>
           <div>
@@ -317,6 +317,14 @@ export default function StockOutDetail() {
             </span>
           </div>
           <div><p className="label mb-1">Catatan</p><p className="text-slate-500">{detail.notes || detail.note || '—'}</p></div>
+          <div>
+            <p className="label mb-1">Total Produk</p>
+            <p className="font-bold text-slate-800">{items.length} <span className="font-normal text-slate-400">item</span></p>
+          </div>
+          <div>
+            <p className="label mb-1">Total Qty</p>
+            <p className="font-bold text-slate-800">{fmt(items.reduce((s, i) => s + (i.quantity ?? 0), 0))} <span className="font-normal text-slate-400">unit</span></p>
+          </div>
         </div>
 
         {items.length > 0 && (
