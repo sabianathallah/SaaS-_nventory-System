@@ -12,11 +12,18 @@ class ProductController {
         try {
             const { page, limit, offset } = paginate(req.query);
             const filter = buildFilter(req.query, {
-                name:       'like',
                 sku:        'like',
                 CategoryId: 'exact',
                 ArticleId:  'exact',
             });
+
+            if (req.query.name) {
+                const term = req.query.name.replace(/'/g, "''");
+                filter[Op.or] = [
+                    { name: { [Op.iLike]: `%${term}%` } },
+                    sequelize.literal(`EXISTS (SELECT 1 FROM "ProductSKUs" WHERE "ProductSKUs"."ProductId" = "Product"."id" AND "ProductSKUs"."sku_code" ILIKE '%${term}%')`),
+                ];
+            }
 
             // Sorting
             const sortBy    = VALID_SORT.includes(req.query.sortBy) ? req.query.sortBy : 'name';

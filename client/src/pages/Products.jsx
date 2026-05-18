@@ -482,7 +482,7 @@ export default function Products() {
         <SearchBar
           value={search}
           onChange={v => { setSearch(v); setPage(1) }}
-          placeholder="Cari nama produk…"
+          placeholder="Cari nama / kode SKU…"
           className="flex-1 min-w-48"
         />
         <div className="flex items-center gap-2 flex-wrap">
