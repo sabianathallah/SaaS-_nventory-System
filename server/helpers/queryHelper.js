@@ -43,10 +43,10 @@ function buildFilter(query, schema) {
                 where[field] = { [Op.iLike]: `%${value}%` };
                 break;
             case 'gte':
-                where[field] = { ...(where[field] || {}), [Op.gte]: new Date(value) };
+                where[field] = { ...(where[field] || {}), [Op.gte]: new Date(/^\d{4}-\d{2}-\d{2}$/.test(value) ? value + 'T00:00:00.000Z' : value) };
                 break;
             case 'lte':
-                where[field] = { ...(where[field] || {}), [Op.lte]: new Date(value) };
+                where[field] = { ...(where[field] || {}), [Op.lte]: new Date(/^\d{4}-\d{2}-\d{2}$/.test(value) ? value + 'T23:59:59.999Z' : value) };
                 break;
             case 'in':
                 where[field] = { [Op.in]: value.split(',') };
