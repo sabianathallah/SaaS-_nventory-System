@@ -20,6 +20,11 @@ module.exports = (sequelize, DataTypes) => {
         onDelete: 'SET NULL',
         onUpdate: 'CASCADE'
       });
+      Stock_In_Header.belongsTo(models.User, {
+        foreignKey: { name: 'createdBy', allowNull: true },
+        onDelete: 'SET NULL',
+        onUpdate: 'CASCADE'
+      });
       Stock_In_Header.hasMany(models.Stock_In_Item, {
         foreignKey: 'StockInHeaderId',
         onDelete: 'CASCADE',
@@ -34,7 +39,8 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: false,
       defaultValue: DataTypes.NOW
     },
-    note: DataTypes.STRING,
+    note:      DataTypes.STRING,
+    createdBy: { type: DataTypes.INTEGER, allowNull: true },
     companyId: { type: DataTypes.INTEGER, allowNull: true }
   }, {
     sequelize,

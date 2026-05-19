@@ -32,11 +32,15 @@ export default function StockIn() {
       render: r => <span className="text-xs text-slate-400 truncate max-w-[200px] block">{r.note || '—'}</span>,
     },
     {
-      key: 'itemCount', label: 'Item', width: 70,
+      key: 'itemCount', label: 'Item', width: 60,
       render: r => <span className="text-sm font-semibold text-slate-700">{r.itemCount ?? 0}</span>,
     },
     {
-      key: 'grandTotal', label: 'Total', width: 160,
+      key: 'totalQty', label: 'Total Qty', width: 90,
+      render: r => <span className="font-mono text-sm font-bold text-slate-700">{fmt(r.totalQty ?? 0)}</span>,
+    },
+    {
+      key: 'grandTotal', label: 'Total Nilai', width: 150,
       render: r => (
         <span className="font-mono font-bold text-sm text-slate-800">
           Rp {fmt(r.grandTotal)}
@@ -44,7 +48,11 @@ export default function StockIn() {
       ),
     },
     {
-      key: 'actions', label: '', width: 130,
+      key: 'createdBy', label: 'Oleh', width: 120,
+      render: r => <span className="text-xs text-slate-500">{r.User?.name ?? '—'}</span>,
+    },
+    {
+      key: 'actions', label: '', width: 120,
       render: r => (
         <button
           onClick={() => navigate(`/stock-in/${r.id}`)}

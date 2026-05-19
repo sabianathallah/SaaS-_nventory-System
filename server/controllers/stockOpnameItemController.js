@@ -64,10 +64,18 @@ class StockOpnameItemController {
 
             let system_qty = body.system_qty;
             if (system_qty == null) {
-                const stock = await Stock.findOne({
-                    where: { ProductId, WarehouseId: session.warehouseId },
-                });
-                system_qty = stock?.quantity ?? 0;
+                if (ProductSKUId) {
+                    // Per-SKU qty is the most accurate baseline for variant-level opname.
+                    // In single-warehouse setups (most common) this equals the exact per-warehouse count.
+                    // Stock.quantity would be the product *total* across all SKUs — wrong per-variant.
+                    const sku = await ProductSKU.findByPk(ProductSKUId);
+                    system_qty = sku?.qty ?? 0;
+                } else {
+                    const stock = await Stock.findOne({
+                        where: { ProductId, WarehouseId: session.warehouseId },
+                    });
+                    system_qty = stock?.quantity ?? 0;
+                }
             }
             const scanned = Number(scanned_qty);
             const difference = scanned - Number(system_qty);
@@ -90,7 +98,11 @@ class StockOpnameItemController {
                 include: [{ model: Stock_Opname_Session, where: companyFilter(req), required: true }]
             });
             if (!item) throw { name: 'NotFound', message: 'Stock opname item not found' };
-            await item.update(req.body);
+            const { scanned_qty, difference } = req.body;
+            const updates = {};
+            if (scanned_qty != null) updates.scanned_qty = Number(scanned_qty);
+            if (difference  != null) updates.difference  = Number(difference);
+            await item.update(updates);
             res.status(200).json(item);
         } catch (err) { next(err); }
     }

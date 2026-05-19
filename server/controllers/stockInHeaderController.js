@@ -1,7 +1,7 @@
 'use strict';
 const {
   sequelize, Stock_In_Header, Stock_In_Item, Stock_Movement, Stock,
-  Supplier, Warehouse, ProductSKU, Product, ProductVariantOption, ProductVariantType,
+  Supplier, Warehouse, User, ProductSKU, Product, ProductVariantOption, ProductVariantType,
 } = require('../models');
 const { companyFilter, companyId } = require('../helpers/tenancy');
 const { paginate, buildFilter, paginatedResponse } = require('../helpers/queryHelper');
@@ -37,6 +37,7 @@ class StockInHeaderController {
         include: [
           { model: Supplier,  attributes: ['id', 'name'] },
           { model: Warehouse, attributes: ['id', 'name'] },
+          { model: User,      foreignKey: 'createdBy', attributes: ['id', 'name'] },
           { model: Stock_In_Item, attributes: ['id', 'quantity', 'price'] },
         ],
         order: [['date', 'DESC']],
@@ -47,8 +48,9 @@ class StockInHeaderController {
       const enriched = rows.map(r => {
         const plain = r.toJSON();
         const itemCount  = plain.Stock_In_Items?.length ?? 0;
+        const totalQty   = (plain.Stock_In_Items ?? []).reduce((s, i) => s + i.quantity, 0);
         const grandTotal = (plain.Stock_In_Items ?? []).reduce((s, i) => s + Number(i.price) * i.quantity, 0);
-        return { ...plain, itemCount, grandTotal };
+        return { ...plain, itemCount, totalQty, grandTotal };
       });
 
       res.status(200).json(paginatedResponse(enriched, count, page, limit));
@@ -62,6 +64,7 @@ class StockInHeaderController {
         include: [
           { model: Supplier,  attributes: ['id', 'name'] },
           { model: Warehouse, attributes: ['id', 'name'] },
+          { model: User,      foreignKey: 'createdBy', attributes: ['id', 'name'] },
           {
             model: Stock_In_Item,
             include: SKU_INCLUDE,
@@ -92,6 +95,7 @@ class StockInHeaderController {
         SupplierId: SupplierId || null,
         WarehouseId,
         note: note || null,
+        createdBy: req.user.id,
         companyId: cid,
       }, { transaction: t });
 

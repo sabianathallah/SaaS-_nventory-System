@@ -34,12 +34,20 @@ export default function StockOut() {
         : <span className="text-xs text-slate-400">—</span>,
     },
     {
-      key: 'itemCount', label: 'Item', width: 70,
+      key: 'itemCount', label: 'Item', width: 60,
       render: r => <span className="text-sm font-semibold text-slate-700">{r.itemCount ?? 0}</span>,
     },
     {
       key: 'totalQty', label: 'Total Qty', width: 90,
       render: r => <span className="font-mono text-sm text-danger font-bold">{fmt(r.totalQty ?? 0)}</span>,
+    },
+    {
+      key: 'grandTotal', label: 'Total Nilai', width: 150,
+      render: r => (
+        <span className="font-mono font-bold text-sm text-slate-800">
+          Rp {fmt(r.grandTotal ?? 0)}
+        </span>
+      ),
     },
     {
       key: 'createdBy', label: 'Oleh', width: 120,

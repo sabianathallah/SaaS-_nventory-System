@@ -70,7 +70,7 @@ function ProductSkuPicker({ onSelect }) {
   const handleAdd = () => {
     if (!selSku) return toast.error('Pilih SKU produk terlebih dahulu')
     if (!qty || Number(qty) <= 0) return toast.error('Qty harus lebih dari 0')
-    onSelect({ sku: selSku, quantity: Number(qty), price: Number(price) || 0 })
+    onSelect({ sku: { ...selSku, Product: selProduct }, quantity: Number(qty), price: Number(price) || 0 })
     // Reset
     setSearch(''); setSelProduct(null); setSelSku(null); setQty(1); setPrice('')
   }
@@ -399,6 +399,10 @@ export default function StockInDetail() {
           <div>
             <p className="label mb-1">Grand Total</p>
             <p className="font-bold text-slate-800 font-mono">Rp {fmt(grandTotal)}</p>
+          </div>
+          <div>
+            <p className="label mb-1">Oleh</p>
+            <p className="font-semibold text-slate-700">{detail.User?.name ?? '—'}</p>
           </div>
         </div>
 

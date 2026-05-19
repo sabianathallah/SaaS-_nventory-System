@@ -1,5 +1,5 @@
 'use strict';
-const { sequelize, Stock_Opname_Session, Stock_Opname_Item, Stock, Stock_Movement, Warehouse, User, Product, ProductSKU } = require('../models');
+const { sequelize, Stock_Opname_Session, Stock_Opname_Item, Stock, Stock_Movement, Warehouse, User, Product, ProductSKU, ProductVariantOption } = require('../models');
 const { companyFilter, companyId } = require('../helpers/tenancy');
 const { paginate, buildFilter, paginatedResponse } = require('../helpers/queryHelper');
 
@@ -34,7 +34,16 @@ class StockOpnameSessionController {
                 include: [
                     { model: Warehouse, attributes: ['id', 'name'] },
                     { model: User, foreignKey: 'createdBy', attributes: ['id', 'name'] },
-                    { model: Stock_Opname_Item, include: [{ model: Product, attributes: ['id', 'name', 'sku', 'unit'] }] }
+                    {
+                        model: Stock_Opname_Item,
+                        include: [
+                            { model: Product, attributes: ['id', 'name', 'sku', 'unit'] },
+                            {
+                                model: ProductSKU, attributes: ['id', 'sku_code'], required: false,
+                                include: [{ model: ProductVariantOption, attributes: ['id', 'value'], through: { attributes: [] } }],
+                            },
+                        ],
+                    }
                 ]
             });
             if (!session) throw { name: 'NotFound', message: 'Stock opname session not found' };
@@ -80,15 +89,14 @@ class StockOpnameSessionController {
                 for (const item of items) {
                     const diff = item.difference ?? (item.scanned_qty - item.system_qty);
                     if (diff === 0) continue;
+                    // Apply diff as a delta so multiple SKUs of the same product
+                    // accumulate correctly (absolute override would overwrite siblings).
                     const stock = await Stock.findOne({ where: { ProductId: item.ProductId, WarehouseId: session.warehouseId }, transaction: t });
-                    // Set to physically-counted value — opname is the source of truth regardless of
-                    // movements that occurred after the item's system_qty snapshot was taken.
-                    if (stock) await stock.update({ quantity: item.scanned_qty }, { transaction: t });
+                    if (stock) await stock.increment('quantity', { by: diff, transaction: t });
 
-                    // Keep ProductSKU.qty in sync if this item was tracked at SKU level
                     if (item.ProductSKUId) {
                         const sku = await ProductSKU.findByPk(item.ProductSKUId, { transaction: t });
-                        if (sku) await sku.update({ qty: sku.qty + diff }, { transaction: t });
+                        if (sku) await sku.increment('qty', { by: diff, transaction: t });
                     }
                     await Stock_Movement.create({
                         ProductId:    item.ProductId,

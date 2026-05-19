@@ -32,7 +32,7 @@ export default function OpnameDetail() {
   const [scannerConnected, setScannerConnected] = useState(false)
   const [fillInitialized, setFillInitialized]   = useState(false)
   const [confirmMode, setConfirmMode]           = useState(null) // 'submit' | 'cancel' | 'close'
-  const [skuPicker, setSkuPicker]               = useState(null) // { stock } — produk yang sedang dipilih SKU-nya
+  const [skuPicker, setSkuPicker]               = useState(null) // { stock }
 
   const { data: session, isLoading: sessionLoading } = useQuery({
     queryKey: ['opname-session', id],
@@ -109,6 +109,7 @@ export default function OpnameDetail() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['opname'] })
       qc.invalidateQueries({ queryKey: ['opname-session', id] })
+      qc.invalidateQueries({ queryKey: ['opname-items', id] })
       qc.invalidateQueries({ queryKey: ['stocks'] })
       qc.invalidateQueries({ queryKey: ['movements'] })
       toast.success('Session ditutup — stok disesuaikan')
@@ -136,8 +137,9 @@ export default function OpnameDetail() {
         }
       }
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['opname-items', id] })
+    onSuccess: async () => {
+      // Await the refetch so the useEffect re-init sees fresh data
+      await qc.invalidateQueries({ queryKey: ['opname-items', id] })
       toast.success('Hasil opname disimpan')
       setLocalItems([])
       setFillInitialized(false)
@@ -149,7 +151,6 @@ export default function OpnameDetail() {
 
   // ── Fill helpers ──────────────────────────────────────────────────────────────
   const addProduct = (stock) => {
-    // Buka SKU picker untuk produk ini; penambahan ke localItems setelah SKU dipilih
     setSkuPicker({ stock })
     setSearch('')
   }
@@ -162,8 +163,23 @@ export default function OpnameDetail() {
       setSkuPicker(null)
       return
     }
+    // Block mixing product-level and SKU-level items for the same product
+    if (sku && localItems.find(i => i.skuKey === `prod-${productId}`)) {
+      toast.error('Produk ini sudah ditambahkan tanpa varian. Hapus dulu untuk tambah per varian.')
+      setSkuPicker(null)
+      return
+    }
+    if (!sku && localItems.some(i => String(i.productId) === productId && i.skuId !== null)) {
+      toast.error('Produk ini sudah ditambahkan per varian. Hapus dulu untuk tambah tanpa varian.')
+      setSkuPicker(null)
+      return
+    }
     const opts = sku?.ProductVariantOptions ?? []
     const variantLabel = opts.map(o => o.value).join(' / ')
+    // SKU items: use per-SKU qty as system baseline (correct for single-warehouse; Stock.quantity
+    // would be the product total across all SKUs which gives wrong diff per variant).
+    // Non-SKU items: use warehouse-level product stock.
+    const systemQty = sku != null ? (sku.qty ?? stock.quantity) : stock.quantity
     setLocalItems(prev => [...prev, {
       id: null, saved: false, dirty: false,
       productId,
@@ -172,7 +188,7 @@ export default function OpnameDetail() {
       productName:  stock.Product?.name ?? `#${productId}`,
       skuCode:      sku?.sku_code ?? stock.Product?.sku ?? '',
       variantLabel,
-      systemQty:    stock.quantity,
+      systemQty,
       qty:          '',
     }])
     setSkuPicker(null)
@@ -184,7 +200,8 @@ export default function OpnameDetail() {
       const productId = String(sku.ProductId ?? sku.Product?.id)
       const skuId     = String(sku.id)
       const skuKey    = `sku-${skuId}`
-      const systemQty = stocks?.data?.find(s => String(s.ProductId) === productId)?.quantity ?? 0
+      // Use per-SKU qty as system baseline (scan always resolves to a specific SKU)
+      const systemQty = sku.qty ?? 0
       const label     = skuLabel(sku)
       setLocalItems(prev => {
         const idx = prev.findIndex(i => i.skuKey === skuKey)
@@ -241,6 +258,15 @@ export default function OpnameDetail() {
     setConfirmMode('submit')
   }
 
+  const handleCloseClick = () => {
+    const unsaved = localItems.filter(i => !i.saved || i.dirty)
+    if (unsaved.length > 0) {
+      toast.error(`Ada ${unsaved.length} item belum disubmit. Klik "Submit" terlebih dahulu.`)
+      return
+    }
+    setConfirmMode('close')
+  }
+
   const itemsToSubmit = localItems.filter(i => !i.saved || i.dirty)
 
   if (sessionLoading) return <div className="p-8 text-slate-400 text-sm">Memuat…</div>
@@ -266,8 +292,8 @@ export default function OpnameDetail() {
               onClick={() => {
                 const headers = ['No', 'Produk', 'SKU', 'Varian', 'Stok Sistem', 'Stok Aktual', 'Selisih']
                 const rows = items.map((item, i) => {
-                  const sku  = item.ProductSKU
-                  const opts = sku?.ProductVariantOptions ?? []
+                  const sku     = item.ProductSKU
+                  const opts    = sku?.ProductVariantOptions ?? []
                   const variant = opts.map(o => o.value).join(' / ') || '—'
                   return [i + 1, item.Product?.name ?? '—', sku?.sku_code ?? item.Product?.sku ?? '—', variant, item.system_qty, item.scanned_qty, item.difference ?? 0]
                 })
@@ -295,10 +321,16 @@ export default function OpnameDetail() {
           </div>
           <div>
             <p className="label mb-1">Total Selisih</p>
-            <p className={`font-bold font-mono ${items.reduce((s, i) => s + (i.difference ?? 0), 0) < 0 ? 'text-danger' : items.reduce((s, i) => s + (i.difference ?? 0), 0) > 0 ? 'text-success' : 'text-slate-400'}`}>
-              {items.reduce((s, i) => s + (i.difference ?? 0), 0) > 0 ? '+' : ''}{items.reduce((s, i) => s + (i.difference ?? 0), 0)}
-            </p>
+            {(() => {
+              const total = items.reduce((s, i) => s + (i.difference ?? 0), 0)
+              return (
+                <p className={`font-bold font-mono ${total < 0 ? 'text-danger' : total > 0 ? 'text-success' : 'text-slate-400'}`}>
+                  {total > 0 ? '+' : ''}{total}
+                </p>
+              )
+            })()}
           </div>
+          <div><p className="label mb-1">Oleh</p><p className="font-semibold text-slate-700">{session.User?.name ?? '—'}</p></div>
         </div>
 
         {items.length > 0 ? (
@@ -307,10 +339,11 @@ export default function OpnameDetail() {
               <span className="text-xs font-bold text-slate-600 uppercase tracking-wide">Hasil Hitung Opname ({items.length})</span>
             </div>
             <div className="overflow-x-auto">
-            <table className="w-full min-w-[400px] text-sm">
+            <table className="w-full min-w-[520px] text-sm">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-100">
                   <th className="th py-2 text-left">Produk</th>
+                  <th className="th py-2 text-left">Varian / SKU</th>
                   <th className="th py-2 text-right w-24">Sistem</th>
                   <th className="th py-2 text-right w-24">Aktual</th>
                   <th className="th py-2 text-right w-24">Selisih</th>
@@ -318,12 +351,18 @@ export default function OpnameDetail() {
               </thead>
               <tbody>
                 {items.map(item => {
-                  const diff = item.difference ?? 0
+                  const sku     = item.ProductSKU
+                  const opts    = sku?.ProductVariantOptions ?? []
+                  const variant = opts.map(o => o.value).join(' / ') || sku?.sku_code || '—'
+                  const diff    = item.difference ?? 0
                   return (
                     <tr key={item.id} className="tr border-b border-slate-50">
                       <td className="td py-2">
-                        <p className="font-medium">{item.Product?.name}</p>
+                        <p className="font-medium text-slate-800">{item.Product?.name}</p>
                         <p className="text-xs font-mono text-slate-400">{item.Product?.sku}</p>
+                      </td>
+                      <td className="td py-2">
+                        <span className="text-xs text-slate-500">{sku ? variant : '—'}</span>
                       </td>
                       <td className="td py-2 text-right font-mono text-slate-500">{item.system_qty}</td>
                       <td className="td py-2 text-right font-mono">{item.scanned_qty}</td>
@@ -363,7 +402,7 @@ export default function OpnameDetail() {
         <button
           type="button"
           onClick={(e) => {
-            e.currentTarget.blur() // lepas fokus agar Enter dari scanner tidak memicu tombol ini
+            e.currentTarget.blur()
             setScannerConnected(v => !v)
             if (!scannerConnected) toast.success('Scanner eksternal terhubung', { icon: '🔌' })
             else toast('Scanner diputus', { icon: '🔌' })
@@ -391,10 +430,14 @@ export default function OpnameDetail() {
           <div className="bg-white rounded-lg border border-slate-200 p-3 max-h-40 overflow-y-auto space-y-1.5 mb-3">
             {itemsToSubmit.map(i => (
               <div key={i.skuKey} className="flex items-center justify-between text-xs">
-                <span className="text-slate-700 truncate">{i.productName}</span>
+                <span className="text-slate-700 truncate">
+                  {i.productName}{i.variantLabel ? ` · ${i.variantLabel}` : ''}
+                </span>
                 <div className="flex items-center gap-3 ml-2 shrink-0">
                   <span className="text-slate-400">sistem: {i.systemQty}</span>
-                  <span className="font-mono font-bold text-slate-800">aktual: {i.qty}</span>
+                  <span className={`font-mono font-bold ${Number(i.qty) < Number(i.systemQty) ? 'text-danger' : Number(i.qty) > Number(i.systemQty) ? 'text-success' : 'text-slate-800'}`}>
+                    aktual: {i.qty}
+                  </span>
                 </div>
               </div>
             ))}
@@ -475,22 +518,31 @@ export default function OpnameDetail() {
                 <p className="text-xs text-slate-400 text-center py-6">Tidak ada produk</p>
               )}
               {filteredStocks.map(s => {
-                const productId = String(s.ProductId)
-                const already   = localItems.some(i => i.skuKey === `prod-${productId}`)
-                const clickable = fillMode === 'manual' && !already
+                const productId      = String(s.ProductId)
+                // "already" = product-level (no SKU) item already in list → disable button
+                const already        = localItems.some(i => i.skuKey === `prod-${productId}`)
+                // "partially" = some SKUs of this product are in list → visual indicator only
+                const partiallyAdded = !already && localItems.some(i => String(i.productId) === productId)
+                const clickable      = fillMode === 'manual' && !already
                 return (
                   <button
                     key={productId}
                     onClick={() => clickable && addProduct(s)}
                     disabled={!clickable}
                     className={`w-full text-left px-3 py-2.5 flex items-center justify-between transition-colors
-                      ${already   ? 'bg-success-light/60 cursor-default' : ''}
-                      ${clickable ? 'hover:bg-slate-50 cursor-pointer'   : 'cursor-default'}
+                      ${already        ? 'bg-success-light/60 cursor-default' : ''}
+                      ${partiallyAdded ? 'bg-blue-50/50' : ''}
+                      ${clickable      ? 'hover:bg-slate-50 cursor-pointer' : 'cursor-default'}
                     `}
                   >
                     <div className="min-w-0">
                       <p className="text-sm font-medium text-slate-800 truncate">{s.Product?.name}</p>
                       <p className="text-xs font-mono text-slate-400">{s.Product?.sku}</p>
+                      {partiallyAdded && (
+                        <p className="text-[10px] text-blue-500 font-medium">
+                          {localItems.filter(i => String(i.productId) === productId).length} varian ditambahkan
+                        </p>
+                      )}
                     </div>
                     <div className="text-right ml-2 shrink-0">
                       <p className="text-xs text-slate-400">sistem</p>
@@ -561,7 +613,7 @@ export default function OpnameDetail() {
         <div className="flex-1" />
         <button onClick={() => navigate('/opname')} className="btn-secondary text-sm">Tutup</button>
         <button
-          onClick={() => setConfirmMode('close')}
+          onClick={handleCloseClick}
           className="text-sm px-3 py-2 rounded-lg font-medium flex items-center gap-1.5 bg-success-light text-success border border-success/20 hover:bg-success hover:text-white transition-colors"
         >
           <CheckCircle size={14} /> Close
@@ -633,8 +685,12 @@ function SkuPickerModal({ stock, onConfirm, onClose }) {
               value={selSkuId}
               onChange={v => setSelSkuId(v)}
               options={[
-                { value: '', label: 'Tanpa varian (produk ini)' },
-                ...(skus ?? []).map(s => ({ value: s.id, label: skuLabel(s) || s.sku_code })),
+                // Only offer product-level option when there are truly no SKUs defined
+                ...(!skus || skus.length === 0 ? [{ value: '', label: 'Tanpa varian (produk ini)' }] : []),
+                ...(skus ?? []).map(s => ({
+                  value: s.id,
+                  label: `${skuLabel(s) || s.sku_code} — stok: ${s.qty ?? 0}`,
+                })),
               ]}
               placeholder="Pilih varian…"
             />

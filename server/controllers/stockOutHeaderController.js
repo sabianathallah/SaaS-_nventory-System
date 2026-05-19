@@ -24,6 +24,10 @@ class StockOutHeaderController {
                             sequelize.literal(`(SELECT COALESCE(SUM(quantity), 0) FROM "Stock_Movements" WHERE "ReferenceId" = "Stock_Out_Header"."id" AND "type" = 'OUT')`),
                             'totalQty'
                         ],
+                        [
+                            sequelize.literal(`(SELECT COALESCE(SUM(sm.quantity * COALESCE(ps.price, 0)), 0) FROM "Stock_Movements" sm LEFT JOIN "ProductSKUs" ps ON sm."ProductSKUId" = ps.id WHERE sm."ReferenceId" = "Stock_Out_Header"."id" AND sm."type" = 'OUT')`),
+                            'grandTotal'
+                        ],
                     ]
                 },
                 include: [
@@ -53,11 +57,12 @@ class StockOutHeaderController {
                 include: [
                     { model: Product,   attributes: ['id', 'name', 'sku', 'unit'] },
                     { model: Warehouse, attributes: ['id', 'name'] },
-                    { model: ProductSKU, attributes: ['id', 'sku_code'], required: false,
+                    { model: ProductSKU, attributes: ['id', 'sku_code', 'price'], required: false,
                       include: [{ model: ProductVariantOption, attributes: ['id', 'value'], through: { attributes: [] } }] },
                 ]
             });
-            res.status(200).json({ ...header.toJSON(), movements });
+            const grandTotal = movements.reduce((s, m) => s + Number(m.ProductSKU?.price ?? 0) * m.quantity, 0);
+            res.status(200).json({ ...header.toJSON(), movements, grandTotal });
         } catch (err) { next(err); }
     }
 

@@ -153,7 +153,10 @@ function ProductSkuPicker({ onSelect, warehouseId, stocks }) {
             }}
             options={[
               { value: '', label: selProduct ? 'Pilih varian…' : '← Pilih produk dulu' },
-              ...(skus ?? []).map(s => ({ value: s.id, label: skuLabel(s) || s.sku_code })),
+              ...(skus ?? []).map(s => ({
+                value: s.id,
+                label: `${skuLabel(s) || s.sku_code} — stok: ${s.qty ?? 0}`,
+              })),
             ]}
             placeholder={selProduct ? 'Pilih varian…' : '← Pilih produk dulu'}
             disabled={!selProduct || !skus}
@@ -171,9 +174,9 @@ function ProductSkuPicker({ onSelect, warehouseId, stocks }) {
           <div className="flex-1 min-w-0">
             <p className="text-sm font-semibold text-slate-800 truncate">{selProduct?.name}</p>
             <p className="text-xs text-slate-500">{skuLabel(selSku)}</p>
-            {warehouseId && selProduct && (
-              <p className={`text-xs ${getAvail(selProduct.id) === 0 ? 'text-red-400' : 'text-slate-400'}`}>
-                Tersedia: {getAvail(selProduct.id) ?? '…'}
+            {selSku != null && (
+              <p className={`text-xs font-medium ${(selSku.qty ?? 0) === 0 ? 'text-red-500' : 'text-emerald-600'}`}>
+                Stok tersedia: {selSku.qty ?? 0}
               </p>
             )}
           </div>
@@ -351,6 +354,14 @@ export default function StockOutDetail() {
             <p className="label mb-1">Total Qty</p>
             <p className="font-bold text-slate-800">{fmt(items.reduce((s, i) => s + (i.quantity ?? 0), 0))} <span className="font-normal text-slate-400">unit</span></p>
           </div>
+          <div>
+            <p className="label mb-1">Oleh</p>
+            <p className="font-semibold text-slate-700">{detail.User?.name ?? '—'}</p>
+          </div>
+          <div>
+            <p className="label mb-1">Grand Total</p>
+            <p className="font-bold text-slate-800 font-mono">Rp {fmt(detail.grandTotal ?? 0)}</p>
+          </div>
         </div>
 
         {items.length > 0 && (
@@ -360,19 +371,22 @@ export default function StockOutDetail() {
               <span className="text-xs font-bold text-slate-600 uppercase tracking-wide">Items ({items.length})</span>
             </div>
             <div className="overflow-x-auto">
-            <table className="w-full min-w-[400px] text-sm">
+            <table className="w-full min-w-[560px] text-sm">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200">
                   <th className="th py-2 text-left">Produk</th>
                   <th className="th py-2 text-left">Varian / SKU</th>
-                  <th className="th py-2 text-right w-28">Qty</th>
+                  <th className="th py-2 text-right w-24">Qty</th>
+                  <th className="th py-2 text-right w-36">Harga Satuan</th>
+                  <th className="th py-2 text-right w-36">Subtotal</th>
                 </tr>
               </thead>
               <tbody>
                 {items.map((item, idx) => {
-                  const sku  = item.ProductSKU
-                  const opts = sku?.ProductVariantOptions ?? []
+                  const sku     = item.ProductSKU
+                  const opts    = sku?.ProductVariantOptions ?? []
                   const variant = opts.map(o => o.value).join(' / ') || sku?.sku_code || '—'
+                  const price   = Number(sku?.price ?? 0)
                   return (
                     <tr key={item.id ?? idx} className="tr border-b border-slate-100 hover:bg-slate-50/50">
                       <td className="td py-3">
@@ -383,11 +397,17 @@ export default function StockOutDetail() {
                         <span className="text-sm text-slate-600">{sku ? variant : '—'}</span>
                       </td>
                       <td className="td py-3 text-right font-mono font-bold text-danger">{fmt(item.quantity)}</td>
+                      <td className="td py-3 text-right font-mono text-slate-500">Rp {fmt(price)}</td>
+                      <td className="td py-3 text-right font-mono font-semibold text-slate-800">Rp {fmt(price * item.quantity)}</td>
                     </tr>
                   )
                 })}
               </tbody>
             </table>
+            </div>
+            <div className="px-5 py-4 bg-slate-50 border-t border-slate-200 flex justify-end items-center gap-3">
+              <span className="text-sm font-semibold text-slate-600">GRAND TOTAL</span>
+              <span className="text-xl font-bold text-slate-900 font-mono">Rp {fmt(detail.grandTotal ?? 0)}</span>
             </div>
           </div>
         )}
