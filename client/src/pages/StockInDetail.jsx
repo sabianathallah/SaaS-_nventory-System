@@ -321,9 +321,10 @@ export default function StockInDetail() {
 
   const handleScan = async (code) => {
     try {
-      const sku = await stockInApi.resolveSku(code)
+      const sku   = await stockInApi.resolveSku(code)
+      const label = skuLabel(sku)
       addItem({ sku, quantity: 1, price: Number(sku.price) || 0 })
-      // Scanner tetap terbuka untuk semua role — feedback via lastScanned di QRScanner
+      toast.success(`${sku.Product?.name ?? code}${label ? ` · ${label}` : ''} +1`)
     } catch {
       toast.error(`SKU "${code}" tidak ditemukan`)
     }

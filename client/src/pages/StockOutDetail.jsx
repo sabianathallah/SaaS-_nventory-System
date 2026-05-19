@@ -86,6 +86,7 @@ function ProductSkuPicker({ onSelect, warehouseId, stocks }) {
       skuId:        selSku.id,
       productId:    selProduct.id,
       productName:  selProduct.name,
+      imageUrl:     selProduct.imageUrl ?? null,
       variantLabel: skuLabel(selSku),
       quantity:     Number(qty),
       available:    avail,
@@ -263,7 +264,7 @@ export default function StockOutDetail() {
       const avail     = stockRec?.quantity ?? 0
       const name      = sku.Product?.name ?? code
       const label     = skuLabel(sku)
-      addItem({ skuId, productId, productName: name, variantLabel: label, quantity: 1, available: avail })
+      addItem({ skuId, productId, productName: name, imageUrl: sku.Product?.imageUrl ?? null, variantLabel: label, quantity: 1, available: avail })
       toast.success(`${name}${label ? ` · ${label}` : ''} +1`)
     } catch {
       toast.error(`SKU "${code}" tidak ditemukan`)
@@ -559,9 +560,10 @@ export default function StockOutDetail() {
             <p className="text-center text-slate-400 text-sm py-10">Belum ada item</p>
           ) : (
             <div className="overflow-x-auto">
-            <table className="w-full min-w-[400px] text-sm">
+            <table className="w-full min-w-[440px] text-sm">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-100">
+                  <th className="th py-2 w-14">Foto</th>
                   <th className="th py-2 text-left">Produk</th>
                   <th className="th py-2 text-left">Varian / SKU</th>
                   <th className="th py-2 text-right w-28">Qty</th>
@@ -572,6 +574,12 @@ export default function StockOutDetail() {
               <tbody>
                 {form.items.map((it, idx) => (
                   <tr key={it.key} className="tr border-b border-slate-50">
+                    <td className="td py-2">
+                      {it.imageUrl
+                        ? <img src={it.imageUrl} className="w-10 h-10 rounded object-cover border border-slate-200" />
+                        : <div className="w-10 h-10 rounded bg-slate-100 flex items-center justify-center"><Package size={14} className="text-slate-300" /></div>
+                      }
+                    </td>
                     <td className="td py-2 font-medium text-slate-800">{it.productName}</td>
                     <td className="td py-2 text-slate-500 text-xs">{it.variantLabel || '—'}</td>
                     <td className="td py-1.5 text-right">
