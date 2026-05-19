@@ -240,7 +240,7 @@ export default function StockOutDetail() {
     onError: e => toast.error(e.response?.data?.message || 'Error'),
   })
 
-  const addItem = ({ skuId, productId, productName, variantLabel, quantity, available }) => {
+  const addItem = ({ skuId, productId, productName, imageUrl, variantLabel, quantity, available }) => {
     setForm(f => {
       const key = skuId ? `sku-${skuId}` : `prod-${productId}`
       const idx = f.items.findIndex(i => i.key === key)
@@ -249,7 +249,7 @@ export default function StockOutDetail() {
         next[idx] = { ...next[idx], quantity: next[idx].quantity + quantity }
         return { ...f, items: next }
       }
-      return { ...f, items: [...f.items, { key, skuId, productId, productName, variantLabel, quantity, available }] }
+      return { ...f, items: [...f.items, { key, skuId, productId, productName, imageUrl: imageUrl ?? null, variantLabel, quantity, available }] }
     })
   }
 
