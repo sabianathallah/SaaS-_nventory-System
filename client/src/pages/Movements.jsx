@@ -1,12 +1,14 @@
 import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
-import { movementsApi, warehousesApi, productsApi } from '../api'
+import { movementsApi, warehousesApi, productsApi, articlesApi, categoriesApi } from '../api'
 import PageHeader from '../components/PageHeader'
 import SearchableSelect from '../components/SearchableSelect'
 import { Table, Pagination } from '../components/Table'
 import { exportExcel } from '../utils/exportExcel'
 import toast from 'react-hot-toast'
+
+const PURPOSES = ['Penjualan','Endorse','Photoshoot','R&D','Pemakaian Internal','Hadiah / Gift','Sample','Retur Vendor','Lainnya']
 
 const TYPE_BADGE = {
   IN:         <span className="badge-green">▲ IN</span>,
@@ -21,20 +23,26 @@ function defaultDateFrom() {
 }
 
 export default function Movements() {
-  const [page, setPage]         = useState(1)
-  const [typeFilter, setType]   = useState('')
-  const [whFilter, setWh]       = useState('')
-  const [prodFilter, setProd]   = useState('')
-  const [dateFrom, setDateFrom] = useState(defaultDateFrom())
-  const [dateTo, setDateTo]     = useState(new Date().toISOString().slice(0, 10))
+  const [page, setPage]           = useState(1)
+  const [typeFilter, setType]     = useState('')
+  const [whFilter, setWh]         = useState('')
+  const [prodFilter, setProd]     = useState('')
+  const [articleFilter, setArt]   = useState('')
+  const [catFilter, setCat]       = useState('')
+  const [purposeFilter, setPurp]  = useState('')
+  const [dateFrom, setDateFrom]   = useState(defaultDateFrom())
+  const [dateTo, setDateTo]       = useState(new Date().toISOString().slice(0, 10))
 
   const filters = useMemo(() => ({
-    type:        typeFilter  || undefined,
-    WarehouseId: whFilter    || undefined,
-    ProductId:   prodFilter  || undefined,
-    dateFrom:    dateFrom    || undefined,
-    dateTo:      dateTo      || undefined,
-  }), [typeFilter, whFilter, prodFilter, dateFrom, dateTo])
+    type:        typeFilter      || undefined,
+    WarehouseId: whFilter        || undefined,
+    ProductId:   prodFilter      || undefined,
+    ArticleId:   articleFilter   || undefined,
+    CategoryId:  catFilter       || undefined,
+    purpose:     purposeFilter   || undefined,
+    dateFrom:    dateFrom        || undefined,
+    dateTo:      dateTo          || undefined,
+  }), [typeFilter, whFilter, prodFilter, articleFilter, catFilter, purposeFilter, dateFrom, dateTo])
 
   const { data, isLoading } = useQuery({
     queryKey: ['movements', { page, ...filters }],
@@ -61,8 +69,18 @@ export default function Movements() {
     queryFn:  () => productsApi.list({ limit: 200 }),
   })
 
+  const { data: articles } = useQuery({
+    queryKey: ['articles', { limit: 200 }],
+    queryFn:  () => articlesApi.list({ limit: 200 }),
+  })
+
+  const { data: categories } = useQuery({
+    queryKey: ['categories', { limit: 200 }],
+    queryFn:  () => categoriesApi.list({ limit: 200 }),
+  })
+
   function resetFilters() {
-    setType(''); setWh(''); setProd('')
+    setType(''); setWh(''); setProd(''); setArt(''); setCat(''); setPurp('')
     setDateFrom(defaultDateFrom())
     setDateTo(new Date().toISOString().slice(0, 10))
     setPage(1)
@@ -256,6 +274,27 @@ export default function Movements() {
             options={[{ value: '', label: 'All products' }, ...(products?.data ?? []).map(p => ({ value: p.id, label: p.name }))]}
             placeholder="All products"
             className="w-48 text-sm"
+          />
+          <SearchableSelect
+            value={articleFilter}
+            onChange={v => { setArt(v); setPage(1) }}
+            options={[{ value: '', label: 'All koleksi' }, ...(articles?.data ?? []).map(a => ({ value: a.id, label: a.name }))]}
+            placeholder="All koleksi"
+            className="w-40 text-sm"
+          />
+          <SearchableSelect
+            value={catFilter}
+            onChange={v => { setCat(v); setPage(1) }}
+            options={[{ value: '', label: 'All kategori' }, ...(categories?.data ?? []).map(c => ({ value: c.id, label: c.name }))]}
+            placeholder="All kategori"
+            className="w-40 text-sm"
+          />
+          <SearchableSelect
+            value={purposeFilter}
+            onChange={v => { setPurp(v); setPage(1) }}
+            options={[{ value: '', label: 'All tujuan' }, ...PURPOSES.map(p => ({ value: p, label: p }))]}
+            placeholder="All tujuan"
+            className="w-44 text-sm"
           />
 
           <button onClick={resetFilters} className="text-xs text-slate-400 hover:text-slate-600 underline ml-auto">Reset</button>

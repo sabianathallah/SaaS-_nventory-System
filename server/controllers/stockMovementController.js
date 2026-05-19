@@ -4,6 +4,19 @@ const { Op, fn, col, literal } = require('sequelize');
 const { companyFilter, companyId } = require('../helpers/tenancy');
 const { paginate, buildFilter, paginatedResponse } = require('../helpers/queryHelper');
 
+const ALLOWED_PURPOSES = ['Penjualan','Endorse','Photoshoot','R&D','Pemakaian Internal','Hadiah / Gift','Sample','Retur Vendor','Lainnya'];
+
+function extraFilters(query) {
+    const { ArticleId, CategoryId, purpose } = query;
+    const productWhere = {};
+    if (ArticleId)  productWhere.ArticleId  = ArticleId;
+    if (CategoryId) productWhere.CategoryId = CategoryId;
+    const purposeWhere = (purpose && ALLOWED_PURPOSES.includes(purpose))
+        ? [literal(`(SELECT soh.purpose FROM "Stock_Out_Headers" soh WHERE soh.id = "Stock_Movement"."ReferenceId" AND "Stock_Movement"."type" = 'OUT') = '${purpose.replace(/'/g, "''")}'`)]
+        : [];
+    return { productWhere, purposeWhere };
+}
+
 class StockMovementController {
     static async getAll(req, res, next) {
         try {
@@ -15,8 +28,12 @@ class StockMovementController {
                 dateFrom:    { field: 'createdAt', type: 'gte' },
                 dateTo:      { field: 'createdAt', type: 'lte' },
             });
+            const { productWhere, purposeWhere } = extraFilters(req.query);
+            const where = { ...companyFilter(req), ...filter };
+            if (purposeWhere.length) where[Op.and] = [...(where[Op.and] || []), ...purposeWhere];
+
             const { rows, count } = await Stock_Movement.findAndCountAll({
-                where: { ...companyFilter(req), ...filter },
+                where,
                 attributes: {
                     include: [
                         [
@@ -26,7 +43,7 @@ class StockMovementController {
                     ]
                 },
                 include: [
-                    { model: Product,   attributes: ['id', 'name', 'sku', 'unit'] },
+                    { model: Product, attributes: ['id', 'name', 'sku', 'unit'], ...(Object.keys(productWhere).length ? { where: productWhere } : {}) },
                     { model: Warehouse, attributes: ['id', 'name'] },
                     {
                         model: ProductSKU, attributes: ['id', 'sku_code'], required: false,
@@ -80,12 +97,18 @@ class StockMovementController {
                 dateFrom:    { field: 'createdAt', type: 'gte' },
                 dateTo:      { field: 'createdAt', type: 'lte' },
             });
+            const { productWhere, purposeWhere } = extraFilters(req.query);
             const base = { ...companyFilter(req), ...filter };
+            if (purposeWhere.length) base[Op.and] = [...(base[Op.and] || []), ...purposeWhere];
+
+            const summaryOpts = Object.keys(productWhere).length
+                ? { include: [{ model: Product, where: productWhere, attributes: [] }] }
+                : {};
 
             const [inRow, outRow, adjRow] = await Promise.all([
-                Stock_Movement.sum('quantity', { where: { ...base, type: 'IN' } }),
-                Stock_Movement.sum('quantity', { where: { ...base, type: 'OUT' } }),
-                Stock_Movement.sum('quantity', { where: { ...base, type: 'ADJUSTMENT' } }),
+                Stock_Movement.sum('quantity', { where: { ...base, type: 'IN'  }, ...summaryOpts }),
+                Stock_Movement.sum('quantity', { where: { ...base, type: 'OUT' }, ...summaryOpts }),
+                Stock_Movement.sum('quantity', { where: { ...base, type: 'ADJUSTMENT' }, ...summaryOpts }),
             ]);
 
             const totalIn  = inRow  || 0;
@@ -103,8 +126,12 @@ class StockMovementController {
                 dateFrom:    { field: 'createdAt', type: 'gte' },
                 dateTo:      { field: 'createdAt', type: 'lte' },
             });
+            const { productWhere, purposeWhere } = extraFilters(req.query);
+            const where = { ...companyFilter(req), ...filter };
+            if (purposeWhere.length) where[Op.and] = [...(where[Op.and] || []), ...purposeWhere];
             const rows = await Stock_Movement.findAll({
-                where: { ...companyFilter(req), ...filter },
+                where,
+                ...(Object.keys(productWhere).length ? { include: [{ model: Product, where: productWhere, attributes: [] }] } : {}),
                 attributes: [
                     [fn('DATE', col('createdAt')), 'date'],
                     'type',
@@ -134,8 +161,11 @@ class StockMovementController {
                 dateFrom:    { field: 'createdAt', type: 'gte' },
                 dateTo:      { field: 'createdAt', type: 'lte' },
             });
+            const { productWhere, purposeWhere } = extraFilters(req.query);
+            const where = { ...companyFilter(req), ...filter };
+            if (purposeWhere.length) where[Op.and] = [...(where[Op.and] || []), ...purposeWhere];
             const rows = await Stock_Movement.findAll({
-                where: { ...companyFilter(req), ...filter },
+                where,
                 attributes: {
                     include: [
                         [
@@ -145,7 +175,7 @@ class StockMovementController {
                     ]
                 },
                 include: [
-                    { model: Product,   attributes: ['name', 'sku'] },
+                    { model: Product, attributes: ['name', 'sku'], ...(Object.keys(productWhere).length ? { where: productWhere } : {}) },
                     { model: Warehouse, attributes: ['name'] },
                     {
                         model: ProductSKU, attributes: ['sku_code'], required: false,
