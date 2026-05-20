@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { useNavigate } from 'react-router-dom'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import { movementsApi, warehousesApi, productsApi, articlesApi, categoriesApi } from '../api'
 import PageHeader from '../components/PageHeader'
@@ -23,6 +24,7 @@ function defaultDateFrom() {
 }
 
 export default function Movements() {
+  const navigate = useNavigate()
   const [page, setPage]           = useState(1)
   const [typeFilter, setType]     = useState('')
   const [whFilter, setWh]         = useState('')
@@ -175,7 +177,19 @@ export default function Movements() {
     },
     {
       key: 'ref', label: 'Ref #', width: 80,
-      render: r => <span className="font-mono text-xs text-slate-400">#{r.ReferenceId ?? '—'}</span>,
+      render: r => {
+        if (!r.ReferenceId) return <span className="font-mono text-xs text-slate-400">—</span>
+        const path = r.type === 'IN' ? `/stock-in/${r.ReferenceId}` : r.type === 'OUT' ? `/stock-out/${r.ReferenceId}` : null
+        if (!path) return <span className="font-mono text-xs text-slate-400">#{r.ReferenceId}</span>
+        return (
+          <button
+            onClick={() => navigate(path)}
+            className="font-mono text-xs text-brand hover:underline hover:text-brand/80 transition-colors"
+          >
+            #{r.ReferenceId}
+          </button>
+        )
+      },
     },
   ]
 
