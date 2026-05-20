@@ -179,7 +179,7 @@ export default function Movements() {
       key: 'ref', label: 'Ref #', width: 80,
       render: r => {
         if (!r.ReferenceId) return <span className="font-mono text-xs text-slate-400">—</span>
-        const path = r.type === 'IN' ? `/stock-in/${r.ReferenceId}` : r.type === 'OUT' ? `/stock-out/${r.ReferenceId}` : null
+        const path = r.type === 'IN' ? `/stock-in/${r.ReferenceId}` : r.type === 'OUT' ? `/stock-out/${r.ReferenceId}` : r.type === 'ADJUSTMENT' ? `/opname/${r.ReferenceId}` : null
         if (!path) return <span className="font-mono text-xs text-slate-400">#{r.ReferenceId}</span>
         return (
           <button
