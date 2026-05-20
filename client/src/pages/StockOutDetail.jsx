@@ -80,8 +80,8 @@ function ProductSkuPicker({ onSelect, warehouseId, stocks }) {
   const handleAdd = () => {
     if (!selSku) return toast.error('Pilih SKU / varian terlebih dahulu')
     if (!qty || Number(qty) <= 0) return toast.error('Qty harus lebih dari 0')
-    const avail = getAvail(selProduct.id)
-    if (avail !== null && Number(qty) > avail) {
+    const avail = selSku.qty ?? 0
+    if (Number(qty) > avail) {
       toast(`Stok akan menjadi negatif. Tersedia: ${avail}`, { icon: '⚠️' })
     }
     onSelect({
@@ -262,8 +262,7 @@ export default function StockOutDetail() {
       const sku       = await stockInApi.resolveSku(code)
       const productId = String(sku.ProductId ?? sku.Product?.id)
       const skuId     = String(sku.id)
-      const stockRec  = stocks?.data?.find(s => String(s.ProductId) === productId)
-      const avail     = stockRec?.quantity ?? 0
+      const avail     = sku.qty ?? 0
       const name      = sku.Product?.name ?? code
       const label     = skuLabel(sku)
       addItem({ skuId, productId, productName: name, imageUrl: sku.Product?.imageUrl ?? null, variantLabel: label, quantity: 1, available: avail })
