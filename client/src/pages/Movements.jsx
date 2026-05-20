@@ -176,17 +176,20 @@ export default function Movements() {
       render: r => <span className="text-xs text-slate-400 truncate max-w-[160px] block">{r.note || '—'}</span>,
     },
     {
-      key: 'ref', label: 'Ref #', width: 80,
+      key: 'ref', label: 'Transaksi', width: 180,
       render: r => {
-        if (!r.ReferenceId) return <span className="font-mono text-xs text-slate-400">—</span>
+        if (!r.ReferenceId) return <span className="text-xs text-slate-400">—</span>
         const path = r.type === 'IN' ? `/stock-in/${r.ReferenceId}` : r.type === 'OUT' ? `/stock-out/${r.ReferenceId}` : r.type === 'ADJUSTMENT' ? `/opname/${r.ReferenceId}` : null
         if (!path) return <span className="font-mono text-xs text-slate-400">#{r.ReferenceId}</span>
+        const label = r.type === 'IN' ? 'Stock IN' : r.type === 'OUT' ? 'Stock OUT' : 'Opname'
         return (
           <button
             onClick={() => navigate(path)}
-            className="btn-secondary text-[10px] px-2 py-0.5 flex items-center gap-1 rounded font-mono"
+            className="btn-secondary text-[11px] px-2.5 py-1 flex items-center gap-1.5 rounded-lg whitespace-nowrap"
           >
-            #{r.ReferenceId}
+            <span className="text-slate-400">Lihat detail</span>
+            <span className="font-semibold text-slate-600">{label}</span>
+            <span className="font-mono text-slate-400">#{r.ReferenceId}</span>
           </button>
         )
       },
