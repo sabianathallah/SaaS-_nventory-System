@@ -50,7 +50,7 @@ class StockMovementController {
                         include: [{ model: ProductVariantOption, attributes: ['id', 'value'], through: { attributes: [] } }]
                     },
                 ],
-                order: [['createdAt', 'DESC']],
+                order: [['date', 'DESC']],
                 limit, offset,
                 distinct: true
             });
@@ -182,7 +182,7 @@ class StockMovementController {
                         include: [{ model: ProductVariantOption, attributes: ['value'], through: { attributes: [] } }]
                     },
                 ],
-                order: [['createdAt', 'DESC']],
+                order: [['date', 'DESC']],
                 limit: 5000,
             });
 
