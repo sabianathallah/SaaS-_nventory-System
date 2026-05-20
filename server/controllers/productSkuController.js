@@ -1,6 +1,5 @@
 'use strict';
-const { Op } = require('sequelize');
-const { Product, ProductSKU, ProductVariantOption, ProductVariantType, ProductSKUVariantOption, Stock_Movement } = require('../models');
+const { Product, ProductSKU, ProductVariantOption, ProductVariantType, ProductSKUVariantOption } = require('../models');
 const { companyFilter, companyId } = require('../helpers/tenancy');
 
 function generateSkuCode(productName, options = []) {
@@ -32,23 +31,7 @@ class ProductSkuController {
         order: [['createdAt', 'ASC']],
       });
 
-      const skuIds = skus.map(s => s.id);
-      const outMovements = skuIds.length ? await Stock_Movement.findAll({
-        where: { ProductSKUId: { [Op.in]: skuIds }, type: 'OUT' },
-        attributes: ['ProductSKUId', 'quantity'],
-      }) : [];
-
-      const outMap = {};
-      for (const m of outMovements) {
-        outMap[m.ProductSKUId] = (outMap[m.ProductSKUId] || 0) + Number(m.quantity);
-      }
-
-      const result = skus.map(s => ({
-        ...s.toJSON(),
-        qty: Number(s.qty) - (outMap[s.id] || 0),
-      }));
-
-      res.status(200).json(result);
+      res.status(200).json(skus.map(s => s.toJSON()));
     } catch (err) { next(err); }
   }
 
