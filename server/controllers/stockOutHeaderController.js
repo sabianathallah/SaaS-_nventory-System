@@ -103,8 +103,11 @@ class StockOutHeaderController {
                     await t.rollback();
                     return res.status(400).json({ message: `DEBUG: ProductId=${ProductId} WarehouseId=${WarehouseId} quantity=${quantity} skuId=${ProductSKUId}` });
                 }
-                const stock = await Stock.findOne({ where: { ProductId, WarehouseId }, transaction: t });
-                if (!stock) { await t.rollback(); return res.status(400).json({ message: `Stok tidak ditemukan untuk ProductId=${ProductId} di WarehouseId=${WarehouseId}` }); }
+                await Stock.findOrCreate({
+                    where: { ProductId, WarehouseId },
+                    defaults: { quantity: 0, companyId: cid },
+                    transaction: t,
+                });
                 resolvedItems.push({ ...item, ProductId, ProductSKUId: ProductSKUId || null, WarehouseId });
             }
 
