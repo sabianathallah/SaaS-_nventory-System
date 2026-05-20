@@ -87,7 +87,7 @@ class DashboardController {
         SELECT COUNT(*)::int AS val
         FROM "Stock_Movements" sm
         JOIN "Products" p ON sm."ProductId" = p.id
-        WHERE DATE(sm."createdAt" AT TIME ZONE 'Asia/Jakarta') = CURRENT_DATE ${todayClause}
+        WHERE DATE(sm."date" AT TIME ZONE 'Asia/Jakarta') = CURRENT_DATE ${todayClause}
       `, opts);
 
       // ── 6. Low stock items (total stock ≤ 5 across all warehouses) ──

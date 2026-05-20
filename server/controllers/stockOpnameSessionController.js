@@ -103,9 +103,10 @@ class StockOpnameSessionController {
                         WarehouseId:  session.warehouseId,
                         ProductSKUId: item.ProductSKUId ?? null,
                         type:         'ADJUSTMENT',
-                        quantity:     diff,   // signed: negative = shrinkage, positive = surplus
+                        quantity:     diff,
                         ReferenceId:  session.id,
                         note:         `Opname koreksi: ${diff > 0 ? '+' : ''}${diff}`,
+                        date:         session.finished_at || new Date(),
                         companyId:    session.companyId
                     }, { transaction: t });
                 }

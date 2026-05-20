@@ -128,7 +128,9 @@ class StockInHeaderController {
           await Stock_Movement.create({
             ProductId: sku.ProductId, WarehouseId,
             type: 'IN', quantity: Number(quantity),
-            ReferenceId: header.id, note: note || null, companyId: cid,
+            ReferenceId: header.id, note: note || null,
+            date: header.date || new Date(),
+            companyId: cid,
           }, { transaction: t });
         }
       }
@@ -201,7 +203,9 @@ class StockInHeaderController {
         await Stock_Movement.create({
           ProductId: sku.ProductId, WarehouseId: header.WarehouseId,
           type: 'IN', quantity: Number(quantity),
-          ReferenceId: header.id, companyId: cid,
+          ReferenceId: header.id,
+          date: header.date || new Date(),
+          companyId: cid,
         }, { transaction: t });
       }
 
@@ -241,7 +245,9 @@ class StockInHeaderController {
           await Stock_Movement.create({
             ProductId: sku.ProductId, WarehouseId: header.WarehouseId,
             type: delta > 0 ? 'IN' : 'OUT', quantity: Math.abs(delta),
-            ReferenceId: header.id, companyId: companyId(req),
+            ReferenceId: header.id,
+            date: header.date || new Date(),
+            companyId: companyId(req),
           }, { transaction: t });
         }
       }
@@ -276,7 +282,10 @@ class StockInHeaderController {
           await Stock_Movement.create({
             ProductId: sku.ProductId, WarehouseId: header.WarehouseId,
             type: 'OUT', quantity: item.quantity,
-            ReferenceId: header.id, companyId: companyId(req),
+            ReferenceId: header.id,
+            note: `Koreksi: item dihapus dari Stock IN #${header.id}`,
+            date: header.date || new Date(),
+            companyId: companyId(req),
           }, { transaction: t });
         }
       }

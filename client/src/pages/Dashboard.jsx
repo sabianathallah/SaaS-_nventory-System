@@ -298,7 +298,7 @@ export default function Dashboard() {
               <StatCard label="Total Stock" value={fmtNum(totalStock)} sub="unit · dari semua SKU" icon={BoxesIcon} accent="#3B82F6" loading={isLoading} />
             )}
             {canViewValue && (
-              <StatCard label="Total Nilai Inventaris" value={fmtRp(totalValue)} sub={isLoading ? '' : fmtRpFull(totalValue)} icon={Wallet} accent="#10B981" loading={isLoading} />
+              <StatCard label="Total Nilai Inventaris" value={fmtRp(totalValue)} sub={isLoading ? '' : `${fmtRpFull(totalValue)} · berdasarkan harga SKU`} icon={Wallet} accent="#10B981" loading={isLoading} />
             )}
           </div>
         )

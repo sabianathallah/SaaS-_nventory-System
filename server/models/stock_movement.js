@@ -60,6 +60,11 @@ module.exports = (sequelize, DataTypes) => {
     ProductSKUId: { type: DataTypes.INTEGER, allowNull: true },
     ReferenceId: DataTypes.BIGINT,
     note: DataTypes.TEXT,
+    date: {
+      type: DataTypes.DATE,
+      allowNull: false,
+      defaultValue: DataTypes.NOW,
+    },
     companyId: { type: DataTypes.INTEGER, allowNull: true }
   }, {
     sequelize,

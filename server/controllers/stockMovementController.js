@@ -25,8 +25,8 @@ class StockMovementController {
                 type:        'exact',
                 ProductId:   'exact',
                 WarehouseId: 'exact',
-                dateFrom:    { field: 'createdAt', type: 'gte' },
-                dateTo:      { field: 'createdAt', type: 'lte' },
+                dateFrom:    { field: 'date', type: 'gte' },
+                dateTo:      { field: 'date', type: 'lte' },
             });
             const { productWhere, purposeWhere } = extraFilters(req.query);
             const where = { ...companyFilter(req), ...filter };
@@ -94,8 +94,8 @@ class StockMovementController {
                 type:        'exact',
                 ProductId:   'exact',
                 WarehouseId: 'exact',
-                dateFrom:    { field: 'createdAt', type: 'gte' },
-                dateTo:      { field: 'createdAt', type: 'lte' },
+                dateFrom:    { field: 'date', type: 'gte' },
+                dateTo:      { field: 'date', type: 'lte' },
             });
             const { productWhere, purposeWhere } = extraFilters(req.query);
             const base = { ...companyFilter(req), ...filter };
@@ -123,8 +123,8 @@ class StockMovementController {
             const filter = buildFilter(req.query, {
                 ProductId:   'exact',
                 WarehouseId: 'exact',
-                dateFrom:    { field: 'createdAt', type: 'gte' },
-                dateTo:      { field: 'createdAt', type: 'lte' },
+                dateFrom:    { field: 'date', type: 'gte' },
+                dateTo:      { field: 'date', type: 'lte' },
             });
             const { productWhere, purposeWhere } = extraFilters(req.query);
             const where = { ...companyFilter(req), ...filter };
@@ -133,12 +133,12 @@ class StockMovementController {
                 where,
                 ...(Object.keys(productWhere).length ? { include: [{ model: Product, where: productWhere, attributes: [] }] } : {}),
                 attributes: [
-                    [fn('DATE', col('createdAt')), 'date'],
+                    [fn('DATE', col('date')), 'date'],
                     'type',
                     [fn('SUM', col('quantity')), 'total'],
                 ],
-                group: [fn('DATE', col('createdAt')), 'type'],
-                order: [[fn('DATE', col('createdAt')), 'ASC']],
+                group: [fn('DATE', col('date')), 'type'],
+                order: [[fn('DATE', col('date')), 'ASC']],
                 raw: true,
             });
 
@@ -158,8 +158,8 @@ class StockMovementController {
                 type:        'exact',
                 ProductId:   'exact',
                 WarehouseId: 'exact',
-                dateFrom:    { field: 'createdAt', type: 'gte' },
-                dateTo:      { field: 'createdAt', type: 'lte' },
+                dateFrom:    { field: 'date', type: 'gte' },
+                dateTo:      { field: 'date', type: 'lte' },
             });
             const { productWhere, purposeWhere } = extraFilters(req.query);
             const where = { ...companyFilter(req), ...filter };
@@ -191,7 +191,7 @@ class StockMovementController {
                 const opts    = r.ProductSKU?.ProductVariantOptions ?? [];
                 const variant = opts.map(o => o.value).join(' / ');
                 return [
-                    new Date(r.createdAt).toISOString(),
+                    new Date(r.date ?? r.createdAt).toISOString(),
                     r.type,
                     `"${r.type === 'OUT' ? (r.getDataValue?.('purpose') ?? r.purpose ?? '') : ''}"`,
                     `"${r.Product?.name ?? ''}"`,

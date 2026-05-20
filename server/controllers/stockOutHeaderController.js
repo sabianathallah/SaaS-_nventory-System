@@ -131,7 +131,9 @@ class StockOutHeaderController {
 
                 movements.push(await Stock_Movement.create({
                     ProductId, ProductSKUId, WarehouseId, type: 'OUT', quantity,
-                    ReferenceId: header.id, note: note || null, companyId: cid
+                    ReferenceId: header.id, note: note || null,
+                    date: header.date || new Date(),
+                    companyId: cid
                 }, { transaction: t }));
             }
             await t.commit();

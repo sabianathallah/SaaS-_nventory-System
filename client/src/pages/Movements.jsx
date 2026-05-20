@@ -108,7 +108,7 @@ export default function Movements() {
         const variant = opts.map(o => o.value).join(' / ') || m.ProductSKU?.sku_code || '—'
         return [
           i + 1,
-          new Date(m.createdAt).toLocaleString('id-ID'),
+          new Date(m.date ?? m.createdAt).toLocaleString('id-ID'),
           m.type,
           m.type === 'OUT' ? (m.purpose ?? '—') : '—',
           m.Product?.name ?? `#${m.ProductId}`,
@@ -131,7 +131,7 @@ export default function Movements() {
   const columns = [
     {
       key: 'date', label: 'Tanggal', width: 130,
-      render: r => <span className="text-xs text-slate-400">{new Date(r.createdAt).toLocaleString('id-ID')}</span>,
+      render: r => <span className="text-xs text-slate-400">{new Date(r.date ?? r.createdAt).toLocaleString('id-ID')}</span>,
     },
     {
       key: 'type', label: 'Tipe', width: 100,
