@@ -126,7 +126,7 @@ class StockInHeaderController {
           await sku.increment('qty', { by: Number(quantity), transaction: t });
 
           await Stock_Movement.create({
-            ProductId: sku.ProductId, WarehouseId,
+            ProductId: sku.ProductId, ProductSKUId: Number(ProductSKUId), WarehouseId,
             type: 'IN', quantity: Number(quantity),
             ReferenceId: header.id, note: note || null,
             date: header.date || new Date(),
@@ -201,7 +201,7 @@ class StockInHeaderController {
         await stock.increment('quantity', { by: Number(quantity), transaction: t });
         await sku.increment('qty', { by: Number(quantity), transaction: t });
         await Stock_Movement.create({
-          ProductId: sku.ProductId, WarehouseId: header.WarehouseId,
+          ProductId: sku.ProductId, ProductSKUId: Number(ProductSKUId), WarehouseId: header.WarehouseId,
           type: 'IN', quantity: Number(quantity),
           ReferenceId: header.id,
           date: header.date || new Date(),
@@ -243,7 +243,7 @@ class StockInHeaderController {
           await stock.increment('quantity', { by: delta, transaction: t });
           await sku.increment('qty', { by: delta, transaction: t });
           await Stock_Movement.create({
-            ProductId: sku.ProductId, WarehouseId: header.WarehouseId,
+            ProductId: sku.ProductId, ProductSKUId: item.ProductSKUId, WarehouseId: header.WarehouseId,
             type: delta > 0 ? 'IN' : 'OUT', quantity: Math.abs(delta),
             ReferenceId: header.id,
             date: header.date || new Date(),
@@ -280,7 +280,7 @@ class StockInHeaderController {
           }
           await sku.decrement('qty', { by: item.quantity, transaction: t });
           await Stock_Movement.create({
-            ProductId: sku.ProductId, WarehouseId: header.WarehouseId,
+            ProductId: sku.ProductId, ProductSKUId: item.ProductSKUId, WarehouseId: header.WarehouseId,
             type: 'OUT', quantity: item.quantity,
             ReferenceId: header.id,
             note: `Koreksi: item dihapus dari Stock IN #${header.id}`,
