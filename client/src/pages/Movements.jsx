@@ -184,7 +184,7 @@ export default function Movements() {
         return (
           <button
             onClick={() => navigate(path)}
-            className="font-mono text-xs text-brand hover:underline hover:text-brand/80 transition-colors"
+            className="btn-secondary text-[10px] px-2 py-0.5 flex items-center gap-1 rounded font-mono"
           >
             #{r.ReferenceId}
           </button>
