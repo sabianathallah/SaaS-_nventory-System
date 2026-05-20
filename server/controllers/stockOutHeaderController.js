@@ -34,7 +34,7 @@ class StockOutHeaderController {
                     { model: User, foreignKey: 'createdBy', attributes: ['id', 'name'] },
                     { model: Warehouse, attributes: ['id', 'name'] },
                 ],
-                order: [['date', 'DESC']],
+                order: [['date', 'DESC'], ['id', 'DESC']],
                 limit, offset,
                 distinct: true
             });

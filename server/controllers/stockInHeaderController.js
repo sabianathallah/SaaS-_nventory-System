@@ -40,7 +40,7 @@ class StockInHeaderController {
           { model: User,      foreignKey: 'createdBy', attributes: ['id', 'name'] },
           { model: Stock_In_Item, attributes: ['id', 'quantity', 'price'] },
         ],
-        order: [['date', 'DESC']],
+        order: [['date', 'DESC'], ['id', 'DESC']],
         limit, offset,
         distinct: true,
       });
