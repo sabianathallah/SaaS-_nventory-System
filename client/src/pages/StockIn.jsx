@@ -20,6 +20,10 @@ export default function StockIn() {
 
   const columns = [
     {
+      key: 'id', label: 'No.', width: 70,
+      render: r => <span className="font-mono text-xs font-semibold text-slate-400">#{r.id}</span>,
+    },
+    {
       key: 'date', label: 'Tanggal', width: 130,
       render: r => <span className="text-xs font-mono text-slate-500">{fmtDate(r.date)}</span>,
     },

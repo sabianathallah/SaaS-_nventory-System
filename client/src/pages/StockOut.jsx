@@ -20,6 +20,10 @@ export default function StockOut() {
 
   const columns = [
     {
+      key: 'id', label: 'No.', width: 70,
+      render: r => <span className="font-mono text-xs font-semibold text-slate-400">#{r.id}</span>,
+    },
+    {
       key: 'date', label: 'Tanggal', width: 120,
       render: r => <span className="text-xs font-mono text-slate-500">{fmtDate(r.date ?? r.createdAt)}</span>,
     },
