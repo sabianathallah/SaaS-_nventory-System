@@ -32,7 +32,9 @@ const skuLabel = (sku) => {
   return opts.map(o => o.value).join(' / ')
 }
 
-const EMPTY_FORM = { warehouseId: '', purpose: '', purposeDetail: '', note: '', items: [] }
+const fmtDate = (d) => d ? new Date(d).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10)
+
+const EMPTY_FORM = { warehouseId: '', purpose: '', purposeDetail: '', note: '', date: fmtDate(), items: [] }
 
 // ── Product → SKU picker untuk Stock OUT ────────────────────────────────────────
 function ProductSkuPicker({ onSelect, warehouseId, stocks }) {
@@ -282,6 +284,7 @@ export default function StockOutDetail() {
     createMutation.mutate({
       WarehouseId: form.warehouseId,
       purpose,
+      date: form.date,
       note:  form.note,
       items: form.items.map(i => ({
         ProductSKUId: i.skuId   ? Number(i.skuId)   : undefined,
@@ -312,7 +315,7 @@ export default function StockOutDetail() {
           item.quantity,
           detail.purpose ?? '—',
           detail.Warehouse?.name ?? '—',
-          new Date(detail.createdAt).toLocaleDateString('id-ID'),
+          new Date(detail.date ?? detail.createdAt).toLocaleDateString('id-ID'),
         ]
       })
       exportExcel(`stock-out-${detail.id}-${new Date().toISOString().slice(0, 10)}`, { headers, rows, sheetName: 'Stock OUT' })
@@ -327,7 +330,7 @@ export default function StockOutDetail() {
           <div className="flex-1">
             <h1 className="text-lg font-bold text-slate-800">Stock OUT #{detail.id}</h1>
             <p className="text-xs text-slate-400">
-              {new Date(detail.createdAt).toLocaleDateString('id-ID', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}
+              {new Date(detail.date ?? detail.createdAt).toLocaleDateString('id-ID', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}
             </p>
           </div>
           {items.length > 0 && (
@@ -339,7 +342,7 @@ export default function StockOutDetail() {
 
         <div className="card p-5 mb-5 grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm">
           <div><p className="label mb-1">Warehouse</p><p className="font-semibold text-slate-700">{detail.Warehouse?.name ?? '—'}</p></div>
-          <div><p className="label mb-1">Tanggal</p><p className="font-mono text-slate-600">{new Date(detail.createdAt).toLocaleDateString('id-ID')}</p></div>
+          <div><p className="label mb-1">Tanggal</p><p className="font-mono text-slate-600">{new Date(detail.date ?? detail.createdAt).toLocaleDateString('id-ID')}</p></div>
           <div>
             <p className="label mb-1">Tujuan</p>
             <span className="inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-violet-50 text-violet-700 border border-violet-100">
@@ -503,6 +506,11 @@ export default function StockOutDetail() {
                 />
               </div>
             )}
+            <div>
+              <label className="label">Tanggal <span className="text-red-500">*</span></label>
+              <input type="date" className="input" value={form.date}
+                onChange={e => setForm(f => ({ ...f, date: e.target.value }))} required />
+            </div>
             <div>
               <label className="label">Catatan</label>
               <input className="input" placeholder="Catatan (opsional)…" value={form.note}

@@ -21,7 +21,7 @@ export default function StockOut() {
   const columns = [
     {
       key: 'date', label: 'Tanggal', width: 120,
-      render: r => <span className="text-xs font-mono text-slate-500">{fmtDate(r.createdAt)}</span>,
+      render: r => <span className="text-xs font-mono text-slate-500">{fmtDate(r.date ?? r.createdAt)}</span>,
     },
     {
       key: 'warehouse', label: 'Gudang',
