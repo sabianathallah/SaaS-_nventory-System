@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
-import { movementsApi, warehousesApi, productsApi, articlesApi, categoriesApi } from '../api'
+import { movementsApi, warehousesApi, productsApi, productSkusApi, articlesApi, categoriesApi } from '../api'
 import PageHeader from '../components/PageHeader'
 import SearchableSelect from '../components/SearchableSelect'
 import { Table, Pagination } from '../components/Table'
@@ -29,6 +29,7 @@ export default function Movements() {
   const [typeFilter, setType]     = useState('')
   const [whFilter, setWh]         = useState('')
   const [prodFilter, setProd]     = useState('')
+  const [skuFilter, setSku]       = useState('')
   const [articleFilter, setArt]   = useState('')
   const [catFilter, setCat]       = useState('')
   const [purposeFilter, setPurp]  = useState('')
@@ -36,15 +37,16 @@ export default function Movements() {
   const [dateTo, setDateTo]       = useState(new Date().toISOString().slice(0, 10))
 
   const filters = useMemo(() => ({
-    type:        typeFilter      || undefined,
-    WarehouseId: whFilter        || undefined,
-    ProductId:   prodFilter      || undefined,
-    ArticleId:   articleFilter   || undefined,
-    CategoryId:  catFilter       || undefined,
-    purpose:     purposeFilter   || undefined,
-    dateFrom:    dateFrom        || undefined,
-    dateTo:      dateTo          || undefined,
-  }), [typeFilter, whFilter, prodFilter, articleFilter, catFilter, purposeFilter, dateFrom, dateTo])
+    type:          typeFilter      || undefined,
+    WarehouseId:   whFilter        || undefined,
+    ProductId:     prodFilter      || undefined,
+    ProductSKUId:  skuFilter       || undefined,
+    ArticleId:     articleFilter   || undefined,
+    CategoryId:    catFilter       || undefined,
+    purpose:       purposeFilter   || undefined,
+    dateFrom:      dateFrom        || undefined,
+    dateTo:        dateTo          || undefined,
+  }), [typeFilter, whFilter, prodFilter, skuFilter, articleFilter, catFilter, purposeFilter, dateFrom, dateTo])
 
   const { data, isLoading } = useQuery({
     queryKey: ['movements', { page, ...filters }],
@@ -71,6 +73,12 @@ export default function Movements() {
     queryFn:  () => productsApi.list({ limit: 200 }),
   })
 
+  const { data: productSkus } = useQuery({
+    queryKey: ['product-skus', prodFilter],
+    queryFn:  () => productSkusApi.list(prodFilter),
+    enabled:  !!prodFilter,
+  })
+
   const { data: articles } = useQuery({
     queryKey: ['articles', { limit: 200 }],
     queryFn:  () => articlesApi.list({ limit: 200 }),
@@ -82,7 +90,7 @@ export default function Movements() {
   })
 
   function resetFilters() {
-    setType(''); setWh(''); setProd(''); setArt(''); setCat(''); setPurp('')
+    setType(''); setWh(''); setProd(''); setSku(''); setArt(''); setCat(''); setPurp('')
     setDateFrom(defaultDateFrom())
     setDateTo(new Date().toISOString().slice(0, 10))
     setPage(1)
@@ -287,11 +295,27 @@ export default function Movements() {
           />
           <SearchableSelect
             value={prodFilter}
-            onChange={v => { setProd(v); setPage(1) }}
+            onChange={v => { setProd(v); setSku(''); setPage(1) }}
             options={[{ value: '', label: 'All products' }, ...(products?.data ?? []).map(p => ({ value: p.id, label: p.name }))]}
             placeholder="All products"
             className="w-48 text-sm"
           />
+          {prodFilter && (
+            <SearchableSelect
+              value={skuFilter}
+              onChange={v => { setSku(v); setPage(1) }}
+              options={[
+                { value: '', label: 'Semua size' },
+                ...(productSkus ?? []).map(s => {
+                  const opts  = s.ProductVariantOptions ?? []
+                  const label = opts.length ? opts.map(o => o.value).join(' / ') : s.sku_code
+                  return { value: s.id, label }
+                }),
+              ]}
+              placeholder="Semua size"
+              className="w-36 text-sm"
+            />
+          )}
           <SearchableSelect
             value={articleFilter}
             onChange={v => { setArt(v); setPage(1) }}

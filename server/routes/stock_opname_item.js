@@ -2,13 +2,16 @@
 const express = require('express');
 const router  = express.Router();
 const C       = require('../controllers/stockOpnameItemController');
-const rp      = require('../middlewares/requirePermission');
 const { requireAnyPermission: rpAny } = require('../middlewares/requirePermission');
 
-router.get('/',       rp('stock.view'),  C.getAll);
-router.get('/:id',    rp('stock.view'),  C.getById);
-router.post('/',      rpAny('stock.manage', 'stock.opname.scan', 'stock.opname.manual_input'), C.create);
-router.put('/:id',    rpAny('stock.manage', 'stock.opname.manual_input'), C.update);
-router.delete('/:id', rp('stock.manage'), C.delete);
+const canView   = rpAny('stock.manage', 'stock.view', 'stock.opname.view');
+const canInput  = rpAny('stock.manage', 'stock.opname.create', 'stock.opname.scan', 'stock.opname.manual_input');
+const canDelete = rpAny('stock.manage', 'stock.opname.delete');
+
+router.get('/',    canView,                                                                     C.getAll);
+router.get('/:id', canView,                                                                     C.getById);
+router.post('/',   canInput,                                                                    C.create);
+router.put('/:id', rpAny('stock.manage', 'stock.opname.create', 'stock.opname.manual_input'),  C.update);
+router.delete('/:id', canDelete,                                                                C.delete);
 
 module.exports = router;

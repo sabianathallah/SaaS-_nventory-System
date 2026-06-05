@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { stockInApi } from '../api'
+import { useAuth } from '../context/AuthContext'
 import PageHeader from '../components/PageHeader'
 import { Table, Pagination } from '../components/Table'
 import { PackagePlus, Eye } from 'lucide-react'
@@ -12,6 +13,10 @@ const fmtDate = (d) => d ? new Date(d).toLocaleDateString('id-ID', { day: '2-dig
 export default function StockIn() {
   const navigate = useNavigate()
   const [page, setPage] = useState(1)
+  const { hasPermission } = useAuth()
+
+  const canCreate   = hasPermission('stock.in.create') || hasPermission('stock.manage')
+  const canViewValue = hasPermission('inventory.view_value') || hasPermission('inventory.manage')
 
   const { data, isLoading } = useQuery({
     queryKey: ['stock-in', { page }],
@@ -33,7 +38,7 @@ export default function StockIn() {
     },
     {
       key: 'note', label: 'Catatan',
-      render: r => <span className="text-xs text-slate-400 truncate max-w-[200px] block">{r.note || '—'}</span>,
+      render: r => <span className="text-xs text-slate-400 truncate max-w-[180px] block">{r.note || '—'}</span>,
     },
     {
       key: 'itemCount', label: 'Item', width: 60,
@@ -43,27 +48,26 @@ export default function StockIn() {
       key: 'totalQty', label: 'Total Qty', width: 90,
       render: r => <span className="font-mono text-sm font-bold text-slate-700">{fmt(r.totalQty ?? 0)}</span>,
     },
-    {
+    ...(canViewValue ? [{
       key: 'grandTotal', label: 'Total Nilai', width: 150,
       render: r => (
         <span className="font-mono font-bold text-sm text-slate-800">
           Rp {fmt(r.grandTotal)}
         </span>
       ),
-    },
+    }] : []),
     {
-      key: 'createdBy', label: 'Oleh', width: 120,
+      key: 'createdBy', label: 'Dibuat oleh', width: 130,
       render: r => <span className="text-xs text-slate-500">{r.User?.name ?? '—'}</span>,
     },
     {
-      key: 'actions', label: '', width: 120,
+      key: 'actions', label: '', width: 110,
       render: r => (
         <button
           onClick={() => navigate(`/stock-in/${r.id}`)}
           className="btn-secondary text-[10px] px-2 py-0.5 flex items-center gap-1 rounded"
         >
-          <Eye size={10} />
-          Lihat Detail
+          <Eye size={10} /> Lihat Detail
         </button>
       ),
     },
@@ -74,12 +78,11 @@ export default function StockIn() {
       <PageHeader
         title="Penerimaan Stok"
         subtitle={`${data?.pagination?.total ?? 0} transaksi`}
-        action={
+        action={canCreate && (
           <button onClick={() => navigate('/stock-in/new')} className="btn-primary">
-            <PackagePlus size={14} />
-            Buat Baru
+            <PackagePlus size={14} /> Buat Baru
           </button>
-        }
+        )}
       />
 
       <div className="card overflow-hidden">

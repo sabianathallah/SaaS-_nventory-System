@@ -22,11 +22,12 @@ class StockMovementController {
         try {
             const { page, limit, offset } = paginate(req.query);
             const filter = buildFilter(req.query, {
-                type:        'exact',
-                ProductId:   'exact',
-                WarehouseId: 'exact',
-                dateFrom:    { field: 'date', type: 'gte' },
-                dateTo:      { field: 'date', type: 'lte' },
+                type:         'exact',
+                ProductId:    'exact',
+                ProductSKUId: 'exact',
+                WarehouseId:  'exact',
+                dateFrom:     { field: 'date', type: 'gte' },
+                dateTo:       { field: 'date', type: 'lte' },
             });
             const { productWhere, purposeWhere } = extraFilters(req.query);
             const where = { ...companyFilter(req), ...filter };

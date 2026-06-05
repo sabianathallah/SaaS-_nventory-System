@@ -49,10 +49,10 @@ class ProductController {
             const { rows, count } = await Product.findAndCountAll({
                 where: { ...companyFilter(req), ...filter, ...extraWhere },
                 attributes: {
-                    include: [[
-                        sequelize.literal(stockSubquery),
-                        'totalStock',
-                    ]],
+                    include: [
+                        [sequelize.literal(stockSubquery), 'totalStock'],
+                        [sequelize.literal(`(SELECT COALESCE(SUM(sku."qty" * sku."price"), 0) FROM "ProductSKUs" sku WHERE sku."ProductId" = "Product"."id")`), 'totalValue'],
+                    ],
                 },
                 include: [
                     { model: Category,   attributes: ['id', 'name'] },

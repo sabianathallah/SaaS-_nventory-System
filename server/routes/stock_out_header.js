@@ -2,15 +2,24 @@
 const express = require('express');
 const router  = express.Router();
 const C       = require('../controllers/stockOutHeaderController');
-const rp      = require('../middlewares/requirePermission');
 const { requireAnyPermission: rpAny } = require('../middlewares/requirePermission');
-const requireCompany             = require('../middlewares/requireCompany');
+const requireCompany              = require('../middlewares/requireCompany');
 const requireWarehouseNotInOpname = require('../middlewares/requireWarehouseNotInOpname');
 
-router.get('/',       rp('stock.view'),  C.getAll);
-router.get('/:id',    rp('stock.view'),  C.getById);
-router.post('/',      rpAny('stock.manage', 'stock.out.scan', 'stock.out.manual_input'), requireCompany, requireWarehouseNotInOpname, C.create);
-router.put('/:id',    rp('stock.manage'), C.update);
-router.delete('/:id', rp('stock.manage'), C.delete);
+const canView       = rpAny('stock.manage', 'stock.view', 'stock.out.view');
+const canCreate     = rpAny('stock.manage', 'stock.out.create', 'stock.out.scan', 'stock.out.manual_input');
+const canEdit       = rpAny('stock.manage', 'stock.out.create');
+const canDelete     = rpAny('stock.manage', 'stock.out.delete');
+const canDeleteItem = rpAny('stock.manage', 'stock.out.delete_item');
+
+router.get('/',       canView,                                               C.getAll);
+router.get('/:id',    canView,                                               C.getById);
+router.post('/',      canCreate, requireCompany, requireWarehouseNotInOpname, C.create);
+router.put('/:id',    canEdit,                                               C.update);
+router.delete('/:id', canDelete,                                             C.delete);
+
+router.post('/:id/items',           canCreate, requireCompany, requireWarehouseNotInOpname, C.addItem);
+router.put('/:id/items/:itemId',    canEdit,                                 C.updateItem);
+router.delete('/:id/items/:itemId', canDeleteItem,                           C.removeItem);
 
 module.exports = router;

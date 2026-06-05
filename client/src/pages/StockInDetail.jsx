@@ -168,7 +168,7 @@ function ProductSkuPicker({ onSelect }) {
 }
 
 // ── Item row (view mode) ──────────────────────────────────────────────────────
-function ItemRow({ item, canDelete, headerId }) {
+function ItemRow({ item, canDelete, headerId, canViewValue }) {
   const qc = useQueryClient()
   const sku   = item.ProductSKU
   const prod  = sku?.Product
@@ -197,8 +197,8 @@ function ItemRow({ item, canDelete, headerId }) {
         <span className="font-bold text-slate-800">{item.quantity}</span>
         <span className="text-xs text-slate-400 ml-1">{prod?.unit}</span>
       </td>
-      <td className="td py-3 text-right font-mono text-sm text-slate-600">Rp {fmt(item.price)}</td>
-      <td className="td py-3 text-right font-mono font-semibold text-slate-800">Rp {fmt(total)}</td>
+      {canViewValue && <td className="td py-3 text-right font-mono text-sm text-slate-600">Rp {fmt(item.price)}</td>}
+      {canViewValue && <td className="td py-3 text-right font-mono font-semibold text-slate-800">Rp {fmt(total)}</td>}
       {canDelete && (
         <td className="td py-3 w-10">
           <button
@@ -217,8 +217,8 @@ function ItemRow({ item, canDelete, headerId }) {
 // ── Items table ───────────────────────────────────────────────────────────────
 // draftMode=true  → items come from server draft (item.ProductSKU structure), onRemove(item.id)
 // draftMode=false → view mode, uses ItemRow
-function ItemsTable({ items, canDelete, headerId, onRemove, draftMode, removeLoading }) {
-  const cols = canDelete ? 6 : 5
+function ItemsTable({ items, canDelete, headerId, onRemove, draftMode, removeLoading, canViewValue }) {
+  const cols = 3 + (canViewValue ? 2 : 0) + (canDelete ? 1 : 0)
   return (
     <div className="overflow-x-auto">
     <table className="w-full min-w-[560px] text-sm">
@@ -227,8 +227,8 @@ function ItemsTable({ items, canDelete, headerId, onRemove, draftMode, removeLoa
           <th className="th py-2 w-14">Foto</th>
           <th className="th py-2 text-left">Nama SKU</th>
           <th className="th py-2 text-right w-24">Qty</th>
-          <th className="th py-2 text-right w-36">Harga</th>
-          <th className="th py-2 text-right w-36">Total</th>
+          {canViewValue && <th className="th py-2 text-right w-36">Harga</th>}
+          {canViewValue && <th className="th py-2 text-right w-36">Total</th>}
           {canDelete && <th className="th py-2 w-10"></th>}
         </tr>
       </thead>
@@ -237,7 +237,7 @@ function ItemsTable({ items, canDelete, headerId, onRemove, draftMode, removeLoa
           <tr><td colSpan={cols} className="td py-10 text-center text-slate-400">Belum ada item</td></tr>
         )}
         {items.map((item, idx) => {
-          if (!draftMode) return <ItemRow key={item.id} item={item} canDelete={canDelete} headerId={headerId} />
+          if (!draftMode) return <ItemRow key={item.id} item={item} canDelete={canDelete} headerId={headerId} canViewValue={canViewValue} />
           const sku  = item.ProductSKU
           const prod = sku?.Product
           return (
@@ -253,8 +253,8 @@ function ItemsTable({ items, canDelete, headerId, onRemove, draftMode, removeLoa
                 <p className="text-xs text-slate-400">{skuLabel(sku)}</p>
               </td>
               <td className="td py-3 text-right font-bold text-slate-800">{item.quantity}</td>
-              <td className="td py-3 text-right font-mono text-slate-600">Rp {fmt(item.price)}</td>
-              <td className="td py-3 text-right font-mono font-semibold text-slate-800">Rp {fmt(Number(item.price) * item.quantity)}</td>
+              {canViewValue && <td className="td py-3 text-right font-mono text-slate-600">Rp {fmt(item.price)}</td>}
+              {canViewValue && <td className="td py-3 text-right font-mono font-semibold text-slate-800">Rp {fmt(Number(item.price) * item.quantity)}</td>}
               <td className="td py-3">
                 <button type="button" onClick={() => onRemove(item.id)}
                   disabled={removeLoading}
@@ -284,6 +284,7 @@ export default function StockInDetail() {
   // Granular permission flags
   const canManualInput = hasPermission('stock.in.manual_input') || hasPermission('stock.manage')
   const canDeleteItem  = hasPermission('stock.in.delete_item')  || hasPermission('stock.manage')
+  const canViewValue   = hasPermission('inventory.view_value')  || hasPermission('inventory.manage')
 
   // ── Draft (server-side) ──────────────────────────────────────────────────────
   const { data: draft, isLoading: draftLoading } = useQuery({
@@ -448,10 +449,12 @@ export default function StockInDetail() {
             <p className="label mb-1">Total Qty</p>
             <p className="font-bold text-slate-800">{fmt(items.reduce((s, i) => s + i.quantity, 0))} <span className="font-normal text-slate-400">unit</span></p>
           </div>
-          <div>
-            <p className="label mb-1">Grand Total</p>
-            <p className="font-bold text-slate-800 font-mono">Rp {fmt(grandTotal)}</p>
-          </div>
+          {canViewValue && (
+            <div>
+              <p className="label mb-1">Grand Total</p>
+              <p className="font-bold text-slate-800 font-mono">Rp {fmt(grandTotal)}</p>
+            </div>
+          )}
           <div>
             <p className="label mb-1">Oleh</p>
             <p className="font-semibold text-slate-700">{detail.User?.name ?? '—'}</p>
@@ -463,11 +466,13 @@ export default function StockInDetail() {
             <PackagePlus size={13} className="text-red-700" />
             <span className="text-xs font-bold text-slate-600 uppercase tracking-wide">Items ({items.length})</span>
           </div>
-          <ItemsTable items={items} canDelete={canDeleteItem} headerId={detail.id} draftMode={false} />
-          <div className="px-5 py-4 bg-slate-50 border-t border-slate-200 flex justify-end items-center gap-3">
-            <span className="text-sm font-semibold text-slate-600">GRAND TOTAL</span>
-            <span className="text-xl font-bold text-slate-900 font-mono">Rp {fmt(grandTotal)}</span>
-          </div>
+          <ItemsTable items={items} canDelete={canDeleteItem} headerId={detail.id} draftMode={false} canViewValue={canViewValue} />
+          {canViewValue && (
+            <div className="px-5 py-4 bg-slate-50 border-t border-slate-200 flex justify-end items-center gap-3">
+              <span className="text-sm font-semibold text-slate-600">GRAND TOTAL</span>
+              <span className="text-xl font-bold text-slate-900 font-mono">Rp {fmt(grandTotal)}</span>
+            </div>
+          )}
         </div>
       </div>
     )
@@ -595,10 +600,11 @@ export default function StockInDetail() {
                 draftMode={true}
                 onRemove={itemId => removeItemMutation.mutate(itemId)}
                 removeLoading={removeItemMutation.isPending}
+                canViewValue={canViewValue}
               />
           }
 
-          {draftItems.length > 0 && (
+          {draftItems.length > 0 && canViewValue && (
             <div className="px-5 py-4 bg-slate-50 border-t border-slate-200 flex justify-end items-center gap-3">
               <span className="text-sm font-semibold text-slate-600">GRAND TOTAL</span>
               <span className="text-xl font-bold text-slate-900 font-mono">Rp {fmt(grandTotal)}</span>

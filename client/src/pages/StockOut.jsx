@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { stockOutApi } from '../api'
+import { useAuth } from '../context/AuthContext'
 import PageHeader from '../components/PageHeader'
 import { Table, Pagination } from '../components/Table'
 import { PackageMinus, Eye } from 'lucide-react'
@@ -10,8 +11,12 @@ const fmt = (n) => Number(n ?? 0).toLocaleString('id-ID')
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'
 
 export default function StockOut() {
-  const navigate    = useNavigate()
+  const navigate = useNavigate()
   const [page, setPage] = useState(1)
+  const { hasPermission } = useAuth()
+
+  const canCreate    = hasPermission('stock.out.create') || hasPermission('stock.manage')
+  const canViewValue = hasPermission('inventory.view_value') || hasPermission('inventory.manage')
 
   const { data, isLoading } = useQuery({
     queryKey: ['stock-out', { page }],
@@ -45,16 +50,16 @@ export default function StockOut() {
       key: 'totalQty', label: 'Total Qty', width: 90,
       render: r => <span className="font-mono text-sm text-danger font-bold">{fmt(r.totalQty ?? 0)}</span>,
     },
-    {
+    ...(canViewValue ? [{
       key: 'grandTotal', label: 'Total Nilai', width: 150,
       render: r => (
         <span className="font-mono font-bold text-sm text-slate-800">
           Rp {fmt(r.grandTotal ?? 0)}
         </span>
       ),
-    },
+    }] : []),
     {
-      key: 'createdBy', label: 'Oleh', width: 120,
+      key: 'createdBy', label: 'Dibuat oleh', width: 130,
       render: r => <span className="text-xs text-slate-500">{r.User?.name ?? '—'}</span>,
     },
     {
@@ -62,7 +67,7 @@ export default function StockOut() {
       render: r => <span className="text-xs text-slate-400 truncate max-w-[150px] block">{r.notes || '—'}</span>,
     },
     {
-      key: 'actions', label: '', width: 120,
+      key: 'actions', label: '', width: 110,
       render: r => (
         <button onClick={() => navigate(`/stock-out/${r.id}`)} className="btn-secondary text-[10px] px-2 py-0.5 flex items-center gap-1 rounded">
           <Eye size={10} /> Lihat Detail
@@ -76,11 +81,11 @@ export default function StockOut() {
       <PageHeader
         title="Pengeluaran Stok"
         subtitle={`${data?.pagination?.total ?? 0} transaksi`}
-        action={
+        action={canCreate && (
           <button onClick={() => navigate('/stock-out/new')} className="btn-primary">
-            <PackageMinus size={14} /> New Stock OUT
+            <PackageMinus size={14} /> Pengeluaran Baru
           </button>
-        }
+        )}
       />
       <div className="card overflow-hidden">
         <Table columns={columns} data={data?.data} loading={isLoading} emptyText="Belum ada transaksi stock out" />

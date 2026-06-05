@@ -12,10 +12,12 @@ import { useCompanyGuard } from '../hooks/useCompanyGuard'
 import CompanyRequiredBanner from '../components/CompanyRequiredBanner'
 
 const STATUS_BADGE = {
-  open:      <span className="badge-amber">● Open</span>,
-  closed:    <span className="badge-green">✓ Closed</span>,
-  cancelled: <span className="badge-muted">✕ Cancelled</span>,
+  open:      <span className="badge-amber">● Berlangsung</span>,
+  closed:    <span className="badge-green">✓ Selesai</span>,
+  cancelled: <span className="badge-muted">✕ Dibatalkan</span>,
 }
+
+const fmtDate = (d) => d ? new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'
 
 export default function Opname() {
   const qc       = useQueryClient()
@@ -75,22 +77,23 @@ export default function Opname() {
     : data?.data?.filter(s => s.status !== 'cancelled')
 
   const columns = [
-    { key: 'id',        label: '#',        width: 60,  render: r => <span className="font-mono text-xs text-slate-400">{r.id}</span> },
-    { key: 'warehouse', label: 'Warehouse',            render: r => <span className="font-semibold text-slate-800">{r.Warehouse?.name ?? '—'}</span> },
-    { key: 'status',    label: 'Status',    width: 110, render: r => STATUS_BADGE[r.status] ?? <span className="badge-muted">{r.status}</span> },
-    { key: 'started',   label: 'Started',   width: 100, render: r => <span className="text-xs text-slate-400">{new Date(r.started_at).toLocaleDateString()}</span> },
-    { key: 'finished',  label: 'Finished',  width: 100, render: r => <span className="text-xs text-slate-400">{r.finished_at ? new Date(r.finished_at).toLocaleDateString() : '—'}</span> },
-    { key: 'notes',     label: 'Notes',                render: r => <span className="text-xs text-slate-400">{r.notes || '—'}</span> },
+    { key: 'id',        label: '#',           width: 60,  render: r => <span className="font-mono text-xs text-slate-400">{r.id}</span> },
+    { key: 'warehouse', label: 'Gudang',                  render: r => <span className="font-semibold text-slate-800">{r.Warehouse?.name ?? '—'}</span> },
+    { key: 'status',    label: 'Status',      width: 120, render: r => STATUS_BADGE[r.status] ?? <span className="badge-muted">{r.status}</span> },
+    { key: 'started',   label: 'Dibuka',      width: 110, render: r => <span className="text-xs text-slate-400">{fmtDate(r.started_at)}</span> },
+    { key: 'finished',  label: 'Ditutup',     width: 110, render: r => <span className="text-xs text-slate-400">{r.finished_at ? fmtDate(r.finished_at) : '—'}</span> },
+    { key: 'createdBy', label: 'Dibuat oleh', width: 130, render: r => <span className="text-xs text-slate-500">{r.User?.name ?? '—'}</span> },
+    { key: 'notes',     label: 'Catatan',                 render: r => <span className="text-xs text-slate-400">{r.notes || '—'}</span> },
     { key: 'actions',   label: '', width: 240, render: r => (
       <div className="flex gap-2">
         {r.status === 'open' && (
           <button onClick={() => navigate(`/opname/${r.id}`)} className="btn-secondary text-xs px-3 py-1.5 flex items-center gap-1.5">
-            <ClipboardList size={12} /> Fill Opname
+            <ClipboardList size={12} /> Isi Opname
           </button>
         )}
         {r.status === 'closed' && (
           <button onClick={() => navigate(`/opname/${r.id}`)} className="btn-secondary text-xs px-3 py-1.5 flex items-center gap-1.5">
-            <Eye size={12} /> View Result
+            <Eye size={12} /> Lihat Hasil
           </button>
         )}
         {r.status === 'open' && (
@@ -98,7 +101,7 @@ export default function Opname() {
             onClick={() => setModal({ mode: 'close-confirm', data: r })}
             className="text-xs px-3 py-1.5 rounded font-medium flex items-center gap-1.5 bg-success-light text-success border border-success/20 hover:bg-success hover:text-white transition-colors"
           >
-            <CheckCircle size={12} /> Close Session
+            <CheckCircle size={12} /> Tutup Sesi
           </button>
         )}
       </div>
@@ -127,10 +130,10 @@ export default function Opname() {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-4 gap-4">
-        <div className="card p-4"><p className="text-xs text-slate-500 mb-1">Total Sessions</p><p className="text-2xl font-bold font-mono text-slate-800">{data?.pagination?.total ?? 0}</p></div>
-        <div className="card p-4"><p className="text-xs text-slate-500 mb-1">Open</p><p className="text-2xl font-bold font-mono text-warning">{openCount}</p></div>
-        <div className="card p-4"><p className="text-xs text-slate-500 mb-1">Closed</p><p className="text-2xl font-bold font-mono text-success">{closedCount}</p></div>
-        <div className="card p-4"><p className="text-xs text-slate-500 mb-1">Cancelled</p><p className="text-2xl font-bold font-mono text-slate-400">{cancelledCount}</p></div>
+        <div className="card p-4"><p className="text-xs text-slate-500 mb-1">Total Sesi</p><p className="text-2xl font-bold font-mono text-slate-800">{data?.pagination?.total ?? 0}</p></div>
+        <div className="card p-4"><p className="text-xs text-slate-500 mb-1">Berlangsung</p><p className="text-2xl font-bold font-mono text-warning">{openCount}</p></div>
+        <div className="card p-4"><p className="text-xs text-slate-500 mb-1">Selesai</p><p className="text-2xl font-bold font-mono text-success">{closedCount}</p></div>
+        <div className="card p-4"><p className="text-xs text-slate-500 mb-1">Dibatalkan</p><p className="text-2xl font-bold font-mono text-slate-400">{cancelledCount}</p></div>
       </div>
 
       {/* Filters + Table */}
@@ -140,10 +143,10 @@ export default function Opname() {
             value={statusFilter}
             onChange={v => { setStatusFilter(v); setPage(1) }}
             options={[
-              { value: '', label: 'All status' },
-              { value: 'open', label: 'Open' },
-              { value: 'closed', label: 'Closed' },
-              ...(showCancelled ? [{ value: 'cancelled', label: 'Cancelled' }] : []),
+              { value: '', label: 'Semua status' },
+              { value: 'open', label: 'Berlangsung' },
+              { value: 'closed', label: 'Selesai' },
+              ...(showCancelled ? [{ value: 'cancelled', label: 'Dibatalkan' }] : []),
             ]}
             placeholder="All status"
             className="w-36 text-sm"
@@ -151,13 +154,13 @@ export default function Opname() {
           <SearchableSelect
             value={whFilter}
             onChange={v => { setWhFilter(v); setPage(1) }}
-            options={[{ value: '', label: 'All warehouses' }, ...(warehouses?.data ?? []).map(w => ({ value: w.id, label: w.name }))]}
+            options={[{ value: '', label: 'Semua gudang' }, ...(warehouses?.data ?? []).map(w => ({ value: w.id, label: w.name }))]}
             placeholder="All warehouses"
             className="w-44 text-sm"
           />
           <label className="flex items-center gap-2 text-xs text-slate-500 ml-auto cursor-pointer select-none">
             <input type="checkbox" className="rounded" checked={showCancelled} onChange={e => setShowCancelled(e.target.checked)} />
-            Tampilkan Cancelled
+            Tampilkan Dibatalkan
           </label>
         </div>
         <Table columns={columns} data={visibleData} loading={isLoading} emptyText="Belum ada sesi opname" />
@@ -190,7 +193,7 @@ export default function Opname() {
 
       {/* ── CLOSE SESSION CONFIRM ─────────────────────────────────────────────── */}
       <Modal open={modal?.mode === 'close-confirm'} onClose={() => setModal(null)} title="Tutup Sesi Opname" size="sm">
-        <p className="text-sm text-slate-600 mb-2">Sesi akan ditutup dan stok disesuaikan berdasarkan data hasil hitung opname.</p>
+        <p className="text-sm text-slate-600 mb-2">Sesi akan ditutup dan stok akan disesuaikan berdasarkan hasil hitung opname.</p>
         <p className="text-xs text-warning font-semibold mb-5">Tindakan ini tidak dapat dibatalkan.</p>
         <div className="flex gap-2">
           <button onClick={() => setModal(null)} className="btn-secondary flex-1 justify-center">Batal</button>

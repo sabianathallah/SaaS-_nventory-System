@@ -208,6 +208,7 @@ export default function StockOutDetail() {
 
   const canManualOutput = hasPermission('stock.out.manual_input') || hasPermission('stock.manage')
   const canScanOut      = hasPermission('stock.out.scan')         || hasPermission('stock.manage')
+  const canViewValue    = hasPermission('inventory.view_value')   || hasPermission('inventory.manage')
 
   // ── Draft (server-side) ──────────────────────────────────────────────────────
   const { data: draft, isLoading: draftLoading } = useQuery({
@@ -417,10 +418,12 @@ export default function StockOutDetail() {
             <p className="label mb-1">Oleh</p>
             <p className="font-semibold text-slate-700">{detail.User?.name ?? '—'}</p>
           </div>
-          <div>
-            <p className="label mb-1">Grand Total</p>
-            <p className="font-bold text-slate-800 font-mono">Rp {fmt(detail.grandTotal ?? 0)}</p>
-          </div>
+          {canViewValue && (
+            <div>
+              <p className="label mb-1">Grand Total</p>
+              <p className="font-bold text-slate-800 font-mono">Rp {fmt(detail.grandTotal ?? 0)}</p>
+            </div>
+          )}
         </div>
 
         {items.length > 0 && (
@@ -436,8 +439,8 @@ export default function StockOutDetail() {
                   <th className="th py-2 text-left">Produk</th>
                   <th className="th py-2 text-left">Varian / SKU</th>
                   <th className="th py-2 text-right w-24">Qty</th>
-                  <th className="th py-2 text-right w-36">Harga Satuan</th>
-                  <th className="th py-2 text-right w-36">Subtotal</th>
+                  {canViewValue && <th className="th py-2 text-right w-36">Harga Satuan</th>}
+                  {canViewValue && <th className="th py-2 text-right w-36">Subtotal</th>}
                 </tr>
               </thead>
               <tbody>
@@ -456,18 +459,20 @@ export default function StockOutDetail() {
                         <span className="text-sm text-slate-600">{sku ? variant : '—'}</span>
                       </td>
                       <td className="td py-3 text-right font-mono font-bold text-danger">{fmt(item.quantity)}</td>
-                      <td className="td py-3 text-right font-mono text-slate-500">Rp {fmt(price)}</td>
-                      <td className="td py-3 text-right font-mono font-semibold text-slate-800">Rp {fmt(price * item.quantity)}</td>
+                      {canViewValue && <td className="td py-3 text-right font-mono text-slate-500">Rp {fmt(price)}</td>}
+                      {canViewValue && <td className="td py-3 text-right font-mono font-semibold text-slate-800">Rp {fmt(price * item.quantity)}</td>}
                     </tr>
                   )
                 })}
               </tbody>
             </table>
             </div>
-            <div className="px-5 py-4 bg-slate-50 border-t border-slate-200 flex justify-end items-center gap-3">
-              <span className="text-sm font-semibold text-slate-600">GRAND TOTAL</span>
-              <span className="text-xl font-bold text-slate-900 font-mono">Rp {fmt(detail.grandTotal ?? 0)}</span>
-            </div>
+            {canViewValue && (
+              <div className="px-5 py-4 bg-slate-50 border-t border-slate-200 flex justify-end items-center gap-3">
+                <span className="text-sm font-semibold text-slate-600">GRAND TOTAL</span>
+                <span className="text-xl font-bold text-slate-900 font-mono">Rp {fmt(detail.grandTotal ?? 0)}</span>
+              </div>
+            )}
           </div>
         )}
       </div>

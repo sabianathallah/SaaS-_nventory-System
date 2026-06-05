@@ -198,10 +198,11 @@ function SkuRows({ product, onOpenQr }) {
 
 // ── Product Row ───────────────────────────────────────────────────────────────
 
-function ProductRow({ product, expanded, onToggle, onDelete, onNavigate, onOpenQr, canEdit, canDelete }) {
+function ProductRow({ product, expanded, onToggle, onDelete, onNavigate, onOpenQr, canEdit, canDelete, canViewValue }) {
   const skus   = product.ProductSKUs ?? []
   const range  = priceRange(skus)
   const stock  = Number(product.totalStock ?? 0)
+  const value  = Number(product.totalValue  ?? 0)
   const skuCnt = skus.length
 
   const handleRowClick = () => onToggle()
@@ -287,6 +288,17 @@ function ProductRow({ product, expanded, onToggle, onDelete, onNavigate, onOpenQ
             : <span className="text-slate-300 text-xs">—</span>}
         </td>
 
+        {/* Nilai Stok */}
+        {canViewValue && (
+          <td className="td w-40 text-right">
+            {skuCnt > 0
+              ? <span className="text-sm font-bold tabular-nums text-slate-700">
+                  Rp {value.toLocaleString('id-ID')}
+                </span>
+              : <span className="text-slate-300 text-xs">—</span>}
+          </td>
+        )}
+
         {/* Actions */}
         <td className="td w-20">
           <div className="flex items-center justify-end gap-1">
@@ -329,7 +341,7 @@ function ProductRow({ product, expanded, onToggle, onDelete, onNavigate, onOpenQ
         skuCnt > 0
           ? <SkuRows product={product} onOpenQr={onOpenQr} />
           : <tr>
-              <td colSpan={8} className="border-b border-slate-100 bg-slate-50/60">
+              <td colSpan={canViewValue ? 9 : 8} className="border-b border-slate-100 bg-slate-50/60">
                 <div className="ml-14 mr-4 py-4 flex items-center gap-4">
                   <div className="flex-1">
                     <p className="text-xs font-semibold text-slate-500">Belum ada SKU</p>
@@ -361,9 +373,10 @@ export default function Products() {
   const { selectedCompany } = useSelectedCompany()
   const { needsCompany } = useCompanyGuard()
   const blocked    = isSuperAdmin && !selectedCompany
-  const canCreate = hasPermission('inventory.product.create') || hasPermission('inventory.manage')
-  const canEdit   = hasPermission('inventory.product.edit')   || hasPermission('inventory.manage')
-  const canDelete = hasPermission('inventory.product.delete') || hasPermission('inventory.manage')
+  const canCreate    = hasPermission('inventory.product.create') || hasPermission('inventory.manage')
+  const canEdit      = hasPermission('inventory.product.edit')   || hasPermission('inventory.manage')
+  const canDelete    = hasPermission('inventory.product.delete') || hasPermission('inventory.manage')
+  const canViewValue = hasPermission('inventory.view_value')     || hasPermission('inventory.manage')
 
   const [page, setPage]         = useState(1)
   const [search, setSearch]     = useState('')
@@ -544,6 +557,7 @@ export default function Products() {
                     <th className="th w-24">SKU</th>
                     <th className="th w-44">Harga</th>
                     <SortTh label="Stok"    col="totalStock" sort={sort} onSort={handleSort} className="w-28 text-right" />
+                    {canViewValue && <th className="th w-40 text-right">Nilai Stok</th>}
                     <th className="th w-16" />
                   </tr>
                 </thead>
@@ -558,6 +572,7 @@ export default function Products() {
                       onDelete={product => setDelModal(product)}
                       canEdit={!blocked && canEdit}
                       canDelete={!blocked && canDelete}
+                      canViewValue={canViewValue}
                       onOpenQr={setQrTarget}
                     />
                   ))}
