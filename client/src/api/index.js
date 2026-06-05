@@ -140,6 +140,16 @@ export const permissionsApi = {
   getAll: () => api.get('/permissions').then(r => r.data),
 }
 
+export const handoverApi = {
+  list:       (params)     => api.get('/handovers', { params }).then(r => r.data),
+  get:        (id)         => api.get(`/handovers/${id}`).then(r => r.data),
+  create:     (data)       => api.post('/handovers', data).then(r => r.data),
+  update:     (id, data)   => api.put(`/handovers/${id}`, data).then(r => r.data),
+  destroy:    (id)         => api.delete(`/handovers/${id}`).then(r => r.data),
+  addResi:    (id, resi)   => api.post(`/handovers/${id}/items`, { resi }).then(r => r.data),
+  removeResi: (id, itemId) => api.delete(`/handovers/${id}/items/${itemId}`).then(r => r.data),
+}
+
 export const systemApi = {
   getPageVisibility:    ()     => api.get('/system/page-visibility').then(r => r.data),
   updatePageVisibility: (data) => api.put('/system/page-visibility', data).then(r => r.data),

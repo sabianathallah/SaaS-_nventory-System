@@ -7,7 +7,7 @@ import {
   Package, BookOpen, Warehouse, Truck,
   ArrowDownToLine, ArrowUpFromLine, ArrowLeftRight,
   ClipboardList, PackageOpen, FileText, Layers,
-  ClipboardCheck, Users, Building2, Eye, EyeOff, Save,
+  ClipboardCheck, Users, Building2, Eye, EyeOff, Save, PackageCheck,
 } from 'lucide-react'
 
 const PAGE_GROUPS = [
@@ -27,6 +27,7 @@ const PAGE_GROUPS = [
       { key: 'stock-out',  label: 'Stock Out',      icon: ArrowUpFromLine },
       { key: 'movements',  label: 'Movements',      icon: ArrowLeftRight },
       { key: 'opname',     label: 'Stock Opname',   icon: ClipboardList },
+      { key: 'handover',   label: 'Handover',       icon: PackageCheck },
     ],
   },
   {
