@@ -26,8 +26,11 @@ class HandoverController {
       const limit = Math.min(50, parseInt(req.query.limit) || 20);
       const offset = (page - 1) * limit;
 
+      const where = { ...companyFilter(req) };
+      if (req.query.status) where.status = req.query.status;
+
       const { count, rows } = await Handover.findAndCountAll({
-        where: companyFilter(req),
+        where,
         include: [
           { model: User, as: 'User', attributes: ['id', 'name'] },
           { model: Handover_Item, attributes: ['id'] },

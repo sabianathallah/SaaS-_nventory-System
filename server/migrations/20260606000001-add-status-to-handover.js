@@ -1,15 +1,14 @@
 'use strict';
 
 module.exports = {
-  async up(queryInterface, Sequelize) {
-    await queryInterface.addColumn('Handovers', 'status', {
-      type: Sequelize.ENUM('OPEN', 'CLOSED'),
-      allowNull: false,
-      defaultValue: 'OPEN',
-    });
+  async up(queryInterface) {
+    // Use raw SQL to avoid PostgreSQL ENUM type issues across environments
+    await queryInterface.sequelize.query(`
+      ALTER TABLE "Handovers"
+      ADD COLUMN IF NOT EXISTS "status" VARCHAR(10) NOT NULL DEFAULT 'OPEN';
+    `);
   },
   async down(queryInterface) {
     await queryInterface.removeColumn('Handovers', 'status');
-    await queryInterface.sequelize.query('DROP TYPE IF EXISTS "enum_Handovers_status";');
   },
 };
