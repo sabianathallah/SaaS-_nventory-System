@@ -72,11 +72,11 @@ export default function Handover() {
       <PageHeader
         title="Handover Pengiriman"
         subtitle="Dokumen serah terima paket kepada kurir"
-        action={{
-          label: 'Buat Handover',
-          icon: PackageCheck,
-          onClick: () => navigate('/handover/new'),
-        }}
+        action={
+          <button onClick={() => navigate('/handover/new')} className="btn-primary">
+            <PackageCheck size={14} /> Buat Handover
+          </button>
+        }
       />
 
       <Table
