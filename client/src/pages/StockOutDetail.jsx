@@ -1,7 +1,7 @@
-import { useState, useMemo, useRef } from 'react'
+import { useState, useMemo, useRef, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { stockOutApi, warehousesApi, stockInApi, productsApi, productSkusApi, stocksApi } from '../api'
+import { stockOutApi, stockOutDraftApi, warehousesApi, stockInApi, productsApi, productSkusApi, stocksApi } from '../api'
 import { useAuth } from '../context/AuthContext'
 import QRScanner from '../components/QRScanner'
 import SearchableSelect from '../components/SearchableSelect'
@@ -209,7 +209,46 @@ export default function StockOutDetail() {
   const canManualOutput = hasPermission('stock.out.manual_input') || hasPermission('stock.manage')
   const canScanOut      = hasPermission('stock.out.scan')         || hasPermission('stock.manage')
 
-  const [form, setForm]                             = useState(EMPTY_FORM)
+  // ── Draft (server-side) ──────────────────────────────────────────────────────
+  const { data: draft, isLoading: draftLoading } = useQuery({
+    queryKey: ['stock-out-draft'],
+    queryFn:  () => stockOutDraftApi.ensure(),
+    enabled:  isNew,
+    staleTime: Infinity,
+  })
+  const draftId    = draft?.id
+  const draftItems = draft?.Stock_Out_Draft_Items ?? []
+
+  // Local form state, initialized from server draft once
+  const formInitialized = useRef(false)
+  const saveTimer       = useRef(null)
+  const [form, setForm] = useState(EMPTY_FORM)
+
+  useEffect(() => {
+    if (draft && !formInitialized.current) {
+      formInitialized.current = true
+      setForm(f => ({
+        ...f,
+        warehouseId: draft.WarehouseId ?? '',
+        purpose:     draft.purpose     ?? '',
+        note:        draft.note        ?? '',
+        date:        draft.date        ? fmtDate(draft.date) : fmtDate(),
+      }))
+      if (draft.Stock_Out_Draft_Items?.length > 0 || draft.WarehouseId) {
+        toast('Draft session dipulihkan', { icon: '📋', duration: 3000 })
+      }
+    }
+  }, [draft])
+
+  const saveFormField = (field, value) => {
+    clearTimeout(saveTimer.current)
+    saveTimer.current = setTimeout(() => {
+      if (draftId) stockOutDraftApi.update(draftId, { [field]: value }).catch(() => {})
+    }, 600)
+  }
+
+  const hasDraft = isNew && (draftItems.length > 0 || !!form.warehouseId)
+
   const [showScanner, setShowScanner]               = useState(false)
   const [scannerConnected, setScannerConnected]     = useState(false)
 
@@ -231,9 +270,35 @@ export default function StockOutDetail() {
     enabled:  !!form.warehouseId && isNew,
   })
 
+  const addItemMutation = useMutation({
+    mutationFn: (data) => stockOutDraftApi.addItem(draftId, data),
+    onSuccess:  ()     => qc.invalidateQueries({ queryKey: ['stock-out-draft'] }),
+    onError:    e      => toast.error(e.response?.data?.message || 'Error'),
+  })
+
+  const removeItemMutation = useMutation({
+    mutationFn: (itemId) => stockOutDraftApi.removeItem(draftId, itemId),
+    onSuccess:  ()       => qc.invalidateQueries({ queryKey: ['stock-out-draft'] }),
+    onError:    e        => toast.error(e.response?.data?.message || 'Error'),
+  })
+
+  const updateItemQtyMutation = useMutation({
+    mutationFn: ({ itemId, quantity }) => stockOutDraftApi.updateItem(draftId, itemId, { quantity }),
+    onSuccess:  ()                      => qc.invalidateQueries({ queryKey: ['stock-out-draft'] }),
+  })
+
   const createMutation = useMutation({
-    mutationFn: d => stockOutApi.create(d),
+    mutationFn: () => {
+      const purpose = form.purpose === 'Lainnya' ? `Lainnya: ${form.purposeDetail.trim()}` : form.purpose
+      return stockOutDraftApi.submit(draftId, {
+        WarehouseId: form.warehouseId,
+        purpose,
+        date: form.date,
+        note: form.note,
+      })
+    },
     onSuccess: (data) => {
+      qc.removeQueries({ queryKey: ['stock-out-draft'] })
       qc.invalidateQueries({ queryKey: ['stock-out'] })
       qc.invalidateQueries({ queryKey: ['stocks'] })
       toast.success('Stock OUT berhasil dicatat')
@@ -242,16 +307,18 @@ export default function StockOutDetail() {
     onError: e => toast.error(e.response?.data?.message || 'Error'),
   })
 
-  const addItem = ({ skuId, productId, productName, imageUrl, variantLabel, quantity, available }) => {
-    setForm(f => {
-      const key = skuId ? `sku-${skuId}` : `prod-${productId}`
-      const idx = f.items.findIndex(i => i.key === key)
-      if (idx >= 0) {
-        const next = [...f.items]
-        next[idx] = { ...next[idx], quantity: next[idx].quantity + quantity }
-        return { ...f, items: next }
-      }
-      return { ...f, items: [...f.items, { key, skuId, productId, productName, imageUrl: imageUrl ?? null, variantLabel, quantity, available }] }
+  const cancelMutation = useMutation({
+    mutationFn: () => stockOutDraftApi.cancel(draftId),
+    onSuccess:  () => { qc.removeQueries({ queryKey: ['stock-out-draft'] }); navigate('/stock-out') },
+    onError:    () => navigate('/stock-out'),
+  })
+
+  const addItem = ({ skuId, productId, quantity }) => {
+    if (!draftId) return toast.error('Draft belum siap, coba lagi')
+    addItemMutation.mutate({
+      ProductSKUId: skuId   ? Number(skuId)   : undefined,
+      ProductId:    productId ? Number(productId) : undefined,
+      quantity,
     })
   }
 
@@ -262,10 +329,9 @@ export default function StockOutDetail() {
       const sku       = await stockInApi.resolveSku(code)
       const productId = String(sku.ProductId ?? sku.Product?.id)
       const skuId     = String(sku.id)
-      const avail     = sku.qty ?? 0
       const name      = sku.Product?.name ?? code
       const label     = skuLabel(sku)
-      addItem({ skuId, productId, productName: name, imageUrl: sku.Product?.imageUrl ?? null, variantLabel: label, quantity: 1, available: avail })
+      addItem({ skuId, productId, quantity: 1 })
       toast.success(`${name}${label ? ` · ${label}` : ''} +1`)
     } catch {
       toast.error(`SKU "${code}" tidak ditemukan`)
@@ -276,21 +342,11 @@ export default function StockOutDetail() {
 
   const handleSubmit = (e) => {
     e.preventDefault()
+    if (!form.warehouseId) return toast.error('Pilih warehouse')
     if (!form.purpose) return toast.error('Pilih tujuan stock out')
     if (form.purpose === 'Lainnya' && !form.purposeDetail.trim()) return toast.error('Jelaskan tujuan lainnya')
-    if (!form.items.length) return toast.error('Tambahkan minimal 1 item')
-    const purpose = form.purpose === 'Lainnya' ? `Lainnya: ${form.purposeDetail.trim()}` : form.purpose
-    createMutation.mutate({
-      WarehouseId: form.warehouseId,
-      purpose,
-      date: form.date,
-      note:  form.note,
-      items: form.items.map(i => ({
-        ProductSKUId: i.skuId   ? Number(i.skuId)   : undefined,
-        ProductId:    i.skuId   ? undefined          : Number(i.productId),
-        quantity:     i.quantity,
-      })),
-    })
+    if (!draftItems.length) return toast.error('Tambahkan minimal 1 item')
+    createMutation.mutate()
   }
 
   // ── VIEW MODE ─────────────────────────────────────────────────────────────────
@@ -438,7 +494,14 @@ export default function StockOutDetail() {
           <ArrowLeft size={16} />
         </button>
         <div className="flex-1">
-          <h1 className="text-lg font-bold text-slate-800">New Stock OUT</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-lg font-bold text-slate-800">New Stock OUT</h1>
+            {hasDraft && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200">
+                📋 Draft aktif
+              </span>
+            )}
+          </div>
           {!canManualOutput && (
             <p className="text-xs text-amber-600 mt-0.5 flex items-center gap-1">
               <ScanLine size={11} /> Mode barcode — gunakan scan untuk menambah item
@@ -476,7 +539,7 @@ export default function StockOutDetail() {
               <label className="label">Warehouse <span className="text-red-500">*</span></label>
               <SearchableSelect
                 value={form.warehouseId}
-                onChange={v => setForm(f => ({ ...f, warehouseId: v, items: [] }))}
+                onChange={v => { setForm(f => ({ ...f, warehouseId: v })); saveFormField('WarehouseId', v) }}
                 options={[{ value: '', label: 'Pilih warehouse…' }, ...(warehouses?.data ?? []).map(w => ({ value: w.id, label: w.name }))]}
                 placeholder="Pilih warehouse…"
                 required
@@ -487,7 +550,7 @@ export default function StockOutDetail() {
               <select
                 className="input"
                 value={form.purpose}
-                onChange={e => setForm(f => ({ ...f, purpose: e.target.value, purposeDetail: '' }))}
+                onChange={e => { setForm(f => ({ ...f, purpose: e.target.value, purposeDetail: '' })); saveFormField('purpose', e.target.value) }}
                 required
               >
                 <option value="">Pilih tujuan…</option>
@@ -508,12 +571,12 @@ export default function StockOutDetail() {
             <div>
               <label className="label">Tanggal <span className="text-red-500">*</span></label>
               <input type="date" className="input" value={form.date}
-                onChange={e => setForm(f => ({ ...f, date: e.target.value }))} required />
+                onChange={e => { setForm(f => ({ ...f, date: e.target.value })); saveFormField('date', e.target.value) }} required />
             </div>
             <div>
               <label className="label">Catatan</label>
               <input className="input" placeholder="Catatan (opsional)…" value={form.note}
-                onChange={e => setForm(f => ({ ...f, note: e.target.value }))} />
+                onChange={e => { setForm(f => ({ ...f, note: e.target.value })); saveFormField('note', e.target.value) }} />
             </div>
           </div>
         </div>
@@ -563,7 +626,9 @@ export default function StockOutDetail() {
           </div>
 
           {/* Items list */}
-          {!form.items.length ? (
+          {draftLoading ? (
+            <p className="text-center text-slate-400 text-sm py-10">Memuat draft…</p>
+          ) : !draftItems.length ? (
             <p className="text-center text-slate-400 text-sm py-10">Belum ada item</p>
           ) : (
             <div className="overflow-x-auto">
@@ -574,51 +639,50 @@ export default function StockOutDetail() {
                   <th className="th py-2 text-left">Produk</th>
                   <th className="th py-2 text-left">Varian / SKU</th>
                   <th className="th py-2 text-right w-28">Qty</th>
-                  <th className="th py-2 text-right w-24">Tersedia</th>
                   <th className="th py-2 w-10"></th>
                 </tr>
               </thead>
               <tbody>
-                {form.items.map((it, idx) => (
-                  <tr key={it.key} className="tr border-b border-slate-50">
-                    <td className="td py-2">
-                      {it.imageUrl
-                        ? <img src={it.imageUrl} className="w-10 h-10 rounded object-cover border border-slate-200" />
-                        : <div className="w-10 h-10 rounded bg-slate-100 flex items-center justify-center"><Package size={14} className="text-slate-300" /></div>
-                      }
-                    </td>
-                    <td className="td py-2 font-medium text-slate-800">{it.productName}</td>
-                    <td className="td py-2 text-slate-500 text-xs">{it.variantLabel || '—'}</td>
-                    <td className="td py-1.5 text-right">
-                      {canManualOutput ? (
-                        <input
-                          type="number" min="1" max={it.available ?? undefined}
-                          value={it.quantity}
-                          onChange={e => {
-                            const val = Number(e.target.value)
-                            if (!val || val < 1) return
-                            setForm(f => {
-                              const next = [...f.items]
-                              next[idx] = { ...next[idx], quantity: val }
-                              return { ...f, items: next }
-                            })
-                          }}
-                          className="w-20 text-right font-mono font-semibold text-danger border border-slate-200 rounded-lg px-2 py-1 text-sm focus:outline-none focus:border-brand/50 bg-white"
-                        />
-                      ) : (
-                        <span className="font-mono font-semibold text-danger">{it.quantity}</span>
-                      )}
-                    </td>
-                    <td className="td py-2 text-right font-mono text-slate-400">{it.available ?? '—'}</td>
-                    <td className="td py-2">
-                      <button type="button"
-                        onClick={() => setForm(f => ({ ...f, items: f.items.filter((_, i) => i !== idx) }))}
-                        className="p-1 text-slate-300 hover:text-danger transition-colors">
-                        <Trash2 size={12} />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                {draftItems.map((it) => {
+                  const sku     = it.ProductSKU
+                  const prod    = sku?.Product ?? it.Product
+                  const variant = sku ? skuLabel(sku) : '—'
+                  return (
+                    <tr key={it.id} className="tr border-b border-slate-50">
+                      <td className="td py-2">
+                        {prod?.imageUrl
+                          ? <img src={prod.imageUrl} className="w-10 h-10 rounded object-cover border border-slate-200" />
+                          : <div className="w-10 h-10 rounded bg-slate-100 flex items-center justify-center"><Package size={14} className="text-slate-300" /></div>
+                        }
+                      </td>
+                      <td className="td py-2 font-medium text-slate-800">{prod?.name ?? '—'}</td>
+                      <td className="td py-2 text-slate-500 text-xs">{variant}</td>
+                      <td className="td py-1.5 text-right">
+                        {canManualOutput ? (
+                          <input
+                            type="number" min="1"
+                            defaultValue={it.quantity}
+                            onBlur={e => {
+                              const val = Number(e.target.value)
+                              if (val >= 1 && val !== it.quantity) updateItemQtyMutation.mutate({ itemId: it.id, quantity: val })
+                            }}
+                            className="w-20 text-right font-mono font-semibold text-danger border border-slate-200 rounded-lg px-2 py-1 text-sm focus:outline-none focus:border-brand/50 bg-white"
+                          />
+                        ) : (
+                          <span className="font-mono font-semibold text-danger">{it.quantity}</span>
+                        )}
+                      </td>
+                      <td className="td py-2">
+                        <button type="button"
+                          onClick={() => removeItemMutation.mutate(it.id)}
+                          disabled={removeItemMutation.isPending}
+                          className="p-1 text-slate-300 hover:text-danger transition-colors disabled:opacity-40">
+                          <Trash2 size={12} />
+                        </button>
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
             </div>
@@ -626,8 +690,12 @@ export default function StockOutDetail() {
         </div>
 
         <div className="flex gap-3">
-          <button type="button" onClick={() => navigate('/stock-out')} className="btn-secondary flex-1 justify-center">Batal</button>
-          <button type="submit" disabled={createMutation.isPending} className="btn-primary flex-1 justify-center">
+          <button type="button" onClick={() => cancelMutation.mutate()}
+            disabled={cancelMutation.isPending}
+            className="btn-secondary flex-1 justify-center">
+            Batalkan Session
+          </button>
+          <button type="submit" disabled={createMutation.isPending || draftLoading} className="btn-primary flex-1 justify-center">
             <Save size={14} />
             {createMutation.isPending ? 'Menyimpan…' : 'Submit Stock OUT'}
           </button>

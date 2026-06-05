@@ -64,6 +64,24 @@ export const stockInApi = {
   removeItem: (id, itemId)        => api.delete(`/stock-in-headers/${id}/items/${itemId}`).then(r => r.data),
 }
 export const stockOutApi       = crud('/stock-out-headers')
+export const stockInDraftApi = {
+  ensure:     ()                   => api.post('/stock-in-drafts/ensure').then(r => r.data),
+  update:     (id, data)           => api.put(`/stock-in-drafts/${id}`, data).then(r => r.data),
+  addItem:    (id, data)           => api.post(`/stock-in-drafts/${id}/items`, data).then(r => r.data),
+  updateItem: (id, itemId, data)   => api.put(`/stock-in-drafts/${id}/items/${itemId}`, data).then(r => r.data),
+  removeItem: (id, itemId)         => api.delete(`/stock-in-drafts/${id}/items/${itemId}`).then(r => r.data),
+  submit:     (id, data)           => api.post(`/stock-in-drafts/${id}/submit`, data).then(r => r.data),
+  cancel:     (id)                 => api.delete(`/stock-in-drafts/${id}`).then(r => r.data),
+}
+export const stockOutDraftApi = {
+  ensure:     ()                   => api.post('/stock-out-drafts/ensure').then(r => r.data),
+  update:     (id, data)           => api.put(`/stock-out-drafts/${id}`, data).then(r => r.data),
+  addItem:    (id, data)           => api.post(`/stock-out-drafts/${id}/items`, data).then(r => r.data),
+  updateItem: (id, itemId, data)   => api.put(`/stock-out-drafts/${id}/items/${itemId}`, data).then(r => r.data),
+  removeItem: (id, itemId)         => api.delete(`/stock-out-drafts/${id}/items/${itemId}`).then(r => r.data),
+  submit:     (id, data)           => api.post(`/stock-out-drafts/${id}/submit`, data).then(r => r.data),
+  cancel:     (id)                 => api.delete(`/stock-out-drafts/${id}`).then(r => r.data),
+}
 export const movementsApi = {
   ...crud('/stock-movements'),
   summary: (params) => api.get('/stock-movements/summary', { params }).then(r => r.data),
