@@ -1,13 +1,16 @@
 'use strict';
 const router = require('express').Router();
 const ctrl   = require('../controllers/stockOutDraftController');
+const { requireAnyPermission: rpAny } = require('../middlewares/requirePermission');
 
-router.post('/ensure',              ctrl.ensure);
-router.put('/:id',                  ctrl.update);
-router.post('/:id/items',           ctrl.addItem);
-router.put('/:id/items/:itemId',    ctrl.updateItem);
-router.delete('/:id/items/:itemId', ctrl.removeItem);
-router.post('/:id/submit',          ctrl.submit);
-router.delete('/:id',               ctrl.cancel);
+const canOutput = rpAny('stock.manage', 'stock.out.scan', 'stock.out.manual_input');
+
+router.post('/ensure',              canOutput, ctrl.ensure);
+router.put('/:id',                  canOutput, ctrl.update);
+router.post('/:id/items',           canOutput, ctrl.addItem);
+router.put('/:id/items/:itemId',    canOutput, ctrl.updateItem);
+router.delete('/:id/items/:itemId', canOutput, ctrl.removeItem);
+router.post('/:id/submit',          canOutput, ctrl.submit);
+router.delete('/:id',               canOutput, ctrl.cancel);
 
 module.exports = router;
