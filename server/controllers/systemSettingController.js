@@ -15,6 +15,7 @@ const DEFAULT_VISIBILITY = {
   'surat-jalan':     true,
   'packing-jobs':    true,
   'form-anak-packing': true,
+  handover:          true,
   users:             true,
   companies:         true,
 };
