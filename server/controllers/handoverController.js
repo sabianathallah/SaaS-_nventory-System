@@ -100,10 +100,33 @@ class HandoverController {
     } catch (err) { next(err); }
   }
 
+  static async closeSession(req, res, next) {
+    try {
+      const h = await Handover.findOne({ where: { id: req.params.id, ...companyFilter(req) } });
+      if (!h) throw { name: 'NotFound', message: 'Handover tidak ditemukan' };
+      h.status = 'CLOSED';
+      await h.save();
+      const full = await findHandover(h.id, req);
+      res.json(full);
+    } catch (err) { next(err); }
+  }
+
+  static async reopenSession(req, res, next) {
+    try {
+      const h = await Handover.findOne({ where: { id: req.params.id, ...companyFilter(req) } });
+      if (!h) throw { name: 'NotFound', message: 'Handover tidak ditemukan' };
+      h.status = 'OPEN';
+      await h.save();
+      const full = await findHandover(h.id, req);
+      res.json(full);
+    } catch (err) { next(err); }
+  }
+
   static async addResi(req, res, next) {
     try {
       const h = await Handover.findOne({ where: { id: req.params.id, ...companyFilter(req) } });
       if (!h) throw { name: 'NotFound', message: 'Handover tidak ditemukan' };
+      if (h.status === 'CLOSED') throw { name: 'ValidationError', message: 'Sesi handover sudah ditutup, tidak bisa menambah resi' };
 
       const { resi } = req.body;
       if (!resi?.trim()) throw { name: 'ValidationError', message: 'Nomor resi wajib diisi' };

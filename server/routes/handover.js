@@ -13,6 +13,8 @@ router.post('/',                    canCreate, ctrl.create);
 router.get('/:id',                  canView,   ctrl.get);
 router.put('/:id',                  canCreate, ctrl.update);
 router.delete('/:id',               rp('handover.manage'), ctrl.destroy);
+router.patch('/:id/close',          canCreate, ctrl.closeSession);
+router.patch('/:id/reopen',         canCreate, ctrl.reopenSession);
 router.post('/:id/items',           canCreate, ctrl.addResi);
 router.delete('/:id/items/:itemId', canCreate, ctrl.removeResi);
 
