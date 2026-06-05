@@ -18,8 +18,4 @@ router.post('/',      canCreate, requireCompany, requireWarehouseNotInOpname, C.
 router.put('/:id',    canEdit,                                               C.update);
 router.delete('/:id', canDelete,                                             C.delete);
 
-router.post('/:id/items',           canCreate, requireCompany, requireWarehouseNotInOpname, C.addItem);
-router.put('/:id/items/:itemId',    canEdit,                                 C.updateItem);
-router.delete('/:id/items/:itemId', canDeleteItem,                           C.removeItem);
-
 module.exports = router;
