@@ -52,9 +52,14 @@ export default function HandoverDetail() {
   const { data: handover, isLoading } = useQuery({
     queryKey: ['handover', id],
     queryFn:  () => handoverApi.get(id),
-    enabled:  !isNew,
+    enabled:  !isNew && !!id && id !== 'undefined',
     staleTime: 0,
   })
+
+  // redirect if id is invalid
+  useEffect(() => {
+    if (!id || id === 'undefined') navigate('/handover', { replace: true })
+  }, [id])
 
   // auto-print if ?print=1
   useEffect(() => {
