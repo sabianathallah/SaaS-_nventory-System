@@ -2,10 +2,13 @@
 const express = require('express');
 const router = express.Router({ mergeParams: true });
 const ProductSkuController = require('../controllers/productSkuController');
+const { requireAnyPermission: rpAny } = require('../middlewares/requirePermission');
 
-router.get('/',         ProductSkuController.getSkus);
-router.post('/',        ProductSkuController.createSku);
-router.put('/:skuId',   ProductSkuController.updateSku);
-router.delete('/:skuId', ProductSkuController.deleteSku);
+const canEdit = rpAny('inventory.manage', 'inventory.product.edit');
+
+router.get('/',          ProductSkuController.getSkus);
+router.post('/',         canEdit, ProductSkuController.createSku);
+router.put('/:skuId',    canEdit, ProductSkuController.updateSku);
+router.delete('/:skuId', canEdit, ProductSkuController.deleteSku);
 
 module.exports = router;

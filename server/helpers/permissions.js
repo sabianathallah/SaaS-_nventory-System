@@ -1,33 +1,36 @@
 'use strict';
 
 const ALL_PERMISSIONS = [
-  // ── Dashboard ────────────────────────────────────────────────────────────────
-  { key: 'dashboard.manage',          label: 'Akses Penuh Dashboard',                      group: 'Dashboard',               isParent: true },
-  { key: 'dashboard.view_stock',      label: 'Lihat Data Stok',                            group: 'Dashboard',               parent: 'dashboard.manage' },
-  { key: 'dashboard.view_value',      label: 'Lihat Nilai Inventaris',                     group: 'Dashboard',               parent: 'dashboard.manage' },
-  { key: 'dashboard.view_analytics',  label: 'Lihat Grafik & Breakdown',                   group: 'Dashboard',               parent: 'dashboard.manage' },
-  { key: 'dashboard.view_movements',  label: 'Lihat Pergerakan Terbaru',                   group: 'Dashboard',               parent: 'dashboard.manage' },
+  // ── Dasbor ───────────────────────────────────────────────────────────────────
+  { key: 'dashboard.manage',          label: 'Akses Penuh Dasbor',                         group: 'Dasbor',                  isParent: true },
+  { key: 'dashboard.view_stock',      label: 'Lihat Data Stok',                            group: 'Dasbor',                  parent: 'dashboard.manage' },
+  { key: 'dashboard.view_value',      label: 'Lihat Nilai Inventaris',                     group: 'Dasbor',                  parent: 'dashboard.manage' },
+  { key: 'dashboard.view_analytics',  label: 'Lihat Grafik & Breakdown',                   group: 'Dasbor',                  parent: 'dashboard.manage' },
+  { key: 'dashboard.view_movements',  label: 'Lihat Pergerakan Terbaru',                   group: 'Dasbor',                  parent: 'dashboard.manage' },
 
-  // ── Inventory ────────────────────────────────────────────────────────────────
-  { key: 'inventory.manage',          label: 'Akses Penuh Inventory',                      group: 'Inventory',               isParent: true },
-  { key: 'inventory.view',            label: 'Lihat Produk & Katalog',                     group: 'Inventory',               parent: 'inventory.manage' },
+  // ── Produk & Katalog ─────────────────────────────────────────────────────────
+  { key: 'inventory.manage',          label: 'Akses Penuh Produk & Katalog',               group: 'Produk & Katalog',        isParent: true },
+  { key: 'inventory.view',            label: 'Lihat Produk & Katalog',                     group: 'Produk & Katalog',        parent: 'inventory.manage' },
+  { key: 'inventory.product.create',  label: 'Tambah Produk Baru',                         group: 'Produk & Katalog',        parent: 'inventory.manage' },
+  { key: 'inventory.product.edit',    label: 'Edit Produk, Variant & SKU',                 group: 'Produk & Katalog',        parent: 'inventory.manage' },
+  { key: 'inventory.product.delete',  label: 'Hapus Produk',                               group: 'Produk & Katalog',        parent: 'inventory.manage' },
 
   // ── Stok ─────────────────────────────────────────────────────────────────────
   { key: 'stock.manage',              label: 'Akses Penuh Stok',                           group: 'Stok',                    isParent: true },
   { key: 'stock.view',                label: 'Lihat Stok & Pergerakan Stok',               group: 'Stok',                    parent: 'stock.manage' },
-  { key: 'stock.in.scan',             label: 'Stock In: Input via Scan Barcode',           group: 'Stok',                    parent: 'stock.manage' },
-  { key: 'stock.in.manual_input',     label: 'Stock In: Input Manual (tanpa barcode)',     group: 'Stok',                    parent: 'stock.manage' },
-  { key: 'stock.in.delete_item',      label: 'Stock In: Hapus Item yang Sudah Tersimpan',  group: 'Stok',                    parent: 'stock.manage' },
-  { key: 'stock.out.scan',            label: 'Stock Out: Input via Scan Barcode',          group: 'Stok',                    parent: 'stock.manage' },
-  { key: 'stock.out.manual_input',    label: 'Stock Out: Input Manual (tanpa barcode)',    group: 'Stok',                    parent: 'stock.manage' },
-  { key: 'stock.out.delete_item',     label: 'Stock Out: Hapus Item yang Sudah Tersimpan', group: 'Stok',                    parent: 'stock.manage' },
-  { key: 'stock.opname.scan',         label: 'Stock Opname: Hitung via Scan Barcode',      group: 'Stok',                    parent: 'stock.manage' },
-  { key: 'stock.opname.manual_input', label: 'Stock Opname: Input Manual (tanpa barcode)', group: 'Stok',                    parent: 'stock.manage' },
+  { key: 'stock.in.scan',             label: 'Penerimaan Stok: Input via Scan Barcode',    group: 'Stok',                    parent: 'stock.manage' },
+  { key: 'stock.in.manual_input',     label: 'Penerimaan Stok: Input Manual',              group: 'Stok',                    parent: 'stock.manage' },
+  { key: 'stock.in.delete_item',      label: 'Penerimaan Stok: Hapus Item Tersimpan',      group: 'Stok',                    parent: 'stock.manage' },
+  { key: 'stock.out.scan',            label: 'Pengeluaran Stok: Input via Scan Barcode',   group: 'Stok',                    parent: 'stock.manage' },
+  { key: 'stock.out.manual_input',    label: 'Pengeluaran Stok: Input Manual',             group: 'Stok',                    parent: 'stock.manage' },
+  { key: 'stock.out.delete_item',     label: 'Pengeluaran Stok: Hapus Item Tersimpan',     group: 'Stok',                    parent: 'stock.manage' },
+  { key: 'stock.opname.scan',         label: 'Stok Opname: Hitung via Scan Barcode',       group: 'Stok',                    parent: 'stock.manage' },
+  { key: 'stock.opname.manual_input', label: 'Stok Opname: Input Manual',                  group: 'Stok',                    parent: 'stock.manage' },
 
   // ── Handover ─────────────────────────────────────────────────────────────────
-  { key: 'handover.manage',           label: 'Akses Penuh Handover Pengiriman',            group: 'Handover',                isParent: true },
-  { key: 'handover.view',             label: 'Lihat Dokumen Handover',                     group: 'Handover',                parent: 'handover.manage' },
-  { key: 'handover.create',           label: 'Buat & Kelola Handover (scan resi)',         group: 'Handover',                parent: 'handover.manage' },
+  { key: 'handover.manage',           label: 'Akses Penuh Handover Pengiriman',            group: 'Handover Pengiriman',     isParent: true },
+  { key: 'handover.view',             label: 'Lihat Dokumen Handover',                     group: 'Handover Pengiriman',     parent: 'handover.manage' },
+  { key: 'handover.create',           label: 'Buat & Kelola Handover (scan resi)',         group: 'Handover Pengiriman',     parent: 'handover.manage' },
 
   // ── Penerimaan & Packing ─────────────────────────────────────────────────────
   { key: 'packing.manage',            label: 'Akses Penuh Penerimaan & Packing',           group: 'Penerimaan & Packing',    isParent: true },
@@ -38,11 +41,11 @@ const ALL_PERMISSIONS = [
 
   // ── Laporan ──────────────────────────────────────────────────────────────────
   { key: 'reports.manage',            label: 'Akses Penuh Laporan',                        group: 'Laporan',                 isParent: true },
-  { key: 'reports.dashboard',         label: 'Lihat Dashboard & Laporan',                  group: 'Laporan',                 parent: 'reports.manage' },
+  { key: 'reports.dashboard',         label: 'Lihat Dasbor & Laporan',                     group: 'Laporan',                 parent: 'reports.manage' },
 
   // ── Administrasi ─────────────────────────────────────────────────────────────
   { key: 'admin.manage',              label: 'Akses Penuh Administrasi',                   group: 'Administrasi',            isParent: true },
-  { key: 'admin.users',               label: 'Kelola Users (CRUD)',                        group: 'Administrasi',            parent: 'admin.manage' },
+  { key: 'admin.users',               label: 'Kelola Pengguna',                            group: 'Administrasi',            parent: 'admin.manage' },
 ];
 
 const ALL_KEYS = ALL_PERMISSIONS.map(p => p.key);

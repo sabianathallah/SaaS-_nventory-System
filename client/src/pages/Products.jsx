@@ -198,7 +198,7 @@ function SkuRows({ product, onOpenQr }) {
 
 // ── Product Row ───────────────────────────────────────────────────────────────
 
-function ProductRow({ product, expanded, onToggle, onDelete, onNavigate, onOpenQr, disabled }) {
+function ProductRow({ product, expanded, onToggle, onDelete, onNavigate, onOpenQr, canEdit, canDelete }) {
   const skus   = product.ProductSKUs ?? []
   const range  = priceRange(skus)
   const stock  = Number(product.totalStock ?? 0)
@@ -300,25 +300,25 @@ function ProductRow({ product, expanded, onToggle, onDelete, onNavigate, onOpenQ
                 <QrCode size={12} />
               </button>
             )}
-            {!disabled && (
-              <>
-                <button
-                  type="button"
-                  onClick={e => { e.stopPropagation(); onNavigate() }}
-                  className="p-1.5 rounded-lg text-slate-300 hover:text-slate-600 hover:bg-slate-100 transition-colors opacity-0 group-hover:opacity-100"
-                  title="Edit produk"
-                >
-                  <Pencil size={12} />
-                </button>
-                <button
-                  type="button"
-                  onClick={e => { e.stopPropagation(); onDelete(product) }}
-                  className="p-1.5 rounded-lg text-slate-300 hover:text-red-400 hover:bg-red-50 transition-colors opacity-0 group-hover:opacity-100"
-                  title="Hapus produk"
-                >
-                  <Trash2 size={12} />
-                </button>
-              </>
+            {canEdit && (
+              <button
+                type="button"
+                onClick={e => { e.stopPropagation(); onNavigate() }}
+                className="p-1.5 rounded-lg text-slate-300 hover:text-slate-600 hover:bg-slate-100 transition-colors opacity-0 group-hover:opacity-100"
+                title="Edit produk"
+              >
+                <Pencil size={12} />
+              </button>
+            )}
+            {canDelete && (
+              <button
+                type="button"
+                onClick={e => { e.stopPropagation(); onDelete(product) }}
+                className="p-1.5 rounded-lg text-slate-300 hover:text-red-400 hover:bg-red-50 transition-colors opacity-0 group-hover:opacity-100"
+                title="Hapus produk"
+              >
+                <Trash2 size={12} />
+              </button>
             )}
           </div>
         </td>
@@ -335,13 +335,15 @@ function ProductRow({ product, expanded, onToggle, onDelete, onNavigate, onOpenQ
                     <p className="text-xs font-semibold text-slate-500">Belum ada SKU</p>
                     <p className="text-[11px] text-slate-400 mt-0.5">Tambahkan variant dan buat SKU melalui halaman edit produk.</p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={e => { e.stopPropagation(); onNavigate() }}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand text-white text-xs font-medium hover:bg-brand/90 transition-colors flex-shrink-0"
-                  >
-                    <Plus size={11} /> Buat SKU
-                  </button>
+                  {canEdit && (
+                    <button
+                      type="button"
+                      onClick={e => { e.stopPropagation(); onNavigate() }}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand text-white text-xs font-medium hover:bg-brand/90 transition-colors flex-shrink-0"
+                    >
+                      <Plus size={11} /> Buat SKU
+                    </button>
+                  )}
                 </div>
               </td>
             </tr>
@@ -359,7 +361,9 @@ export default function Products() {
   const { selectedCompany } = useSelectedCompany()
   const { needsCompany } = useCompanyGuard()
   const blocked    = isSuperAdmin && !selectedCompany
-  const canManage  = hasPermission('inventory.manage')
+  const canCreate = hasPermission('inventory.product.create') || hasPermission('inventory.manage')
+  const canEdit   = hasPermission('inventory.product.edit')   || hasPermission('inventory.manage')
+  const canDelete = hasPermission('inventory.product.delete') || hasPermission('inventory.manage')
 
   const [page, setPage]         = useState(1)
   const [search, setSearch]     = useState('')
@@ -460,7 +464,7 @@ export default function Products() {
             {exporting ? <Loader2 size={14} className="animate-spin" /> : <FileSpreadsheet size={14} />}
             Export Excel
           </button>
-          {!blocked && canManage && (
+          {!blocked && canCreate && (
             <button onClick={() => navigate('/products/new')} className="btn-primary">
               <Plus size={15} /> Tambah Produk
             </button>
@@ -552,7 +556,8 @@ export default function Products() {
                       onToggle={() => toggleExpand(p.id)}
                       onNavigate={() => navigate(`/products/${p.id}`)}
                       onDelete={product => setDelModal(product)}
-                      disabled={blocked || !canManage}
+                      canEdit={!blocked && canEdit}
+                      canDelete={!blocked && canDelete}
                       onOpenQr={setQrTarget}
                     />
                   ))}
