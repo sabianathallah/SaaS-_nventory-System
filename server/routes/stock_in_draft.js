@@ -3,7 +3,7 @@ const router = require('express').Router();
 const ctrl   = require('../controllers/stockInDraftController');
 const { requireAnyPermission: rpAny } = require('../middlewares/requirePermission');
 
-const canInput = rpAny('stock.manage', 'stock.in.scan', 'stock.in.manual_input');
+const canInput = rpAny('stock.manage', 'stock.in.create', 'stock.in.scan', 'stock.in.manual_input');
 
 router.get('/current',              canInput, ctrl.current);
 router.post('/ensure',              canInput, ctrl.ensure);
