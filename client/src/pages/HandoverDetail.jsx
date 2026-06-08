@@ -8,7 +8,7 @@ import QRScanner from '../components/QRScanner'
 import toast from 'react-hot-toast'
 import {
   ArrowLeft, PackageCheck, ScanLine, Camera, Trash2, Printer,
-  Plus, X, Package,
+  Plus, X, Package, Lock, Unlock, ScanBarcode, FileEdit,
 } from 'lucide-react'
 import logoPreface from '../assets/logo-preface.jpeg'
 
@@ -38,17 +38,15 @@ export default function HandoverDetail() {
   const { user }       = useAuth()
   const isNew          = id === 'new'
 
-  // form state (only used when creating)
-  const [form, setForm] = useState({ ekspedisi: '', ekspedisiCustom: '', date: today(), note: '' })
+  const [form, setForm]           = useState({ ekspedisi: '', ekspedisiCustom: '', date: today(), note: '' })
   const [customMode, setCustomMode] = useState(false)
-
-  // scan state
   const [scanInput, setScanInput]   = useState('')
   const [showCamera, setShowCamera] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(null)
+  const [scannerConnected, setScannerConnected] = useState(false)
+  const [confirmClose, setConfirmClose] = useState(false)
   const scanInputRef = useRef(null)
 
-  // existing handover
   const { data: handover, isLoading } = useQuery({
     queryKey: ['handover', id],
     queryFn:  () => handoverApi.get(id),
@@ -56,24 +54,25 @@ export default function HandoverDetail() {
     staleTime: 0,
   })
 
-  // auto-print if ?print=1
+  const isClosed = handover?.status === 'CLOSED'
+
   useEffect(() => {
     if (!isNew && handover && searchParams.get('print') === '1') {
       setTimeout(() => window.print(), 500)
     }
   }, [isNew, handover, searchParams])
 
-  // focus scan input when not in camera mode
   useEffect(() => {
-    if (!showCamera && !isNew) {
+    if (!showCamera && !isNew && !isClosed) {
       setTimeout(() => scanInputRef.current?.focus(), 100)
     }
-  }, [showCamera, isNew])
+  }, [showCamera, isNew, isClosed])
 
-  // external USB scanner (fires when scan input is NOT focused — catch global keypresses)
   useExternalScanner(
-    useCallback((code) => { if (!isNew) handleAddResi(code) }, [isNew, handover]),
-    !isNew && !showCamera,
+    useCallback((code) => {
+      if (!isNew && handover && !isClosed) handleAddResi(code)
+    }, [isNew, handover, isClosed]),
+    !isNew && !showCamera && scannerConnected,
   )
 
   // ── Mutations ──────────────────────────────────────────────────────────────
@@ -95,8 +94,7 @@ export default function HandoverDetail() {
       scanInputRef.current?.focus()
     },
     onError: (e) => {
-      const msg = e?.response?.data?.message ?? 'Gagal menambahkan resi'
-      toast.error(msg)
+      toast.error(e?.response?.data?.message ?? 'Gagal menambahkan resi')
       setScanInput('')
       scanInputRef.current?.focus()
     },
@@ -120,6 +118,27 @@ export default function HandoverDetail() {
       toast.success('Handover dihapus')
     },
     onError: () => toast.error('Gagal menghapus handover'),
+  })
+
+  const closeMutation = useMutation({
+    mutationFn: () => handoverApi.close(id),
+    onSuccess: (h) => {
+      qc.setQueryData(['handover', id], h)
+      qc.invalidateQueries({ queryKey: ['handovers'] })
+      qc.invalidateQueries({ queryKey: ['handovers-count'] })
+      setScannerConnected(false)
+      toast.success('Sesi ditutup')
+    },
+    onError: () => toast.error('Gagal menutup sesi'),
+  })
+
+  const reopenMutation = useMutation({
+    mutationFn: () => handoverApi.reopen(id),
+    onSuccess: (h) => {
+      qc.setQueryData(['handover', id], h)
+      toast.success('Sesi dibuka kembali')
+    },
+    onError: () => toast.error('Gagal membuka sesi'),
   })
 
   // ── Handlers ───────────────────────────────────────────────────────────────
@@ -150,21 +169,20 @@ export default function HandoverDetail() {
   // ── Create form ────────────────────────────────────────────────────────────
   if (isNew) {
     return (
-      <div className="max-w-xl mx-auto space-y-6">
-        <div className="flex items-center gap-3">
-          <button onClick={() => navigate('/handover')} className="p-2 rounded-lg hover:bg-slate-100 text-slate-500 transition-colors">
-            <ArrowLeft size={18} />
+      <div className="px-6 py-6 max-w-xl">
+        <div className="flex items-center gap-3 mb-6">
+          <button onClick={() => navigate('/handover')} className="p-1.5 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors">
+            <ArrowLeft size={16} />
           </button>
           <div>
-            <h1 className="text-xl font-bold text-slate-800">Buat Handover Baru</h1>
-            <p className="text-sm text-slate-500 mt-0.5">Satu dokumen untuk satu ekspedisi</p>
+            <h1 className="text-lg font-bold text-slate-800">Buat Handover Baru</h1>
+            <p className="text-xs text-slate-400">Satu dokumen untuk satu ekspedisi</p>
           </div>
         </div>
 
-        <form onSubmit={handleCreate} className="bg-white border border-slate-200 rounded-2xl p-6 space-y-5 shadow-sm">
-          {/* Ekspedisi */}
+        <form onSubmit={handleCreate} className="card p-6 space-y-5">
           <div>
-            <label className="block text-sm font-semibold text-slate-700 mb-1.5">Ekspedisi</label>
+            <label className="label mb-1.5">Ekspedisi</label>
             {!customMode ? (
               <div className="grid grid-cols-2 gap-2">
                 {EKSPEDISI_LIST.map(e => (
@@ -193,35 +211,33 @@ export default function HandoverDetail() {
               <div className="flex gap-2">
                 <input
                   autoFocus
-                  className="flex-1 px-3 py-2 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500"
+                  className="input flex-1"
                   placeholder="Nama ekspedisi…"
                   value={form.ekspedisiCustom}
                   onChange={e => setForm(f => ({ ...f, ekspedisiCustom: e.target.value }))}
                 />
-                <button type="button" onClick={() => setCustomMode(false)} className="px-3 py-2 rounded-xl border border-slate-200 text-sm text-slate-500 hover:bg-slate-50">
+                <button type="button" onClick={() => setCustomMode(false)} className="btn-secondary text-sm">
                   Pilih daftar
                 </button>
               </div>
             )}
           </div>
 
-          {/* Date */}
           <div>
-            <label className="block text-sm font-semibold text-slate-700 mb-1.5">Tanggal</label>
+            <label className="label mb-1.5">Tanggal</label>
             <input
               type="date"
-              className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500"
+              className="input"
               value={form.date}
               onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
             />
           </div>
 
-          {/* Note */}
           <div>
-            <label className="block text-sm font-semibold text-slate-700 mb-1.5">Catatan <span className="font-normal text-slate-400">(opsional)</span></label>
+            <label className="label mb-1.5">Catatan <span className="font-normal text-slate-400">(opsional)</span></label>
             <input
               type="text"
-              className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500"
+              className="input"
               placeholder="Keterangan tambahan…"
               value={form.note}
               onChange={e => setForm(f => ({ ...f, note: e.target.value }))}
@@ -231,9 +247,9 @@ export default function HandoverDetail() {
           <button
             type="submit"
             disabled={createMutation.isPending}
-            className="w-full py-3 bg-red-600 hover:bg-red-700 disabled:bg-red-400 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2"
+            className="btn-primary w-full justify-center py-2.5"
           >
-            <PackageCheck size={16} />
+            <PackageCheck size={15} />
             {createMutation.isPending ? 'Menyimpan…' : 'Buat Handover & Mulai Scan'}
           </button>
         </form>
@@ -241,21 +257,12 @@ export default function HandoverDetail() {
     )
   }
 
-  // ── Loading ────────────────────────────────────────────────────────────────
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-48 text-slate-400 text-sm">
-        Memuat data handover…
-      </div>
-    )
+    return <div className="p-8 text-slate-400 text-sm">Memuat…</div>
   }
 
   if (!handover) {
-    return (
-      <div className="flex items-center justify-center h-48 text-slate-400 text-sm">
-        Handover tidak ditemukan.
-      </div>
-    )
+    return <div className="p-8 text-red-500 text-sm">Handover tidak ditemukan.</div>
   }
 
   const items = handover.Handover_Items ?? []
@@ -263,7 +270,6 @@ export default function HandoverDetail() {
   // ── Detail / Scan view ─────────────────────────────────────────────────────
   return (
     <>
-      {/* Camera scanner overlay */}
       {showCamera && (
         <QRScanner
           onScan={handleCameraResult}
@@ -273,23 +279,17 @@ export default function HandoverDetail() {
         />
       )}
 
-      {/* Delete confirm modal */}
       {confirmDelete && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl">
+          <div className="card p-6 max-w-sm w-full shadow-xl">
             <h3 className="font-bold text-slate-800 mb-2">Hapus resi?</h3>
             <p className="text-sm text-slate-500 mb-4 font-mono break-all">{confirmDelete.resi}</p>
             <div className="flex gap-2">
-              <button
-                onClick={() => setConfirmDelete(null)}
-                className="flex-1 py-2 border border-slate-200 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50"
-              >
-                Batal
-              </button>
+              <button onClick={() => setConfirmDelete(null)} className="btn-secondary flex-1 justify-center">Batal</button>
               <button
                 onClick={() => removeResiMutation.mutate({ hid: handover.id, itemId: confirmDelete.id })}
                 disabled={removeResiMutation.isPending}
-                className="flex-1 py-2 bg-red-600 text-white rounded-xl text-sm font-semibold hover:bg-red-700 disabled:bg-red-400"
+                className="btn-danger flex-1 justify-center"
               >
                 Hapus
               </button>
@@ -299,114 +299,233 @@ export default function HandoverDetail() {
       )}
 
       {/* Screen view */}
-      <div className="space-y-5 no-print">
-        {/* Header bar */}
-        <div className="flex items-start gap-3">
-          <button onClick={() => navigate('/handover')} className="p-2 rounded-lg hover:bg-slate-100 text-slate-500 mt-0.5 transition-colors">
-            <ArrowLeft size={18} />
+      <div className="px-6 py-6 max-w-4xl no-print">
+        {/* Header */}
+        <div className="flex items-center gap-3 mb-6">
+          <button onClick={() => navigate('/handover')} className="p-1.5 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors">
+            <ArrowLeft size={16} />
           </button>
           <div className="flex-1 min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-xl font-bold text-slate-800">Handover #{handover.id}</h1>
-              <span className="px-2.5 py-0.5 bg-blue-50 text-blue-700 border border-blue-100 rounded-full text-xs font-semibold">
-                {handover.ekspedisi}
-              </span>
+              <h1 className="text-lg font-bold text-slate-800">Handover #{handover.id}</h1>
+              <span className="badge-muted">{handover.ekspedisi}</span>
+              {isClosed
+                ? <span className="badge bg-red-50 text-red-600 border border-red-200"><Lock size={9} /> Ditutup</span>
+                : null
+              }
             </div>
-            <p className="text-sm text-slate-500 mt-0.5">
+            <p className="text-xs text-slate-400 mt-0.5">
               {fmtDate(handover.date)} · {items.length} resi
               {handover.note && ` · ${handover.note}`}
             </p>
           </div>
+
           <div className="flex items-center gap-2 shrink-0">
+            {/* Draft Session button — pause & return to list, session stays OPEN */}
+            {!isClosed && (
+              <button
+                type="button"
+                onClick={() => navigate('/handover')}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold bg-amber-100 text-amber-700 border border-amber-300 hover:bg-amber-200 transition-colors"
+              >
+                <FileEdit size={13} /> Draft Session
+              </button>
+            )}
+
+            {/* Scanner connect toggle */}
+            {!isClosed && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.currentTarget.blur()
+                  setScannerConnected(v => !v)
+                  if (!scannerConnected) toast.success('Scanner eksternal terhubung', { icon: '🔌' })
+                  else toast('Scanner diputus', { icon: '🔌' })
+                }}
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                  scannerConnected
+                    ? 'bg-green-50 border-green-300 text-green-700 hover:bg-green-100'
+                    : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300 hover:text-slate-700'
+                }`}
+              >
+                {scannerConnected
+                  ? <><span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" /> Connected</>
+                  : <><ScanBarcode size={14} /> Hubungkan Scanner</>
+                }
+              </button>
+            )}
+
+            {isClosed ? (
+              <button
+                onClick={() => reopenMutation.mutate()}
+                disabled={reopenMutation.isPending}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-green-300 bg-green-50 text-green-700 text-sm font-medium hover:bg-green-100 disabled:opacity-50 transition-colors"
+              >
+                <Unlock size={14} /> Buka Sesi
+              </button>
+            ) : (
+              <button
+                onClick={() => setConfirmClose(true)}
+                disabled={closeMutation.isPending}
+                className="text-sm px-3 py-2 rounded-lg font-medium flex items-center gap-1.5 bg-success-light text-success border border-success/20 hover:bg-success hover:text-white transition-colors disabled:opacity-50"
+              >
+                <Lock size={14} /> Tutup Sesi
+              </button>
+            )}
+
             <button
               onClick={() => window.print()}
-              className="flex items-center gap-1.5 px-3 py-2 bg-red-600 text-white rounded-xl text-sm font-semibold hover:bg-red-700 transition-colors"
+              className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-2"
             >
-              <Printer size={15} /> Print
+              <Printer size={14} /> Print
             </button>
-            <button
-              onClick={() => {
-                if (window.confirm(`Hapus handover #${handover.id}? Semua data resi akan ikut terhapus.`)) {
-                  deleteMutation.mutate()
-                }
-              }}
-              className="p-2 rounded-xl border border-red-200 text-red-500 hover:bg-red-50 transition-colors"
-              title="Hapus handover"
-            >
-              <Trash2 size={15} />
-            </button>
+
+            {!isClosed && (
+              <button
+                onClick={() => {
+                  if (window.confirm(`Batalkan session Handover #${handover.id}? Semua data resi akan ikut terhapus.`)) {
+                    deleteMutation.mutate()
+                  }
+                }}
+                disabled={deleteMutation.isPending}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-red-200 text-red-600 bg-red-50 hover:bg-red-100 text-sm font-medium transition-colors disabled:opacity-50"
+              >
+                <Trash2 size={14} /> Batalkan Session
+              </button>
+            )}
+            {isClosed && (
+              <button
+                onClick={() => {
+                  if (window.confirm(`Hapus handover #${handover.id}?`)) {
+                    deleteMutation.mutate()
+                  }
+                }}
+                disabled={deleteMutation.isPending}
+                className="p-2 rounded-lg border border-slate-200 text-slate-400 hover:text-red-500 hover:border-red-200 hover:bg-red-50 transition-colors"
+                title="Hapus handover"
+              >
+                <Trash2 size={14} />
+              </button>
+            )}
           </div>
         </div>
+
+        {/* Close confirm panel */}
+        {confirmClose && (
+          <div className="card p-5 mb-5 border-amber-200 bg-amber-50/50">
+            <p className="text-sm font-semibold text-slate-800 mb-2">Tutup sesi handover ini?</p>
+            <p className="text-sm text-slate-600 mb-4">Setelah ditutup tidak bisa menambah resi lagi, kecuali dibuka kembali.</p>
+            <div className="flex gap-2">
+              <button onClick={() => setConfirmClose(false)} className="btn-secondary flex-1 justify-center">Batal</button>
+              <button
+                onClick={() => { closeMutation.mutate(); setConfirmClose(false) }}
+                disabled={closeMutation.isPending}
+                className="flex-1 py-2 rounded-lg text-sm font-semibold text-white bg-amber-500 hover:bg-amber-600 disabled:bg-amber-300 transition-colors"
+              >
+                {closeMutation.isPending ? 'Menutup…' : 'Ya, Tutup Sesi'}
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Scan input area */}
-        <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
-          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Scan / Input Resi</p>
-          <div className="flex gap-2">
-            <form onSubmit={handleScanInput} className="flex-1 flex gap-2">
-              <input
-                ref={scanInputRef}
-                type="text"
-                className="flex-1 px-3 py-2.5 border border-slate-300 rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500"
-                placeholder="Scan atau ketik nomor resi, lalu Enter…"
-                value={scanInput}
-                onChange={e => setScanInput(e.target.value.toUpperCase())}
-                disabled={addResiMutation.isPending}
-                autoComplete="off"
-              />
-              <button
-                type="submit"
-                disabled={!scanInput.trim() || addResiMutation.isPending}
-                className="px-4 py-2.5 bg-slate-800 text-white rounded-xl text-sm font-semibold hover:bg-slate-700 disabled:bg-slate-300 transition-colors flex items-center gap-1.5"
-              >
-                <Plus size={15} /> Tambah
-              </button>
-            </form>
-            <button
-              type="button"
-              onClick={() => setShowCamera(true)}
-              className="px-3 py-2.5 border border-slate-200 rounded-xl text-slate-600 hover:bg-slate-50 transition-colors flex items-center gap-1.5 text-sm"
-              title="Gunakan kamera"
-            >
-              <Camera size={16} />
-            </button>
+        {isClosed ? (
+          <div className="card p-4 mb-5 border-red-200 bg-red-50/50 flex items-center gap-3 text-red-700">
+            <Lock size={16} className="shrink-0" />
+            <div>
+              <p className="text-sm font-semibold">Sesi ditutup</p>
+              <p className="text-xs mt-0.5 text-red-500">Tidak bisa menambah atau menghapus resi. Klik "Buka Sesi" untuk mengaktifkan kembali.</p>
+            </div>
           </div>
-          {addResiMutation.isPending && (
-            <p className="text-xs text-slate-400 mt-2 animate-pulse">Menambahkan resi…</p>
-          )}
-        </div>
+        ) : (
+          <div className="card p-4 mb-5">
+            <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-3">Scan / Input Resi</p>
+            <div className="flex gap-2">
+              <form onSubmit={handleScanInput} className="flex-1 flex gap-2">
+                <input
+                  ref={scanInputRef}
+                  type="text"
+                  className="input flex-1 font-mono"
+                  placeholder="Scan atau ketik nomor resi, lalu Enter…"
+                  value={scanInput}
+                  onChange={e => setScanInput(e.target.value.toUpperCase())}
+                  disabled={addResiMutation.isPending}
+                  autoComplete="off"
+                />
+                <button
+                  type="submit"
+                  disabled={!scanInput.trim() || addResiMutation.isPending}
+                  className="btn-primary px-4 flex items-center gap-1.5 text-sm"
+                >
+                  <Plus size={14} /> Tambah
+                </button>
+              </form>
+              <button
+                type="button"
+                onClick={() => setShowCamera(true)}
+                className="btn-secondary px-3 flex items-center gap-1.5 text-sm"
+                title="Gunakan kamera"
+              >
+                <Camera size={15} />
+              </button>
+            </div>
+            {addResiMutation.isPending && (
+              <p className="text-xs text-slate-400 mt-2 animate-pulse">Menambahkan resi…</p>
+            )}
+            {scannerConnected && (
+              <p className="text-xs text-green-600 mt-2 flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse inline-block" />
+                Scanner eksternal aktif — arahkan scanner ke resi (tanpa fokus di input)
+              </p>
+            )}
+          </div>
+        )}
 
-        {/* Resi list */}
-        <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
-          <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
-            <p className="text-sm font-semibold text-slate-700 flex items-center gap-2">
-              <Package size={15} className="text-slate-400" />
-              Daftar Resi
-            </p>
-            <span className="text-xs font-mono font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-lg">
-              {items.length} resi
+        {/* Resi table */}
+        <div className="card overflow-hidden">
+          <div className="px-5 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+            <span className="text-xs font-bold text-slate-600 uppercase tracking-wide flex items-center gap-2">
+              <Package size={13} /> Daftar Resi
             </span>
+            <span className="text-xs font-mono font-bold text-slate-500">{items.length} resi</span>
           </div>
 
           {items.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-slate-300">
-              <ScanLine size={32} className="mb-2" />
+              <ScanLine size={28} className="mb-2" />
               <p className="text-sm">Belum ada resi — mulai scan di atas</p>
             </div>
           ) : (
-            <div className="divide-y divide-slate-50">
-              {items.map((item, idx) => (
-                <div key={item.id} className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 transition-colors">
-                  <span className="text-xs font-mono text-slate-400 w-8 text-right shrink-0">{idx + 1}</span>
-                  <span className="flex-1 font-mono text-sm font-semibold text-slate-800 break-all">{item.resi}</span>
-                  <span className="text-xs text-slate-400 shrink-0">{fmtDateTime(item.scannedAt)}</span>
-                  <button
-                    onClick={() => setConfirmDelete(item)}
-                    className="p-1 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-colors shrink-0"
-                  >
-                    <X size={14} />
-                  </button>
-                </div>
-              ))}
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-100">
+                    <th className="th py-2 text-center w-12">No.</th>
+                    <th className="th py-2 text-left">Nomor Resi</th>
+                    <th className="th py-2 text-right w-44">Waktu Scan</th>
+                    {!isClosed && <th className="th py-2 w-10" />}
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map((item, idx) => (
+                    <tr key={item.id} className="tr border-b border-slate-50">
+                      <td className="td py-2.5 text-center font-mono text-xs text-slate-400">{idx + 1}</td>
+                      <td className="td py-2.5 font-mono font-semibold text-slate-800">{item.resi}</td>
+                      <td className="td py-2.5 text-right text-xs text-slate-400">{fmtDateTime(item.scannedAt)}</td>
+                      {!isClosed && (
+                        <td className="td py-2.5 text-center">
+                          <button
+                            onClick={() => setConfirmDelete(item)}
+                            className="p-1 rounded text-slate-300 hover:text-red-500 hover:bg-red-50 transition-colors"
+                          >
+                            <X size={13} />
+                          </button>
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
         </div>
@@ -432,7 +551,6 @@ function PrintLayout({ handover, items }) {
 
   const ROWS_PER_PAGE = 40
 
-  // Split items into pages
   const pages = []
   for (let i = 0; i < Math.max(1, items.length); i += ROWS_PER_PAGE) {
     pages.push(items.slice(i, i + ROWS_PER_PAGE))
@@ -442,22 +560,13 @@ function PrintLayout({ handover, items }) {
     <>
       {pages.map((pageItems, pageIdx) => (
         <div key={pageIdx} className="print-page">
-          {/* Kop Surat */}
           <div className="print-header">
             <img src={logoPreface} alt="Preface" className="print-logo" />
-            <div className="print-company">
-              <div className="print-company-name">PREFACE</div>
-              <div className="print-company-sub">Warehouse & Fulfillment Division</div>
-            </div>
           </div>
           <div className="print-divider" />
 
-          {/* Title */}
-          <div className="print-title">
-            DOKUMEN SERAH TERIMA PAKET
-          </div>
+          <div className="print-title">DOKUMEN SERAH TERIMA PAKET</div>
 
-          {/* Meta info */}
           <div className="print-meta">
             <table className="print-meta-table">
               <tbody>
@@ -492,7 +601,6 @@ function PrintLayout({ handover, items }) {
             <div className="print-page-info">Halaman {pageIdx + 1} dari {pages.length}</div>
           )}
 
-          {/* Resi table */}
           <table className="print-table">
             <thead>
               <tr>
@@ -520,14 +628,13 @@ function PrintLayout({ handover, items }) {
             </tbody>
           </table>
 
-          {/* Footer TTD — only on last page */}
           {pageIdx === pages.length - 1 && (
             <div className="print-footer">
               <div className="print-sign-block">
                 <div className="print-sign-title">Pengirim,</div>
                 <div className="print-sign-space" />
                 <div className="print-sign-line" />
-                <div className="print-sign-name">{handover.User?.name ?? '(Nama Pengirim)'}</div>
+                <div className="print-sign-name">&nbsp;</div>
                 <div className="print-sign-role">Pihak Preface</div>
               </div>
               <div className="print-sign-block">

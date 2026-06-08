@@ -1,32 +1,76 @@
-import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
-import { stockOutApi } from '../api'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { stockOutApi, stockOutDraftApi } from '../api'
 import { useAuth } from '../context/AuthContext'
 import PageHeader from '../components/PageHeader'
 import { Table, Pagination } from '../components/Table'
-import { PackageMinus, Eye } from 'lucide-react'
+import toast from 'react-hot-toast'
+import { PackageMinus, Eye, PencilLine, X } from 'lucide-react'
 
 const fmt = (n) => Number(n ?? 0).toLocaleString('id-ID')
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'
 
 export default function StockOut() {
   const navigate = useNavigate()
-  const [page, setPage] = useState(1)
-  const { hasPermission } = useAuth()
+  const qc = useQueryClient()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const page  = Number(searchParams.get('page')  || '1')
+  const limit = Number(searchParams.get('limit') || '10')
+  const setPage = (p) => setSearchParams(prev => { prev.set('page', String(p)); return prev }, { replace: true })
+  const { hasPermission, user } = useAuth()
 
   const canCreate    = hasPermission('stock.out.create') || hasPermission('stock.manage')
   const canViewValue = hasPermission('inventory.view_value') || hasPermission('inventory.manage')
 
   const { data, isLoading } = useQuery({
-    queryKey: ['stock-out', { page }],
-    queryFn:  () => stockOutApi.list({ page, limit: 10 }),
+    queryKey: ['stock-out', { page, limit }],
+    queryFn:  () => stockOutApi.list({ page, limit }),
   })
+
+  const { data: drafts = [] } = useQuery({
+    queryKey: ['stock-out-draft-current'],
+    queryFn:  () => stockOutDraftApi.current(),
+    enabled:  canCreate,
+  })
+
+  const newSession = useMutation({
+    mutationFn: () => stockOutDraftApi.create(),
+    onSuccess: (draft) => navigate(`/stock-out/new?draftId=${draft.id}`),
+    onError: () => toast.error('Gagal membuat session baru'),
+  })
+
+  const cancelDraft = useMutation({
+    mutationFn: (id) => stockOutDraftApi.cancel(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['stock-out-draft-current'] })
+      qc.removeQueries({ queryKey: ['stock-out-draft'] })
+      toast.success('Session dibatalkan')
+    },
+    onError: () => toast.error('Gagal membatalkan session'),
+  })
+
+  const draftRows = drafts.map(draft => ({
+    _isDraft:   true,
+    _draftId:   draft.id,
+    id:         `draft-${draft.id}`,
+    date:       draft.date,
+    Warehouse:  draft.Warehouse,
+    purpose:    draft.purpose || '',
+    notes:      draft.note   || '',
+    itemCount:  draft.Stock_Out_Draft_Items?.length ?? 0,
+    totalQty:   draft.Stock_Out_Draft_Items?.reduce((s, i) => s + (i.quantity ?? 0), 0) ?? 0,
+    grandTotal: draft.Stock_Out_Draft_Items?.reduce((s, i) => s + (i.quantity ?? 0) * (i.price ?? 0), 0) ?? 0,
+    User:       { name: user?.name },
+  }))
+
+  const tableData = [...draftRows, ...(data?.data ?? [])]
 
   const columns = [
     {
-      key: 'id', label: 'No.', width: 70,
-      render: r => <span className="font-mono text-xs font-semibold text-slate-400">#{r.id}</span>,
+      key: 'id', label: 'No.', width: 90,
+      render: r => r._isDraft
+        ? <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-700 border border-amber-200 whitespace-nowrap">● Aktif</span>
+        : <span className="font-mono text-xs font-semibold text-slate-400">#{r.id}</span>,
     },
     {
       key: 'date', label: 'Tanggal', width: 120,
@@ -52,11 +96,7 @@ export default function StockOut() {
     },
     ...(canViewValue ? [{
       key: 'grandTotal', label: 'Total Nilai', width: 150,
-      render: r => (
-        <span className="font-mono font-bold text-sm text-slate-800">
-          Rp {fmt(r.grandTotal ?? 0)}
-        </span>
-      ),
+      render: r => <span className="font-mono font-bold text-sm text-slate-800">Rp {fmt(r.grandTotal ?? 0)}</span>,
     }] : []),
     {
       key: 'createdBy', label: 'Dibuat oleh', width: 130,
@@ -67,8 +107,24 @@ export default function StockOut() {
       render: r => <span className="text-xs text-slate-400 truncate max-w-[150px] block">{r.notes || '—'}</span>,
     },
     {
-      key: 'actions', label: '', width: 110,
-      render: r => (
+      key: 'actions', label: '', width: 180,
+      render: r => r._isDraft ? (
+        <div className="flex gap-1.5">
+          <button
+            onClick={() => navigate(`/stock-out/new?draftId=${r._draftId}`)}
+            className="flex items-center gap-1 text-[10px] px-2.5 py-1 rounded font-semibold bg-amber-500 text-white hover:bg-amber-600 transition-colors"
+          >
+            <PencilLine size={10} /> Isi Session
+          </button>
+          <button
+            onClick={() => { if (confirm('Batalkan session ini? Semua item akan dihapus.')) cancelDraft.mutate(r._draftId) }}
+            disabled={cancelDraft.isPending}
+            className="flex items-center gap-1 text-[10px] px-2 py-1 rounded font-medium text-slate-500 hover:text-red-500 hover:bg-red-50 border border-slate-200 transition-colors"
+          >
+            <X size={10} /> Batal
+          </button>
+        </div>
+      ) : (
         <button onClick={() => navigate(`/stock-out/${r.id}`)} className="btn-secondary text-[10px] px-2 py-0.5 flex items-center gap-1 rounded">
           <Eye size={10} /> Lihat Detail
         </button>
@@ -82,13 +138,17 @@ export default function StockOut() {
         title="Pengeluaran Stok"
         subtitle={`${data?.pagination?.total ?? 0} transaksi`}
         action={canCreate && (
-          <button onClick={() => navigate('/stock-out/new')} className="btn-primary">
-            <PackageMinus size={14} /> Pengeluaran Baru
+          <button
+            onClick={() => newSession.mutate()}
+            disabled={newSession.isPending}
+            className="btn-primary disabled:opacity-50"
+          >
+            <PackageMinus size={14} /> {newSession.isPending ? 'Membuat…' : 'Pengeluaran Baru'}
           </button>
         )}
       />
       <div className="card overflow-hidden">
-        <Table columns={columns} data={data?.data} loading={isLoading} emptyText="Belum ada transaksi stock out" />
+        <Table columns={columns} data={tableData} loading={isLoading} emptyText="Belum ada transaksi stock out" />
         <Pagination pagination={data?.pagination} onPageChange={setPage} />
       </div>
     </div>

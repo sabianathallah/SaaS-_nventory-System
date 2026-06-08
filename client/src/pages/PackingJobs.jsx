@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useSearchParams } from 'react-router-dom'
 import { packingJobsApi, incomingGoodsApi } from '../api'
 import { useAuth } from '../context/AuthContext'
 import PageHeader from '../components/PageHeader'
@@ -104,7 +105,11 @@ export default function PackingJobs() {
   const qc = useQueryClient()
   const { isHeadPacking, isTimPacking } = useAuth()
 
-  const [page, setPage]               = useState(1)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const page  = Number(searchParams.get('page')  || '1')
+  const limit = Number(searchParams.get('limit') || '15')
+  const setPage = (p) => setSearchParams(prev => { prev.set('page', String(p)); return prev }, { replace: true })
+
   const [modal, setModal]             = useState(null)
   const [form, setForm]               = useState(EMPTY_FORM)
   const [submitItems, setSubmitItems] = useState([])
@@ -112,8 +117,8 @@ export default function PackingJobs() {
   const [showScanner, setShowScanner]   = useState(false)
 
   const { data, isLoading } = useQuery({
-    queryKey: ['packing-jobs', { page }],
-    queryFn:  () => packingJobsApi.list({ page, limit: 15 }),
+    queryKey: ['packing-jobs', { page, limit }],
+    queryFn:  () => packingJobsApi.list({ page, limit }),
   })
 
   const igQuery = useQuery({

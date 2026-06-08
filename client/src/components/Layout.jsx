@@ -9,7 +9,7 @@ import {
   ArrowDownToLine, ArrowUpFromLine, ArrowLeftRight,
   ClipboardList, Users, Building2, BookOpen, LogOut, Bell,
   PackageOpen, FileText, Layers, ClipboardCheck, Menu, X, Eye, EyeOff,
-  PackageCheck,
+  PackageCheck, Link2,
 } from 'lucide-react'
 import logoPreface from '../assets/logo-preface.jpeg'
 
@@ -58,6 +58,12 @@ const NAV_GROUPS = [
     ],
   },
   {
+    label: 'Umum',
+    items: [
+      { to: '/database-links', icon: Link2, label: 'Database Links', pageKey: 'database-links' },
+    ],
+  },
+  {
     label: 'Administrasi',
     adminOnly: true,
     items: [
@@ -72,7 +78,7 @@ const PAGE_TITLES = {
   '/': 'Dashboard', '/products': 'Produk', '/catalog': 'Kategori dan Koleksi',
   '/warehouses': 'Gudang', '/suppliers': 'Vendor',
   '/stock-in': 'Penerimaan Stok', '/stock-in/new': 'Penerimaan Stok Baru', '/stock-out': 'Pengeluaran Stok', '/movements': 'Pergerakan',
-  '/opname': 'Stock Opname', '/handover': 'Handover Pengiriman', '/users': 'Pengguna', '/companies': 'Perusahaan',
+  '/opname': 'Stock Opname', '/handover': 'Handover Pengiriman', '/database-links': 'Database Links', '/users': 'Pengguna', '/companies': 'Perusahaan',
   '/vendors': 'Vendor', '/incoming-goods': 'Barang Masuk', '/surat-jalan': 'Surat Jalan',
   '/packing-jobs': 'Pekerjaan Packing', '/form-anak-packing': 'Form Anak Packing',
   '/page-visibility': 'Visibilitas Halaman',

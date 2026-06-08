@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useSearchParams } from 'react-router-dom'
 import { vendorsApi } from '../api'
 import PageHeader from '../components/PageHeader'
 import { Table, Pagination } from '../components/Table'
@@ -11,13 +12,16 @@ const EMPTY = { name: '', vendorCode: '', contact: '', phone: '', email: '', add
 
 export default function Vendors() {
   const qc = useQueryClient()
-  const [page, setPage]   = useState(1)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const page  = Number(searchParams.get('page')  || '1')
+  const limit = Number(searchParams.get('limit') || '15')
+  const setPage = (p) => setSearchParams(prev => { prev.set('page', String(p)); return prev }, { replace: true })
   const [modal, setModal] = useState(null)
   const [form, setForm]   = useState(EMPTY)
 
   const { data, isLoading } = useQuery({
-    queryKey: ['vendors', { page }],
-    queryFn:  () => vendorsApi.list({ page, limit: 15 }),
+    queryKey: ['vendors', { page, limit }],
+    queryFn:  () => vendorsApi.list({ page, limit }),
   })
 
   const set = (field) => (e) => setForm(f => ({ ...f, [field]: e.target.value }))

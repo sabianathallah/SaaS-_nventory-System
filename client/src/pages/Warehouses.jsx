@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { warehousesApi } from '../api'
 import PageHeader from '../components/PageHeader'
 import { Table, Pagination } from '../components/Table'
@@ -15,14 +15,17 @@ export default function Warehouses() {
   const qc       = useQueryClient()
   const navigate = useNavigate()
   const { needsCompany } = useCompanyGuard()
-  const [page, setPage]     = useState(1)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const page  = Number(searchParams.get('page')  || '1')
+  const limit = Number(searchParams.get('limit') || '10')
+  const setPage = (p) => setSearchParams(prev => { prev.set('page', String(p)); return prev }, { replace: true })
   const [search, setSearch] = useState('')
   const [modal, setModal]   = useState(null)
   const [form, setForm]     = useState({ name: '', location: '' })
 
   const { data, isLoading } = useQuery({
-    queryKey: ['warehouses', { page, name: search }],
-    queryFn:  () => warehousesApi.list({ page, limit: 10, name: search }),
+    queryKey: ['warehouses', { page, limit, name: search }],
+    queryFn:  () => warehousesApi.list({ page, limit, name: search }),
   })
 
   const save = useMutation({

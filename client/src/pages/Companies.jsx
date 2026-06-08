@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useSearchParams } from 'react-router-dom'
 import { companiesApi } from '../api'
 import PageHeader from '../components/PageHeader'
 import { Table, Pagination } from '../components/Table'
@@ -21,7 +22,10 @@ const STATUS_BADGE = {
 export default function Companies() {
   const qc = useQueryClient()
   const logoInputRef = useRef(null)
-  const [page, setPage]     = useState(1)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const page  = Number(searchParams.get('page')  || '1')
+  const limit = Number(searchParams.get('limit') || '10')
+  const setPage = (p) => setSearchParams(prev => { prev.set('page', String(p)); return prev }, { replace: true })
   const [search, setSearch] = useState('')
   const [modal, setModal]   = useState(null)
   const [form, setForm]     = useState(EMPTY)
@@ -33,8 +37,8 @@ export default function Companies() {
   }, [form.logoPreview])
 
   const { data, isLoading } = useQuery({
-    queryKey: ['companies', { page, name: search }],
-    queryFn:  () => companiesApi.list({ page, limit: 10, name: search }),
+    queryKey: ['companies', { page, limit, name: search }],
+    queryFn:  () => companiesApi.list({ page, limit, name: search }),
   })
 
   const save = useMutation({

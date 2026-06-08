@@ -6,17 +6,20 @@ const {
 } = require('../models');
 const { companyFilter, companyId } = require('../helpers/tenancy');
 
-const DRAFT_ITEM_INCLUDE = [{
-    model: Stock_In_Draft_Item,
-    include: [{
-        model: ProductSKU,
-        attributes: ['id', 'sku_code', 'price', 'qty'],
-        include: [
-            { model: Product, attributes: ['id', 'name', 'imageUrl', 'unit'] },
-            { model: ProductVariantOption, attributes: ['id', 'value'], through: { attributes: [] } },
-        ],
-    }],
-}];
+const DRAFT_ITEM_INCLUDE = [
+    {
+        model: Stock_In_Draft_Item,
+        include: [{
+            model: ProductSKU,
+            attributes: ['id', 'sku_code', 'price', 'qty'],
+            include: [
+                { model: Product, attributes: ['id', 'name', 'imageUrl', 'unit'] },
+                { model: ProductVariantOption, attributes: ['id', 'value'], through: { attributes: [] } },
+            ],
+        }],
+    },
+    { model: Warehouse, attributes: ['id', 'name'] },
+];
 
 async function findDraft(id, req) {
     const draft = await Stock_In_Draft.findOne({
@@ -28,6 +31,44 @@ async function findDraft(id, req) {
 }
 
 class StockInDraftController {
+    static async current(req, res, next) {
+        try {
+            const drafts = await Stock_In_Draft.findAll({
+                where: { status: 'draft', createdBy: req.user.id, ...companyFilter(req) },
+                include: DRAFT_ITEM_INCLUDE,
+                order: [['createdAt', 'DESC']],
+            });
+            res.status(200).json(drafts);
+        } catch (err) { next(err); }
+    }
+
+    static async get(req, res, next) {
+        try {
+            const draft = await Stock_In_Draft.findOne({
+                where: { id: req.params.id, createdBy: req.user.id, ...companyFilter(req) },
+                include: DRAFT_ITEM_INCLUDE,
+            });
+            if (!draft) return res.status(404).json({ message: 'Draft tidak ditemukan' });
+            res.status(200).json(draft);
+        } catch (err) { next(err); }
+    }
+
+    static async create(req, res, next) {
+        try {
+            const cid = companyId(req);
+            let draft = await Stock_In_Draft.create({
+                createdBy: req.user.id,
+                companyId: cid,
+                status: 'draft',
+            });
+            draft = await Stock_In_Draft.findOne({
+                where: { id: draft.id },
+                include: DRAFT_ITEM_INCLUDE,
+            });
+            res.status(201).json(draft);
+        } catch (err) { next(err); }
+    }
+
     static async ensure(req, res, next) {
         try {
             const cid = companyId(req);

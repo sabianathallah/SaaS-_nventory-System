@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { productsApi, categoriesApi, articlesApi, warehousesApi, productSkusApi } from '../api'
 import SearchBar from '../components/SearchBar'
@@ -378,12 +378,30 @@ export default function Products() {
   const canDelete    = hasPermission('inventory.product.delete') || hasPermission('inventory.manage')
   const canViewValue = hasPermission('inventory.view_value')     || hasPermission('inventory.manage')
 
-  const [page, setPage]         = useState(1)
-  const [search, setSearch]     = useState('')
-  const [catFilter, setCat]     = useState('')
-  const [artFilter, setArt]     = useState('')
-  const [whFilter, setWh]       = useState('')
-  const [sort, setSort]         = useState({ col: 'name', dir: 'asc' })
+  const [searchParams, setSearchParams] = useSearchParams()
+  const page      = Number(searchParams.get('page')  || '1')
+  const limit     = Number(searchParams.get('limit') || '15')
+  const search    = searchParams.get('q')    || ''
+  const catFilter = searchParams.get('cat')  || ''
+  const artFilter = searchParams.get('art')  || ''
+  const whFilter  = searchParams.get('wh')   || ''
+  const sort      = { col: searchParams.get('sortBy') || 'name', dir: searchParams.get('sortDir') || 'asc' }
+
+  const sp = (updates) => setSearchParams(prev => {
+    Object.entries(updates).forEach(([k, v]) => v ? prev.set(k, v) : prev.delete(k))
+    return prev
+  }, { replace: true })
+
+  const setPage   = (p) => sp({ page: String(p) })
+  const setSearch = (v) => sp({ q: v, page: '1' })
+  const setCat    = (v) => sp({ cat: v, page: '1' })
+  const setArt    = (v) => sp({ art: v, page: '1' })
+  const setWh     = (v) => sp({ wh: v, page: '1' })
+  const setSort   = (fn) => {
+    const next = fn(sort)
+    sp({ sortBy: next.col, sortDir: next.dir, page: '1' })
+  }
+
   const [delModal, setDelModal] = useState(null)
   const [expanded, setExpanded] = useState(new Set())
   const [qrTarget, setQrTarget] = useState(null)
@@ -402,9 +420,9 @@ export default function Products() {
   }
 
   const { data, isLoading } = useQuery({
-    queryKey: ['products', { page, name: search, CategoryId: catFilter, ArticleId: artFilter, WarehouseId: whFilter, sortBy: sort.col, sortOrder: sort.dir }],
+    queryKey: ['products', { page, limit, name: search, CategoryId: catFilter, ArticleId: artFilter, WarehouseId: whFilter, sortBy: sort.col, sortOrder: sort.dir }],
     queryFn:  () => productsApi.list({
-      page, limit: 15, name: search,
+      page, limit, name: search,
       CategoryId:  catFilter  || undefined,
       ArticleId:   artFilter  || undefined,
       WarehouseId: whFilter   || undefined,
@@ -527,7 +545,7 @@ export default function Products() {
           />
           {activeFilters > 0 && (
             <button
-              onClick={() => { setCat(''); setArt(''); setWh(''); setPage(1) }}
+              onClick={() => setSearchParams(prev => { ['cat','art','wh'].forEach(k => prev.delete(k)); prev.set('page','1'); return prev }, { replace: true })}
               className="text-xs text-slate-400 hover:text-slate-700 underline whitespace-nowrap"
             >
               Reset filter

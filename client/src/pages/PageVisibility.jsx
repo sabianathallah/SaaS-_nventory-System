@@ -7,7 +7,7 @@ import {
   Package, BookOpen, Warehouse, Truck,
   ArrowDownToLine, ArrowUpFromLine, ArrowLeftRight,
   ClipboardList, PackageOpen, FileText, Layers,
-  ClipboardCheck, Users, Building2, Eye, EyeOff, Save, PackageCheck,
+  ClipboardCheck, Users, Building2, Eye, EyeOff, Save, PackageCheck, Link2,
 } from 'lucide-react'
 
 const PAGE_GROUPS = [
@@ -43,6 +43,12 @@ const PAGE_GROUPS = [
     items: [
       { key: 'packing-jobs',      label: 'Packing Jobs',      icon: Layers },
       { key: 'form-anak-packing', label: 'Form Anak Packing', icon: ClipboardCheck },
+    ],
+  },
+  {
+    label: 'Umum',
+    items: [
+      { key: 'database-links', label: 'Database Links', icon: Link2 },
     ],
   },
   {

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useSearchParams } from 'react-router-dom'
 import { suppliersApi } from '../api'
 import PageHeader from '../components/PageHeader'
 import { Table, Pagination } from '../components/Table'
@@ -13,14 +14,17 @@ import CompanyRequiredBanner from '../components/CompanyRequiredBanner'
 export default function Suppliers() {
   const qc = useQueryClient()
   const { needsCompany } = useCompanyGuard()
-  const [page, setPage]     = useState(1)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const page  = Number(searchParams.get('page')  || '1')
+  const limit = Number(searchParams.get('limit') || '10')
+  const setPage = (p) => setSearchParams(prev => { prev.set('page', String(p)); return prev }, { replace: true })
   const [search, setSearch] = useState('')
   const [modal, setModal]   = useState(null)
   const [form, setForm]     = useState({ name: '', contact: '' })
 
   const { data, isLoading } = useQuery({
-    queryKey: ['suppliers', { page, name: search }],
-    queryFn:  () => suppliersApi.list({ page, limit: 10, name: search }),
+    queryKey: ['suppliers', { page, limit, name: search }],
+    queryFn:  () => suppliersApi.list({ page, limit, name: search }),
   })
 
   const save = useMutation({

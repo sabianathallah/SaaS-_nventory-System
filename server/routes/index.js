@@ -24,6 +24,9 @@ const stockOpnameItemRouter    = require('./stock_opname_item');
 const stockInDraftRouter       = require('./stock_in_draft');
 const stockOutDraftRouter      = require('./stock_out_draft');
 const handoverRouter           = require('./handover');
+const dbLinkRouter             = require('./db_link');
+const deliveryNoteRouter       = require('./delivery_note');
+const vendorDeliveryRouter     = require('./vendor_delivery');
 const userRouter               = require('./user');
 const vendorRouter             = require('./vendor');
 const incomingGoodsRouter      = require('./incoming_goods');
@@ -75,6 +78,9 @@ router.use('/stock-opname-items',    stockOpnameItemRouter);
 router.use('/stock-in-drafts',       stockInDraftRouter);
 router.use('/stock-out-drafts',      stockOutDraftRouter);
 router.use('/handovers',             handoverRouter);
+router.use('/db-folders',            dbLinkRouter);
+router.use('/delivery-notes',        deliveryNoteRouter);
+router.use('/vendor-deliveries',     vendorDeliveryRouter);
 
 // Packing
 router.use('/vendors',           vendorRouter);

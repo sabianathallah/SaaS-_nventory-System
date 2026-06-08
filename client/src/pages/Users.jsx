@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useSearchParams } from 'react-router-dom'
 import { usersApi, companiesApi, rolesApi, permissionsApi } from '../api'
 import SearchableSelect from '../components/SearchableSelect'
 import { useAuth } from '../context/AuthContext'
@@ -65,7 +66,10 @@ function PermCheckbox({ state, onChange }) {
 
 function UsersTab({ isSuperAdmin, roles }) {
   const qc = useQueryClient()
-  const [page, setPage]     = useState(1)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const page  = Number(searchParams.get('page')  || '1')
+  const limit = Number(searchParams.get('limit') || '10')
+  const setPage = (p) => setSearchParams(prev => { prev.set('page', String(p)); return prev }, { replace: true })
   const [search, setSearch] = useState('')
   const [modal, setModal]   = useState(null)
   const [showPwd, setShowPwd] = useState(false)
@@ -74,8 +78,8 @@ function UsersTab({ isSuperAdmin, roles }) {
   const [form, setForm] = useState({ name: '', email: '', password: '', role: defaultRole, companyId: '' })
 
   const { data, isLoading } = useQuery({
-    queryKey: ['users', { page, name: search }],
-    queryFn:  () => usersApi.list({ page, limit: 10, name: search }),
+    queryKey: ['users', { page, limit, name: search }],
+    queryFn:  () => usersApi.list({ page, limit, name: search }),
   })
 
   const { data: companiesData } = useQuery({

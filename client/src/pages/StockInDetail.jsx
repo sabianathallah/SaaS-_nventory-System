@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef, useEffect } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { stockInApi, stockInDraftApi, warehousesApi, productsApi, productSkusApi } from '../api'
 import { useAuth } from '../context/AuthContext'
@@ -13,7 +13,7 @@ import { exportExcel } from '../utils/exportExcel'
 import {
   ArrowLeft, PackagePlus, ScanLine, Plus, Trash2,
   Save, ChevronDown, Package, X, FileSpreadsheet,
-  ScanBarcode, Unplug,
+  ScanBarcode, Unplug, BookmarkCheck,
 } from 'lucide-react'
 
 const fmt     = (n) => Number(n ?? 0).toLocaleString('id-ID')
@@ -280,6 +280,8 @@ export default function StockInDetail() {
   const { hasPermission } = useAuth()
   const isNew           = !id || id === 'new'
   const { needsCompany } = useCompanyGuard()
+  const [urlParams]     = useSearchParams()
+  const draftIdParam    = urlParams.get('draftId')
 
   // Granular permission flags
   const canManualInput = hasPermission('stock.in.manual_input') || hasPermission('stock.manage')
@@ -288,8 +290,10 @@ export default function StockInDetail() {
 
   // ── Draft (server-side) ──────────────────────────────────────────────────────
   const { data: draft, isLoading: draftLoading } = useQuery({
-    queryKey: ['stock-in-draft'],
-    queryFn:  () => stockInDraftApi.ensure(),
+    queryKey: draftIdParam ? ['stock-in-draft', draftIdParam] : ['stock-in-draft'],
+    queryFn:  draftIdParam
+      ? () => stockInDraftApi.get(draftIdParam)
+      : () => stockInDraftApi.ensure(),
     enabled:  isNew,
     staleTime: Infinity,
   })
@@ -309,9 +313,6 @@ export default function StockInDetail() {
         WarehouseId: draft.WarehouseId ?? '',
         note:        draft.note        ?? '',
       })
-      if (draft.Stock_In_Draft_Items?.length > 0 || draft.WarehouseId) {
-        toast('Draft session dipulihkan', { icon: '📋', duration: 3000 })
-      }
     }
   }, [draft])
 
@@ -358,17 +359,22 @@ export default function StockInDetail() {
     }),
     onSuccess: (data) => {
       qc.removeQueries({ queryKey: ['stock-in-draft'] })
+      qc.invalidateQueries({ queryKey: ['stock-in-draft-current'] })
       qc.invalidateQueries({ queryKey: ['stock-in'] })
       toast.success('Stock IN berhasil dibuat')
-      navigate(`/stock-in/${data.id}`)
+      navigate(`/stock-in/${data.id}`, { replace: true })
     },
     onError: e => toast.error(e.response?.data?.message || 'Error'),
   })
 
   const cancelMutation = useMutation({
     mutationFn: () => stockInDraftApi.cancel(draftId),
-    onSuccess:  () => { qc.removeQueries({ queryKey: ['stock-in-draft'] }); navigate('/stock-in') },
-    onError:    () => navigate('/stock-in'),
+    onSuccess: () => {
+      qc.removeQueries({ queryKey: ['stock-in-draft'] })
+      qc.invalidateQueries({ queryKey: ['stock-in-draft-current'] })
+      navigate('/stock-in')
+    },
+    onError: () => navigate('/stock-in'),
   })
 
   const addItem = ({ sku, quantity, price }) => {
@@ -615,8 +621,20 @@ export default function StockInDetail() {
         <div className="flex gap-3">
           <button type="button" onClick={() => cancelMutation.mutate()}
             disabled={cancelMutation.isPending}
-            className="btn-secondary flex-1 justify-center">
-            Batalkan Session
+            className="flex-1 justify-center flex items-center gap-2 px-4 py-2 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 text-sm font-medium transition-colors disabled:opacity-50">
+            <X size={14} /> Batalkan
+          </button>
+          <button type="button"
+            onClick={async () => {
+              if (draftId) {
+                clearTimeout(saveTimer.current)
+                await stockInDraftApi.update(draftId, { date: form.date, WarehouseId: form.WarehouseId || null, note: form.note || null }).catch(() => {})
+              }
+              qc.invalidateQueries({ queryKey: ['stock-in-draft-current'] })
+              navigate('/stock-in')
+            }}
+            className="flex-1 justify-center flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 text-sm font-medium transition-colors">
+            <BookmarkCheck size={14} /> Simpan Draft
           </button>
           <button type="submit" disabled={createMutation.isPending || draftLoading} className="btn-primary flex-1 justify-center">
             <Save size={14} />

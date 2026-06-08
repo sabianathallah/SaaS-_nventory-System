@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { opnameSessionsApi, warehousesApi } from '../api'
 import PageHeader from '../components/PageHeader'
 import SearchableSelect from '../components/SearchableSelect'
@@ -24,16 +24,24 @@ export default function Opname() {
   const navigate = useNavigate()
   const { needsCompany } = useCompanyGuard()
 
-  const [page, setPage]                   = useState(1)
-  const [statusFilter, setStatusFilter]   = useState('')
-  const [whFilter, setWhFilter]           = useState('')
-  const [showCancelled, setShowCancelled] = useState(false)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const page          = Number(searchParams.get('page')  || '1')
+  const limit         = Number(searchParams.get('limit') || '10')
+  const statusFilter  = searchParams.get('status') || ''
+  const whFilter      = searchParams.get('wh') || ''
+  const showCancelled = searchParams.get('cancelled') === '1'
+
+  const setPage = (p) => setSearchParams(prev => { prev.set('page', String(p)); return prev }, { replace: true })
+  const setStatusFilter = (v) => setSearchParams(prev => { v ? prev.set('status', v) : prev.delete('status'); prev.set('page', '1'); return prev }, { replace: true })
+  const setWhFilter = (v) => setSearchParams(prev => { v ? prev.set('wh', v) : prev.delete('wh'); prev.set('page', '1'); return prev }, { replace: true })
+  const setShowCancelled = (v) => setSearchParams(prev => { v ? prev.set('cancelled', '1') : prev.delete('cancelled'); return prev }, { replace: true })
+
   const [modal, setModal]                 = useState(null)
   const [form, setForm]                   = useState({ warehouseId: '', notes: '' })
 
   const { data, isLoading } = useQuery({
-    queryKey: ['opname', { page, status: statusFilter || undefined, warehouseId: whFilter || undefined }],
-    queryFn:  () => opnameSessionsApi.list({ page, limit: 10, status: statusFilter || undefined, warehouseId: whFilter || undefined }),
+    queryKey: ['opname', { page, limit, status: statusFilter || undefined, warehouseId: whFilter || undefined }],
+    queryFn:  () => opnameSessionsApi.list({ page, limit, status: statusFilter || undefined, warehouseId: whFilter || undefined }),
   })
   const { data: warehouses } = useQuery({
     queryKey: ['warehouses', { limit: 100 }],

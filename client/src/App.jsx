@@ -23,12 +23,14 @@ import Companies from './pages/Companies'
 import Catalog from './pages/Catalog'
 import Vendors from './pages/Vendors'
 import IncomingGoods from './pages/IncomingGoods'
+import IncomingGoodsDetail from './pages/IncomingGoodsDetail'
 import SuratJalan from './pages/SuratJalan'
 import PackingJobs from './pages/PackingJobs'
 import FormAnakPacking from './pages/FormAnakPacking'
 import PageVisibility from './pages/PageVisibility'
 import Handover from './pages/Handover'
 import HandoverDetail from './pages/HandoverDetail'
+import DatabaseLinks from './pages/DatabaseLinks'
 
 function PrivateRoute({ children }) {
   const { user } = useAuth()
@@ -84,13 +86,15 @@ function AppRoutes() {
                 <Route path="/users"              element={<StaffGuardRoute><PageVisibleRoute pageKey="users"><Users /></PageVisibleRoute></StaffGuardRoute>} />
                 <Route path="/companies"          element={<StaffGuardRoute><PageVisibleRoute pageKey="companies"><Companies /></PageVisibleRoute></StaffGuardRoute>} />
                 <Route path="/vendors"            element={<StaffGuardRoute><PageVisibleRoute pageKey="vendors"><Vendors /></PageVisibleRoute></StaffGuardRoute>} />
-                <Route path="/incoming-goods"     element={<StaffGuardRoute><PageVisibleRoute pageKey="incoming-goods"><IncomingGoods /></PageVisibleRoute></StaffGuardRoute>} />
-                <Route path="/surat-jalan"        element={<StaffGuardRoute><PageVisibleRoute pageKey="surat-jalan"><SuratJalan /></PageVisibleRoute></StaffGuardRoute>} />
+                <Route path="/incoming-goods"        element={<StaffGuardRoute><PageVisibleRoute pageKey="incoming-goods"><IncomingGoods /></PageVisibleRoute></StaffGuardRoute>} />
+                <Route path="/incoming-goods/new"  element={<StaffGuardRoute><PageVisibleRoute pageKey="incoming-goods"><IncomingGoodsDetail /></PageVisibleRoute></StaffGuardRoute>} />
+                <Route path="/incoming-goods/:id"  element={<StaffGuardRoute><PageVisibleRoute pageKey="incoming-goods"><IncomingGoodsDetail /></PageVisibleRoute></StaffGuardRoute>} />
+                <Route path="/surat-jalan"         element={<StaffGuardRoute><PageVisibleRoute pageKey="surat-jalan"><SuratJalan /></PageVisibleRoute></StaffGuardRoute>} />
                 <Route path="/packing-jobs"       element={<StaffGuardRoute><PageVisibleRoute pageKey="packing-jobs"><PackingJobs /></PageVisibleRoute></StaffGuardRoute>} />
                 <Route path="/form-anak-packing"  element={<StaffGuardRoute><PageVisibleRoute pageKey="form-anak-packing"><FormAnakPacking /></PageVisibleRoute></StaffGuardRoute>} />
                 <Route path="/handover"           element={<StaffGuardRoute><PageVisibleRoute pageKey="handover"><Handover /></PageVisibleRoute></StaffGuardRoute>} />
-                <Route path="/handover/new"       element={<StaffGuardRoute><PageVisibleRoute pageKey="handover"><HandoverDetail /></PageVisibleRoute></StaffGuardRoute>} />
                 <Route path="/handover/:id"       element={<StaffGuardRoute><PageVisibleRoute pageKey="handover"><HandoverDetail /></PageVisibleRoute></StaffGuardRoute>} />
+                <Route path="/database-links"     element={<StaffGuardRoute><PageVisibleRoute pageKey="database-links"><DatabaseLinks /></PageVisibleRoute></StaffGuardRoute>} />
                 <Route path="/page-visibility"    element={<StaffGuardRoute><PageVisibility /></StaffGuardRoute>} />
               </Routes>
             </Layout>

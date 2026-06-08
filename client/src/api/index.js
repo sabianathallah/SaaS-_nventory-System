@@ -65,6 +65,9 @@ export const stockInApi = {
 }
 export const stockOutApi       = crud('/stock-out-headers')
 export const stockInDraftApi = {
+  current:    ()                   => api.get('/stock-in-drafts/current').then(r => r.data),
+  get:        (id)                 => api.get(`/stock-in-drafts/${id}`).then(r => r.data),
+  create:     ()                   => api.post('/stock-in-drafts').then(r => r.data),
   ensure:     ()                   => api.post('/stock-in-drafts/ensure').then(r => r.data),
   update:     (id, data)           => api.put(`/stock-in-drafts/${id}`, data).then(r => r.data),
   addItem:    (id, data)           => api.post(`/stock-in-drafts/${id}/items`, data).then(r => r.data),
@@ -74,6 +77,9 @@ export const stockInDraftApi = {
   cancel:     (id)                 => api.delete(`/stock-in-drafts/${id}`).then(r => r.data),
 }
 export const stockOutDraftApi = {
+  current:    ()                   => api.get('/stock-out-drafts/current').then(r => r.data),
+  get:        (id)                 => api.get(`/stock-out-drafts/${id}`).then(r => r.data),
+  create:     ()                   => api.post('/stock-out-drafts').then(r => r.data),
   ensure:     ()                   => api.post('/stock-out-drafts/ensure').then(r => r.data),
   update:     (id, data)           => api.put(`/stock-out-drafts/${id}`, data).then(r => r.data),
   addItem:    (id, data)           => api.post(`/stock-out-drafts/${id}/items`, data).then(r => r.data),
@@ -146,8 +152,40 @@ export const handoverApi = {
   create:     (data)       => api.post('/handovers', data).then(r => r.data),
   update:     (id, data)   => api.put(`/handovers/${id}`, data).then(r => r.data),
   destroy:    (id)         => api.delete(`/handovers/${id}`).then(r => r.data),
+  close:      (id)         => api.patch(`/handovers/${id}/close`).then(r => r.data),
+  reopen:     (id)         => api.patch(`/handovers/${id}/reopen`).then(r => r.data),
   addResi:    (id, resi)   => api.post(`/handovers/${id}/items`, { resi }).then(r => r.data),
   removeResi: (id, itemId) => api.delete(`/handovers/${id}/items/${itemId}`).then(r => r.data),
+}
+
+export const deliveryNotesApi = {
+  list:   (params)     => api.get('/delivery-notes', { params }).then(r => r.data),
+  get:    (id)         => api.get(`/delivery-notes/${id}`).then(r => r.data),
+  create: (formData)   => api.post('/delivery-notes', formData).then(r => r.data),
+  update: (id, fd)     => api.put(`/delivery-notes/${id}`, fd).then(r => r.data),
+  remove: (id)         => api.delete(`/delivery-notes/${id}`).then(r => r.data),
+}
+
+export const vendorDeliveriesApi = {
+  list:       (params)            => api.get('/vendor-deliveries', { params }).then(r => r.data),
+  get:        (id)                => api.get(`/vendor-deliveries/${id}`).then(r => r.data),
+  create:     (data)              => api.post('/vendor-deliveries', data).then(r => r.data),
+  update:     (id, data)          => api.put(`/vendor-deliveries/${id}`, data).then(r => r.data),
+  remove:     (id)                => api.delete(`/vendor-deliveries/${id}`).then(r => r.data),
+  addItem:    (id, data)          => api.post(`/vendor-deliveries/${id}/items`, data).then(r => r.data),
+  updateItem: (id, itemId, data)  => api.put(`/vendor-deliveries/${id}/items/${itemId}`, data).then(r => r.data),
+  removeItem: (id, itemId)        => api.delete(`/vendor-deliveries/${id}/items/${itemId}`).then(r => r.data),
+}
+
+export const dbLinksApi = {
+  listFolders:  ()             => api.get('/db-folders').then(r => r.data),
+  createFolder: (data)         => api.post('/db-folders', data).then(r => r.data),
+  updateFolder: (id, data)     => api.put(`/db-folders/${id}`, data).then(r => r.data),
+  deleteFolder: (id)           => api.delete(`/db-folders/${id}`).then(r => r.data),
+  listLinks:    (folderId)     => api.get(`/db-folders/${folderId}/links`).then(r => r.data),
+  createLink:   (folderId, d)  => api.post(`/db-folders/${folderId}/links`, d).then(r => r.data),
+  updateLink:   (folderId, linkId, d) => api.put(`/db-folders/${folderId}/links/${linkId}`, d).then(r => r.data),
+  deleteLink:   (folderId, linkId)    => api.delete(`/db-folders/${folderId}/links/${linkId}`).then(r => r.data),
 }
 
 export const systemApi = {

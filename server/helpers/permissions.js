@@ -59,6 +59,11 @@ const ALL_PERMISSIONS = [
   { key: 'reports.manage',            label: 'Akses Penuh Laporan',                        group: 'Laporan',                 isParent: true },
   { key: 'reports.dashboard',         label: 'Lihat Dasbor & Laporan',                     group: 'Laporan',                 parent: 'reports.manage' },
 
+  // ── Database Links ────────────────────────────────────────────────────────────
+  { key: 'db_link.manage',            label: 'Akses Penuh Database Links',                 group: 'Database Links',          isParent: true },
+  { key: 'db_link.view',              label: 'Lihat Database Links',                       group: 'Database Links',          parent: 'db_link.manage' },
+  { key: 'db_link.add_link',          label: 'Tambah Link ke Folder',                      group: 'Database Links',          parent: 'db_link.manage' },
+
   // ── Administrasi ─────────────────────────────────────────────────────────────
   { key: 'admin.manage',              label: 'Akses Penuh Administrasi',                   group: 'Administrasi',            isParent: true },
   { key: 'admin.users',               label: 'Kelola Pengguna',                            group: 'Administrasi',            parent: 'admin.manage' },
@@ -82,6 +87,7 @@ const DEFAULT_PERMISSIONS = {
     'handover.manage',
     'packing.manage',
     'reports.manage',
+    'db_link.manage',
   ],
 
   HEAD_PACKING: [
@@ -92,11 +98,12 @@ const DEFAULT_PERMISSIONS = {
     'stock.in.view', 'stock.out.view', 'stock.opname.view',
     'packing.manage',
     'reports.manage',
+    'db_link.view',
   ],
 
   TIM_PACKING: ['packing.view', 'packing.jobs'],
 
-  HR: ['admin.manage', 'reports.manage'],
+  HR: ['admin.manage', 'reports.manage', 'db_link.view'],
 
   CEO: [
     'dashboard.manage',
@@ -107,9 +114,10 @@ const DEFAULT_PERMISSIONS = {
     'handover.view',
     'packing.view',
     'reports.manage',
+    'db_link.view',
   ],
 
-  STAFF: ['inventory.view'],
+  STAFF: ['inventory.view', 'db_link.view'],
 };
 
 const EDITABLE_ROLES = ['COMPANY_ADMIN', 'OPERASIONAL', 'TIM_PACKING', 'STAFF'];

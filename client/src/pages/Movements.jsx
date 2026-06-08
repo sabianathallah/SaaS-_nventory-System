@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import { movementsApi, warehousesApi, productsApi, productSkusApi, articlesApi, categoriesApi } from '../api'
 import PageHeader from '../components/PageHeader'
@@ -25,16 +25,35 @@ function defaultDateFrom() {
 
 export default function Movements() {
   const navigate = useNavigate()
-  const [page, setPage]           = useState(1)
-  const [typeFilter, setType]     = useState('')
-  const [whFilter, setWh]         = useState('')
-  const [prodFilter, setProd]     = useState('')
-  const [skuFilter, setSku]       = useState('')
-  const [articleFilter, setArt]   = useState('')
-  const [catFilter, setCat]       = useState('')
-  const [purposeFilter, setPurp]  = useState('')
-  const [dateFrom, setDateFrom]   = useState(defaultDateFrom())
-  const [dateTo, setDateTo]       = useState(new Date().toISOString().slice(0, 10))
+  const [searchParams, setSearchParams] = useSearchParams()
+
+  const page          = Number(searchParams.get('page')  || '1')
+  const limit         = Number(searchParams.get('limit') || '15')
+  const typeFilter    = searchParams.get('type')    || ''
+  const whFilter      = searchParams.get('wh')      || ''
+  const prodFilter    = searchParams.get('prod')    || ''
+  const skuFilter     = searchParams.get('sku')     || ''
+  const articleFilter = searchParams.get('article') || ''
+  const catFilter     = searchParams.get('cat')     || ''
+  const purposeFilter = searchParams.get('purpose') || ''
+  const dateFrom      = searchParams.get('from')    || defaultDateFrom()
+  const dateTo        = searchParams.get('to')      || new Date().toISOString().slice(0, 10)
+
+  const sp = (updates) => setSearchParams(prev => {
+    Object.entries(updates).forEach(([k, v]) => v ? prev.set(k, v) : prev.delete(k))
+    return prev
+  }, { replace: true })
+
+  const setPage      = (p) => sp({ page: String(p) })
+  const setType      = (v) => sp({ type: v, page: '1' })
+  const setWh        = (v) => sp({ wh: v, page: '1' })
+  const setProd      = (v) => sp({ prod: v, sku: '', page: '1' })
+  const setSku       = (v) => sp({ sku: v, page: '1' })
+  const setArt       = (v) => sp({ article: v, page: '1' })
+  const setCat       = (v) => sp({ cat: v, page: '1' })
+  const setPurp      = (v) => sp({ purpose: v, page: '1' })
+  const setDateFrom  = (v) => sp({ from: v, page: '1' })
+  const setDateTo    = (v) => sp({ to: v, page: '1' })
 
   const filters = useMemo(() => ({
     type:          typeFilter      || undefined,
@@ -49,8 +68,8 @@ export default function Movements() {
   }), [typeFilter, whFilter, prodFilter, skuFilter, articleFilter, catFilter, purposeFilter, dateFrom, dateTo])
 
   const { data, isLoading } = useQuery({
-    queryKey: ['movements', { page, ...filters }],
-    queryFn:  () => movementsApi.list({ page, limit: 15, ...filters }),
+    queryKey: ['movements', { page, limit, ...filters }],
+    queryFn:  () => movementsApi.list({ page, limit, ...filters }),
   })
 
   const { data: summary } = useQuery({
@@ -90,10 +109,13 @@ export default function Movements() {
   })
 
   function resetFilters() {
-    setType(''); setWh(''); setProd(''); setSku(''); setArt(''); setCat(''); setPurp('')
-    setDateFrom(defaultDateFrom())
-    setDateTo(new Date().toISOString().slice(0, 10))
-    setPage(1)
+    setSearchParams(prev => {
+      ['type','wh','prod','sku','article','cat','purpose'].forEach(k => prev.delete(k))
+      prev.set('from', defaultDateFrom())
+      prev.set('to', new Date().toISOString().slice(0, 10))
+      prev.set('page', '1')
+      return prev
+    }, { replace: true })
   }
 
   function handleExportCsv() {

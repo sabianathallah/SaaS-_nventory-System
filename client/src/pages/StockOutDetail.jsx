@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef, useEffect } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { stockOutApi, stockOutDraftApi, warehousesApi, stockInApi, productsApi, productSkusApi, stocksApi } from '../api'
 import { useAuth } from '../context/AuthContext'
@@ -9,7 +9,7 @@ import { useExternalScanner } from '../hooks/useExternalScanner'
 import { useCompanyGuard } from '../hooks/useCompanyGuard'
 import CompanyRequiredBanner from '../components/CompanyRequiredBanner'
 import toast from 'react-hot-toast'
-import { ArrowLeft, PackageMinus, ScanLine, Plus, Trash2, Save, ScanBarcode, ChevronDown, Package, FileSpreadsheet } from 'lucide-react'
+import { ArrowLeft, PackageMinus, ScanLine, Plus, Trash2, Save, ScanBarcode, ChevronDown, Package, FileSpreadsheet, BookmarkCheck, X } from 'lucide-react'
 import { exportExcel } from '../utils/exportExcel'
 
 const fmt = (n) => Number(n ?? 0).toLocaleString('id-ID')
@@ -205,6 +205,8 @@ export default function StockOutDetail() {
   const { hasPermission } = useAuth()
   const isNew      = !id || id === 'new'
   const { needsCompany } = useCompanyGuard()
+  const [urlParams] = useSearchParams()
+  const draftIdParam = urlParams.get('draftId')
 
   const canManualOutput = hasPermission('stock.out.manual_input') || hasPermission('stock.manage')
   const canScanOut      = hasPermission('stock.out.scan')         || hasPermission('stock.manage')
@@ -212,8 +214,10 @@ export default function StockOutDetail() {
 
   // ── Draft (server-side) ──────────────────────────────────────────────────────
   const { data: draft, isLoading: draftLoading } = useQuery({
-    queryKey: ['stock-out-draft'],
-    queryFn:  () => stockOutDraftApi.ensure(),
+    queryKey: draftIdParam ? ['stock-out-draft', draftIdParam] : ['stock-out-draft'],
+    queryFn:  draftIdParam
+      ? () => stockOutDraftApi.get(draftIdParam)
+      : () => stockOutDraftApi.ensure(),
     enabled:  isNew,
     staleTime: Infinity,
   })
@@ -300,18 +304,23 @@ export default function StockOutDetail() {
     },
     onSuccess: (data) => {
       qc.removeQueries({ queryKey: ['stock-out-draft'] })
+      qc.invalidateQueries({ queryKey: ['stock-out-draft-current'] })
       qc.invalidateQueries({ queryKey: ['stock-out'] })
       qc.invalidateQueries({ queryKey: ['stocks'] })
       toast.success('Stock OUT berhasil dicatat')
-      navigate(`/stock-out/${data.id}`)
+      navigate(`/stock-out/${data.id}`, { replace: true })
     },
     onError: e => toast.error(e.response?.data?.message || 'Error'),
   })
 
   const cancelMutation = useMutation({
     mutationFn: () => stockOutDraftApi.cancel(draftId),
-    onSuccess:  () => { qc.removeQueries({ queryKey: ['stock-out-draft'] }); navigate('/stock-out') },
-    onError:    () => navigate('/stock-out'),
+    onSuccess: () => {
+      qc.removeQueries({ queryKey: ['stock-out-draft'] })
+      qc.invalidateQueries({ queryKey: ['stock-out-draft-current'] })
+      navigate('/stock-out')
+    },
+    onError: () => navigate('/stock-out'),
   })
 
   const addItem = ({ skuId, productId, quantity }) => {
@@ -697,8 +706,21 @@ export default function StockOutDetail() {
         <div className="flex gap-3">
           <button type="button" onClick={() => cancelMutation.mutate()}
             disabled={cancelMutation.isPending}
-            className="btn-secondary flex-1 justify-center">
-            Batalkan Session
+            className="flex-1 justify-center flex items-center gap-2 px-4 py-2 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 text-sm font-medium transition-colors disabled:opacity-50">
+            <X size={14} /> Batalkan
+          </button>
+          <button type="button"
+            onClick={async () => {
+              if (draftId) {
+                clearTimeout(saveTimer.current)
+                const purpose = form.purpose === 'Lainnya' ? `Lainnya: ${form.purposeDetail?.trim()}` : form.purpose
+                await stockOutDraftApi.update(draftId, { date: form.date, WarehouseId: form.warehouseId || null, purpose: purpose || null, note: form.note || null }).catch(() => {})
+              }
+              qc.invalidateQueries({ queryKey: ['stock-out-draft-current'] })
+              navigate('/stock-out')
+            }}
+            className="flex-1 justify-center flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 text-sm font-medium transition-colors">
+            <BookmarkCheck size={14} /> Simpan Draft
           </button>
           <button type="submit" disabled={createMutation.isPending || draftLoading} className="btn-primary flex-1 justify-center">
             <Save size={14} />

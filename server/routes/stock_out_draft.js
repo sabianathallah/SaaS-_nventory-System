@@ -5,7 +5,10 @@ const { requireAnyPermission: rpAny } = require('../middlewares/requirePermissio
 
 const canOutput = rpAny('stock.manage', 'stock.out.scan', 'stock.out.manual_input');
 
+router.get('/current',              canOutput, ctrl.current);
 router.post('/ensure',              canOutput, ctrl.ensure);
+router.post('/',                    canOutput, ctrl.create);
+router.get('/:id',                  canOutput, ctrl.get);
 router.put('/:id',                  canOutput, ctrl.update);
 router.post('/:id/items',           canOutput, ctrl.addItem);
 router.put('/:id/items/:itemId',    canOutput, ctrl.updateItem);

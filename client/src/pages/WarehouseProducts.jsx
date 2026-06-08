@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useParams, useNavigate, Link } from 'react-router-dom'
+import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { warehousesApi, productsApi } from '../api'
 import SearchBar from '../components/SearchBar'
@@ -103,9 +103,12 @@ export default function WarehouseProducts() {
   const navigate = useNavigate()
 
   const [search, setSearch] = useState('')
-  const [page, setPage]     = useState(1)
   const [sort, setSort]     = useState({ col: 'name', dir: 'asc' })
   const [exporting, setExporting] = useState(false)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const page  = Number(searchParams.get('page')  || '1')
+  const limit = Number(searchParams.get('limit') || '20')
+  const setPage = (p) => setSearchParams(prev => { prev.set('page', String(p)); return prev }, { replace: true })
 
   const handleSort = (col) => {
     setSort(s => ({ col, dir: s.col === col && s.dir === 'asc' ? 'desc' : 'asc' }))
@@ -118,9 +121,9 @@ export default function WarehouseProducts() {
   })
 
   const { data, isLoading: prodLoading } = useQuery({
-    queryKey: ['products', { page, name: search, WarehouseId: id, sortBy: sort.col, sortOrder: sort.dir }],
+    queryKey: ['products', { page, limit, name: search, WarehouseId: id, sortBy: sort.col, sortOrder: sort.dir }],
     queryFn:  () => productsApi.list({
-      page, limit: 20, name: search,
+      page, limit, name: search,
       WarehouseId: id,
       sortBy:    sort.col,
       sortOrder: sort.dir,
