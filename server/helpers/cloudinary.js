@@ -63,4 +63,56 @@ function uploadSingle(field, folder = 'saas-inventory/products') {
   };
 }
 
-module.exports = { cloudinary, upload, uploadSingle, destroyByUrl, isConfigured };
+// Handover attachment upload — supports PDF + images.
+// Falls back to local disk storage when Cloudinary is not configured.
+const path = require('path');
+const fs   = require('fs');
+
+const UPLOAD_DIR = path.join(__dirname, '..', 'uploads', 'handovers');
+
+function uploadHandoverAttachment() {
+  if (isConfigured) {
+    const { CloudinaryStorage: CS } = require('multer-storage-cloudinary');
+    const storage = new CS({
+      cloudinary,
+      params: (req, file) => ({
+        folder: 'saas-inventory/handovers',
+        resource_type: 'auto',
+        allowed_formats: ['jpg', 'jpeg', 'png', 'webp', 'pdf'],
+        public_id: `handover-${Date.now()}`,
+      }),
+    });
+    return multer({ storage, limits: { fileSize: 10 * 1024 * 1024 } });
+  }
+
+  // Local disk fallback
+  fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+  const storage = multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, UPLOAD_DIR),
+    filename:    (_req, file, cb) => {
+      const ext  = path.extname(file.originalname).toLowerCase();
+      cb(null, `handover-${Date.now()}${ext}`);
+    },
+  });
+  return multer({
+    storage,
+    limits: { fileSize: 10 * 1024 * 1024 },
+    fileFilter: (_req, file, cb) => {
+      const allowed = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+      cb(null, allowed.includes(file.mimetype));
+    },
+  });
+}
+
+async function destroyHandoverAttachment(url) {
+  if (!url) return;
+  if (url.startsWith('http')) {
+    await destroyByUrl(url);
+  } else {
+    // local disk path like /uploads/handovers/filename.pdf
+    const filePath = path.join(__dirname, '..', url.replace(/^\//, ''));
+    try { fs.unlinkSync(filePath); } catch (_) {}
+  }
+}
+
+module.exports = { cloudinary, upload, uploadSingle, destroyByUrl, isConfigured, uploadHandoverAttachment, destroyHandoverAttachment };

@@ -9,6 +9,7 @@ import toast from 'react-hot-toast'
 import {
   ArrowLeft, PackageCheck, ScanLine, Camera, Trash2, Printer,
   Plus, X, Package, Lock, Unlock, ScanBarcode, FileEdit,
+  Paperclip, FileText, ImageIcon, ExternalLink,
 } from 'lucide-react'
 import logoPreface from '../assets/logo-preface.jpeg'
 
@@ -45,7 +46,9 @@ export default function HandoverDetail() {
   const [confirmDelete, setConfirmDelete] = useState(null)
   const [scannerConnected, setScannerConnected] = useState(false)
   const [confirmClose, setConfirmClose] = useState(false)
-  const scanInputRef = useRef(null)
+  const [attachUploading, setAttachUploading] = useState(false)
+  const scanInputRef   = useRef(null)
+  const attachInputRef = useRef(null)
 
   const { data: handover, isLoading } = useQuery({
     queryKey: ['handover', id],
@@ -141,6 +144,15 @@ export default function HandoverDetail() {
     onError: () => toast.error('Gagal membuka sesi'),
   })
 
+  const deleteAttachmentMutation = useMutation({
+    mutationFn: () => handoverApi.deleteAttachment(id),
+    onSuccess: (h) => {
+      qc.setQueryData(['handover', id], h)
+      toast.success('Lampiran dihapus')
+    },
+    onError: () => toast.error('Gagal menghapus lampiran'),
+  })
+
   // ── Handlers ───────────────────────────────────────────────────────────────
   function handleCreate(e) {
     e.preventDefault()
@@ -164,6 +176,29 @@ export default function HandoverDetail() {
   function handleCameraResult(code) {
     handleAddResi(code)
     setShowCamera(false)
+  }
+
+  async function handleAttachmentChange(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setAttachUploading(true)
+    try {
+      const h = await handoverApi.uploadAttachment(id, file)
+      qc.setQueryData(['handover', id], h)
+      toast.success('Lampiran berhasil diunggah')
+    } catch (err) {
+      toast.error(err?.response?.data?.message ?? 'Gagal mengunggah lampiran')
+    } finally {
+      setAttachUploading(false)
+      e.target.value = ''
+    }
+  }
+
+  function resolveAttachmentUrl(url) {
+    if (!url) return null
+    if (url.startsWith('http')) return url
+    const base = (import.meta.env.VITE_API_URL || '').replace(/\/api$/, '')
+    return base + url
   }
 
   // ── Create form ────────────────────────────────────────────────────────────
@@ -428,6 +463,76 @@ export default function HandoverDetail() {
           </div>
         )}
 
+        {/* Attachment section */}
+        <div className="card p-4 mb-5">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wide flex items-center gap-2">
+              <Paperclip size={13} /> Dokumen Lampiran
+            </span>
+            {!handover.attachment_url && (
+              <button
+                type="button"
+                onClick={() => attachInputRef.current?.click()}
+                disabled={attachUploading}
+                className="btn-secondary text-xs px-3 py-1.5 flex items-center gap-1.5"
+              >
+                {attachUploading ? 'Mengunggah…' : <><Paperclip size={12} /> Upload PDF / Foto</>}
+              </button>
+            )}
+            <input
+              ref={attachInputRef}
+              type="file"
+              accept=".pdf,image/jpeg,image/png,image/webp"
+              className="hidden"
+              onChange={handleAttachmentChange}
+            />
+          </div>
+
+          {handover.attachment_url ? (
+            <div className="flex items-center gap-3 p-3 rounded-lg bg-slate-50 border border-slate-200">
+              {handover.attachment_url.endsWith('.pdf') || handover.attachment_url.includes('/raw/')
+                ? <FileText size={20} className="text-red-500 shrink-0" />
+                : <ImageIcon size={20} className="text-blue-500 shrink-0" />
+              }
+              <span className="text-sm text-slate-700 truncate flex-1 font-medium">
+                {handover.attachment_url.split('/').pop()}
+              </span>
+              <a
+                href={resolveAttachmentUrl(handover.attachment_url)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="p-1.5 rounded text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                title="Buka lampiran"
+              >
+                <ExternalLink size={14} />
+              </a>
+              <button
+                type="button"
+                onClick={() => {
+                  if (window.confirm('Hapus lampiran ini?')) deleteAttachmentMutation.mutate()
+                }}
+                disabled={deleteAttachmentMutation.isPending}
+                className="p-1.5 rounded text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                title="Hapus lampiran"
+              >
+                <Trash2 size={14} />
+              </button>
+              <button
+                type="button"
+                onClick={() => attachInputRef.current?.click()}
+                disabled={attachUploading}
+                className="text-xs text-slate-400 hover:text-slate-600 underline shrink-0"
+              >
+                Ganti
+              </button>
+            </div>
+          ) : (
+            <p className="text-xs text-slate-400">
+              Belum ada lampiran — upload surat jalan / AWB untuk validasi shipping.
+            </p>
+          )}
+        </div>
+
         {/* Scan input area */}
         {isClosed ? (
           <div className="card p-4 mb-5 border-red-200 bg-red-50/50 flex items-center gap-3 text-red-700">
@@ -549,7 +654,7 @@ function PrintLayout({ handover, items }) {
     })
   }
 
-  const ROWS_PER_PAGE = 40
+  const ROWS_PER_PAGE = 25
 
   const pages = []
   for (let i = 0; i < Math.max(1, items.length); i += ROWS_PER_PAGE) {

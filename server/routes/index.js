@@ -25,12 +25,10 @@ const stockInDraftRouter       = require('./stock_in_draft');
 const stockOutDraftRouter      = require('./stock_out_draft');
 const handoverRouter           = require('./handover');
 const dbLinkRouter             = require('./db_link');
-const deliveryNoteRouter       = require('./delivery_note');
 const vendorDeliveryRouter     = require('./vendor_delivery');
 const userRouter               = require('./user');
 const vendorRouter             = require('./vendor');
 const incomingGoodsRouter      = require('./incoming_goods');
-const suratJalanRouter         = require('./surat_jalan');
 const packingJobRouter         = require('./packing_job');
 const formAnakPackingRouter    = require('./form_anak_packing');
 const roleRouter               = require('./role');
@@ -79,13 +77,11 @@ router.use('/stock-in-drafts',       stockInDraftRouter);
 router.use('/stock-out-drafts',      stockOutDraftRouter);
 router.use('/handovers',             handoverRouter);
 router.use('/db-folders',            dbLinkRouter);
-router.use('/delivery-notes',        deliveryNoteRouter);
 router.use('/vendor-deliveries',     vendorDeliveryRouter);
 
 // Packing
 router.use('/vendors',           vendorRouter);
 router.use('/incoming-goods',    incomingGoodsRouter);
-router.use('/surat-jalan',       suratJalanRouter);
 router.use('/packing-jobs',      packingJobRouter);
 router.use('/form-anak-packing', formAnakPackingRouter);
 

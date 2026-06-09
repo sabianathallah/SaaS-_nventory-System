@@ -1,6 +1,7 @@
 'use strict';
 const express = require('express');
 const cors    = require('cors');
+const path    = require('path');
 
 const router       = require('./routes/index');
 const errorHandler = require('./middlewares/errorHandler');
@@ -31,6 +32,8 @@ app.use(cors({
 }));
 
 app.get('/health', (_req, res) => res.json({ ok: true }));
+
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());

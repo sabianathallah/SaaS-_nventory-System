@@ -4,7 +4,7 @@ import { vendorDeliveriesApi } from '../api'
 import { useAuth } from '../context/AuthContext'
 import PageHeader from '../components/PageHeader'
 import { Table, Pagination } from '../components/Table'
-import { Plus, Eye, Link2, Video } from 'lucide-react'
+import { Plus, Eye, Video } from 'lucide-react'
 
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'
 
@@ -28,9 +28,9 @@ export default function IncomingGoods() {
     { key: 'date',    label: 'Tanggal',  width: 130, render: r => <span className="text-xs font-mono text-slate-500">{fmtDate(r.date)}</span> },
     { key: 'vendor',  label: 'Vendor',               render: r => <span className="font-semibold text-slate-800">{r.Vendor?.name ?? '—'}</span> },
     {
-      key: 'sj', label: 'Surat Jalan', width: 120,
-      render: r => r.DeliveryNote
-        ? <span className="flex items-center gap-1 text-xs text-success font-medium"><Link2 size={11} /> Terhubung</span>
+      key: 'sj', label: 'No. SJ', width: 130,
+      render: r => r.sjNumber
+        ? <span className="text-xs font-mono text-slate-600">{r.sjNumber}</span>
         : <span className="text-xs text-slate-300">—</span>,
     },
     { key: 'items',   label: 'Item',    width: 70,  render: r => <span className="font-semibold text-slate-700">{r.itemCount ?? 0}</span> },

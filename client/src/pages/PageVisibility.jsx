@@ -6,7 +6,7 @@ import { systemApi } from '../api'
 import {
   Package, BookOpen, Warehouse, Truck,
   ArrowDownToLine, ArrowUpFromLine, ArrowLeftRight,
-  ClipboardList, PackageOpen, FileText, Layers,
+  ClipboardList, PackageOpen, Layers,
   ClipboardCheck, Users, Building2, Eye, EyeOff, Save, PackageCheck, Link2,
 } from 'lucide-react'
 
@@ -35,7 +35,6 @@ const PAGE_GROUPS = [
     items: [
       { key: 'vendors',        label: 'Vendors',      icon: Truck },
       { key: 'incoming-goods', label: 'Barang Masuk', icon: PackageOpen },
-      { key: 'surat-jalan',    label: 'Surat Jalan',  icon: FileText },
     ],
   },
   {

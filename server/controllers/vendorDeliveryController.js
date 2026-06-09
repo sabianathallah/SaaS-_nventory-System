@@ -1,5 +1,7 @@
 'use strict';
-const { VendorDelivery, VendorDeliveryItem, DeliveryNote, Vendor, User, Product, ProductSKU, ProductVariantOption, ProductVariantType } = require('../models');
+const { VendorDelivery, VendorDeliveryItem, Vendor, User, Product, ProductSKU, ProductVariantOption, ProductVariantType } = require('../models');
+const { destroyByUrl } = require('../helpers/cloudinary');
+const { companyFilter } = require('../helpers/tenancy');
 
 const SKU_INCLUDE = {
   model: ProductSKU, as: 'ProductSKU', attributes: ['id', 'sku_code'],
@@ -12,9 +14,8 @@ const SKU_INCLUDE = {
 };
 
 const HEADER_INCLUDE = [
-  { model: Vendor,       as: 'Vendor',       attributes: ['id', 'name'] },
-  { model: User,         as: 'Creator',      attributes: ['id', 'name'] },
-  { model: DeliveryNote, as: 'DeliveryNote', attributes: ['id', 'photoUrl', 'date'] },
+  { model: Vendor, as: 'Vendor',   attributes: ['id', 'name'] },
+  { model: User,   as: 'Creator',  attributes: ['id', 'name'] },
 ];
 
 const ITEM_INCLUDE = [
@@ -27,6 +28,7 @@ exports.list = async (req, res, next) => {
     const { page = 1, limit = 15 } = req.query;
     const offset = (Number(page) - 1) * Number(limit);
     const { rows, count } = await VendorDelivery.findAndCountAll({
+      where: companyFilter(req),
       include: [
         ...HEADER_INCLUDE,
         { model: VendorDeliveryItem, as: 'items', attributes: ['id'] },
@@ -42,7 +44,8 @@ exports.list = async (req, res, next) => {
 
 exports.get = async (req, res, next) => {
   try {
-    const row = await VendorDelivery.findByPk(req.params.id, {
+    const row = await VendorDelivery.findOne({
+      where: { id: req.params.id, ...companyFilter(req) },
       include: [
         ...HEADER_INCLUDE,
         { model: VendorDeliveryItem, as: 'items', include: ITEM_INCLUDE },
@@ -51,10 +54,7 @@ exports.get = async (req, res, next) => {
     if (!row) return res.status(404).json({ message: 'Barang masuk tidak ditemukan' });
     const data = {
       ...row.toJSON(),
-      items: row.items.map(i => ({
-        ...i.toJSON(),
-        selisih: (i.qtySJ ?? 0) - (i.qtyActual ?? 0),
-      })),
+      items: row.items.map(i => ({ ...i.toJSON(), selisih: (i.qtySJ ?? 0) - (i.qtyActual ?? 0) })),
     };
     res.json({ data });
   } catch (err) { next(err); }
@@ -62,17 +62,19 @@ exports.get = async (req, res, next) => {
 
 exports.create = async (req, res, next) => {
   try {
-    const { vendorId, date, deliveryNoteId, videoLink, notes } = req.body;
+    const { vendorId, date, sjNumber, videoLink, notes } = req.body;
+    const sjPhoto = req.file?.path ?? null;
     if (!vendorId) return res.status(400).json({ message: 'Vendor wajib dipilih' });
     if (!date)     return res.status(400).json({ message: 'Tanggal wajib diisi' });
     const row = await VendorDelivery.create({
       vendorId,
       date,
-      deliveryNoteId: deliveryNoteId || null,
-      videoLink:      videoLink?.trim() || null,
-      notes:          notes?.trim() || null,
-      createdBy:      req.user.id,
-      companyId:      req.user.companyId ?? null,
+      sjNumber: sjNumber?.trim() || null,
+      sjPhoto,
+      videoLink: videoLink?.trim() || null,
+      notes:     notes?.trim()     || null,
+      createdBy: req.user.id,
+      companyId: req.user.companyId ?? null,
     });
     const result = await VendorDelivery.findByPk(row.id, { include: HEADER_INCLUDE });
     res.status(201).json({ data: result });
@@ -81,15 +83,18 @@ exports.create = async (req, res, next) => {
 
 exports.update = async (req, res, next) => {
   try {
-    const row = await VendorDelivery.findByPk(req.params.id);
+    const row = await VendorDelivery.findOne({ where: { id: req.params.id, ...companyFilter(req) } });
     if (!row) return res.status(404).json({ message: 'Barang masuk tidak ditemukan' });
-    const { vendorId, date, deliveryNoteId, videoLink, notes } = req.body;
+    const { vendorId, date, sjNumber, videoLink, notes } = req.body;
+    const newPhoto = req.file?.path ?? null;
+    if (newPhoto && row.sjPhoto) await destroyByUrl(row.sjPhoto).catch(() => {});
     await row.update({
-      vendorId:       vendorId       ?? row.vendorId,
-      date:           date           ?? row.date,
-      deliveryNoteId: deliveryNoteId !== undefined ? (deliveryNoteId || null) : row.deliveryNoteId,
-      videoLink:      videoLink !== undefined ? (videoLink?.trim() || null) : row.videoLink,
-      notes:          notes     !== undefined ? (notes?.trim()     || null) : row.notes,
+      vendorId:  vendorId  ?? row.vendorId,
+      date:      date      ?? row.date,
+      sjNumber:  sjNumber  !== undefined ? (sjNumber?.trim()  || null) : row.sjNumber,
+      sjPhoto:   newPhoto  ?? row.sjPhoto,
+      videoLink: videoLink !== undefined ? (videoLink?.trim() || null) : row.videoLink,
+      notes:     notes     !== undefined ? (notes?.trim()     || null) : row.notes,
     });
     const result = await VendorDelivery.findByPk(row.id, { include: HEADER_INCLUDE });
     res.json({ data: result });
@@ -98,8 +103,9 @@ exports.update = async (req, res, next) => {
 
 exports.destroy = async (req, res, next) => {
   try {
-    const row = await VendorDelivery.findByPk(req.params.id);
+    const row = await VendorDelivery.findOne({ where: { id: req.params.id, ...companyFilter(req) } });
     if (!row) return res.status(404).json({ message: 'Barang masuk tidak ditemukan' });
+    if (row.sjPhoto) await destroyByUrl(row.sjPhoto).catch(() => {});
     await row.destroy();
     res.json({ message: 'Barang masuk dihapus' });
   } catch (err) { next(err); }
@@ -109,7 +115,7 @@ exports.destroy = async (req, res, next) => {
 
 exports.addItem = async (req, res, next) => {
   try {
-    const delivery = await VendorDelivery.findByPk(req.params.id);
+    const delivery = await VendorDelivery.findOne({ where: { id: req.params.id, ...companyFilter(req) } });
     if (!delivery) return res.status(404).json({ message: 'Barang masuk tidak ditemukan' });
     const { productId, productSkuId, qtySJ, qtyActual, notes } = req.body;
     if (!productId) return res.status(400).json({ message: 'Produk wajib dipilih' });
@@ -117,7 +123,7 @@ exports.addItem = async (req, res, next) => {
       deliveryId:   delivery.id,
       productId,
       productSkuId: productSkuId || null,
-      qtySJ:        Number(qtySJ)    || 0,
+      qtySJ:        Number(qtySJ)     || 0,
       qtyActual:    Number(qtyActual) || 0,
       notes:        notes?.trim() || null,
     });

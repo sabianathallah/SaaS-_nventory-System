@@ -1,6 +1,7 @@
 'use strict';
 const { Handover, Handover_Item, User } = require('../models');
 const { companyFilter, companyId } = require('../helpers/tenancy');
+const { destroyHandoverAttachment } = require('../helpers/cloudinary');
 
 const ITEM_ORDER = [['scannedAt', 'ASC'], ['id', 'ASC']];
 
@@ -159,6 +160,39 @@ class HandoverController {
       if (!item) throw { name: 'NotFound', message: 'Item tidak ditemukan' };
       await item.destroy();
       res.json({ message: 'Resi dihapus' });
+    } catch (err) { next(err); }
+  }
+
+  static async uploadAttachment(req, res, next) {
+    try {
+      const h = await Handover.findOne({ where: { id: req.params.id, ...companyFilter(req) } });
+      if (!h) throw { name: 'NotFound', message: 'Handover tidak ditemukan' };
+      if (!req.file) throw { name: 'ValidationError', message: 'File tidak ditemukan' };
+
+      // Remove old attachment if exists
+      if (h.attachment_url) await destroyHandoverAttachment(h.attachment_url);
+
+      // Cloudinary returns secure_url; disk storage returns a local path
+      const url = req.file.path ?? `/uploads/handovers/${req.file.filename}`;
+      h.attachment_url = url;
+      await h.save();
+
+      const full = await findHandover(h.id, req);
+      res.json(full);
+    } catch (err) { next(err); }
+  }
+
+  static async deleteAttachment(req, res, next) {
+    try {
+      const h = await Handover.findOne({ where: { id: req.params.id, ...companyFilter(req) } });
+      if (!h) throw { name: 'NotFound', message: 'Handover tidak ditemukan' };
+
+      if (h.attachment_url) await destroyHandoverAttachment(h.attachment_url);
+      h.attachment_url = null;
+      await h.save();
+
+      const full = await findHandover(h.id, req);
+      res.json(full);
     } catch (err) { next(err); }
   }
 }

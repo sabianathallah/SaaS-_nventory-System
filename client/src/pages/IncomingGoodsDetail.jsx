@@ -1,13 +1,13 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { vendorDeliveriesApi, deliveryNotesApi, vendorsApi, productsApi, productSkusApi } from '../api'
+import { vendorDeliveriesApi, vendorsApi, productsApi, productSkusApi } from '../api'
 import { useAuth } from '../context/AuthContext'
 import SearchableSelect from '../components/SearchableSelect'
 import toast from 'react-hot-toast'
 import {
-  ArrowLeft, Save, Plus, Trash2, Link2, Video,
-  ImageIcon, AlertTriangle, Check,
+  ArrowLeft, Save, Plus, Trash2, Video,
+  AlertTriangle, Check, Upload, X,
 } from 'lucide-react'
 
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'
@@ -26,7 +26,6 @@ function ItemRow({ item, deliveryId, canManage, onDeleted, onUpdated }) {
   const [qtyActual, setQtyActual] = useState(item.qtyActual)
   const [notes,     setNotes]     = useState(item.notes ?? '')
 
-  const qc = useQueryClient()
   const update = useMutation({
     mutationFn: (d) => vendorDeliveriesApi.updateItem(deliveryId, item.id, d),
     onSuccess: (res) => { onUpdated(res.data); setEditing(false) },
@@ -197,16 +196,19 @@ export default function IncomingGoodsDetail() {
   const canManage = hasPermission('packing.manage') || hasPermission('packing.incoming')
   const isNew = id === 'new'
 
+  const fileInputRef = useRef(null)
+
   // Header form state
-  const [vendorId,        setVendorId]        = useState('')
-  const [date,            setDate]            = useState(new Date().toISOString().slice(0, 10))
-  const [deliveryNoteId,  setDeliveryNoteId]  = useState('')
-  const [videoLink,       setVideoLink]       = useState('')
-  const [notes,           setNotes]           = useState('')
-  const [items,           setItems]           = useState([])
+  const [vendorId,   setVendorId]   = useState('')
+  const [date,       setDate]       = useState(new Date().toISOString().slice(0, 10))
+  const [sjNumber,   setSjNumber]   = useState('')
+  const [sjPhotoFile, setSjPhotoFile] = useState(null)
+  const [sjPhotoPreview, setSjPhotoPreview] = useState(null)
+  const [videoLink,  setVideoLink]  = useState('')
+  const [notes,      setNotes]      = useState('')
+  const [items,      setItems]      = useState([])
 
   const { data: vendors } = useQuery({ queryKey: ['vendors', { limit: 200 }], queryFn: () => vendorsApi.list({ limit: 200 }) })
-  const { data: sjList  } = useQuery({ queryKey: ['delivery-notes', { limit: 200 }], queryFn: () => deliveryNotesApi.list({ limit: 200 }) })
 
   const { data: existing, isLoading } = useQuery({
     queryKey: ['vendor-delivery', id],
@@ -219,11 +221,25 @@ export default function IncomingGoodsDetail() {
     const d = existing.data
     setVendorId(String(d.vendorId))
     setDate(d.date)
-    setDeliveryNoteId(d.deliveryNoteId ? String(d.deliveryNoteId) : '')
+    setSjNumber(d.sjNumber ?? '')
+    setSjPhotoPreview(d.sjPhoto ?? null)
     setVideoLink(d.videoLink ?? '')
     setNotes(d.notes ?? '')
     setItems(d.items ?? [])
   }, [existing])
+
+  function handlePhotoChange(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setSjPhotoFile(file)
+    setSjPhotoPreview(URL.createObjectURL(file))
+  }
+
+  function clearPhoto() {
+    setSjPhotoFile(null)
+    setSjPhotoPreview(null)
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
 
   const createDelivery = useMutation({
     mutationFn: (d) => vendorDeliveriesApi.create(d),
@@ -246,21 +262,16 @@ export default function IncomingGoodsDetail() {
     const payload = {
       vendorId,
       date,
-      deliveryNoteId: deliveryNoteId || null,
-      videoLink:      videoLink.trim() || null,
-      notes:          notes.trim() || null,
+      sjNumber: sjNumber.trim() || null,
+      videoLink: videoLink.trim() || null,
+      notes:     notes.trim() || null,
     }
+    if (sjPhotoFile) payload.sjPhoto = sjPhotoFile
     if (isNew) createDelivery.mutate(payload)
     else updateDelivery.mutate(payload)
   }
 
   const delivery = existing?.data
-
-  const sjOptions = (sjList?.data ?? []).map(s => ({
-    value: String(s.id),
-    label: `SJ #${s.id} — ${fmtDate(s.date)}${s.Vendor ? ` (${s.Vendor.name})` : ''}`,
-  }))
-
   const totalSelisih = items.filter(i => i.selisih !== 0).length
 
   return (
@@ -295,38 +306,59 @@ export default function IncomingGoodsDetail() {
             <input type="date" className="input" value={date} onChange={e => setDate(e.target.value)} disabled={!canManage} />
           </div>
           <div>
-            <label className="label">Surat Jalan (opsional)</label>
-            <SearchableSelect
-              value={deliveryNoteId}
-              onChange={setDeliveryNoteId}
-              options={[{ value: '', label: 'Pilih SJ…' }, ...sjOptions]}
-              placeholder="Pilih SJ…"
-              disabled={!canManage}
-            />
+            <label className="label">No. Surat Jalan (opsional)</label>
+            <input className="input" type="text" placeholder="Contoh: SJ/2026/001" value={sjNumber} onChange={e => setSjNumber(e.target.value)} disabled={!canManage} />
           </div>
           <div>
             <label className="label">Link Video (GDrive)</label>
             <input className="input" type="url" placeholder="https://drive.google.com/…" value={videoLink} onChange={e => setVideoLink(e.target.value)} disabled={!canManage} />
           </div>
         </div>
+
+        {/* SJ Photo */}
+        {canManage && (
+          <div>
+            <label className="label">Foto Surat Jalan (opsional)</label>
+            <div className="flex items-start gap-3">
+              {sjPhotoPreview ? (
+                <div className="relative group">
+                  <img src={sjPhotoPreview} alt="SJ" className="w-24 h-24 object-cover rounded-xl border border-slate-200" />
+                  <button type="button" onClick={clearPhoto}
+                    className="absolute -top-1.5 -right-1.5 bg-white border border-slate-200 rounded-full p-0.5 text-slate-400 hover:text-red-500 shadow-sm">
+                    <X size={12} />
+                  </button>
+                </div>
+              ) : (
+                <button type="button" onClick={() => fileInputRef.current?.click()}
+                  className="flex flex-col items-center justify-center w-24 h-24 border-2 border-dashed border-slate-200 rounded-xl text-slate-400 hover:border-brand hover:text-brand transition-colors gap-1">
+                  <Upload size={18} />
+                  <span className="text-[10px]">Upload</span>
+                </button>
+              )}
+              <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoChange} />
+              {sjPhotoPreview && !sjPhotoFile && (
+                <button type="button" onClick={() => fileInputRef.current?.click()}
+                  className="text-xs text-brand hover:underline self-end mb-1">Ganti foto</button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Read-only photo display for non-managers */}
+        {!canManage && sjPhotoPreview && (
+          <div className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 border border-slate-100">
+            <img src={sjPhotoPreview} alt="SJ" className="w-16 h-16 object-cover rounded-lg border border-slate-200" />
+            <div>
+              <p className="text-xs font-semibold text-slate-600">Foto Surat Jalan</p>
+              {sjNumber && <p className="text-[11px] text-slate-400">{sjNumber}</p>}
+            </div>
+          </div>
+        )}
+
         <div>
           <label className="label">Catatan</label>
           <textarea className="input resize-none" rows={2} value={notes} onChange={e => setNotes(e.target.value)} disabled={!canManage} placeholder="Catatan opsional…" />
         </div>
-
-        {/* SJ photo preview */}
-        {deliveryNoteId && (() => {
-          const sj = sjList?.data?.find(s => String(s.id) === deliveryNoteId)
-          return sj?.photoUrl ? (
-            <div className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 border border-slate-100">
-              <img src={sj.photoUrl} alt="SJ" className="w-16 h-16 object-cover rounded-lg border border-slate-200" />
-              <div>
-                <p className="text-xs font-semibold text-slate-600">Foto Surat Jalan #{sj.id}</p>
-                <p className="text-[11px] text-slate-400">{fmtDate(sj.date)}</p>
-              </div>
-            </div>
-          ) : null
-        })()}
 
         {canManage && (
           <div className="flex justify-end">

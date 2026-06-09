@@ -8,7 +8,7 @@ import {
   LayoutDashboard, Package, Warehouse, Truck,
   ArrowDownToLine, ArrowUpFromLine, ArrowLeftRight,
   ClipboardList, Users, Building2, BookOpen, LogOut, Bell,
-  PackageOpen, FileText, Layers, ClipboardCheck, Menu, X, Eye, EyeOff,
+  PackageOpen, Layers, ClipboardCheck, Menu, X, Eye, EyeOff,
   PackageCheck, Link2,
 } from 'lucide-react'
 import logoPreface from '../assets/logo-preface.jpeg'
@@ -46,7 +46,6 @@ const NAV_GROUPS = [
     items: [
       { to: '/vendors',        icon: Truck,       label: 'Vendors',      pageKey: 'vendors',          adminOnly: true },
       { to: '/incoming-goods', icon: PackageOpen, label: 'Barang Masuk', pageKey: 'incoming-goods',   operasionalOnly: true },
-      { to: '/surat-jalan',    icon: FileText,    label: 'Surat Jalan',  pageKey: 'surat-jalan',      operasionalOnly: true },
     ],
   },
   {
@@ -79,7 +78,7 @@ const PAGE_TITLES = {
   '/warehouses': 'Gudang', '/suppliers': 'Vendor',
   '/stock-in': 'Penerimaan Stok', '/stock-in/new': 'Penerimaan Stok Baru', '/stock-out': 'Pengeluaran Stok', '/movements': 'Pergerakan',
   '/opname': 'Stock Opname', '/handover': 'Handover Pengiriman', '/database-links': 'Database Links', '/users': 'Pengguna', '/companies': 'Perusahaan',
-  '/vendors': 'Vendor', '/incoming-goods': 'Barang Masuk', '/surat-jalan': 'Surat Jalan',
+  '/vendors': 'Vendor', '/incoming-goods': 'Barang Masuk',
   '/packing-jobs': 'Pekerjaan Packing', '/form-anak-packing': 'Form Anak Packing',
   '/page-visibility': 'Visibilitas Halaman',
 }

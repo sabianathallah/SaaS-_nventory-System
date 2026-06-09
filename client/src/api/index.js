@@ -114,11 +114,6 @@ export const incomingGoodsApi = {
   updateItem:       (id, itemId, data) => api.put(`/incoming-goods/${id}/items/${itemId}`, data).then(r => r.data),
 }
 
-export const suratJalanApi = {
-  list:        (params) => api.get('/surat-jalan', { params }).then(r => r.data),
-  get:         (id)     => api.get(`/surat-jalan/${id}`).then(r => r.data),
-  markPrinted: (id)     => api.post(`/surat-jalan/${id}/print`).then(r => r.data),
-}
 
 export const packingJobsApi = {
   list:       (params)     => api.get('/packing-jobs', { params }).then(r => r.data),
@@ -154,23 +149,21 @@ export const handoverApi = {
   destroy:    (id)         => api.delete(`/handovers/${id}`).then(r => r.data),
   close:      (id)         => api.patch(`/handovers/${id}/close`).then(r => r.data),
   reopen:     (id)         => api.patch(`/handovers/${id}/reopen`).then(r => r.data),
-  addResi:    (id, resi)   => api.post(`/handovers/${id}/items`, { resi }).then(r => r.data),
-  removeResi: (id, itemId) => api.delete(`/handovers/${id}/items/${itemId}`).then(r => r.data),
-}
-
-export const deliveryNotesApi = {
-  list:   (params)     => api.get('/delivery-notes', { params }).then(r => r.data),
-  get:    (id)         => api.get(`/delivery-notes/${id}`).then(r => r.data),
-  create: (formData)   => api.post('/delivery-notes', formData).then(r => r.data),
-  update: (id, fd)     => api.put(`/delivery-notes/${id}`, fd).then(r => r.data),
-  remove: (id)         => api.delete(`/delivery-notes/${id}`).then(r => r.data),
+  addResi:          (id, resi)   => api.post(`/handovers/${id}/items`, { resi }).then(r => r.data),
+  removeResi:       (id, itemId) => api.delete(`/handovers/${id}/items/${itemId}`).then(r => r.data),
+  uploadAttachment: (id, file)   => {
+    const fd = new FormData()
+    fd.append('attachment', file)
+    return api.post(`/handovers/${id}/attachment`, fd).then(r => r.data)
+  },
+  deleteAttachment: (id) => api.delete(`/handovers/${id}/attachment`).then(r => r.data),
 }
 
 export const vendorDeliveriesApi = {
   list:       (params)            => api.get('/vendor-deliveries', { params }).then(r => r.data),
   get:        (id)                => api.get(`/vendor-deliveries/${id}`).then(r => r.data),
-  create:     (data)              => api.post('/vendor-deliveries', data).then(r => r.data),
-  update:     (id, data)          => api.put(`/vendor-deliveries/${id}`, data).then(r => r.data),
+  create:     (data)              => api.post('/vendor-deliveries', toPayload(data)).then(r => r.data),
+  update:     (id, data)          => api.put(`/vendor-deliveries/${id}`, toPayload(data)).then(r => r.data),
   remove:     (id)                => api.delete(`/vendor-deliveries/${id}`).then(r => r.data),
   addItem:    (id, data)          => api.post(`/vendor-deliveries/${id}/items`, data).then(r => r.data),
   updateItem: (id, itemId, data)  => api.put(`/vendor-deliveries/${id}/items/${itemId}`, data).then(r => r.data),
