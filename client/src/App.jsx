@@ -30,6 +30,7 @@ import PageVisibility from './pages/PageVisibility'
 import Handover from './pages/Handover'
 import HandoverDetail from './pages/HandoverDetail'
 import DatabaseLinks from './pages/DatabaseLinks'
+import Laporan from './pages/Laporan'
 
 function PrivateRoute({ children }) {
   const { user } = useAuth()
@@ -93,6 +94,7 @@ function AppRoutes() {
                 <Route path="/handover"           element={<StaffGuardRoute><PageVisibleRoute pageKey="handover"><Handover /></PageVisibleRoute></StaffGuardRoute>} />
                 <Route path="/handover/:id"       element={<StaffGuardRoute><PageVisibleRoute pageKey="handover"><HandoverDetail /></PageVisibleRoute></StaffGuardRoute>} />
                 <Route path="/database-links"     element={<StaffGuardRoute><PageVisibleRoute pageKey="database-links"><DatabaseLinks /></PageVisibleRoute></StaffGuardRoute>} />
+                <Route path="/laporan"            element={<StaffGuardRoute><PageVisibleRoute pageKey="laporan"><Laporan /></PageVisibleRoute></StaffGuardRoute>} />
                 <Route path="/page-visibility"    element={<StaffGuardRoute><PageVisibility /></StaffGuardRoute>} />
               </Routes>
             </Layout>

@@ -7,10 +7,16 @@ import {
   Package, BookOpen, Warehouse, Truck,
   ArrowDownToLine, ArrowUpFromLine, ArrowLeftRight,
   ClipboardList, PackageOpen, Layers,
-  ClipboardCheck, Users, Building2, Eye, EyeOff, Save, PackageCheck, Link2,
+  ClipboardCheck, Users, Building2, Eye, EyeOff, Save, PackageCheck, Link2, BarChart2,
 } from 'lucide-react'
 
 const PAGE_GROUPS = [
+  {
+    label: 'Ringkasan',
+    items: [
+      { key: 'laporan', label: 'Laporan Bulanan', icon: BarChart2 },
+    ],
+  },
   {
     label: 'Inventory',
     items: [

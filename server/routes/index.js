@@ -34,6 +34,7 @@ const formAnakPackingRouter    = require('./form_anak_packing');
 const roleRouter               = require('./role');
 const permissionRouter         = require('./permission');
 const systemSettingRouter      = require('./system_setting');
+const reportRouter             = require('./report');
 const { Role, RolePermission } = require('../models');
 const { Op } = require('sequelize');
 
@@ -89,7 +90,8 @@ router.use('/form-anak-packing', formAnakPackingRouter);
 router.use('/roles',       roleRouter);
 router.use('/permissions', permissionRouter);
 
-router.use('/system', systemSettingRouter);
+router.use('/system',   systemSettingRouter);
+router.use('/reports',  reportRouter);
 
 // Admin only
 router.use('/users',     isAdmin, userRouter);

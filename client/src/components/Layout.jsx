@@ -9,7 +9,7 @@ import {
   ArrowDownToLine, ArrowUpFromLine, ArrowLeftRight,
   ClipboardList, Users, Building2, BookOpen, LogOut, Bell,
   PackageOpen, Layers, ClipboardCheck, Menu, X, Eye, EyeOff,
-  PackageCheck, Link2,
+  PackageCheck, Link2, BarChart2,
 } from 'lucide-react'
 import logoPreface from '../assets/logo-preface.jpeg'
 
@@ -19,7 +19,10 @@ const BRAND_HOVER = '#D93248'
 const NAV_GROUPS = [
   {
     label: 'Ringkasan',
-    items: [{ to: '/', icon: LayoutDashboard, label: 'Dashboard', staffVisible: true }],
+    items: [
+      { to: '/',        icon: LayoutDashboard, label: 'Dashboard', staffVisible: true },
+      { to: '/laporan', icon: BarChart2,        label: 'Laporan', pageKey: 'laporan' },
+    ],
   },
   {
     label: 'Inventori',
@@ -81,6 +84,7 @@ const PAGE_TITLES = {
   '/vendors': 'Vendor', '/incoming-goods': 'Barang Masuk',
   '/packing-jobs': 'Pekerjaan Packing', '/form-anak-packing': 'Form Anak Packing',
   '/page-visibility': 'Visibilitas Halaman',
+  '/laporan': 'Laporan Bulanan',
 }
 
 export default function Layout({ children }) {

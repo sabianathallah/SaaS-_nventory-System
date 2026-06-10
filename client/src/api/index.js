@@ -181,3 +181,7 @@ export const systemApi = {
   getPageVisibility:    ()     => api.get('/system/page-visibility').then(r => r.data),
   updatePageVisibility: (data) => api.put('/system/page-visibility', data).then(r => r.data),
 }
+
+export const reportApi = {
+  monthly: (params) => api.get('/reports/monthly', { params }).then(r => r.data),
+}
