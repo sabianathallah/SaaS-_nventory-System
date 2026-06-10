@@ -5,7 +5,10 @@ module.exports = {
     await queryInterface.addColumn('VendorDeliveries', 'sjNumber', { type: Sequelize.STRING, allowNull: true });
     await queryInterface.addColumn('VendorDeliveries', 'sjPhoto',  { type: Sequelize.TEXT,   allowNull: true });
 
-    // Drop FK constraint then column
+    // Explicitly drop FK constraint before removing column (PostgreSQL requires this)
+    await queryInterface.sequelize.query(
+      'ALTER TABLE "VendorDeliveries" DROP CONSTRAINT IF EXISTS "VendorDeliveries_deliveryNoteId_fkey"'
+    );
     await queryInterface.removeColumn('VendorDeliveries', 'deliveryNoteId');
 
     // Drop DeliveryNotes table
