@@ -230,17 +230,27 @@ class StockOutDraftController {
                 companyId: cid,
             }, { transaction: t });
 
-            const movements = [];
+            // Resolve ProductIds and validate stock before touching DB
+            const resolvedItems = [];
             for (const item of items) {
                 let { ProductSKUId, ProductId, quantity } = item;
-
-                // Resolve ProductId from SKU if not stored
                 if (!ProductId && ProductSKUId) {
                     const sku = await ProductSKU.findByPk(ProductSKUId, { transaction: t });
                     if (sku) ProductId = sku.ProductId;
                 }
-
                 if (!ProductId) continue;
+                const stock = await Stock.findOne({ where: { ProductId, WarehouseId }, transaction: t });
+                const available = stock ? Number(stock.quantity) : 0;
+                if (available < Number(quantity)) {
+                    await t.rollback();
+                    return res.status(400).json({ message: `Stok tidak cukup di gudang yang dipilih (tersedia: ${available}, dibutuhkan: ${quantity})` });
+                }
+                resolvedItems.push({ ...item.toJSON(), ProductId });
+            }
+
+            const movements = [];
+            for (const item of resolvedItems) {
+                let { ProductSKUId, ProductId, quantity } = item;
 
                 await Stock.findOrCreate({
                     where: { ProductId, WarehouseId },

@@ -21,7 +21,12 @@ class DashboardController {
   static async getStats(req, res, next) {
     try {
       const { clause, params } = companyScope(req);
-      const opts = { type: QueryTypes.SELECT, replacements: params };
+
+      // Optional warehouse filter
+      const whId = req.query.warehouseId ? parseInt(req.query.warehouseId) : null;
+      const whClause = whId ? 'AND s."WarehouseId" = :whId' : '';
+      const allParams = whId ? { ...params, whId } : params;
+      const opts = { type: QueryTypes.SELECT, replacements: allParams };
 
       // ── 1. Total products ─────────────────────────────────────────
       const [prodRow] = await sequelize.query(`
@@ -44,7 +49,7 @@ class DashboardController {
           ), 0)::numeric AS total_value
         FROM "Stocks" s
         JOIN "Products" p ON s."ProductId" = p.id
-        WHERE 1=1 ${clause}
+        WHERE 1=1 ${clause} ${whClause}
       `, opts);
 
       // ── 3. Stock & value per article (from Stocks table) ─────────
@@ -62,7 +67,7 @@ class DashboardController {
         FROM "Stocks" s
         JOIN "Products"  p ON s."ProductId" = p.id
         LEFT JOIN "Articles" a ON p."ArticleId" = a.id
-        WHERE 1=1 ${clause}
+        WHERE 1=1 ${clause} ${whClause}
         GROUP BY a.id, a.name
         ORDER BY "totalValue" DESC NULLS LAST
       `, opts);
@@ -76,7 +81,7 @@ class DashboardController {
         FROM "Stocks" s
         JOIN "Warehouses" w ON s."WarehouseId" = w.id
         JOIN "Products"   p ON s."ProductId"   = p.id
-        WHERE 1=1 ${clause}
+        WHERE 1=1 ${clause} ${whClause}
         GROUP BY w.id, w.name
         ORDER BY "totalStock" DESC
       `, opts);
@@ -99,7 +104,7 @@ class DashboardController {
           COALESCE(SUM(s.quantity), 0)::int              AS "totalStock"
         FROM "Products" p
         LEFT JOIN "Stocks" s ON s."ProductId" = p.id
-        WHERE 1=1 ${clause}
+        WHERE 1=1 ${clause} ${whClause}
         GROUP BY p.id, p.name, p.sku
         HAVING COALESCE(SUM(s.quantity), 0) <= 5
         ORDER BY "totalStock" ASC, p.name ASC
@@ -118,7 +123,7 @@ class DashboardController {
         JOIN "Warehouses" w ON s."WarehouseId" = w.id
         JOIN "Products"   p ON s."ProductId"   = p.id
         LEFT JOIN "Articles" a ON p."ArticleId" = a.id
-        WHERE 1=1 ${clause}
+        WHERE 1=1 ${clause} ${whClause}
         GROUP BY w.id, w.name, a.id, a.name
         ORDER BY w.name, "totalStock" DESC NULLS LAST
       `, opts);

@@ -27,7 +27,7 @@ const toPayload = (data) => {
 }
 
 // ── Resources ─────────────────────────────────────────────────────────────────
-export const dashboardApi  = { getStats: () => api.get('/dashboard/stats').then(r => r.data) }
+export const dashboardApi  = { getStats: (params) => api.get('/dashboard/stats', { params }).then(r => r.data) }
 export const categoriesApi = crud('/categories')
 export const articlesApi   = crud('/articles')
 
@@ -151,14 +151,8 @@ export const handoverApi = {
   reopen:     (id)         => api.patch(`/handovers/${id}/reopen`).then(r => r.data),
   addResi:          (id, resi)   => api.post(`/handovers/${id}/items`, { resi }).then(r => r.data),
   removeResi:       (id, itemId) => api.delete(`/handovers/${id}/items/${itemId}`).then(r => r.data),
-  uploadAttachment: (id, file)   => {
-    const fd = new FormData()
-    fd.append('attachment', file)
-    return api.post(`/handovers/${id}/attachment`, fd).then(r => r.data)
-  },
-  deleteAttachment: (id) => api.delete(`/handovers/${id}/attachment`).then(r => r.data),
-  fetchAttachmentBlob: (id) =>
-    api.get(`/handovers/${id}/attachment`, { responseType: 'blob' }).then(r => r.data),
+  setAttachmentUrl: (id, url) => api.post(`/handovers/${id}/attachment`, { url }).then(r => r.data),
+  deleteAttachment: (id)     => api.delete(`/handovers/${id}/attachment`).then(r => r.data),
 }
 
 export const vendorDeliveriesApi = {

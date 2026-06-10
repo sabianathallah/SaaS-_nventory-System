@@ -8,9 +8,10 @@ class StockOutHeaderController {
         try {
             const { page, limit, offset } = paginate(req.query);
             const filter = buildFilter(req.query, {
-                destination: 'like',
-                dateFrom:    { field: 'date', type: 'gte' },
-                dateTo:      { field: 'date', type: 'lte' },
+                destination:  'like',
+                WarehouseId:  'exact',
+                dateFrom:     { field: 'date', type: 'gte' },
+                dateTo:       { field: 'date', type: 'lte' },
             });
             const { rows, count } = await Stock_Out_Header.findAndCountAll({
                 where: { ...companyFilter(req), ...filter },
@@ -121,6 +122,17 @@ class StockOutHeaderController {
                 },
                 { transaction: t }
             );
+            // Validate all items have sufficient stock before touching DB
+            for (const item of resolvedItems) {
+                const { ProductId, WarehouseId, quantity } = item;
+                const stock = await Stock.findOne({ where: { ProductId, WarehouseId }, transaction: t });
+                const available = stock ? Number(stock.quantity) : 0;
+                if (available < quantity) {
+                    await t.rollback();
+                    return res.status(400).json({ message: `Stok tidak cukup di gudang yang dipilih (tersedia: ${available}, dibutuhkan: ${quantity})` });
+                }
+            }
+
             const movements = [];
             for (const item of resolvedItems) {
                 const { ProductId, ProductSKUId, quantity, note, WarehouseId } = item;

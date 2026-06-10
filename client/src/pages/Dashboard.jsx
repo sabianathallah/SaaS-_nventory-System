@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { dashboardApi, movementsApi } from '../api'
+import { dashboardApi, movementsApi, warehousesApi } from '../api'
 import { useAuth } from '../context/AuthContext'
 import {
   Package, BoxesIcon, Wallet, Warehouse,
@@ -222,15 +222,21 @@ export default function Dashboard() {
   const { user, hasPermission } = useAuth()
   const [artPage, setArtPage] = useState(0)
   const [whPage,  setWhPage]  = useState(0)
+  const [selectedWh, setSelectedWh] = useState('')
 
   const canViewStock     = hasPermission('dashboard.view_stock')
   const canViewValue     = hasPermission('dashboard.view_value')
   const canViewAnalytics = hasPermission('dashboard.view_analytics')
   const canViewMovements = hasPermission('dashboard.view_movements')
 
+  const { data: warehouses } = useQuery({
+    queryKey: ['warehouses', { limit: 100 }],
+    queryFn:  () => warehousesApi.list({ limit: 100 }),
+  })
+
   const { data: stats, isLoading } = useQuery({
-    queryKey: ['dashboard-stats'],
-    queryFn:  dashboardApi.getStats,
+    queryKey: ['dashboard-stats', { warehouseId: selectedWh || undefined }],
+    queryFn:  () => dashboardApi.getStats(selectedWh ? { warehouseId: selectedWh } : undefined),
     staleTime: 30_000,
   })
 
@@ -275,15 +281,27 @@ export default function Dashboard() {
     <div className="px-6 py-6 max-w-screen-xl mx-auto space-y-6">
 
       {/* ── Welcome ─────────────────────────────────────────── */}
-      <div className="flex items-start justify-between">
+      <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
           <h2 className="text-xl font-bold text-slate-800">
             {greeting()}, {user?.name?.split(' ')[0]} 👋
           </h2>
           <p className="text-sm text-slate-400 mt-0.5">Ringkasan inventaris terkini</p>
         </div>
-        <div className="text-xs text-slate-400 font-mono bg-white border border-slate-200 px-3 py-1.5 rounded-lg flex-shrink-0">
-          {new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <select
+            value={selectedWh}
+            onChange={e => { setSelectedWh(e.target.value); setArtPage(0); setWhPage(0) }}
+            className="input text-sm w-44"
+          >
+            <option value="">Semua Gudang</option>
+            {(warehouses?.data ?? []).map(w => (
+              <option key={w.id} value={w.id}>{w.name}</option>
+            ))}
+          </select>
+          <div className="text-xs text-slate-400 font-mono bg-white border border-slate-200 px-3 py-1.5 rounded-lg">
+            {new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+          </div>
         </div>
       </div>
 
@@ -295,10 +313,10 @@ export default function Dashboard() {
           <div className={`grid grid-cols-1 gap-4 ${cols}`}>
             <StatCard label="Total Produk" value={fmtNum(totalProducts)} icon={Package} loading={isLoading} />
             {canViewStock && (
-              <StatCard label="Total Stock" value={fmtNum(totalStock)} sub="unit · dari semua SKU" icon={BoxesIcon} accent="#3B82F6" loading={isLoading} />
+              <StatCard label="Total Stock" value={fmtNum(totalStock)} sub={selectedWh ? `unit · ${warehouses?.data?.find(w => String(w.id) === String(selectedWh))?.name ?? ''}` : 'unit · semua gudang'} icon={BoxesIcon} accent="#3B82F6" loading={isLoading} />
             )}
             {canViewValue && (
-              <StatCard label="Total Nilai Inventaris" value={fmtRp(totalValue)} sub={isLoading ? '' : `${fmtRpFull(totalValue)} · berdasarkan harga SKU`} icon={Wallet} accent="#10B981" loading={isLoading} />
+              <StatCard label="Nilai Inventaris" value={fmtRp(totalValue)} sub={isLoading ? '' : `${fmtRpFull(totalValue)} · berdasarkan harga SKU`} icon={Wallet} accent="#10B981" loading={isLoading} />
             )}
           </div>
         )

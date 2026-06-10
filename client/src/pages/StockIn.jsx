@@ -1,11 +1,14 @@
+import { useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { stockInApi, stockInDraftApi } from '../api'
+import { stockInApi, stockInDraftApi, warehousesApi } from '../api'
 import { useAuth } from '../context/AuthContext'
 import PageHeader from '../components/PageHeader'
 import { Table, Pagination } from '../components/Table'
 import toast from 'react-hot-toast'
 import { PackagePlus, Eye, PencilLine, X } from 'lucide-react'
+
+const WH_KEY = 'stockin_warehouse_filter'
 
 const fmt = (n) => Number(n ?? 0).toLocaleString('id-ID')
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'
@@ -22,9 +25,21 @@ export default function StockIn() {
   const canCreate    = hasPermission('stock.in.create') || hasPermission('stock.manage')
   const canViewValue = hasPermission('inventory.view_value') || hasPermission('inventory.manage')
 
+  const [warehouseFilter, setWarehouseFilter] = useState(() => localStorage.getItem(WH_KEY) || '')
+  const handleWarehouseChange = (val) => {
+    setWarehouseFilter(val)
+    val ? localStorage.setItem(WH_KEY, val) : localStorage.removeItem(WH_KEY)
+    setPage(1)
+  }
+
+  const { data: warehouses } = useQuery({
+    queryKey: ['warehouses', { limit: 100 }],
+    queryFn:  () => warehousesApi.list({ limit: 100 }),
+  })
+
   const { data, isLoading } = useQuery({
-    queryKey: ['stock-in', { page, limit }],
-    queryFn:  () => stockInApi.list({ page, limit }),
+    queryKey: ['stock-in', { page, limit, WarehouseId: warehouseFilter || undefined }],
+    queryFn:  () => stockInApi.list({ page, limit, WarehouseId: warehouseFilter || undefined }),
   })
 
   const { data: drafts = [] } = useQuery({
@@ -143,6 +158,18 @@ export default function StockIn() {
           </button>
         )}
       />
+      <div className="mb-3 flex gap-2">
+        <select
+          value={warehouseFilter}
+          onChange={e => handleWarehouseChange(e.target.value)}
+          className="input text-sm w-48"
+        >
+          <option value="">Semua Gudang</option>
+          {(warehouses?.data ?? []).map(w => (
+            <option key={w.id} value={w.id}>{w.name}</option>
+          ))}
+        </select>
+      </div>
       <div className="card overflow-hidden">
         <Table columns={columns} data={tableData} loading={isLoading} emptyText="Belum ada transaksi" />
         <Pagination pagination={data?.pagination} onPageChange={setPage} />

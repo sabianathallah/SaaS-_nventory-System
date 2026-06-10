@@ -9,7 +9,7 @@ import toast from 'react-hot-toast'
 import {
   ArrowLeft, PackageCheck, ScanLine, Camera, Trash2, Printer,
   Plus, X, Package, Lock, Unlock, ScanBarcode, FileEdit,
-  Paperclip, FileText, ImageIcon,
+  Paperclip, ExternalLink, Link,
 } from 'lucide-react'
 import logoPreface from '../assets/logo-preface.jpeg'
 
@@ -45,12 +45,11 @@ export default function HandoverDetail() {
   const [showCamera, setShowCamera] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(null)
   const [scannerConnected, setScannerConnected] = useState(false)
-  const [confirmClose, setConfirmClose]     = useState(false)
-  const [attachUploading, setAttachUploading] = useState(false)
-  const [attachBlobUrl, setAttachBlobUrl]   = useState(null)
-  const [attachMime, setAttachMime]         = useState(null)
-  const scanInputRef   = useRef(null)
-  const attachInputRef = useRef(null)
+  const [confirmClose, setConfirmClose]   = useState(false)
+  const [attachUrlInput, setAttachUrlInput] = useState('')
+  const [showAttachInput, setShowAttachInput] = useState(false)
+  const [attachSaving, setAttachSaving]   = useState(false)
+  const scanInputRef = useRef(null)
 
   const { data: handover, isLoading } = useQuery({
     queryKey: ['handover', id],
@@ -80,23 +79,6 @@ export default function HandoverDetail() {
     !isNew && !showCamera && scannerConnected,
   )
 
-  // Load attachment as blob so it renders inline without direct Cloudinary access
-  useEffect(() => {
-    if (!handover?.attachment_url) {
-      setAttachBlobUrl(null)
-      setAttachMime(null)
-      return
-    }
-    let objectUrl = null
-    handoverApi.fetchAttachmentBlob(id)
-      .then(blob => {
-        objectUrl = URL.createObjectURL(blob)
-        setAttachBlobUrl(objectUrl)
-        setAttachMime(blob.type)
-      })
-      .catch(() => {})
-    return () => { if (objectUrl) URL.revokeObjectURL(objectUrl) }
-  }, [handover?.attachment_url, id])
 
   // ── Mutations ──────────────────────────────────────────────────────────────
   const createMutation = useMutation({
@@ -168,6 +150,8 @@ export default function HandoverDetail() {
     mutationFn: () => handoverApi.deleteAttachment(id),
     onSuccess: (h) => {
       qc.setQueryData(['handover', id], h)
+      setShowAttachInput(false)
+      setAttachUrlInput('')
       toast.success('Lampiran dihapus')
     },
     onError: () => toast.error('Gagal menghapus lampiran'),
@@ -198,20 +182,21 @@ export default function HandoverDetail() {
     setShowCamera(false)
   }
 
-  async function handleAttachmentChange(e) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    setAttachUploading(true)
-    if (attachBlobUrl) { URL.revokeObjectURL(attachBlobUrl); setAttachBlobUrl(null) }
+  async function handleSaveAttachUrl(e) {
+    e.preventDefault()
+    const url = attachUrlInput.trim()
+    if (!url) return toast.error('Masukkan link dokumen')
+    setAttachSaving(true)
     try {
-      const h = await handoverApi.uploadAttachment(id, file)
+      const h = await handoverApi.setAttachmentUrl(id, url)
       qc.setQueryData(['handover', id], h)
-      toast.success('Lampiran berhasil diunggah')
+      setShowAttachInput(false)
+      setAttachUrlInput('')
+      toast.success('Link dokumen disimpan')
     } catch (err) {
-      toast.error(err?.response?.data?.message ?? 'Gagal mengunggah lampiran')
+      toast.error(err?.response?.data?.message ?? 'Gagal menyimpan link')
     } finally {
-      setAttachUploading(false)
-      e.target.value = ''
+      setAttachSaving(false)
     }
   }
 
@@ -483,91 +468,75 @@ export default function HandoverDetail() {
             <span className="text-xs font-bold text-slate-500 uppercase tracking-wide flex items-center gap-2">
               <Paperclip size={13} /> Dokumen Lampiran
             </span>
-            {!handover.attachment_url && (
+            {!handover.attachment_url && !showAttachInput && (
               <button
                 type="button"
-                onClick={() => attachInputRef.current?.click()}
-                disabled={attachUploading}
+                onClick={() => setShowAttachInput(true)}
                 className="btn-secondary text-xs px-3 py-1.5 flex items-center gap-1.5"
               >
-                {attachUploading ? 'Mengunggah…' : <><Paperclip size={12} /> Upload PDF / Foto</>}
+                <Link size={12} /> Tambah Link
               </button>
             )}
-            <input
-              ref={attachInputRef}
-              type="file"
-              accept=".pdf,image/jpeg,image/png,image/webp"
-              className="hidden"
-              onChange={handleAttachmentChange}
-            />
           </div>
 
           {handover.attachment_url ? (
-            <div className="space-y-2">
-              {/* Toolbar */}
-              <div className="flex items-center gap-2">
-                {attachMime?.startsWith('image/') ? (
-                  <ImageIcon size={15} className="text-blue-500 shrink-0" />
-                ) : (
-                  <FileText size={15} className="text-red-500 shrink-0" />
-                )}
-                <span className="text-xs text-slate-500 truncate flex-1">
-                  {handover.attachment_url.split('/').pop().split('?')[0]}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 p-3 rounded-lg bg-slate-50 border border-slate-200">
+                <ExternalLink size={15} className="text-blue-500 shrink-0" />
+                <span className="text-xs text-slate-600 truncate flex-1 font-mono">
+                  {handover.attachment_url}
                 </span>
-                {attachBlobUrl && (
-                  <a
-                    href={attachBlobUrl}
-                    download
-                    className="text-xs text-slate-400 hover:text-blue-600 underline shrink-0"
-                  >
-                    Download
-                  </a>
-                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <a
+                  href={handover.attachment_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn-primary text-xs px-4 py-1.5 flex items-center gap-1.5"
+                >
+                  <ExternalLink size={12} /> Buka Dokumen
+                </a>
                 <button
                   type="button"
-                  onClick={() => attachInputRef.current?.click()}
-                  disabled={attachUploading}
-                  className="text-xs text-slate-400 hover:text-slate-600 underline shrink-0"
+                  onClick={() => { setAttachUrlInput(handover.attachment_url); setShowAttachInput(true) }}
+                  className="text-xs text-slate-400 hover:text-slate-600 underline"
                 >
                   Ganti
                 </button>
                 <button
                   type="button"
-                  onClick={() => {
-                    if (window.confirm('Hapus lampiran ini?')) deleteAttachmentMutation.mutate()
-                  }}
+                  onClick={() => { if (window.confirm('Hapus lampiran ini?')) deleteAttachmentMutation.mutate() }}
                   disabled={deleteAttachmentMutation.isPending}
                   className="p-1 rounded text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"
                 >
                   <Trash2 size={13} />
                 </button>
               </div>
-
-              {/* Inline preview */}
-              {!attachBlobUrl && (
-                <div className="h-24 rounded-lg bg-slate-100 flex items-center justify-center text-xs text-slate-400 animate-pulse">
-                  Memuat lampiran…
-                </div>
-              )}
-              {attachBlobUrl && attachMime?.startsWith('image/') && (
-                <img
-                  src={attachBlobUrl}
-                  alt="Lampiran"
-                  className="w-full max-h-72 object-contain rounded-lg border border-slate-200 bg-slate-50"
-                />
-              )}
-              {attachBlobUrl && attachMime === 'application/pdf' && (
-                <embed
-                  src={attachBlobUrl}
-                  type="application/pdf"
-                  className="w-full rounded-lg border border-slate-200"
-                  style={{ height: '420px' }}
-                />
-              )}
             </div>
+          ) : showAttachInput ? (
+            <form onSubmit={handleSaveAttachUrl} className="flex gap-2">
+              <input
+                autoFocus
+                type="url"
+                className="input flex-1 text-sm"
+                placeholder="Paste link Google Drive / Dropbox…"
+                value={attachUrlInput}
+                onChange={e => setAttachUrlInput(e.target.value)}
+              />
+              <button type="submit" disabled={attachSaving} className="btn-primary text-xs px-4">
+                {attachSaving ? 'Menyimpan…' : 'Simpan'}
+              </button>
+              <button
+                type="button"
+                onClick={() => { setShowAttachInput(false); setAttachUrlInput('') }}
+                className="btn-secondary text-xs px-3"
+              >
+                Batal
+              </button>
+            </form>
           ) : (
             <p className="text-xs text-slate-400">
-              Belum ada lampiran — upload surat jalan / AWB untuk validasi shipping.
+              Belum ada lampiran — tambahkan link Google Drive / Dropbox untuk validasi shipping.
             </p>
           )}
         </div>

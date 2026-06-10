@@ -28,9 +28,10 @@ class StockInHeaderController {
     try {
       const { page, limit, offset } = paginate(req.query);
       const filter = buildFilter(req.query, {
-        SupplierId: 'exact',
-        dateFrom:   { field: 'date', type: 'gte' },
-        dateTo:     { field: 'date', type: 'lte' },
+        SupplierId:  'exact',
+        WarehouseId: 'exact',
+        dateFrom:    { field: 'date', type: 'gte' },
+        dateTo:      { field: 'date', type: 'lte' },
       });
       const { rows, count } = await Stock_In_Header.findAndCountAll({
         where: { ...companyFilter(req), ...filter },

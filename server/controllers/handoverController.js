@@ -1,28 +1,7 @@
 'use strict';
-const https = require('https');
-const http  = require('http');
-const path  = require('path');
-const fs    = require('fs');
 const { Handover, Handover_Item, User } = require('../models');
 const { companyFilter, companyId } = require('../helpers/tenancy');
-const { destroyHandoverAttachment, cloudinary, isConfigured } = require('../helpers/cloudinary');
-
-function cloudinaryPublicId(url) {
-  const m = url.match(/\/(?:image|video|raw)\/upload\/(?:v\d+\/)?(.+?)(?:\.[a-z0-9]+)?$/i);
-  return m ? m[1] : null;
-}
-function cloudinaryResourceType(url) {
-  const m = url.match(/\/(image|video|raw)\/upload\//);
-  return m ? m[1] : 'image';
-}
-
-const MIME = {
-  '.pdf':  'application/pdf',
-  '.jpg':  'image/jpeg',
-  '.jpeg': 'image/jpeg',
-  '.png':  'image/png',
-  '.webp': 'image/webp',
-};
+const { destroyHandoverAttachment } = require('../helpers/cloudinary');
 
 const ITEM_ORDER = [['scannedAt', 'ASC'], ['id', 'ASC']];
 
@@ -184,73 +163,18 @@ class HandoverController {
     } catch (err) { next(err); }
   }
 
-  static async serveAttachment(req, res, next) {
+  static async setAttachmentUrl(req, res, next) {
     try {
       const h = await Handover.findOne({ where: { id: req.params.id, ...companyFilter(req) } });
       if (!h) throw { name: 'NotFound', message: 'Handover tidak ditemukan' };
-      if (!h.attachment_url) throw { name: 'NotFound', message: 'Tidak ada lampiran' };
 
-      const url = h.attachment_url;
+      const { url } = req.body;
+      if (!url?.trim()) throw { name: 'ValidationError', message: 'URL lampiran wajib diisi' };
 
-      if (url.startsWith('http')) {
-        // If Cloudinary is configured, generate a signed URL to bypass access control
-        let targetUrl = url;
-        if (isConfigured) {
-          const publicId    = cloudinaryPublicId(url);
-          const resourceType = cloudinaryResourceType(url);
-          if (publicId) {
-            targetUrl = cloudinary.url(publicId, {
-              resource_type: resourceType,
-              sign_url: true,
-              secure: true,
-              type: 'upload',
-            });
-          }
-        }
-
-        const fetchUrl = (fetchTarget, hops = 0) => {
-          if (hops > 5) return next(new Error('Too many redirects'));
-          const client = fetchTarget.startsWith('https') ? https : http;
-          client.get(fetchTarget, (upstream) => {
-            if (upstream.statusCode >= 300 && upstream.statusCode < 400 && upstream.headers.location) {
-              upstream.resume();
-              return fetchUrl(upstream.headers.location, hops + 1);
-            }
-            if (upstream.statusCode !== 200) {
-              upstream.resume();
-              return next({ name: 'NotFound', message: 'File tidak dapat diakses dari storage' });
-            }
-            const ct = upstream.headers['content-type'] || 'application/octet-stream';
-            res.set('Content-Type', ct);
-            res.set('Content-Disposition', 'inline');
-            res.set('Cache-Control', 'private, max-age=3600');
-            upstream.pipe(res);
-          }).on('error', next);
-        };
-        fetchUrl(targetUrl);
-      } else {
-        const filePath = path.join(__dirname, '..', url.replace(/^\//, ''));
-        const ext = path.extname(filePath).toLowerCase();
-        res.set('Content-Type', MIME[ext] || 'application/octet-stream');
-        res.set('Content-Disposition', 'inline');
-        res.set('Cache-Control', 'private, max-age=3600');
-        fs.createReadStream(filePath).pipe(res);
-      }
-    } catch (err) { next(err); }
-  }
-
-  static async uploadAttachment(req, res, next) {
-    try {
-      const h = await Handover.findOne({ where: { id: req.params.id, ...companyFilter(req) } });
-      if (!h) throw { name: 'NotFound', message: 'Handover tidak ditemukan' };
-      if (!req.file) throw { name: 'ValidationError', message: 'File tidak ditemukan' };
-
-      // Remove old attachment if exists
+      // Clean up old Cloudinary file if any
       if (h.attachment_url) await destroyHandoverAttachment(h.attachment_url);
 
-      // Cloudinary returns secure_url; disk storage returns a local path
-      const url = req.file.path ?? `/uploads/handovers/${req.file.filename}`;
-      h.attachment_url = url;
+      h.attachment_url = url.trim();
       await h.save();
 
       const full = await findHandover(h.id, req);

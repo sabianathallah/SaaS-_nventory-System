@@ -4,12 +4,9 @@ const router  = express.Router();
 const ctrl    = require('../controllers/handoverController');
 const rp      = require('../middlewares/requirePermission');
 const { requireAnyPermission: rpAny } = require('../middlewares/requirePermission');
-const { uploadHandoverAttachment } = require('../helpers/cloudinary');
 
 const canView   = rpAny('handover.manage', 'handover.view', 'handover.create');
 const canCreate = rpAny('handover.manage', 'handover.create');
-
-const attachUpload = uploadHandoverAttachment().single('attachment');
 
 router.get('/',                        canView,   ctrl.list);
 router.post('/',                       canCreate, ctrl.create);
@@ -20,8 +17,7 @@ router.patch('/:id/close',             canCreate, ctrl.closeSession);
 router.patch('/:id/reopen',            canCreate, ctrl.reopenSession);
 router.post('/:id/items',              canCreate, ctrl.addResi);
 router.delete('/:id/items/:itemId',    canCreate, ctrl.removeResi);
-router.get('/:id/attachment',          canView,   ctrl.serveAttachment);
-router.post('/:id/attachment',         canCreate, attachUpload, ctrl.uploadAttachment);
+router.post('/:id/attachment',         canCreate, ctrl.setAttachmentUrl);
 router.delete('/:id/attachment',       canCreate, ctrl.deleteAttachment);
 
 module.exports = router;
