@@ -184,14 +184,27 @@ class HandoverController {
       const url = h.attachment_url;
 
       if (url.startsWith('http')) {
-        const client = url.startsWith('https') ? https : http;
-        client.get(url, (upstream) => {
-          const ct = upstream.headers['content-type'] || 'application/octet-stream';
-          res.set('Content-Type', ct);
-          res.set('Content-Disposition', 'inline');
-          res.set('Cache-Control', 'private, max-age=3600');
-          upstream.pipe(res);
-        }).on('error', next);
+        const fetch = (targetUrl, hops = 0) => {
+          if (hops > 5) return next(new Error('Too many redirects'));
+          const client = targetUrl.startsWith('https') ? https : http;
+          client.get(targetUrl, (upstream) => {
+            // Follow redirects
+            if (upstream.statusCode >= 300 && upstream.statusCode < 400 && upstream.headers.location) {
+              upstream.resume();
+              return fetch(upstream.headers.location, hops + 1);
+            }
+            if (upstream.statusCode !== 200) {
+              upstream.resume();
+              return next({ name: 'NotFound', message: 'File tidak dapat diakses dari storage' });
+            }
+            const ct = upstream.headers['content-type'] || 'application/octet-stream';
+            res.set('Content-Type', ct);
+            res.set('Content-Disposition', 'inline');
+            res.set('Cache-Control', 'private, max-age=3600');
+            upstream.pipe(res);
+          }).on('error', next);
+        };
+        fetch(url);
       } else {
         const filePath = path.join(__dirname, '..', url.replace(/^\//, ''));
         const ext = path.extname(filePath).toLowerCase();
