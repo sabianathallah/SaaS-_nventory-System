@@ -4,6 +4,7 @@ import { useSearchParams } from 'react-router-dom'
 import { usersApi, companiesApi, rolesApi, permissionsApi } from '../api'
 import SearchableSelect from '../components/SearchableSelect'
 import { useAuth } from '../context/AuthContext'
+import { useSelectedCompany } from '../context/SelectedCompanyContext'
 import PageHeader from '../components/PageHeader'
 import { Table, Pagination } from '../components/Table'
 import Modal from '../components/Modal'
@@ -635,10 +636,11 @@ function RolesTab({ roles, allPermissions, onRolesChange }) {
 
 export default function Users() {
   const { isSuperAdmin, user } = useAuth()
+  const { selectedCompany } = useSelectedCompany()
   const [tab, setTab] = useState('users')
   const qc = useQueryClient()
 
-  const companyId = isSuperAdmin ? null : user?.companyId
+  const companyId = isSuperAdmin ? (selectedCompany?.id ?? null) : user?.companyId
 
   const { data: roles = [], refetch: refetchRoles } = useQuery({
     queryKey: ['roles', companyId],
