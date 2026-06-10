@@ -188,7 +188,7 @@ class HandoverController {
           if (hops > 5) return next(new Error('Too many redirects'));
           const client = targetUrl.startsWith('https') ? https : http;
           client.get(targetUrl, (upstream) => {
-            // Follow redirects
+            console.log(`[attachment proxy] status=${upstream.statusCode} url=${targetUrl.substring(0, 80)}`);
             if (upstream.statusCode >= 300 && upstream.statusCode < 400 && upstream.headers.location) {
               upstream.resume();
               return fetch(upstream.headers.location, hops + 1);
