@@ -21,7 +21,7 @@ const NAV_GROUPS = [
   {
     label: 'Ringkasan',
     items: [
-      { to: '/',        icon: LayoutDashboard, label: 'Dashboard', staffVisible: true },
+      { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
       { to: '/laporan', icon: BarChart2,        label: 'Laporan', pageKey: 'laporan' },
     ],
   },
@@ -75,7 +75,7 @@ const NAV_GROUPS = [
 ]
 
 const PAGE_TITLES = {
-  '/': 'Dashboard', '/products': 'Produk', '/catalog': 'Kategori dan Koleksi',
+  '/dashboard': 'Dashboard', '/products': 'Produk', '/catalog': 'Kategori dan Koleksi',
   '/warehouses': 'Gudang', '/suppliers': 'Vendor',
   '/stock-in': 'Penerimaan Stok', '/stock-in/new': 'Penerimaan Stok Baru', '/stock-out': 'Pengeluaran Stok', '/movements': 'Pergerakan',
   '/opname': 'Stock Opname', '/handover': 'Handover Pengiriman', '/database-links': 'Database Links', '/users': 'Pengguna', '/companies': 'Perusahaan',

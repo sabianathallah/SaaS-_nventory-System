@@ -32,6 +32,7 @@ import Handover from './pages/Handover'
 import HandoverDetail from './pages/HandoverDetail'
 import DatabaseLinks from './pages/DatabaseLinks'
 import Laporan from './pages/Laporan'
+import Landing from './pages/Landing'
 
 function PrivateRoute({ children }) {
   const { user } = useAuth()
@@ -40,7 +41,12 @@ function PrivateRoute({ children }) {
 
 function PublicRoute({ children }) {
   const { user } = useAuth()
-  return !user ? children : <Navigate to="/" replace />
+  return !user ? children : <Navigate to="/dashboard" replace />
+}
+
+function RootRoute() {
+  const { user } = useAuth()
+  return user ? <Navigate to="/dashboard" replace /> : <Landing />
 }
 
 // Shows NoPermission UI instead of redirecting — user can see they lack access
@@ -51,26 +57,27 @@ function PermissionRoute({ permission, page, children }) {
 
 function SuperRoute({ children }) {
   const { isSuperAdmin } = useAuth()
-  return isSuperAdmin ? children : <Navigate to="/" replace />
+  return isSuperAdmin ? children : <Navigate to="/dashboard" replace />
 }
 
 function PageVisibleRoute({ pageKey, children }) {
   const { isSuperAdmin } = useAuth()
   const { isPageVisible } = usePageVisibility()
-  if (!isSuperAdmin && !isPageVisible(pageKey)) return <Navigate to="/" replace />
+  if (!isSuperAdmin && !isPageVisible(pageKey)) return <Navigate to="/dashboard" replace />
   return children
 }
 
 function AppRoutes() {
   return (
     <Routes>
+      <Route path="/" element={<RootRoute />} />
       <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
       <Route path="/*" element={
         <PrivateRoute>
           <PageVisibilityProvider>
             <Layout>
               <Routes>
-                <Route path="/" element={<Dashboard />} />
+                <Route path="/dashboard" element={<Dashboard />} />
 
                 {/* ── Produk ── */}
                 <Route path="/products"          element={<PageVisibleRoute pageKey="products"><PermissionRoute permission="inventory.view" page="Produk"><Products /></PermissionRoute></PageVisibleRoute>} />

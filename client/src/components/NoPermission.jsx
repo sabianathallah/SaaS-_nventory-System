@@ -17,7 +17,7 @@ export default function NoPermission({ page }) {
         Hubungi admin perusahaan untuk meminta akses.
       </p>
       <button
-        onClick={() => navigate('/')}
+        onClick={() => navigate('/dashboard')}
         className="btn-secondary text-sm"
       >
         Kembali ke Dashboard
