@@ -15,7 +15,6 @@ import { Plus, Pencil, Trash2, UserCircle2, ShieldCheck, Save, Check, Eye, EyeOf
 
 const SYSTEM_ROLE_STYLE = {
   SUPER_ADMIN:   'bg-red-100 text-red-700',
-  ADMIN:         'bg-orange-100 text-orange-700',
   COMPANY_ADMIN: 'bg-blue-100 text-blue-700',
   OPERASIONAL:   'bg-teal-100 text-teal-700',
   TIM_PACKING:   'bg-violet-100 text-violet-700',
@@ -42,7 +41,7 @@ function RoleBadge({ name, displayName }) {
 }
 
 function roleColor(name) {
-  const PRESET = { SUPER_ADMIN:'#EF4444', ADMIN:'#F97316', COMPANY_ADMIN:'#3B82F6', OPERASIONAL:'#14B8A6', TIM_PACKING:'#8B5CF6' }
+  const PRESET = { SUPER_ADMIN:'#EF4444', COMPANY_ADMIN:'#3B82F6', OPERASIONAL:'#14B8A6', TIM_PACKING:'#8B5CF6' }
   return PRESET[name] ?? COLOR_PALETTE[roleColorIndex(name)]
 }
 
@@ -416,7 +415,7 @@ function RolesTab({ roles, allPermissions, onRolesChange }) {
 
         <div className="px-3 py-3 border-t border-slate-200">
           <p className="text-[10px] text-slate-400 leading-relaxed">
-            <strong className="text-slate-500">SUPER_ADMIN</strong> & <strong className="text-slate-500">ADMIN</strong> mendapat akses penuh dan tidak bisa diedit.
+            <strong className="text-slate-500">SUPER_ADMIN</strong> mendapat akses penuh lintas perusahaan dan tidak bisa diedit.
           </p>
         </div>
       </div>

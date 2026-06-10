@@ -39,19 +39,19 @@ export function AuthProvider({ children }) {
 
   const hasPermission = useCallback((key) => {
     if (!user) return false
-    if (user.role === 'SUPER_ADMIN' || user.role === 'ADMIN') return true
+    if (user.role === 'SUPER_ADMIN' || user.role === 'COMPANY_ADMIN') return true
     return Array.isArray(user.permissions) && user.permissions.includes(key)
   }, [user])
 
   const isSuperAdmin   = user?.role === 'SUPER_ADMIN'
-  const isAdmin        = ['SUPER_ADMIN', 'ADMIN', 'COMPANY_ADMIN'].includes(user?.role)
-  const isOperasional  = ['SUPER_ADMIN', 'ADMIN', 'COMPANY_ADMIN', 'OPERASIONAL'].includes(user?.role)
+  const isAdmin        = ['SUPER_ADMIN', 'COMPANY_ADMIN'].includes(user?.role)
+  const isOperasional  = ['SUPER_ADMIN', 'COMPANY_ADMIN', 'OPERASIONAL'].includes(user?.role)
   const isHeadPacking  = false
-  const isTimPacking   = ['SUPER_ADMIN', 'ADMIN', 'COMPANY_ADMIN', 'TIM_PACKING'].includes(user?.role)
+  const isTimPacking   = ['SUPER_ADMIN', 'COMPANY_ADMIN', 'TIM_PACKING'].includes(user?.role)
   const isHR           = false
   const isStaff        = user?.role === 'STAFF'
   const canViewPacking = user
-    ? (user.role === 'SUPER_ADMIN' || user.role === 'ADMIN' ||
+    ? (user.role === 'SUPER_ADMIN' || user.role === 'COMPANY_ADMIN' ||
        Array.isArray(user.permissions) && user.permissions.includes('packing.view'))
     : false
 

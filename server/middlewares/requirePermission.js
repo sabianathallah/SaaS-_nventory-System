@@ -30,7 +30,7 @@ async function resolveRoleRow(req) {
 const requirePermission = (key) => async (req, res, next) => {
   try {
     const { role } = req.user;
-    if (role === 'SUPER_ADMIN' || role === 'ADMIN') return next();
+    if (role === 'SUPER_ADMIN' || role === 'COMPANY_ADMIN') return next();
     const roleRow = await resolveRoleRow(req);
     if (!roleRow) return res.status(403).json({ message: 'Forbidden: Role tidak ditemukan' });
     const keysToCheck = withParents([key]);
@@ -45,7 +45,7 @@ const requirePermission = (key) => async (req, res, next) => {
 const requireAnyPermission = (...keys) => async (req, res, next) => {
   try {
     const { role } = req.user;
-    if (role === 'SUPER_ADMIN' || role === 'ADMIN') return next();
+    if (role === 'SUPER_ADMIN' || role === 'COMPANY_ADMIN') return next();
     const roleRow = await resolveRoleRow(req);
     if (!roleRow) return res.status(403).json({ message: 'Forbidden: Role tidak ditemukan' });
     const keysToCheck = withParents(keys);
