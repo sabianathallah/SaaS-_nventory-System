@@ -5,7 +5,16 @@ const path  = require('path');
 const fs    = require('fs');
 const { Handover, Handover_Item, User } = require('../models');
 const { companyFilter, companyId } = require('../helpers/tenancy');
-const { destroyHandoverAttachment } = require('../helpers/cloudinary');
+const { destroyHandoverAttachment, cloudinary, isConfigured } = require('../helpers/cloudinary');
+
+function cloudinaryPublicId(url) {
+  const m = url.match(/\/(?:image|video|raw)\/upload\/(?:v\d+\/)?(.+?)(?:\.[a-z0-9]+)?$/i);
+  return m ? m[1] : null;
+}
+function cloudinaryResourceType(url) {
+  const m = url.match(/\/(image|video|raw)\/upload\//);
+  return m ? m[1] : 'image';
+}
 
 const MIME = {
   '.pdf':  'application/pdf',
@@ -184,14 +193,28 @@ class HandoverController {
       const url = h.attachment_url;
 
       if (url.startsWith('http')) {
-        const fetch = (targetUrl, hops = 0) => {
+        // If Cloudinary is configured, generate a signed URL to bypass access control
+        let targetUrl = url;
+        if (isConfigured) {
+          const publicId    = cloudinaryPublicId(url);
+          const resourceType = cloudinaryResourceType(url);
+          if (publicId) {
+            targetUrl = cloudinary.url(publicId, {
+              resource_type: resourceType,
+              sign_url: true,
+              secure: true,
+              type: 'upload',
+            });
+          }
+        }
+
+        const fetchUrl = (fetchTarget, hops = 0) => {
           if (hops > 5) return next(new Error('Too many redirects'));
-          const client = targetUrl.startsWith('https') ? https : http;
-          client.get(targetUrl, (upstream) => {
-            console.log(`[attachment proxy] status=${upstream.statusCode} url=${targetUrl.substring(0, 80)}`);
+          const client = fetchTarget.startsWith('https') ? https : http;
+          client.get(fetchTarget, (upstream) => {
             if (upstream.statusCode >= 300 && upstream.statusCode < 400 && upstream.headers.location) {
               upstream.resume();
-              return fetch(upstream.headers.location, hops + 1);
+              return fetchUrl(upstream.headers.location, hops + 1);
             }
             if (upstream.statusCode !== 200) {
               upstream.resume();
@@ -204,7 +227,7 @@ class HandoverController {
             upstream.pipe(res);
           }).on('error', next);
         };
-        fetch(url);
+        fetchUrl(targetUrl);
       } else {
         const filePath = path.join(__dirname, '..', url.replace(/^\//, ''));
         const ext = path.extname(filePath).toLowerCase();
