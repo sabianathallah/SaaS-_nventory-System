@@ -49,12 +49,6 @@ function PermissionRoute({ permission, page, children }) {
   return hasPermission(permission) ? children : <NoPermission page={page} />
 }
 
-// Hard redirect — for pages that should be completely invisible to non-admins
-function AdminRoute({ children }) {
-  const { isAdmin } = useAuth()
-  return isAdmin ? children : <Navigate to="/" replace />
-}
-
 function SuperRoute({ children }) {
   const { isSuperAdmin } = useAuth()
   return isSuperAdmin ? children : <Navigate to="/" replace />
@@ -117,8 +111,8 @@ function AppRoutes() {
                 <Route path="/database-links" element={<PageVisibleRoute pageKey="database-links"><PermissionRoute permission="db_link.view" page="Database Links"><DatabaseLinks /></PermissionRoute></PageVisibleRoute>} />
                 <Route path="/laporan"        element={<PageVisibleRoute pageKey="laporan"><PermissionRoute permission="reports.manage" page="Laporan"><Laporan /></PermissionRoute></PageVisibleRoute>} />
 
-                {/* ── Admin only (hard redirect) ── */}
-                <Route path="/users"           element={<AdminRoute><PageVisibleRoute pageKey="users"><Users /></PageVisibleRoute></AdminRoute>} />
+                {/* ── Administrasi ── */}
+                <Route path="/users"           element={<PageVisibleRoute pageKey="users"><PermissionRoute permission="admin.users" page="Pengguna"><Users /></PermissionRoute></PageVisibleRoute>} />
                 <Route path="/companies"       element={<SuperRoute><PageVisibleRoute pageKey="companies"><Companies /></PageVisibleRoute></SuperRoute>} />
                 <Route path="/page-visibility" element={<SuperRoute><PageVisibility /></SuperRoute>} />
               </Routes>

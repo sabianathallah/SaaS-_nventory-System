@@ -46,15 +46,13 @@ const NAV_GROUPS = [
   },
   {
     label: 'Penerimaan Barang Vendor',
-    packingOnly: true,
     items: [
-      { to: '/vendors',        icon: Truck,       label: 'Vendors',      pageKey: 'vendors',          adminOnly: true },
-      { to: '/incoming-goods', icon: PackageOpen, label: 'Barang Masuk', pageKey: 'incoming-goods',   operasionalOnly: true },
+      { to: '/vendors',        icon: Truck,       label: 'Vendors',      pageKey: 'vendors' },
+      { to: '/incoming-goods', icon: PackageOpen, label: 'Barang Masuk', pageKey: 'incoming-goods' },
     ],
   },
   {
     label: 'Packing',
-    packingOnly: true,
     items: [
       { to: '/packing-jobs',      icon: Layers,         label: 'Packing Jobs',      pageKey: 'packing-jobs' },
       { to: '/form-anak-packing', icon: ClipboardCheck, label: 'Form Anak Packing', pageKey: 'form-anak-packing' },
@@ -68,11 +66,10 @@ const NAV_GROUPS = [
   },
   {
     label: 'Administrasi',
-    adminOnly: true,
     items: [
-      { to: '/users',            icon: Users,     label: 'Pengguna',             pageKey: 'users',     adminOnly: true },
-      { to: '/companies',        icon: Building2, label: 'Perusahaan',         pageKey: 'companies', superOnly: true },
-      { to: '/page-visibility',  icon: Eye,       label: 'Visibilitas Halaman',                     superOnly: true },
+      { to: '/users',           icon: Users,     label: 'Pengguna',           pageKey: 'users' },
+      { to: '/companies',       icon: Building2, label: 'Perusahaan',         pageKey: 'companies', superOnly: true },
+      { to: '/page-visibility', icon: Eye,       label: 'Visibilitas Halaman',                     superOnly: true },
     ],
   },
 ]
@@ -89,7 +86,7 @@ const PAGE_TITLES = {
 }
 
 export default function Layout({ children }) {
-  const { user, signOut, isAdmin, isSuperAdmin, isOperasional, isHeadPacking, isStaff, canViewPacking } = useAuth()
+  const { user, signOut, isSuperAdmin } = useAuth()
   const { needsCompany } = useCompanyGuard()
   const { isPageVisible } = usePageVisibility()
   const navigate  = useNavigate()
@@ -135,19 +132,10 @@ export default function Layout({ children }) {
         {/* Nav */}
         <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-5">
           {NAV_GROUPS.map((group) => {
-            if (group.adminOnly && !isAdmin) return null
-            if (group.packingOnly && !canViewPacking) return null
-            if (isStaff && group.adminOnly) return null
-
             const navItems = group.items.reduce((acc, item) => {
-              if (item.adminOnly && !isAdmin) return acc
               if (item.superOnly && !isSuperAdmin) return acc
-              if (item.operasionalOnly && !isOperasional) return acc
-              if (item.headPackingOnly && !isHeadPacking) return acc
-              if (isStaff && !item.staffVisible) return acc
 
               const hidden = !!(item.pageKey && !isPageVisible(item.pageKey))
-              // Non-SUPER_ADMIN: filter out hidden pages entirely
               if (hidden && !isSuperAdmin) return acc
 
               acc.push({ ...item, hidden })
