@@ -185,3 +185,16 @@ export const systemApi = {
 export const reportApi = {
   monthly: (params) => api.get('/reports/monthly', { params }).then(r => r.data),
 }
+
+export const profileApi = {
+  get:            ()           => api.get('/me').then(r => r.data),
+  update:         (data)       => {
+    const fd = new FormData()
+    if (data.name) fd.append('name', data.name)
+    if (data.avatar instanceof File) fd.append('avatar', data.avatar)
+    return api.patch('/me', fd).then(r => r.data)
+  },
+  deleteAvatar:   ()           => api.delete('/me/avatar').then(r => r.data),
+  changePassword: (currentPassword, newPassword) =>
+    api.patch('/me/password', { currentPassword, newPassword }).then(r => r.data),
+}
