@@ -48,8 +48,10 @@ module.exports = {
       // Insert role if not exists for this company
       await queryInterface.sequelize.query(`
         INSERT INTO "Roles" (name, "displayName", "isSystem", "companyId", "createdAt", "updatedAt")
-        VALUES (:name, :displayName, false, :companyId, :now, :now)
-        ON CONFLICT DO NOTHING
+        SELECT :name, :displayName, false, :companyId, :now, :now
+        WHERE NOT EXISTS (
+          SELECT 1 FROM "Roles" WHERE name = :name AND "companyId" = :companyId
+        )
       `, { replacements: { ...r, companyId, now } });
 
       // Get role id
@@ -67,8 +69,10 @@ module.exports = {
       for (const key of perms) {
         await queryInterface.sequelize.query(`
           INSERT INTO "RolePermissions" ("roleId", "permissionKey", "createdAt", "updatedAt")
-          VALUES (:roleId, :key, :now, :now)
-          ON CONFLICT DO NOTHING
+          SELECT :roleId, :key, :now, :now
+          WHERE NOT EXISTS (
+            SELECT 1 FROM "RolePermissions" WHERE "roleId" = :roleId AND "permissionKey" = :key
+          )
         `, { replacements: { roleId: role.id, key, now } });
       }
     }
@@ -90,8 +94,8 @@ module.exports = {
     for (const u of users) {
       await queryInterface.sequelize.query(`
         INSERT INTO "Users" (name, email, password, role, "companyId", "isActive", "createdAt", "updatedAt")
-        VALUES (:name, :email, :password, :role, :companyId, true, :now, :now)
-        ON CONFLICT (email) DO NOTHING
+        SELECT :name, :email, :password, :role, :companyId, true, :now, :now
+        WHERE NOT EXISTS (SELECT 1 FROM "Users" WHERE email = :email)
       `, { replacements: { ...u, password: hash(PASSWORD), companyId: u.companyId, now } });
     }
   },
