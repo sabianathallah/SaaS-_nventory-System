@@ -9,7 +9,7 @@ import toast from 'react-hot-toast'
 import {
   ArrowLeft, PackageCheck, ScanLine, Camera, Trash2, Printer,
   Plus, X, Package, Lock, Unlock, ScanBarcode, FileEdit,
-  Paperclip, FileText, ImageIcon, ExternalLink,
+  Paperclip, FileText, ImageIcon,
 } from 'lucide-react'
 import logoPreface from '../assets/logo-preface.jpeg'
 
@@ -45,8 +45,10 @@ export default function HandoverDetail() {
   const [showCamera, setShowCamera] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(null)
   const [scannerConnected, setScannerConnected] = useState(false)
-  const [confirmClose, setConfirmClose] = useState(false)
+  const [confirmClose, setConfirmClose]     = useState(false)
   const [attachUploading, setAttachUploading] = useState(false)
+  const [attachBlobUrl, setAttachBlobUrl]   = useState(null)
+  const [attachMime, setAttachMime]         = useState(null)
   const scanInputRef   = useRef(null)
   const attachInputRef = useRef(null)
 
@@ -77,6 +79,24 @@ export default function HandoverDetail() {
     }, [isNew, handover, isClosed]),
     !isNew && !showCamera && scannerConnected,
   )
+
+  // Load attachment as blob so it renders inline without direct Cloudinary access
+  useEffect(() => {
+    if (!handover?.attachment_url) {
+      setAttachBlobUrl(null)
+      setAttachMime(null)
+      return
+    }
+    let objectUrl = null
+    handoverApi.fetchAttachmentBlob(id)
+      .then(blob => {
+        objectUrl = URL.createObjectURL(blob)
+        setAttachBlobUrl(objectUrl)
+        setAttachMime(blob.type)
+      })
+      .catch(() => {})
+    return () => { if (objectUrl) URL.revokeObjectURL(objectUrl) }
+  }, [handover?.attachment_url, id])
 
   // ── Mutations ──────────────────────────────────────────────────────────────
   const createMutation = useMutation({
@@ -182,6 +202,7 @@ export default function HandoverDetail() {
     const file = e.target.files?.[0]
     if (!file) return
     setAttachUploading(true)
+    if (attachBlobUrl) { URL.revokeObjectURL(attachBlobUrl); setAttachBlobUrl(null) }
     try {
       const h = await handoverApi.uploadAttachment(id, file)
       qc.setQueryData(['handover', id], h)
@@ -192,13 +213,6 @@ export default function HandoverDetail() {
       setAttachUploading(false)
       e.target.value = ''
     }
-  }
-
-  function resolveAttachmentUrl(url) {
-    if (!url) return null
-    if (url.startsWith('http')) return url
-    const base = (import.meta.env.VITE_API_URL || '').replace(/\/api$/, '')
-    return base + url
   }
 
   // ── Create form ────────────────────────────────────────────────────────────
@@ -489,42 +503,67 @@ export default function HandoverDetail() {
           </div>
 
           {handover.attachment_url ? (
-            <div className="flex items-center gap-3 p-3 rounded-lg bg-slate-50 border border-slate-200">
-              {handover.attachment_url.endsWith('.pdf') || handover.attachment_url.includes('/raw/')
-                ? <FileText size={20} className="text-red-500 shrink-0" />
-                : <ImageIcon size={20} className="text-blue-500 shrink-0" />
-              }
-              <span className="text-sm text-slate-700 truncate flex-1 font-medium">
-                {handover.attachment_url.split('/').pop()}
-              </span>
-              <a
-                href={resolveAttachmentUrl(handover.attachment_url)}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="p-1.5 rounded text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
-                title="Buka lampiran"
-              >
-                <ExternalLink size={14} />
-              </a>
-              <button
-                type="button"
-                onClick={() => {
-                  if (window.confirm('Hapus lampiran ini?')) deleteAttachmentMutation.mutate()
-                }}
-                disabled={deleteAttachmentMutation.isPending}
-                className="p-1.5 rounded text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"
-                title="Hapus lampiran"
-              >
-                <Trash2 size={14} />
-              </button>
-              <button
-                type="button"
-                onClick={() => attachInputRef.current?.click()}
-                disabled={attachUploading}
-                className="text-xs text-slate-400 hover:text-slate-600 underline shrink-0"
-              >
-                Ganti
-              </button>
+            <div className="space-y-2">
+              {/* Toolbar */}
+              <div className="flex items-center gap-2">
+                {attachMime?.startsWith('image/') ? (
+                  <ImageIcon size={15} className="text-blue-500 shrink-0" />
+                ) : (
+                  <FileText size={15} className="text-red-500 shrink-0" />
+                )}
+                <span className="text-xs text-slate-500 truncate flex-1">
+                  {handover.attachment_url.split('/').pop().split('?')[0]}
+                </span>
+                {attachBlobUrl && (
+                  <a
+                    href={attachBlobUrl}
+                    download
+                    className="text-xs text-slate-400 hover:text-blue-600 underline shrink-0"
+                  >
+                    Download
+                  </a>
+                )}
+                <button
+                  type="button"
+                  onClick={() => attachInputRef.current?.click()}
+                  disabled={attachUploading}
+                  className="text-xs text-slate-400 hover:text-slate-600 underline shrink-0"
+                >
+                  Ganti
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (window.confirm('Hapus lampiran ini?')) deleteAttachmentMutation.mutate()
+                  }}
+                  disabled={deleteAttachmentMutation.isPending}
+                  className="p-1 rounded text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                >
+                  <Trash2 size={13} />
+                </button>
+              </div>
+
+              {/* Inline preview */}
+              {!attachBlobUrl && (
+                <div className="h-24 rounded-lg bg-slate-100 flex items-center justify-center text-xs text-slate-400 animate-pulse">
+                  Memuat lampiran…
+                </div>
+              )}
+              {attachBlobUrl && attachMime?.startsWith('image/') && (
+                <img
+                  src={attachBlobUrl}
+                  alt="Lampiran"
+                  className="w-full max-h-72 object-contain rounded-lg border border-slate-200 bg-slate-50"
+                />
+              )}
+              {attachBlobUrl && attachMime === 'application/pdf' && (
+                <embed
+                  src={attachBlobUrl}
+                  type="application/pdf"
+                  className="w-full rounded-lg border border-slate-200"
+                  style={{ height: '420px' }}
+                />
+              )}
             </div>
           ) : (
             <p className="text-xs text-slate-400">

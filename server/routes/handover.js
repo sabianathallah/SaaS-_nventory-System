@@ -20,6 +20,7 @@ router.patch('/:id/close',             canCreate, ctrl.closeSession);
 router.patch('/:id/reopen',            canCreate, ctrl.reopenSession);
 router.post('/:id/items',              canCreate, ctrl.addResi);
 router.delete('/:id/items/:itemId',    canCreate, ctrl.removeResi);
+router.get('/:id/attachment',          canView,   ctrl.serveAttachment);
 router.post('/:id/attachment',         canCreate, attachUpload, ctrl.uploadAttachment);
 router.delete('/:id/attachment',       canCreate, ctrl.deleteAttachment);
 

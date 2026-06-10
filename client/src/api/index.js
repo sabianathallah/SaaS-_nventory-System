@@ -157,6 +157,8 @@ export const handoverApi = {
     return api.post(`/handovers/${id}/attachment`, fd).then(r => r.data)
   },
   deleteAttachment: (id) => api.delete(`/handovers/${id}/attachment`).then(r => r.data),
+  fetchAttachmentBlob: (id) =>
+    api.get(`/handovers/${id}/attachment`, { responseType: 'blob' }).then(r => r.data),
 }
 
 export const vendorDeliveriesApi = {

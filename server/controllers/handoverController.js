@@ -1,7 +1,19 @@
 'use strict';
+const https = require('https');
+const http  = require('http');
+const path  = require('path');
+const fs    = require('fs');
 const { Handover, Handover_Item, User } = require('../models');
 const { companyFilter, companyId } = require('../helpers/tenancy');
 const { destroyHandoverAttachment } = require('../helpers/cloudinary');
+
+const MIME = {
+  '.pdf':  'application/pdf',
+  '.jpg':  'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.png':  'image/png',
+  '.webp': 'image/webp',
+};
 
 const ITEM_ORDER = [['scannedAt', 'ASC'], ['id', 'ASC']];
 
@@ -160,6 +172,34 @@ class HandoverController {
       if (!item) throw { name: 'NotFound', message: 'Item tidak ditemukan' };
       await item.destroy();
       res.json({ message: 'Resi dihapus' });
+    } catch (err) { next(err); }
+  }
+
+  static async serveAttachment(req, res, next) {
+    try {
+      const h = await Handover.findOne({ where: { id: req.params.id, ...companyFilter(req) } });
+      if (!h) throw { name: 'NotFound', message: 'Handover tidak ditemukan' };
+      if (!h.attachment_url) throw { name: 'NotFound', message: 'Tidak ada lampiran' };
+
+      const url = h.attachment_url;
+
+      if (url.startsWith('http')) {
+        const client = url.startsWith('https') ? https : http;
+        client.get(url, (upstream) => {
+          const ct = upstream.headers['content-type'] || 'application/octet-stream';
+          res.set('Content-Type', ct);
+          res.set('Content-Disposition', 'inline');
+          res.set('Cache-Control', 'private, max-age=3600');
+          upstream.pipe(res);
+        }).on('error', next);
+      } else {
+        const filePath = path.join(__dirname, '..', url.replace(/^\//, ''));
+        const ext = path.extname(filePath).toLowerCase();
+        res.set('Content-Type', MIME[ext] || 'application/octet-stream');
+        res.set('Content-Disposition', 'inline');
+        res.set('Cache-Control', 'private, max-age=3600');
+        fs.createReadStream(filePath).pipe(res);
+      }
     } catch (err) { next(err); }
   }
 
