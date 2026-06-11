@@ -243,6 +243,7 @@ export default function Dashboard() {
   const { data: movements } = useQuery({
     queryKey: ['movements', { limit: 10 }],
     queryFn:  () => movementsApi.list({ limit: 10 }),
+    enabled:  canViewMovements,
   })
 
   const {
