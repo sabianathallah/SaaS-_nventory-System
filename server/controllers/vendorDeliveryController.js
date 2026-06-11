@@ -1,7 +1,7 @@
 'use strict';
 const { VendorDelivery, VendorDeliveryItem, Vendor, User, Product, ProductSKU, ProductVariantOption, ProductVariantType } = require('../models');
 const { destroyByUrl } = require('../helpers/cloudinary');
-const { companyFilter } = require('../helpers/tenancy');
+const { companyFilter, companyId: getCompanyId } = require('../helpers/tenancy');
 
 const SKU_INCLUDE = {
   model: ProductSKU, as: 'ProductSKU', attributes: ['id', 'sku_code'],
@@ -63,18 +63,18 @@ exports.get = async (req, res, next) => {
 exports.create = async (req, res, next) => {
   try {
     const { vendorId, date, sjNumber, videoLink, notes } = req.body;
-    const sjPhoto = req.file?.path ?? null;
+    const newPhotos = (req.files ?? []).map(f => f.path);
     if (!vendorId) return res.status(400).json({ message: 'Vendor wajib dipilih' });
     if (!date)     return res.status(400).json({ message: 'Tanggal wajib diisi' });
     const row = await VendorDelivery.create({
       vendorId,
       date,
-      sjNumber: sjNumber?.trim() || null,
-      sjPhoto,
+      sjNumber:  sjNumber?.trim()  || null,
+      sjPhotos:  newPhotos.length > 0 ? newPhotos : null,
       videoLink: videoLink?.trim() || null,
       notes:     notes?.trim()     || null,
       createdBy: req.user.id,
-      companyId: req.user.companyId ?? null,
+      companyId: getCompanyId(req),
     });
     const result = await VendorDelivery.findByPk(row.id, { include: HEADER_INCLUDE });
     res.status(201).json({ data: result });
@@ -85,14 +85,18 @@ exports.update = async (req, res, next) => {
   try {
     const row = await VendorDelivery.findOne({ where: { id: req.params.id, ...companyFilter(req) } });
     if (!row) return res.status(404).json({ message: 'Barang masuk tidak ditemukan' });
-    const { vendorId, date, sjNumber, videoLink, notes } = req.body;
-    const newPhoto = req.file?.path ?? null;
-    if (newPhoto && row.sjPhoto) await destroyByUrl(row.sjPhoto).catch(() => {});
+    const { vendorId, date, sjNumber, videoLink, notes, keepPhotos } = req.body;
+    const newPhotos  = (req.files ?? []).map(f => f.path);
+    const kept       = keepPhotos ? JSON.parse(keepPhotos) : (row.sjPhotos ?? []);
+    const current    = row.sjPhotos ?? [];
+    const removed    = current.filter(url => !kept.includes(url));
+    for (const url of removed) await destroyByUrl(url).catch(() => {});
+    const sjPhotos   = [...kept, ...newPhotos];
     await row.update({
       vendorId:  vendorId  ?? row.vendorId,
       date:      date      ?? row.date,
       sjNumber:  sjNumber  !== undefined ? (sjNumber?.trim()  || null) : row.sjNumber,
-      sjPhoto:   newPhoto  ?? row.sjPhoto,
+      sjPhotos:  sjPhotos.length > 0 ? sjPhotos : null,
       videoLink: videoLink !== undefined ? (videoLink?.trim() || null) : row.videoLink,
       notes:     notes     !== undefined ? (notes?.trim()     || null) : row.notes,
     });
@@ -105,7 +109,7 @@ exports.destroy = async (req, res, next) => {
   try {
     const row = await VendorDelivery.findOne({ where: { id: req.params.id, ...companyFilter(req) } });
     if (!row) return res.status(404).json({ message: 'Barang masuk tidak ditemukan' });
-    if (row.sjPhoto) await destroyByUrl(row.sjPhoto).catch(() => {});
+    for (const url of row.sjPhotos ?? []) await destroyByUrl(url).catch(() => {});
     await row.destroy();
     res.json({ message: 'Barang masuk dihapus' });
   } catch (err) { next(err); }

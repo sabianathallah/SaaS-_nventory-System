@@ -12,7 +12,7 @@ module.exports = (sequelize, DataTypes) => {
     vendorId:  { type: DataTypes.INTEGER, allowNull: false },
     date:      { type: DataTypes.DATEONLY, allowNull: false },
     sjNumber:  { type: DataTypes.STRING, allowNull: true },
-    sjPhoto:   { type: DataTypes.TEXT, allowNull: true },
+    sjPhotos:  { type: DataTypes.JSON,   allowNull: true },
     videoLink: { type: DataTypes.TEXT, allowNull: true },
     notes:     { type: DataTypes.TEXT, allowNull: true },
     createdBy: { type: DataTypes.INTEGER, allowNull: false },

@@ -3,11 +3,11 @@ const express = require('express');
 const router  = express.Router();
 const ctrl    = require('../controllers/vendorDeliveryController');
 const { requireAnyPermission: rpAny } = require('../middlewares/requirePermission');
-const { uploadSingle } = require('../helpers/cloudinary');
+const { uploadArray } = require('../helpers/cloudinary');
 
 const canView   = rpAny('packing.manage', 'packing.incoming', 'packing.view');
 const canManage = rpAny('packing.manage', 'packing.incoming');
-const uploadSJ  = uploadSingle('sjPhoto', 'saas-inventory/surat-jalan');
+const uploadSJ  = uploadArray('sjPhotoFiles', 8, 'saas-inventory/surat-jalan');
 
 router.get('/',    canView,             ctrl.list);
 router.post('/',   canManage, uploadSJ, ctrl.create);

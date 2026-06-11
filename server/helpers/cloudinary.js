@@ -63,6 +63,19 @@ function uploadSingle(field, folder = 'saas-inventory/products') {
   };
 }
 
+function uploadArray(field, maxCount, folder = 'saas-inventory/products') {
+  const arrayUpload = createUpload(folder);
+  return (req, res, next) => {
+    if (!isConfigured && req.is('multipart/form-data')) {
+      return res.status(500).json({
+        message: 'Upload gambar belum dikonfigurasi di server (CLOUDINARY_* env vars kosong).',
+      });
+    }
+    if (!req.is('multipart/form-data')) return next();
+    arrayUpload.array(field, maxCount)(req, res, next);
+  };
+}
+
 // Handover attachment upload — supports PDF + images.
 // Falls back to local disk storage when Cloudinary is not configured.
 const path = require('path');
@@ -115,4 +128,4 @@ async function destroyHandoverAttachment(url) {
   }
 }
 
-module.exports = { cloudinary, upload, uploadSingle, destroyByUrl, isConfigured, uploadHandoverAttachment, destroyHandoverAttachment };
+module.exports = { cloudinary, upload, uploadSingle, uploadArray, destroyByUrl, isConfigured, uploadHandoverAttachment, destroyHandoverAttachment };

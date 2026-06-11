@@ -197,23 +197,24 @@ export default function IncomingGoodsDetail() {
   const isNew = id === 'new'
 
   const fileInputRef = useRef(null)
+  const dragIdx      = useRef(null)
 
   // Header form state
-  const [vendorId,   setVendorId]   = useState('')
-  const [date,       setDate]       = useState(new Date().toISOString().slice(0, 10))
-  const [sjNumber,   setSjNumber]   = useState('')
-  const [sjPhotoFile, setSjPhotoFile] = useState(null)
-  const [sjPhotoPreview, setSjPhotoPreview] = useState(null)
-  const [videoLink,  setVideoLink]  = useState('')
-  const [notes,      setNotes]      = useState('')
-  const [items,      setItems]      = useState([])
+  const [vendorId,  setVendorId]  = useState('')
+  const [date,      setDate]      = useState(new Date().toISOString().slice(0, 10))
+  const [sjNumber,  setSjNumber]  = useState('')
+  const [videoLink, setVideoLink] = useState('')
+  const [notes,     setNotes]     = useState('')
+  const [items,     setItems]     = useState([])
+  // photos: { type:'existing', url:string } | { type:'new', file:File, preview:string }
+  const [photos, setPhotos] = useState([])
 
   const { data: vendors } = useQuery({ queryKey: ['vendors', { limit: 200 }], queryFn: () => vendorsApi.list({ limit: 200 }) })
 
   const { data: existing, isLoading } = useQuery({
     queryKey: ['vendor-delivery', id],
     queryFn:  () => vendorDeliveriesApi.get(id),
-    enabled:  !isNew,
+    enabled:  !isNew && !!id,
   })
 
   useEffect(() => {
@@ -222,30 +223,55 @@ export default function IncomingGoodsDetail() {
     setVendorId(String(d.vendorId))
     setDate(d.date)
     setSjNumber(d.sjNumber ?? '')
-    setSjPhotoPreview(d.sjPhoto ?? null)
     setVideoLink(d.videoLink ?? '')
     setNotes(d.notes ?? '')
     setItems(d.items ?? [])
+    setPhotos((d.sjPhotos ?? []).map(url => ({ type: 'existing', url })))
   }, [existing])
 
-  function handlePhotoChange(e) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    setSjPhotoFile(file)
-    setSjPhotoPreview(URL.createObjectURL(file))
-  }
+  const MAX_PHOTOS = 8
 
-  function clearPhoto() {
-    setSjPhotoFile(null)
-    setSjPhotoPreview(null)
+  function handlePhotoAdd(e) {
+    const files = Array.from(e.target.files ?? [])
+    if (!files.length) return
+    const remaining = MAX_PHOTOS - photos.length
+    const toAdd = files.slice(0, remaining).map(file => ({
+      type: 'new', file, preview: URL.createObjectURL(file),
+    }))
+    setPhotos(prev => [...prev, ...toAdd])
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
+
+  function removePhoto(idx) {
+    setPhotos(prev => {
+      const p = prev[idx]
+      if (p.type === 'new') URL.revokeObjectURL(p.preview)
+      return prev.filter((_, i) => i !== idx)
+    })
+  }
+
+  // drag & drop reorder
+  function onDragStart(idx) { dragIdx.current = idx }
+  function onDragOver(e, idx) {
+    e.preventDefault()
+    if (dragIdx.current === null || dragIdx.current === idx) return
+    setPhotos(prev => {
+      const next = [...prev]
+      const [moved] = next.splice(dragIdx.current, 1)
+      next.splice(idx, 0, moved)
+      dragIdx.current = idx
+      return next
+    })
+  }
+  function onDragEnd() { dragIdx.current = null }
 
   const createDelivery = useMutation({
     mutationFn: (d) => vendorDeliveriesApi.create(d),
     onSuccess: (res) => {
+      const newId = res?.data?.id
+      if (!newId) { toast.error('Gagal mendapatkan ID barang masuk'); return }
       toast.success('Barang masuk disimpan')
-      navigate(`/incoming-goods/${res.data.id}`, { replace: true })
+      navigate(`/incoming-goods/${newId}`, { replace: true })
     },
     onError: e => toast.error(e.response?.data?.message || 'Error'),
   })
@@ -259,14 +285,29 @@ export default function IncomingGoodsDetail() {
   function handleSaveHeader(e) {
     e.preventDefault()
     if (!vendorId) return toast.error('Vendor wajib dipilih')
-    const payload = {
-      vendorId,
-      date,
-      sjNumber: sjNumber.trim() || null,
-      videoLink: videoLink.trim() || null,
-      notes:     notes.trim() || null,
+    const newFiles   = photos.filter(p => p.type === 'new').map(p => p.file)
+    const keepPhotos = photos.filter(p => p.type === 'existing').map(p => p.url)
+    const hasFiles   = newFiles.length > 0
+    let payload
+    if (hasFiles) {
+      const fd = new FormData()
+      fd.append('vendorId',   vendorId)
+      fd.append('date',       date)
+      fd.append('sjNumber',   sjNumber.trim() || '')
+      fd.append('videoLink',  videoLink.trim() || '')
+      fd.append('notes',      notes.trim() || '')
+      fd.append('keepPhotos', JSON.stringify(keepPhotos))
+      newFiles.forEach(f => fd.append('sjPhotoFiles', f))
+      payload = fd
+    } else {
+      payload = {
+        vendorId, date,
+        sjNumber:   sjNumber.trim()   || null,
+        videoLink:  videoLink.trim()  || null,
+        notes:      notes.trim()      || null,
+        keepPhotos: JSON.stringify(keepPhotos),
+      }
     }
-    if (sjPhotoFile) payload.sjPhoto = sjPhotoFile
     if (isNew) createDelivery.mutate(payload)
     else updateDelivery.mutate(payload)
   }
@@ -315,42 +356,75 @@ export default function IncomingGoodsDetail() {
           </div>
         </div>
 
-        {/* SJ Photo */}
+        {/* SJ Photos */}
         {canManage && (
           <div>
-            <label className="label">Foto Surat Jalan (opsional)</label>
-            <div className="flex items-start gap-3">
-              {sjPhotoPreview ? (
-                <div className="relative group">
-                  <img src={sjPhotoPreview} alt="SJ" className="w-24 h-24 object-cover rounded-xl border border-slate-200" />
-                  <button type="button" onClick={clearPhoto}
-                    className="absolute -top-1.5 -right-1.5 bg-white border border-slate-200 rounded-full p-0.5 text-slate-400 hover:text-red-500 shadow-sm">
+            <label className="label">
+              Foto Surat Jalan (opsional)
+              <span className="ml-2 text-[10px] font-normal text-slate-400 normal-case tracking-normal">
+                {photos.length}/{MAX_PHOTOS} foto · drag untuk urut ulang
+              </span>
+            </label>
+            <div className="flex flex-wrap gap-3 mt-1">
+              {photos.map((p, idx) => (
+                <div
+                  key={idx}
+                  draggable
+                  onDragStart={() => onDragStart(idx)}
+                  onDragOver={e => onDragOver(e, idx)}
+                  onDragEnd={onDragEnd}
+                  className="relative group cursor-grab active:cursor-grabbing"
+                >
+                  <img
+                    src={p.type === 'existing' ? p.url : p.preview}
+                    alt={`SJ ${idx + 1}`}
+                    className="w-24 h-24 object-cover rounded-xl border border-slate-200 select-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removePhoto(idx)}
+                    className="absolute -top-1.5 -right-1.5 bg-white border border-slate-200 rounded-full p-0.5 text-slate-400 hover:text-red-500 shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
                     <X size={12} />
                   </button>
+                  <span className="absolute bottom-1 left-1 bg-black/40 text-white text-[9px] px-1 rounded leading-none py-0.5">
+                    {idx + 1}
+                  </span>
                 </div>
-              ) : (
-                <button type="button" onClick={() => fileInputRef.current?.click()}
-                  className="flex flex-col items-center justify-center w-24 h-24 border-2 border-dashed border-slate-200 rounded-xl text-slate-400 hover:border-brand hover:text-brand transition-colors gap-1">
+              ))}
+
+              {photos.length < MAX_PHOTOS && (
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="flex flex-col items-center justify-center w-24 h-24 border-2 border-dashed border-slate-200 rounded-xl text-slate-400 hover:border-brand hover:text-brand transition-colors gap-1"
+                >
                   <Upload size={18} />
-                  <span className="text-[10px]">Upload</span>
+                  <span className="text-[10px]">Tambah</span>
                 </button>
               )}
-              <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoChange} />
-              {sjPhotoPreview && !sjPhotoFile && (
-                <button type="button" onClick={() => fileInputRef.current?.click()}
-                  className="text-xs text-brand hover:underline self-end mb-1">Ganti foto</button>
-              )}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={handlePhotoAdd}
+              />
             </div>
           </div>
         )}
 
         {/* Read-only photo display for non-managers */}
-        {!canManage && sjPhotoPreview && (
-          <div className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 border border-slate-100">
-            <img src={sjPhotoPreview} alt="SJ" className="w-16 h-16 object-cover rounded-lg border border-slate-200" />
-            <div>
-              <p className="text-xs font-semibold text-slate-600">Foto Surat Jalan</p>
-              {sjNumber && <p className="text-[11px] text-slate-400">{sjNumber}</p>}
+        {!canManage && photos.length > 0 && (
+          <div>
+            <p className="text-xs font-semibold text-slate-600 mb-2">Foto Surat Jalan</p>
+            <div className="flex flex-wrap gap-2">
+              {photos.map((p, idx) => (
+                <a key={idx} href={p.url} target="_blank" rel="noopener noreferrer">
+                  <img src={p.url} alt={`SJ ${idx + 1}`} className="w-16 h-16 object-cover rounded-lg border border-slate-200 hover:opacity-80 transition-opacity" />
+                </a>
+              ))}
             </div>
           </div>
         )}

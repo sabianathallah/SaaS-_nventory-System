@@ -16,6 +16,7 @@ const crud   = (url) => ({ list: list(url), get: get(url), create: create(url), 
 // Content-Type automatically when given a FormData instance.
 const toPayload = (data) => {
   if (!data || typeof data !== 'object') return data
+  if (data instanceof FormData) return data
   const hasFile = Object.values(data).some(value => value instanceof File)
   if (!hasFile) return data
   const fd = new FormData()
