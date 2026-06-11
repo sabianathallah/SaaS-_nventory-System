@@ -87,8 +87,8 @@ function AppRoutes() {
 
                 {/* ── Katalog & Inventori ── */}
                 <Route path="/catalog"                    element={<PageVisibleRoute pageKey="catalog"><PermissionRoute permission="inventory.manage" page="Kategori & Koleksi"><Catalog /></PermissionRoute></PageVisibleRoute>} />
-                <Route path="/warehouses"                 element={<PageVisibleRoute pageKey="warehouses"><PermissionRoute permission="inventory.manage" page="Gudang"><Warehouses /></PermissionRoute></PageVisibleRoute>} />
-                <Route path="/warehouses/:id/products"   element={<PageVisibleRoute pageKey="warehouses"><PermissionRoute permission="inventory.manage" page="Gudang"><WarehouseProducts /></PermissionRoute></PageVisibleRoute>} />
+                <Route path="/warehouses"                 element={<PageVisibleRoute pageKey="warehouses"><PermissionRoute permission="inventory.view" page="Gudang"><Warehouses /></PermissionRoute></PageVisibleRoute>} />
+                <Route path="/warehouses/:id/products"   element={<PageVisibleRoute pageKey="warehouses"><PermissionRoute permission="inventory.view" page="Gudang"><WarehouseProducts /></PermissionRoute></PageVisibleRoute>} />
                 <Route path="/suppliers"                  element={<PageVisibleRoute pageKey="suppliers"><PermissionRoute permission="inventory.manage" page="Vendor"><Suppliers /></PermissionRoute></PageVisibleRoute>} />
 
                 {/* ── Transaksi Stok ── */}

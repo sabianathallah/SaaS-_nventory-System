@@ -7,7 +7,7 @@ import toast from 'react-hot-toast'
 import QrModal from '../components/QrModal'
 import {
   ArrowLeft, Trash2, ChevronRight, ImageIcon, Loader2,
-  Hash, Layers, Pencil, QrCode, Package, Tag, Plus,
+  Hash, Layers, Pencil, QrCode, Package, Tag, Plus, X,
 } from 'lucide-react'
 
 // ── SKU Table read-only ───────────────────────────────────────────────────────
@@ -145,6 +145,7 @@ export default function ProductDetail() {
   const { hasPermission } = useAuth()
   const canEdit   = hasPermission('inventory.product.edit')   || hasPermission('inventory.manage')
   const canDelete = hasPermission('inventory.product.delete') || hasPermission('inventory.manage')
+  const [lightbox, setLightbox] = useState(null)
 
   const { data: product, isLoading } = useQuery({
     queryKey: ['product', id],
@@ -180,6 +181,7 @@ export default function ProductDetail() {
   const skus       = product.ProductSKUs ?? []
 
   return (
+    <>
     <div className="min-h-screen bg-canvas">
       {/* ── Sticky Header ──────────────────────────────────────────── */}
       <div className="sticky top-0 z-20 bg-white border-b border-slate-200 shadow-sm">
@@ -224,7 +226,11 @@ export default function ProductDetail() {
         <div className="card px-6 py-6">
           <div className="flex gap-6">
             {/* Photo */}
-            <div className="w-40 h-40 rounded-2xl overflow-hidden border border-slate-200 bg-slate-50 flex-shrink-0">
+            <div
+              className="w-40 h-40 rounded-2xl overflow-hidden border border-slate-200 bg-slate-50 flex-shrink-0"
+              style={product.imageUrl ? { cursor: 'zoom-in' } : {}}
+              onClick={() => product.imageUrl && setLightbox(product.imageUrl)}
+            >
               {product.imageUrl ? (
                 <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover" />
               ) : (
@@ -320,5 +326,43 @@ export default function ProductDetail() {
 
       </div>
     </div>
+
+    {/* Lightbox */}
+    {lightbox && (
+      <div
+        onClick={() => setLightbox(null)}
+        style={{
+          position: 'fixed', inset: 0, zIndex: 1000,
+          background: 'rgba(0,0,0,0.85)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          cursor: 'zoom-out',
+        }}
+      >
+        <button
+          onClick={() => setLightbox(null)}
+          style={{
+            position: 'absolute', top: 16, right: 16,
+            background: 'rgba(255,255,255,0.15)', border: 'none',
+            borderRadius: '50%', width: 36, height: 36,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            cursor: 'pointer', color: '#fff',
+          }}
+        >
+          <X size={18} />
+        </button>
+        <img
+          src={lightbox}
+          alt="Preview"
+          onClick={e => e.stopPropagation()}
+          style={{
+            maxWidth: '90vw', maxHeight: '90vh',
+            objectFit: 'contain', borderRadius: 8,
+            boxShadow: '0 8px 40px rgba(0,0,0,0.5)',
+            cursor: 'default',
+          }}
+        />
+      </div>
+    )}
+    </>
   )
 }

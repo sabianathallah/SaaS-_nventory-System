@@ -10,11 +10,14 @@ import toast from 'react-hot-toast'
 import { Plus, Pencil, Trash2, Package } from 'lucide-react'
 import { useCompanyGuard } from '../hooks/useCompanyGuard'
 import CompanyRequiredBanner from '../components/CompanyRequiredBanner'
+import { useAuth } from '../context/AuthContext'
 
 export default function Warehouses() {
   const qc       = useQueryClient()
   const navigate = useNavigate()
   const { needsCompany } = useCompanyGuard()
+  const { hasPermission } = useAuth()
+  const canManage = hasPermission('inventory.manage')
   const [searchParams, setSearchParams] = useSearchParams()
   const page  = Number(searchParams.get('page')  || '1')
   const limit = Number(searchParams.get('limit') || '10')
@@ -59,8 +62,8 @@ export default function Warehouses() {
         >
           <Package size={12} /> Produk
         </button>
-        <button onClick={() => { setForm({ name: r.name, location: r.location }); setModal({ mode: 'edit', data: r }) }} className="p-1.5 rounded text-slate-400 btn-edit transition-colors"><Pencil size={13} /></button>
-        <button onClick={() => setModal({ mode: 'delete', data: r })} className="p-1.5 rounded text-slate-400 hover:text-danger hover:bg-danger-light transition-colors"><Trash2 size={13} /></button>
+        {canManage && <button onClick={() => { setForm({ name: r.name, location: r.location }); setModal({ mode: 'edit', data: r }) }} className="p-1.5 rounded text-slate-400 btn-edit transition-colors"><Pencil size={13} /></button>}
+        {canManage && <button onClick={() => setModal({ mode: 'delete', data: r })} className="p-1.5 rounded text-slate-400 hover:text-danger hover:bg-danger-light transition-colors"><Trash2 size={13} /></button>}
       </div>
     )},
   ]
@@ -68,7 +71,7 @@ export default function Warehouses() {
   return (
     <div className="px-6 py-6">
       <PageHeader title="Gudang" subtitle={`${data?.pagination?.total ?? 0} gudang`}
-        action={
+        action={canManage && (
           <button
             onClick={() => {
               if (needsCompany) return toast.error('Pilih perusahaan terlebih dahulu')
@@ -78,7 +81,7 @@ export default function Warehouses() {
           >
             <Plus size={14} />Gudang Baru
           </button>
-        }
+        )}
       />
       {needsCompany && <div className="mb-4"><CompanyRequiredBanner action="menambah gudang" /></div>}
       <div className="card overflow-hidden">
