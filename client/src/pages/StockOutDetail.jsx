@@ -275,21 +275,26 @@ export default function StockOutDetail() {
     enabled:  !!form.warehouseId && isNew,
   })
 
+  const draftQueryKey = draftIdParam ? ['stock-out-draft', draftIdParam] : ['stock-out-draft']
+
   const addItemMutation = useMutation({
     mutationFn: (data) => stockOutDraftApi.addItem(draftId, data),
-    onSuccess:  ()     => qc.invalidateQueries({ queryKey: ['stock-out-draft'] }),
-    onError:    e      => toast.error(e.response?.data?.message || 'Error'),
+    // Gunakan setQueryData (bukan invalidateQueries) agar tidak ada refetch —
+    // refetch menyebabkan re-render yang bisa menggeser focus keluar halaman,
+    // sehingga scan berikutnya masuk ke DevTools console bukan ke page.
+    onSuccess: (updatedDraft) => qc.setQueryData(draftQueryKey, updatedDraft),
+    onError:   e => toast.error(e.response?.data?.message || 'Error'),
   })
 
   const removeItemMutation = useMutation({
     mutationFn: (itemId) => stockOutDraftApi.removeItem(draftId, itemId),
-    onSuccess:  ()       => qc.invalidateQueries({ queryKey: ['stock-out-draft'] }),
+    onSuccess:  ()       => qc.invalidateQueries({ queryKey: draftQueryKey }),
     onError:    e        => toast.error(e.response?.data?.message || 'Error'),
   })
 
   const updateItemQtyMutation = useMutation({
     mutationFn: ({ itemId, quantity }) => stockOutDraftApi.updateItem(draftId, itemId, { quantity }),
-    onSuccess:  ()                      => qc.invalidateQueries({ queryKey: ['stock-out-draft'] }),
+    onSuccess:  ()                      => qc.invalidateQueries({ queryKey: draftQueryKey }),
   })
 
   const createMutation = useMutation({
@@ -346,6 +351,8 @@ export default function StockOutDetail() {
     } catch {
       toast.error(`SKU "${code}" tidak ditemukan`)
     }
+    // Kembalikan focus ke halaman agar scan berikutnya tidak jatuh ke DevTools console
+    document.body.focus()
   }
 
   useExternalScanner(handleScan, isNew && scannerConnected && canScanOut)
