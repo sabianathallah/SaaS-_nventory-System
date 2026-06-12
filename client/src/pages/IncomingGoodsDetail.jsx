@@ -7,8 +7,9 @@ import SearchableSelect from '../components/SearchableSelect'
 import toast from 'react-hot-toast'
 import {
   ArrowLeft, Save, Plus, Trash2, Video,
-  AlertTriangle, Check, Upload, X,
+  AlertTriangle, Check, Upload, X, Printer,
 } from 'lucide-react'
+import logoPreface from '../assets/logo-preface.jpeg'
 
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'
 
@@ -286,7 +287,9 @@ export default function IncomingGoodsDetail() {
     e.preventDefault()
     if (!vendorId) return toast.error('Vendor wajib dipilih')
     const newFiles   = photos.filter(p => p.type === 'new').map(p => p.file)
-    const keepPhotos = photos.filter(p => p.type === 'existing').map(p => p.url)
+    // Fallback ke data server jika state belum ter-load (race condition guard)
+    const existingPhotos = photos.filter(p => p.type === 'existing').map(p => p.url)
+    const keepPhotos = !isNew && isLoading ? (existing?.data?.sjPhotos ?? []) : existingPhotos
     const hasFiles   = newFiles.length > 0
     let payload
     if (hasFiles) {
@@ -316,16 +319,22 @@ export default function IncomingGoodsDetail() {
   const totalSelisih = items.filter(i => i.selisih !== 0).length
 
   return (
-    <div className="px-6 py-6 max-w-5xl mx-auto space-y-6">
+    <>
+    <div className="px-6 py-6 max-w-5xl mx-auto space-y-6 no-print">
       {/* Header */}
       <div className="flex items-center gap-3">
         <button onClick={() => navigate('/incoming-goods')} className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100">
           <ArrowLeft size={18} />
         </button>
-        <div>
+        <div className="flex-1">
           <h1 className="text-xl font-bold text-slate-800">{isNew ? 'Catat Barang Masuk' : `Barang Masuk #${id}`}</h1>
           {delivery && <p className="text-sm text-slate-400">{delivery.Vendor?.name} — {fmtDate(delivery.date)}</p>}
         </div>
+        {!isNew && delivery && (
+          <button onClick={() => window.print()} className="btn-secondary text-sm flex items-center gap-2">
+            <Printer size={14} /> Print
+          </button>
+        )}
       </div>
 
       {/* Header form */}
@@ -436,7 +445,7 @@ export default function IncomingGoodsDetail() {
 
         {canManage && (
           <div className="flex justify-end">
-            <button type="submit" disabled={createDelivery.isPending || updateDelivery.isPending} className="btn-primary">
+            <button type="submit" disabled={createDelivery.isPending || updateDelivery.isPending || isLoading} className="btn-primary">
               <Save size={14} /> {isNew ? 'Simpan & Lanjut Input Item' : 'Simpan Perubahan'}
             </button>
           </div>
@@ -504,6 +513,145 @@ export default function IncomingGoodsDetail() {
           <Video size={15} /> Buka Video Pengecekan
         </a>
       )}
+    </div>
+
+    {/* Print layout */}
+    {!isNew && delivery && (
+      <div className="print-only">
+        <IncomingGoodsPrintLayout delivery={delivery} items={items} />
+      </div>
+    )}
+    </>
+  )
+}
+
+// ── Print Layout ──────────────────────────────────────────────────────────────
+function IncomingGoodsPrintLayout({ delivery, items }) {
+  const fmt = (d) => d ? new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' }) : '—'
+  const now  = new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })
+
+  return (
+    <div className="print-page">
+      {/* Header */}
+      <div className="print-header">
+        <img src={logoPreface} alt="Preface" className="print-logo" />
+        <div>
+          <div className="print-company-name">Preface Wearhouse</div>
+          <div className="print-company-sub">Sistem Inventori Internal</div>
+        </div>
+      </div>
+      <div className="print-divider" />
+      <div className="print-title">SURAT TANDA TERIMA BARANG</div>
+
+      {/* Meta info */}
+      <div className="print-meta">
+        <table className="print-meta-table">
+          <tbody>
+            <tr>
+              <td className="print-meta-key">No. Dokumen</td>
+              <td className="print-meta-sep">:</td>
+              <td className="print-meta-val">STB-{String(delivery.id).padStart(4, '0')}</td>
+              <td className="print-meta-key">Tanggal Terima</td>
+              <td className="print-meta-sep">:</td>
+              <td className="print-meta-val">{fmt(delivery.date)}</td>
+            </tr>
+            <tr>
+              <td className="print-meta-key">Vendor</td>
+              <td className="print-meta-sep">:</td>
+              <td className="print-meta-val">{delivery.Vendor?.name ?? '—'}</td>
+              <td className="print-meta-key">No. Surat Jalan</td>
+              <td className="print-meta-sep">:</td>
+              <td className="print-meta-val">{delivery.sjNumber ?? '—'}</td>
+            </tr>
+            <tr>
+              <td className="print-meta-key">Dicetak oleh</td>
+              <td className="print-meta-sep">:</td>
+              <td className="print-meta-val">{delivery.Creator?.name ?? '—'}</td>
+              <td className="print-meta-key">Tanggal Cetak</td>
+              <td className="print-meta-sep">:</td>
+              <td className="print-meta-val">{now}</td>
+            </tr>
+            {delivery.notes && (
+              <tr>
+                <td className="print-meta-key">Catatan</td>
+                <td className="print-meta-sep">:</td>
+                <td className="print-meta-val" colSpan={3}>{delivery.notes}</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Items table */}
+      <table className="print-table">
+        <thead>
+          <tr>
+            <th className="print-th print-th-no">No</th>
+            <th className="print-th">Nama Produk</th>
+            <th className="print-th">SKU / Varian</th>
+            <th className="print-th" style={{ width: 70, textAlign: 'center' }}>Qty SJ</th>
+            <th className="print-th" style={{ width: 80, textAlign: 'center' }}>Qty Aktual</th>
+            <th className="print-th" style={{ width: 70, textAlign: 'center' }}>Selisih</th>
+            <th className="print-th">Catatan</th>
+          </tr>
+        </thead>
+        <tbody>
+          {items.map((item, idx) => {
+            const opts = item.ProductSKU?.ProductVariantOptions ?? []
+            const skuStr = opts.length ? opts.map(o => o.value).join(' / ') : (item.ProductSKU?.sku_code ?? '—')
+            const selisih = (item.qtySJ ?? 0) - (item.qtyActual ?? 0)
+            return (
+              <tr key={item.id} className={idx % 2 === 1 ? 'print-row-even' : ''}>
+                <td className="print-td print-td-center">{idx + 1}</td>
+                <td className="print-td">
+                  <strong>{item.Product?.name ?? '—'}</strong>
+                  {item.Product?.unit && <span style={{ color: '#64748b', fontSize: '8pt', marginLeft: 4 }}>({item.Product.unit})</span>}
+                </td>
+                <td className="print-td print-td-center" style={{ fontFamily: 'monospace', fontSize: '8pt' }}>{skuStr}</td>
+                <td className="print-td print-td-center">{item.qtySJ ?? 0}</td>
+                <td className="print-td print-td-center">{item.qtyActual ?? 0}</td>
+                <td className="print-td print-td-center" style={{ color: selisih !== 0 ? '#dc2626' : '#16a34a', fontWeight: 700 }}>
+                  {selisih > 0 ? `+${selisih}` : selisih}
+                </td>
+                <td className="print-td" style={{ fontSize: '8pt', color: '#64748b' }}>{item.notes ?? '—'}</td>
+              </tr>
+            )
+          })}
+          {items.length === 0 && (
+            <tr><td colSpan={7} className="print-td print-td-center" style={{ color: '#94a3b8' }}>Tidak ada item</td></tr>
+          )}
+        </tbody>
+      </table>
+
+      {/* Summary */}
+      <div style={{ fontSize: '9pt', color: '#475569', marginBottom: 24, display: 'flex', gap: 32 }}>
+        <span>Total item: <strong>{items.length}</strong></span>
+        <span>Total qty SJ: <strong>{items.reduce((s, i) => s + (i.qtySJ ?? 0), 0)}</strong></span>
+        <span>Total qty aktual: <strong>{items.reduce((s, i) => s + (i.qtyActual ?? 0), 0)}</strong></span>
+        <span style={{ color: items.some(i => i.selisih !== 0) ? '#dc2626' : '#16a34a' }}>
+          Item selisih: <strong>{items.filter(i => i.selisih !== 0).length}</strong>
+        </span>
+      </div>
+
+      {/* Signature */}
+      <div className="print-footer">
+        <div className="print-sign-block">
+          <div className="print-sign-title">Diterima oleh</div>
+          <div className="print-sign-role" style={{ marginBottom: 4 }}>PIC Operasional / Produksi</div>
+          <div className="print-sign-space" />
+          <div className="print-sign-line" />
+          <div className="print-sign-name">{delivery.Creator?.name ?? '_______________'}</div>
+          <div className="print-sign-role">Preface Wearhouse</div>
+        </div>
+        <div className="print-sign-block">
+          <div className="print-sign-title">Diserahkan oleh</div>
+          <div className="print-sign-role" style={{ marginBottom: 4 }}>Perwakilan Vendor</div>
+          <div className="print-sign-space" />
+          <div className="print-sign-line" />
+          <div className="print-sign-name">{delivery.Vendor?.name ?? '_______________'}</div>
+          <div className="print-sign-role">Vendor</div>
+        </div>
+      </div>
     </div>
   )
 }

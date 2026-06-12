@@ -87,7 +87,8 @@ exports.update = async (req, res, next) => {
     if (!row) return res.status(404).json({ message: 'Barang masuk tidak ditemukan' });
     const { vendorId, date, sjNumber, videoLink, notes, keepPhotos } = req.body;
     const newPhotos  = (req.files ?? []).map(f => f.path);
-    const kept       = keepPhotos ? JSON.parse(keepPhotos) : (row.sjPhotos ?? []);
+    // Jika keepPhotos tidak dikirim sama sekali, pertahankan foto yang ada
+    const kept       = keepPhotos !== undefined ? JSON.parse(keepPhotos) : (row.sjPhotos ?? []);
     const current    = row.sjPhotos ?? [];
     const removed    = current.filter(url => !kept.includes(url));
     for (const url of removed) await destroyByUrl(url).catch(() => {});

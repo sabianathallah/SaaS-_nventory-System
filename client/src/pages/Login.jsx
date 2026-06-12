@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import toast from 'react-hot-toast'
-import { Loader2, ArrowRight, Eye, EyeOff } from 'lucide-react'
+import { Loader2, ArrowRight, Eye, EyeOff, ArrowLeft } from 'lucide-react'
 import logoPreface from '../assets/logo-preface.jpeg'
 
 const MAROON = '#A0141E'
@@ -130,7 +130,29 @@ export default function Login() {
         justifyContent: 'center',
         padding: 24,
         background: '#FFFFFF',
+        position: 'relative',
       }}>
+        {/* Back to home */}
+        <Link
+          to="/"
+          style={{
+            position: 'absolute',
+            top: 20,
+            left: 20,
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 5,
+            fontSize: 11,
+            color: '#9a9690',
+            textDecoration: 'none',
+            letterSpacing: '0.04em',
+            transition: 'color 0.15s',
+          }}
+          onMouseEnter={e => e.currentTarget.style.color = MAROON}
+          onMouseLeave={e => e.currentTarget.style.color = '#9a9690'}
+        >
+          <ArrowLeft size={12} /> Back to home
+        </Link>
         <div style={{ width: '100%', maxWidth: 360 }} className="animate-slide-up">
 
           {/* Mobile logo */}

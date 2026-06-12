@@ -57,7 +57,7 @@ router.get('/me/permissions', async (req, res, next) => {
     const rpRows = roleRow
       ? await RolePermission.findAll({ where: { roleId: roleRow.id } })
       : [];
-    res.json({ role, permissions: rpRows.map(r => r.permissionKey) });
+    res.json({ role, permissions: rpRows.map(r => r.permissionKey), avatar: req.user.avatar ?? null });
   } catch (err) { next(err); }
 });
 

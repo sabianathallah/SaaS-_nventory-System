@@ -6,6 +6,7 @@ import Layout from './components/Layout'
 import NoPermission from './components/NoPermission'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
+import SOP from './pages/SOP'
 import Products from './pages/Products'
 import ProductDetail from './pages/ProductDetail'
 import ProductEdit from './pages/ProductEdit'
@@ -78,6 +79,7 @@ function AppRoutes() {
             <Layout>
               <Routes>
                 <Route path="/dashboard" element={<Dashboard />} />
+                <Route path="/sop"       element={<SOP />} />
 
                 {/* ── Produk ── */}
                 <Route path="/products"          element={<PageVisibleRoute pageKey="products"><PermissionRoute permission="inventory.view" page="Produk"><Products /></PermissionRoute></PageVisibleRoute>} />

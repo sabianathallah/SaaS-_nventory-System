@@ -16,7 +16,12 @@ export function AuthProvider({ children }) {
     if (!token) return
     api.get('/me/permissions')
       .then(res => {
-        const updated = { ...user, permissions: res.data.permissions }
+        const updated = {
+          ...user,
+          role: res.data.role ?? user.role,
+          avatar: res.data.avatar ?? user.avatar ?? null,
+          permissions: res.data.permissions,
+        }
         localStorage.setItem('user', JSON.stringify(updated))
         setUser(updated)
       })

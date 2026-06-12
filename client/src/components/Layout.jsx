@@ -10,7 +10,7 @@ import {
   ArrowDownToLine, ArrowUpFromLine, ArrowLeftRight,
   ClipboardList, Users, Building2, BookOpen, LogOut, Bell,
   PackageOpen, Layers, ClipboardCheck, Menu, X, Eye, EyeOff,
-  PackageCheck, Link2, BarChart2,
+  PackageCheck, Link2, BarChart2, BookMarked,
 } from 'lucide-react'
 import logoPreface from '../assets/logo-preface.jpeg'
 
@@ -22,7 +22,8 @@ const NAV_GROUPS = [
     label: 'Ringkasan',
     items: [
       { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-      { to: '/laporan', icon: BarChart2,        label: 'Laporan', pageKey: 'laporan' },
+      { to: '/sop',       icon: BookMarked, label: 'SOP' },
+      { to: '/laporan',   icon: BarChart2,        label: 'Laporan', pageKey: 'laporan' },
     ],
   },
   {
@@ -75,7 +76,7 @@ const NAV_GROUPS = [
 ]
 
 const PAGE_TITLES = {
-  '/dashboard': 'Dashboard', '/products': 'Produk', '/catalog': 'Kategori dan Koleksi',
+  '/dashboard': 'Dashboard', '/sop': 'SOP Operasional', '/products': 'Produk', '/catalog': 'Kategori dan Koleksi',
   '/warehouses': 'Gudang', '/suppliers': 'Vendor',
   '/stock-in': 'Penerimaan Stok', '/stock-in/new': 'Penerimaan Stok Baru', '/stock-out': 'Pengeluaran Stok', '/movements': 'Pergerakan',
   '/opname': 'Stock Opname', '/handover': 'Handover Pengiriman', '/database-links': 'Database Links', '/users': 'Pengguna', '/companies': 'Perusahaan',
@@ -170,11 +171,15 @@ export default function Layout({ children }) {
                       >
                         {({ isActive }) => (
                           <>
-                            <Icon
-                              size={15}
-                              strokeWidth={isActive ? 2.5 : 2}
-                              className={`flex-shrink-0 ${item.hidden && !isActive ? 'opacity-50' : ''}`}
-                            />
+                            {item.icon ? (
+                              <Icon
+                                size={15}
+                                strokeWidth={isActive ? 2.5 : 2}
+                                className={`flex-shrink-0 ${item.hidden && !isActive ? 'opacity-50' : ''}`}
+                              />
+                            ) : (
+                              <span className="flex-shrink-0 w-[15px]" />
+                            )}
                             <span className={`flex-1 truncate ${item.hidden && !isActive ? 'opacity-60' : ''}`}>
                               {item.label}
                             </span>
