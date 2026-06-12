@@ -224,6 +224,8 @@ export default function StockOutDetail() {
   const draftId    = draft?.id
   const draftItems = draft?.Stock_Out_Draft_Items ?? []
 
+  // Ref untuk kembalikan focus ke halaman setelah scan (agar scanner berikutnya tidak jatuh ke DevTools)
+  const pageRef         = useRef(null)
   // Local form state, initialized from server draft once
   const formInitialized = useRef(false)
   const saveTimer       = useRef(null)
@@ -352,7 +354,7 @@ export default function StockOutDetail() {
       toast.error(`SKU "${code}" tidak ditemukan`)
     }
     // Kembalikan focus ke halaman agar scan berikutnya tidak jatuh ke DevTools console
-    document.body.focus()
+    pageRef.current?.focus()
   }
 
   useExternalScanner(handleScan, isNew && scannerConnected && canScanOut)
@@ -509,7 +511,7 @@ export default function StockOutDetail() {
   )
 
   return (
-    <div className="px-6 py-6 max-w-4xl">
+    <div className="px-6 py-6 max-w-4xl outline-none" ref={pageRef} tabIndex={-1}>
       <div className="flex items-center gap-3 mb-6">
         <button onClick={() => navigate('/stock-out')} className="p-1.5 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors">
           <ArrowLeft size={16} />
