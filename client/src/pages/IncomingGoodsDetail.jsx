@@ -331,7 +331,17 @@ export default function IncomingGoodsDetail() {
           {delivery && <p className="text-sm text-slate-400">{delivery.Vendor?.name} — {fmtDate(delivery.date)}</p>}
         </div>
         {!isNew && delivery && (
-          <button onClick={() => window.print()} className="btn-secondary text-sm flex items-center gap-2">
+          <button
+            onClick={() => {
+              const vendor = delivery.Vendor?.name?.replace(/[/\\?%*:|"<>]/g, '-') ?? 'Vendor'
+              const tgl    = delivery.date ?? new Date().toISOString().slice(0, 10)
+              const prev   = document.title
+              document.title = `Barang Masuk_${vendor}_${tgl}`
+              window.print()
+              setTimeout(() => { document.title = prev }, 1000)
+            }}
+            className="btn-secondary text-sm flex items-center gap-2"
+          >
             <Printer size={14} /> Print
           </button>
         )}

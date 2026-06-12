@@ -62,7 +62,14 @@ export default function HandoverDetail() {
 
   useEffect(() => {
     if (!isNew && handover && searchParams.get('print') === '1') {
-      setTimeout(() => window.print(), 500)
+      setTimeout(() => {
+        const eks  = handover.ekspedisi?.replace(/[/\\?%*:|"<>]/g, '-') ?? 'Ekspedisi'
+        const tgl  = handover.date ?? new Date().toISOString().slice(0, 10)
+        const prev = document.title
+        document.title = `Handover_${eks}_${tgl}`
+        window.print()
+        setTimeout(() => { document.title = prev }, 1000)
+      }, 500)
     }
   }, [isNew, handover, searchParams])
 
@@ -408,7 +415,14 @@ export default function HandoverDetail() {
             )}
 
             <button
-              onClick={() => window.print()}
+              onClick={() => {
+                const eks  = handover.ekspedisi?.replace(/[/\\?%*:|"<>]/g, '-') ?? 'Ekspedisi'
+                const tgl  = handover.date ?? new Date().toISOString().slice(0, 10)
+                const prev = document.title
+                document.title = `Handover_${eks}_${tgl}`
+                window.print()
+                setTimeout(() => { document.title = prev }, 1000)
+              }}
               className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-2"
             >
               <Printer size={14} /> Print
