@@ -119,9 +119,12 @@ function UsersTab({ isSuperAdmin, roles }) {
       key: 'user', label: 'User',
       render: r => (
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-full bg-red-50 border border-red-200 text-red-700 flex items-center justify-center text-xs font-bold flex-shrink-0">
-            {r.name ? initials(r.name) : <UserCircle2 size={14} />}
-          </div>
+          {r.avatar
+            ? <img src={r.avatar} alt={r.name} className="w-8 h-8 rounded-full object-cover flex-shrink-0 border border-slate-200" />
+            : <div className="w-8 h-8 rounded-full bg-red-50 border border-red-200 text-red-700 flex items-center justify-center text-xs font-bold flex-shrink-0">
+                {r.name ? initials(r.name) : <UserCircle2 size={14} />}
+              </div>
+          }
           <div>
             <p className="font-semibold text-slate-800">{r.name}</p>
             <p className="text-xs text-slate-400">{r.email}</p>
