@@ -7,7 +7,7 @@ import CompanySwitcher from './CompanySwitcher'
 import { useCompanyGuard } from '../hooks/useCompanyGuard'
 import {
   LayoutDashboard, Package, Warehouse, Truck,
-  ArrowDownToLine, ArrowUpFromLine, ArrowLeftRight,
+  ArrowDownToLine, ArrowUpFromLine, ArrowLeftRight, Repeat2,
   ClipboardList, Users, Building2, BookOpen, LogOut, Bell,
   PackageOpen, Layers, ClipboardCheck, Menu, X, Eye, EyeOff,
   PackageCheck, Link2, BarChart2, BookMarked,
@@ -41,6 +41,7 @@ const NAV_GROUPS = [
       { to: '/stock-in',  icon: ArrowDownToLine, label: 'Penerimaan Stock',      pageKey: 'stock-in' },
       { to: '/stock-out', icon: ArrowUpFromLine,  label: 'Pengeluaran Stock',    pageKey: 'stock-out' },
       { to: '/movements', icon: ArrowLeftRight,   label: 'Pergerakan', pageKey: 'movements' },
+      { to: '/transfers', icon: Repeat2,          label: 'Transfer Stok', pageKey: 'transfers' },
       { to: '/opname',    icon: ClipboardList,    label: 'Stock Opname', pageKey: 'opname' },
       { to: '/handover',  icon: PackageCheck,     label: 'Handover',     pageKey: 'handover' },
     ],
@@ -79,7 +80,7 @@ const PAGE_TITLES = {
   '/dashboard': 'Dashboard', '/sop': 'SOP Operasional', '/products': 'Produk', '/catalog': 'Kategori dan Koleksi',
   '/warehouses': 'Gudang', '/suppliers': 'Vendor',
   '/stock-in': 'Penerimaan Stok', '/stock-in/new': 'Penerimaan Stok Baru', '/stock-out': 'Pengeluaran Stok', '/movements': 'Pergerakan',
-  '/opname': 'Stock Opname', '/handover': 'Handover Pengiriman', '/database-links': 'Database Links', '/users': 'Pengguna', '/companies': 'Perusahaan',
+  '/opname': 'Stock Opname', '/transfers': 'Transfer Stok', '/handover': 'Handover Pengiriman', '/database-links': 'Database Links', '/users': 'Pengguna', '/companies': 'Perusahaan',
   '/vendors': 'Vendor', '/incoming-goods': 'Barang Masuk',
   '/packing-jobs': 'Pekerjaan Packing', '/form-anak-packing': 'Form Anak Packing',
   '/page-visibility': 'Visibilitas Halaman',

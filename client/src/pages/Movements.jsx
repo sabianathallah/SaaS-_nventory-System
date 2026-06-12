@@ -209,9 +209,21 @@ export default function Movements() {
       key: 'ref', label: 'Transaksi', width: 180,
       render: r => {
         if (!r.ReferenceId) return <span className="text-xs text-slate-400">—</span>
-        const path = r.type === 'IN' ? `/stock-in/${r.ReferenceId}` : r.type === 'OUT' ? `/stock-out/${r.ReferenceId}` : r.type === 'ADJUSTMENT' ? `/opname/${r.ReferenceId}` : null
+        let path, label
+        if (r.source === 'TRANSFER') {
+          path  = `/transfers/${r.ReferenceId}`
+          label = 'Transfer'
+        } else if (r.type === 'IN') {
+          path  = `/stock-in/${r.ReferenceId}`
+          label = 'Stock IN'
+        } else if (r.type === 'OUT') {
+          path  = `/stock-out/${r.ReferenceId}`
+          label = 'Stock OUT'
+        } else if (r.type === 'ADJUSTMENT') {
+          path  = `/opname/${r.ReferenceId}`
+          label = 'Opname'
+        }
         if (!path) return <span className="font-mono text-xs text-slate-400">#{r.ReferenceId}</span>
-        const label = r.type === 'IN' ? 'Stock IN' : r.type === 'OUT' ? 'Stock OUT' : 'Opname'
         return (
           <button
             onClick={() => navigate(path)}

@@ -55,6 +55,12 @@ const ALL_PERMISSIONS = [
   { key: 'packing.jobs',              label: 'Buat & Kelola Packing Job',                  group: 'Penerimaan & Packing',    parent: 'packing.manage' },
   { key: 'packing.verify',            label: 'Verifikasi Packing & Buat FAP',              group: 'Penerimaan & Packing',    parent: 'packing.manage' },
 
+  // ── Transfer Stok ────────────────────────────────────────────────────────────
+  { key: 'stock.transfer.manage',     label: 'Akses Penuh Transfer Stok',                  group: 'Transfer Stok',           isParent: true },
+  { key: 'stock.transfer.view',       label: 'Lihat Daftar Transfer Stok',                 group: 'Transfer Stok',           parent: 'stock.transfer.manage' },
+  { key: 'stock.transfer.create',     label: 'Buat Transfer Stok Antar Gudang',            group: 'Transfer Stok',           parent: 'stock.transfer.manage' },
+  { key: 'stock.transfer.delete',     label: 'Hapus Transfer Stok',                        group: 'Transfer Stok',           parent: 'stock.transfer.manage' },
+
   // ── Laporan ──────────────────────────────────────────────────────────────────
   { key: 'reports.manage',            label: 'Akses Penuh Laporan',                        group: 'Laporan',                 isParent: true },
   { key: 'reports.dashboard',         label: 'Lihat Dasbor & Laporan',                     group: 'Laporan',                 parent: 'reports.manage' },
@@ -83,6 +89,7 @@ const DEFAULT_PERMISSIONS = {
     'stock.in.view', 'stock.in.create', 'stock.in.scan', 'stock.in.manual_input', 'stock.in.delete', 'stock.in.delete_item',
     'stock.out.view', 'stock.out.create', 'stock.out.scan', 'stock.out.manual_input', 'stock.out.delete', 'stock.out.delete_item',
     'stock.opname.view', 'stock.opname.create', 'stock.opname.scan', 'stock.opname.delete',
+    'stock.transfer.manage',
     'handover.manage',
     'packing.manage',
     'reports.manage',

@@ -59,6 +59,7 @@ module.exports = (sequelize, DataTypes) => {
     },
     ProductSKUId: { type: DataTypes.INTEGER, allowNull: true },
     ReferenceId: DataTypes.BIGINT,
+    source: { type: DataTypes.STRING(20), allowNull: true },
     note: DataTypes.TEXT,
     date: {
       type: DataTypes.DATE,

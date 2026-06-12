@@ -183,6 +183,13 @@ export const systemApi = {
   updatePageVisibility: (data) => api.put('/system/page-visibility', data).then(r => r.data),
 }
 
+export const stockTransfersApi = {
+  list:    (params) => api.get('/stock-transfers', { params }).then(r => r.data),
+  get:     (id)     => api.get(`/stock-transfers/${id}`).then(r => r.data),
+  create:  (data)   => api.post('/stock-transfers', data).then(r => r.data),
+  destroy: (id)     => api.delete(`/stock-transfers/${id}`).then(r => r.data),
+}
+
 export const reportApi = {
   monthly: (params) => api.get('/reports/monthly', { params }).then(r => r.data),
 }

@@ -33,6 +33,8 @@ import Handover from './pages/Handover'
 import HandoverDetail from './pages/HandoverDetail'
 import DatabaseLinks from './pages/DatabaseLinks'
 import Laporan from './pages/Laporan'
+import Transfers from './pages/Transfers'
+import TransferDetail from './pages/TransferDetail'
 import Landing from './pages/Landing'
 
 function PrivateRoute({ children }) {
@@ -107,6 +109,10 @@ function AppRoutes() {
                 {/* ── Handover ── */}
                 <Route path="/handover"      element={<PageVisibleRoute pageKey="handover"><PermissionRoute permission="handover.view" page="Handover"><Handover /></PermissionRoute></PageVisibleRoute>} />
                 <Route path="/handover/:id"  element={<PageVisibleRoute pageKey="handover"><PermissionRoute permission="handover.view" page="Handover"><HandoverDetail /></PermissionRoute></PageVisibleRoute>} />
+
+                {/* ── Transfer Stok ── */}
+                <Route path="/transfers"     element={<PageVisibleRoute pageKey="transfers"><PermissionRoute permission="stock.transfer.view" page="Transfer Stok"><Transfers /></PermissionRoute></PageVisibleRoute>} />
+                <Route path="/transfers/:id" element={<PageVisibleRoute pageKey="transfers"><PermissionRoute permission="stock.transfer.view" page="Transfer Stok"><TransferDetail /></PermissionRoute></PageVisibleRoute>} />
 
                 {/* ── Packing ── */}
                 <Route path="/vendors"              element={<PageVisibleRoute pageKey="vendors"><PermissionRoute permission="packing.manage" page="Vendors"><Vendors /></PermissionRoute></PageVisibleRoute>} />
