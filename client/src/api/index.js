@@ -131,13 +131,6 @@ export const formAnakPackingApi = {
   get:  (id)     => api.get(`/form-anak-packing/${id}`).then(r => r.data),
 }
 
-export const rolesApi = {
-  getAll:  (params)                => api.get('/roles', { params }).then(r => r.data),
-  create:  (name, displayName)     => api.post('/roles', { name, displayName }).then(r => r.data),
-  update:  (id, displayName, permissions) => api.put(`/roles/${id}`, { displayName, permissions }).then(r => r.data),
-  destroy: (id)                    => api.delete(`/roles/${id}`).then(r => r.data),
-}
-
 export const permissionsApi = {
   getAll: () => api.get('/permissions').then(r => r.data),
 }
@@ -162,9 +155,20 @@ export const vendorDeliveriesApi = {
   create:     (data)              => api.post('/vendor-deliveries', toPayload(data)).then(r => r.data),
   update:     (id, data)          => api.put(`/vendor-deliveries/${id}`, toPayload(data)).then(r => r.data),
   remove:     (id)                => api.delete(`/vendor-deliveries/${id}`).then(r => r.data),
-  addItem:    (id, data)          => api.post(`/vendor-deliveries/${id}/items`, data).then(r => r.data),
-  updateItem: (id, itemId, data)  => api.put(`/vendor-deliveries/${id}/items/${itemId}`, data).then(r => r.data),
-  removeItem: (id, itemId)        => api.delete(`/vendor-deliveries/${id}/items/${itemId}`).then(r => r.data),
+  addItem:           (id, data)         => api.post(`/vendor-deliveries/${id}/items`, data).then(r => r.data),
+  updateItem:        (id, itemId, data) => api.put(`/vendor-deliveries/${id}/items/${itemId}`, data).then(r => r.data),
+  removeItem:        (id, itemId)       => api.delete(`/vendor-deliveries/${id}/items/${itemId}`).then(r => r.data),
+  patchSelisihStatus:(id, status)       => api.patch(`/vendor-deliveries/${id}/selisih-status`, { status }).then(r => r.data),
+  patchStatus:       (id, status)       => api.patch(`/vendor-deliveries/${id}/status`, { status }).then(r => r.data),
+  analytics:         (params)           => api.get('/vendor-deliveries/analytics', { params }).then(r => r.data),
+}
+
+export const rolesApi = {
+  getAll:        (params)                    => api.get('/roles', { params }).then(r => r.data),
+  create:        (name, displayName)         => api.post('/roles', { name, displayName }).then(r => r.data),
+  update:        (id, displayName, perms)    => api.put(`/roles/${id}`, { displayName, permissions: perms }).then(r => r.data),
+  resetDefaults: (id)                        => api.post(`/roles/${id}/reset`).then(r => r.data),
+  destroy:       (id)                        => api.delete(`/roles/${id}`).then(r => r.data),
 }
 
 export const dbLinksApi = {

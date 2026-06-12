@@ -1,7 +1,27 @@
 'use strict';
-const { VendorDelivery, VendorDeliveryItem, Vendor, User, Product, ProductSKU, ProductVariantOption, ProductVariantType } = require('../models');
+const { VendorDelivery, VendorDeliveryItem, Vendor, User, Product, ProductSKU, ProductVariantOption, ProductVariantType, sequelize } = require('../models');
+const { Op, fn, col, literal } = require('sequelize');
 const { destroyByUrl } = require('../helpers/cloudinary');
 const { companyFilter, companyId: getCompanyId } = require('../helpers/tenancy');
+
+// Recompute selisihStatus on parent delivery after any item mutation.
+// Rule: no selisih left → null; has selisih + status was null → 'unclear';
+//       has selisih + already 'clear'/'unclear' → keep (manual status).
+// Exception: if a NEW selisih appears after being 'clear', keep 'clear' — team already reviewed.
+async function syncSelisihStatus(deliveryId) {
+  const items = await VendorDeliveryItem.findAll({
+    where: { deliveryId },
+    attributes: ['qtySJ', 'qtyActual'],
+  });
+  const hasSelisih = items.some(i => (i.qtySJ ?? 0) !== (i.qtyActual ?? 0));
+  const delivery = await VendorDelivery.findByPk(deliveryId, { attributes: ['id', 'selisihStatus'] });
+  if (!delivery) return;
+  if (!hasSelisih) {
+    await delivery.update({ selisihStatus: null });
+  } else if (!delivery.selisihStatus) {
+    await delivery.update({ selisihStatus: 'unclear' });
+  }
+}
 
 const SKU_INCLUDE = {
   model: ProductSKU, as: 'ProductSKU', attributes: ['id', 'sku_code'],
@@ -25,19 +45,27 @@ const ITEM_INCLUDE = [
 
 exports.list = async (req, res, next) => {
   try {
-    const { page = 1, limit = 15 } = req.query;
+    const { page = 1, limit = 15, sjMissing, selisihFilter } = req.query;
     const offset = (Number(page) - 1) * Number(limit);
+    const where = { ...companyFilter(req) };
+    if (sjMissing === 'true') where.sjNumber = null;
+    if (selisihFilter === 'unclear') where.selisihStatus = 'unclear';
     const { rows, count } = await VendorDelivery.findAndCountAll({
-      where: companyFilter(req),
+      where,
+      distinct: true,
       include: [
         ...HEADER_INCLUDE,
-        { model: VendorDeliveryItem, as: 'items', attributes: ['id'] },
+        { model: VendorDeliveryItem, as: 'items', attributes: ['id', 'qtySJ', 'qtyActual'] },
       ],
       order: [['date', 'DESC'], ['createdAt', 'DESC']],
       limit: Number(limit),
       offset,
     });
-    const data = rows.map(r => ({ ...r.toJSON(), itemCount: r.items?.length ?? 0, items: undefined }));
+    const data = rows.map(r => {
+      const items = r.items ?? [];
+      const selisihCount = items.filter(i => (i.qtySJ ?? 0) !== (i.qtyActual ?? 0)).length;
+      return { ...r.toJSON(), itemCount: items.length, selisihCount, items: undefined };
+    });
     res.json({ data, pagination: { total: count, page: Number(page), limit: Number(limit), totalPages: Math.ceil(count / Number(limit)) } });
   } catch (err) { next(err); }
 };
@@ -85,21 +113,23 @@ exports.update = async (req, res, next) => {
   try {
     const row = await VendorDelivery.findOne({ where: { id: req.params.id, ...companyFilter(req) } });
     if (!row) return res.status(404).json({ message: 'Barang masuk tidak ditemukan' });
+    const isClosed = row.status === 'closed';
     const { vendorId, date, sjNumber, videoLink, notes, keepPhotos } = req.body;
-    const newPhotos  = (req.files ?? []).map(f => f.path);
-    // Jika keepPhotos tidak dikirim sama sekali, pertahankan foto yang ada
-    const kept       = keepPhotos !== undefined ? JSON.parse(keepPhotos) : (row.sjPhotos ?? []);
-    const current    = row.sjPhotos ?? [];
-    const removed    = current.filter(url => !kept.includes(url));
+    const newPhotos = (req.files ?? []).map(f => f.path);
+    const kept      = keepPhotos !== undefined ? JSON.parse(keepPhotos) : (row.sjPhotos ?? []);
+    const current   = row.sjPhotos ?? [];
+    const removed   = current.filter(url => !kept.includes(url));
     for (const url of removed) await destroyByUrl(url).catch(() => {});
-    const sjPhotos   = [...kept, ...newPhotos];
+    const sjPhotos  = [...kept, ...newPhotos];
     await row.update({
-      vendorId:  vendorId  ?? row.vendorId,
-      date:      date      ?? row.date,
+      // When closed: only SJ fields can change
+      vendorId:  isClosed ? row.vendorId : (vendorId ?? row.vendorId),
+      date:      isClosed ? row.date     : (date     ?? row.date),
+      notes:     isClosed ? row.notes    : (notes !== undefined ? (notes?.trim() || null) : row.notes),
+      // SJ fields always editable
       sjNumber:  sjNumber  !== undefined ? (sjNumber?.trim()  || null) : row.sjNumber,
       sjPhotos:  sjPhotos.length > 0 ? sjPhotos : null,
       videoLink: videoLink !== undefined ? (videoLink?.trim() || null) : row.videoLink,
-      notes:     notes     !== undefined ? (notes?.trim()     || null) : row.notes,
     });
     const result = await VendorDelivery.findByPk(row.id, { include: HEADER_INCLUDE });
     res.json({ data: result });
@@ -122,6 +152,7 @@ exports.addItem = async (req, res, next) => {
   try {
     const delivery = await VendorDelivery.findOne({ where: { id: req.params.id, ...companyFilter(req) } });
     if (!delivery) return res.status(404).json({ message: 'Barang masuk tidak ditemukan' });
+    if (delivery.status === 'closed') return res.status(403).json({ message: 'Barang masuk sudah ditutup. Buka kembali untuk menambah item.' });
     const { productId, productSkuId, qtySJ, qtyActual, notes } = req.body;
     if (!productId) return res.status(400).json({ message: 'Produk wajib dipilih' });
     const item = await VendorDeliveryItem.create({
@@ -132,6 +163,7 @@ exports.addItem = async (req, res, next) => {
       qtyActual:    Number(qtyActual) || 0,
       notes:        notes?.trim() || null,
     });
+    await syncSelisihStatus(delivery.id);
     const result = await VendorDeliveryItem.findByPk(item.id, { include: ITEM_INCLUDE });
     res.status(201).json({ data: { ...result.toJSON(), selisih: result.qtySJ - result.qtyActual } });
   } catch (err) { next(err); }
@@ -141,6 +173,8 @@ exports.updateItem = async (req, res, next) => {
   try {
     const item = await VendorDeliveryItem.findOne({ where: { id: req.params.itemId, deliveryId: req.params.id } });
     if (!item) return res.status(404).json({ message: 'Item tidak ditemukan' });
+    const delivery = await VendorDelivery.findByPk(item.deliveryId, { attributes: ['id', 'status'] });
+    if (delivery?.status === 'closed') return res.status(403).json({ message: 'Barang masuk sudah ditutup. Buka kembali untuk mengedit item.' });
     const { productId, productSkuId, qtySJ, qtyActual, notes } = req.body;
     await item.update({
       productId:    productId    ?? item.productId,
@@ -149,6 +183,7 @@ exports.updateItem = async (req, res, next) => {
       qtyActual:    qtyActual !== undefined ? Number(qtyActual) : item.qtyActual,
       notes:        notes     !== undefined ? (notes?.trim() || null) : item.notes,
     });
+    await syncSelisihStatus(item.deliveryId);
     const result = await VendorDeliveryItem.findByPk(item.id, { include: ITEM_INCLUDE });
     res.json({ data: { ...result.toJSON(), selisih: result.qtySJ - result.qtyActual } });
   } catch (err) { next(err); }
@@ -158,7 +193,93 @@ exports.removeItem = async (req, res, next) => {
   try {
     const item = await VendorDeliveryItem.findOne({ where: { id: req.params.itemId, deliveryId: req.params.id } });
     if (!item) return res.status(404).json({ message: 'Item tidak ditemukan' });
+    const delivery = await VendorDelivery.findByPk(item.deliveryId, { attributes: ['id', 'status'] });
+    if (delivery?.status === 'closed') return res.status(403).json({ message: 'Barang masuk sudah ditutup. Buka kembali untuk menghapus item.' });
+    const deliveryId = item.deliveryId;
     await item.destroy();
+    await syncSelisihStatus(deliveryId);
     res.json({ message: 'Item dihapus' });
+  } catch (err) { next(err); }
+};
+
+exports.patchSelisihStatus = async (req, res, next) => {
+  try {
+    const { status } = req.body;
+    if (!['unclear', 'clear'].includes(status)) {
+      return res.status(400).json({ message: 'Status tidak valid. Gunakan: unclear atau clear' });
+    }
+    const row = await VendorDelivery.findOne({ where: { id: req.params.id, ...companyFilter(req) } });
+    if (!row) return res.status(404).json({ message: 'Barang masuk tidak ditemukan' });
+    await row.update({ selisihStatus: status });
+    res.json({ data: { selisihStatus: status } });
+  } catch (err) { next(err); }
+};
+
+exports.patchStatus = async (req, res, next) => {
+  try {
+    const { status } = req.body;
+    if (!['open', 'closed'].includes(status)) {
+      return res.status(400).json({ message: 'Status tidak valid. Gunakan: open atau closed' });
+    }
+    const row = await VendorDelivery.findOne({ where: { id: req.params.id, ...companyFilter(req) } });
+    if (!row) return res.status(404).json({ message: 'Barang masuk tidak ditemukan' });
+    await row.update({ status });
+    res.json({ data: { status } });
+  } catch (err) { next(err); }
+};
+
+exports.analytics = async (req, res, next) => {
+  try {
+    const { dateFrom, dateTo, articleId, productId, productSkuId } = req.query;
+    const cf = companyFilter(req);
+
+    // Build WHERE clauses for the raw query
+    const conditions = ['1=1'];
+    const replacements = {};
+
+    if (cf.companyId) {
+      conditions.push('vd."companyId" = :companyId');
+      replacements.companyId = cf.companyId;
+    }
+    if (dateFrom) { conditions.push('vd.date >= :dateFrom'); replacements.dateFrom = dateFrom; }
+    if (dateTo)   { conditions.push('vd.date <= :dateTo');   replacements.dateTo   = dateTo;   }
+    if (productId)    { conditions.push('vdi."productId" = :productId');       replacements.productId    = productId;    }
+    if (productSkuId) { conditions.push('vdi."productSkuId" = :productSkuId'); replacements.productSkuId = productSkuId; }
+    if (articleId)    { conditions.push('p."ArticleId" = :articleId');         replacements.articleId    = articleId;    }
+
+    const where = conditions.join(' AND ');
+
+    const chart = await sequelize.query(`
+      SELECT
+        vd.date::text                          AS date,
+        COALESCE(SUM(vdi."qtyActual"), 0)::int AS qty,
+        COUNT(DISTINCT vd.id)::int             AS deliveries
+      FROM "VendorDeliveries" vd
+      JOIN "VendorDeliveryItems" vdi ON vdi."deliveryId" = vd.id
+      JOIN "Products" p              ON p.id = vdi."productId"
+      WHERE ${where}
+      GROUP BY vd.date
+      ORDER BY vd.date ASC
+    `, { replacements, type: sequelize.QueryTypes.SELECT });
+
+    // Top products (limit 10)
+    const topProducts = await sequelize.query(`
+      SELECT
+        p.id,
+        p.name,
+        COALESCE(SUM(vdi."qtyActual"), 0)::int AS qty
+      FROM "VendorDeliveries" vd
+      JOIN "VendorDeliveryItems" vdi ON vdi."deliveryId" = vd.id
+      JOIN "Products" p              ON p.id = vdi."productId"
+      WHERE ${where}
+      GROUP BY p.id, p.name
+      ORDER BY qty DESC
+      LIMIT 10
+    `, { replacements, type: sequelize.QueryTypes.SELECT });
+
+    const totalQty       = chart.reduce((s, r) => s + r.qty, 0);
+    const totalDeliveries = chart.reduce((s, r) => s + r.deliveries, 0);
+
+    res.json({ chart, topProducts, summary: { totalQty, totalDeliveries } });
   } catch (err) { next(err); }
 };

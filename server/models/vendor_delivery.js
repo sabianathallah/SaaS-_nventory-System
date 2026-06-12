@@ -15,8 +15,10 @@ module.exports = (sequelize, DataTypes) => {
     sjPhotos:  { type: DataTypes.JSON,   allowNull: true },
     videoLink: { type: DataTypes.TEXT, allowNull: true },
     notes:     { type: DataTypes.TEXT, allowNull: true },
-    createdBy: { type: DataTypes.INTEGER, allowNull: false },
-    companyId: { type: DataTypes.INTEGER, allowNull: true },
+    createdBy:     { type: DataTypes.INTEGER, allowNull: false },
+    companyId:     { type: DataTypes.INTEGER, allowNull: true },
+    selisihStatus: { type: DataTypes.STRING(20), allowNull: true,  defaultValue: null },
+    status:        { type: DataTypes.STRING(20), allowNull: false, defaultValue: 'open' },
   }, { sequelize, modelName: 'VendorDelivery' });
   return VendorDelivery;
 };

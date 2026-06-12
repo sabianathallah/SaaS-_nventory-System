@@ -10,7 +10,21 @@ import { Table, Pagination } from '../components/Table'
 import Modal from '../components/Modal'
 import SearchBar from '../components/SearchBar'
 import toast from 'react-hot-toast'
-import { Plus, Pencil, Trash2, UserCircle2, ShieldCheck, Save, Check, Eye, EyeOff } from 'lucide-react'
+import { Plus, Pencil, Trash2, UserCircle2, ShieldCheck, Save, Check, Eye, EyeOff,
+  LayoutDashboard, Package, Boxes, Truck, PackageCheck, ArrowLeftRight,
+  BarChart2, Link2, Settings, RotateCcw } from 'lucide-react'
+
+const GROUP_META = {
+  'Dasbor':                { icon: LayoutDashboard, color: '#6366F1' },
+  'Produk & Katalog':      { icon: Package,         color: '#F97316' },
+  'Stok':                  { icon: Boxes,           color: '#10B981' },
+  'Handover Pengiriman':   { icon: Truck,           color: '#06B6D4' },
+  'Penerimaan & Packing':  { icon: PackageCheck,    color: '#8B5CF6' },
+  'Transfer Stok':         { icon: ArrowLeftRight,  color: '#14B8A6' },
+  'Laporan':               { icon: BarChart2,       color: '#F59E0B' },
+  'Database Links':        { icon: Link2,           color: '#64748B' },
+  'Administrasi':          { icon: Settings,        color: '#EF4444' },
+}
 
 // ── Role badge helpers ────────────────────────────────────────────────────────
 
@@ -275,6 +289,17 @@ function RolesTab({ roles, allPermissions, onRolesChange }) {
     onError: e => toast.error(e.response?.data?.message || 'Error'),
   })
 
+  const resetMut = useMutation({
+    mutationFn: (id) => rolesApi.resetDefaults(id),
+    onSuccess: (res) => {
+      qc.invalidateQueries({ queryKey: ['roles'] })
+      setDirty(d => { const n = { ...d }; delete n[res.id]; return n })
+      toast.success('Permissions direset ke default')
+      onRolesChange()
+    },
+    onError: e => toast.error(e.response?.data?.message || 'Role ini tidak memiliki default permissions'),
+  })
+
   const deleteMut = useMutation({
     mutationFn: (id) => rolesApi.destroy(id),
     onSuccess: (_, id) => {
@@ -506,7 +531,10 @@ function RolesTab({ roles, allPermissions, onRolesChange }) {
                 return (
                   <div key={group}>
                     <div className="flex items-center justify-between mb-2">
-                      <p className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">{group}</p>
+                      <div className="flex items-center gap-2">
+                        {(() => { const m = GROUP_META[group]; const Icon = m?.icon; return Icon ? <Icon size={13} style={{ color: m.color }} /> : null })()}
+                        <p className="text-[11px] font-bold uppercase tracking-widest" style={{ color: GROUP_META[group]?.color ?? '#64748B' }}>{group}</p>
+                      </div>
                       <button onClick={() => {
                         const cur  = getPerms(selectedRole.id)
                         const next = allOn
@@ -534,6 +562,7 @@ function RolesTab({ roles, allPermissions, onRolesChange }) {
                               </div>
                               <div className="flex-1 min-w-0">
                                 <p className="text-sm font-bold text-slate-700 leading-tight">{parent.label}</p>
+                                {parent.desc && <p className="text-[10px] text-slate-400 mt-0.5 leading-relaxed">{parent.desc}</p>}
                                 {children.length > 0 && (
                                   <p className="text-[10px] text-slate-400 mt-0.5">
                                     {children.filter(c => activePerms.includes(c.key)).length} / {children.length} sub-permission aktif
@@ -566,6 +595,7 @@ function RolesTab({ roles, allPermissions, onRolesChange }) {
                                   </div>
                                   <div className="flex-1 min-w-0">
                                     <p className="text-sm text-slate-700 leading-tight">{child.label}</p>
+                                    {child.desc && <p className="text-[10px] text-slate-400 mt-0.5 leading-relaxed">{child.desc}</p>}
                                   </div>
                                 </div>
                               )
@@ -609,7 +639,16 @@ function RolesTab({ roles, allPermissions, onRolesChange }) {
           </div>
 
           {!selectedRole.isSystem && (
-            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-slate-200 bg-slate-50/50">
+            <div className="flex items-center justify-between gap-3 px-6 py-4 border-t border-slate-200 bg-slate-50/50">
+              <button
+                onClick={() => resetMut.mutate(selectedRole.id)}
+                disabled={resetMut.isPending}
+                title="Reset permission ke konfigurasi default role ini"
+                className="flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-700 px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors disabled:opacity-40"
+              >
+                <RotateCcw size={12} /> Reset ke Default
+              </button>
+              <div className="flex items-center gap-2">
               {isDirty(selectedRole.id) && (
                 <button onClick={() => {
                   setDirty(d => { const n = { ...d }; delete n[selectedRole.id]; return n })
@@ -625,6 +664,7 @@ function RolesTab({ roles, allPermissions, onRolesChange }) {
                 <Save size={13} />
                 {updateMut.isPending ? 'Menyimpan…' : 'Simpan Perubahan'}
               </button>
+              </div>
             </div>
           )}
         </div>

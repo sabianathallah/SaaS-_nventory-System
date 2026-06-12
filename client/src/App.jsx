@@ -97,10 +97,8 @@ function AppRoutes() {
 
                 {/* ── Transaksi Stok ── */}
                 <Route path="/stock-in"      element={<PageVisibleRoute pageKey="stock-in"><PermissionRoute permission="stock.in.view" page="Penerimaan Stock"><StockIn /></PermissionRoute></PageVisibleRoute>} />
-                <Route path="/stock-in/new"  element={<PageVisibleRoute pageKey="stock-in"><PermissionRoute permission="stock.in.create" page="Penerimaan Stock"><StockInDetail /></PermissionRoute></PageVisibleRoute>} />
                 <Route path="/stock-in/:id"  element={<PageVisibleRoute pageKey="stock-in"><PermissionRoute permission="stock.in.view" page="Penerimaan Stock"><StockInDetail /></PermissionRoute></PageVisibleRoute>} />
                 <Route path="/stock-out"     element={<PageVisibleRoute pageKey="stock-out"><PermissionRoute permission="stock.out.view" page="Pengeluaran Stock"><StockOut /></PermissionRoute></PageVisibleRoute>} />
-                <Route path="/stock-out/new" element={<PageVisibleRoute pageKey="stock-out"><PermissionRoute permission="stock.out.create" page="Pengeluaran Stock"><StockOutDetail /></PermissionRoute></PageVisibleRoute>} />
                 <Route path="/stock-out/:id" element={<PageVisibleRoute pageKey="stock-out"><PermissionRoute permission="stock.out.view" page="Pengeluaran Stock"><StockOutDetail /></PermissionRoute></PageVisibleRoute>} />
                 <Route path="/movements"     element={<PageVisibleRoute pageKey="movements"><PermissionRoute permission="stock.view" page="Pergerakan Stok"><Movements /></PermissionRoute></PageVisibleRoute>} />
                 <Route path="/opname"        element={<PageVisibleRoute pageKey="opname"><PermissionRoute permission="stock.opname.view" page="Stock Opname"><Opname /></PermissionRoute></PageVisibleRoute>} />
@@ -117,7 +115,6 @@ function AppRoutes() {
                 {/* ── Packing ── */}
                 <Route path="/vendors"              element={<PageVisibleRoute pageKey="vendors"><PermissionRoute permission="packing.manage" page="Vendors"><Vendors /></PermissionRoute></PageVisibleRoute>} />
                 <Route path="/incoming-goods"       element={<PageVisibleRoute pageKey="incoming-goods"><PermissionRoute permission="packing.incoming" page="Barang Masuk"><IncomingGoods /></PermissionRoute></PageVisibleRoute>} />
-                <Route path="/incoming-goods/new"   element={<PageVisibleRoute pageKey="incoming-goods"><PermissionRoute permission="packing.incoming" page="Barang Masuk"><IncomingGoodsDetail /></PermissionRoute></PageVisibleRoute>} />
                 <Route path="/incoming-goods/:id"   element={<PageVisibleRoute pageKey="incoming-goods"><PermissionRoute permission="packing.incoming" page="Barang Masuk"><IncomingGoodsDetail /></PermissionRoute></PageVisibleRoute>} />
                 <Route path="/packing-jobs"         element={<PageVisibleRoute pageKey="packing-jobs"><PermissionRoute permission="packing.jobs" page="Packing Jobs"><PackingJobs /></PermissionRoute></PageVisibleRoute>} />
                 <Route path="/form-anak-packing"    element={<PageVisibleRoute pageKey="form-anak-packing"><PermissionRoute permission="packing.view" page="Form Anak Packing"><FormAnakPacking /></PermissionRoute></PageVisibleRoute>} />

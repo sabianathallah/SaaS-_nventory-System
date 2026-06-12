@@ -1,7 +1,7 @@
 'use strict';
 const { Role, RolePermission, sequelize } = require('../models');
 const { Op } = require('sequelize');
-const { SYSTEM_ROLES } = require('../helpers/permissions');
+const { SYSTEM_ROLES, DEFAULT_PERMISSIONS } = require('../helpers/permissions');
 
 function resolveCompanyId(req) {
   if (req.user.role === 'SUPER_ADMIN') {
@@ -92,6 +92,23 @@ class RoleController {
 
       const updated = await RolePermission.findAll({ where: { roleId: role.id } });
       res.json({ id: role.id, name: role.name, displayName: role.displayName, permissions: updated.map(r => r.permissionKey) });
+    } catch (err) { next(err); }
+  }
+
+  // POST /roles/:id/reset-defaults
+  static async resetDefaults(req, res, next) {
+    try {
+      const role = await Role.findByPk(req.params.id);
+      if (!role) return res.status(404).json({ message: 'Role tidak ditemukan' });
+      if (role.isSystem) return res.status(400).json({ message: 'Role sistem tidak dapat direset' });
+      const defaults = DEFAULT_PERMISSIONS[role.name];
+      if (!defaults) return res.status(400).json({ message: 'Tidak ada default permissions untuk role ini' });
+      await RolePermission.destroy({ where: { roleId: role.id } });
+      const now = new Date();
+      if (defaults.length > 0) {
+        await RolePermission.bulkCreate(defaults.map(key => ({ roleId: role.id, permissionKey: key, createdAt: now, updatedAt: now })));
+      }
+      res.json({ id: role.id, name: role.name, displayName: role.displayName, permissions: defaults });
     } catch (err) { next(err); }
   }
 

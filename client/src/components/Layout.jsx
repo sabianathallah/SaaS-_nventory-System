@@ -41,7 +41,7 @@ const NAV_GROUPS = [
       { to: '/stock-in',  icon: ArrowDownToLine, label: 'Penerimaan Stock',      pageKey: 'stock-in' },
       { to: '/stock-out', icon: ArrowUpFromLine,  label: 'Pengeluaran Stock',    pageKey: 'stock-out' },
       { to: '/movements', icon: ArrowLeftRight,   label: 'Pergerakan', pageKey: 'movements' },
-      { to: '/transfers', icon: Repeat2,          label: 'Transfer Stok', pageKey: 'transfers' },
+      { to: '/transfers', icon: Repeat2,          label: 'Transfer Stok', pageKey: 'transfers', requirePermission: 'stock.transfer.view' },
       { to: '/opname',    icon: ClipboardList,    label: 'Stock Opname', pageKey: 'opname' },
       { to: '/handover',  icon: PackageCheck,     label: 'Handover',     pageKey: 'handover' },
     ],
@@ -88,7 +88,7 @@ const PAGE_TITLES = {
 }
 
 export default function Layout({ children }) {
-  const { user, signOut, isSuperAdmin } = useAuth()
+  const { user, signOut, isSuperAdmin, hasPermission } = useAuth()
   const { needsCompany } = useCompanyGuard()
   const { isPageVisible } = usePageVisibility()
   const navigate  = useNavigate()
@@ -136,6 +136,7 @@ export default function Layout({ children }) {
           {NAV_GROUPS.map((group) => {
             const navItems = group.items.reduce((acc, item) => {
               if (item.superOnly && !isSuperAdmin) return acc
+              if (item.requirePermission && !isSuperAdmin && !hasPermission(item.requirePermission)) return acc
 
               const hidden = !!(item.pageKey && !isPageVisible(item.pageKey))
               if (hidden && !isSuperAdmin) return acc
