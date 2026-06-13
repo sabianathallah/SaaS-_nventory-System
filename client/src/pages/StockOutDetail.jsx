@@ -224,9 +224,8 @@ export default function StockOutDetail() {
   const draftId    = draft?.id
   const draftItems = draft?.Stock_Out_Draft_Items ?? []
 
-  // Ref untuk kembalikan focus ke halaman setelah scan (agar scanner berikutnya tidak jatuh ke DevTools)
   const pageRef         = useRef(null)
-  // Local form state, initialized from server draft once
+  const scanGrabRef     = useRef(null) // hidden input untuk cegah DevTools capture scanner
   const formInitialized = useRef(false)
   const saveTimer       = useRef(null)
   const [form, setForm] = useState(EMPTY_FORM)
@@ -277,11 +276,20 @@ export default function StockOutDetail() {
     enabled:  !!form.warehouseId && isNew,
   })
 
-  // Setiap kali draft berubah (karena refetch setelah addItem), kembalikan
-  // focus ke container halaman agar scan berikutnya tetap tertangkap.
+  // Ketika scanner aktif, jaga hidden input selalu terfokus.
   useEffect(() => {
-    if (scannerConnected && isNew) pageRef.current?.focus()
-  }, [draft]) // eslint-disable-line react-hooks/exhaustive-deps
+    if (!scannerConnected || !isNew) return
+    const input = scanGrabRef.current
+    if (!input) return
+    input.focus()
+    const onBlur = () => requestAnimationFrame(() => {
+      if (!document.activeElement || document.activeElement === document.body) {
+        input.focus()
+      }
+    })
+    input.addEventListener('blur', onBlur)
+    return () => input.removeEventListener('blur', onBlur)
+  }, [scannerConnected, isNew])
 
   const draftQueryKey = draftIdParam ? ['stock-out-draft', draftIdParam] : ['stock-out-draft']
 
@@ -356,8 +364,7 @@ export default function StockOutDetail() {
     } catch {
       toast.error(`SKU "${code}" tidak ditemukan`)
     }
-    // Kembalikan focus ke halaman agar scan berikutnya tidak jatuh ke DevTools console
-    pageRef.current?.focus()
+    scanGrabRef.current?.focus()
   }
 
   useExternalScanner(handleScan, isNew && scannerConnected && canScanOut)
@@ -515,6 +522,22 @@ export default function StockOutDetail() {
 
   return (
     <div className="px-6 py-6 max-w-4xl outline-none" ref={pageRef} tabIndex={-1}>
+      {scannerConnected && (
+        <input
+          ref={scanGrabRef}
+          aria-hidden="true"
+          tabIndex={-1}
+          style={{ position: 'fixed', opacity: 0, width: 0, height: 0, top: 0, left: 0, pointerEvents: 'none' }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              const code = e.currentTarget.value.trim()
+              e.currentTarget.value = ''
+              if (code.length > 2) handleScan(code)
+            }
+          }}
+          onChange={() => {}}
+        />
+      )}
       <div className="flex items-center gap-3 mb-6">
         <button onClick={() => navigate('/stock-out')} className="p-1.5 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors">
           <ArrowLeft size={16} />

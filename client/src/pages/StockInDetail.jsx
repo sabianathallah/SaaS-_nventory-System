@@ -304,6 +304,7 @@ export default function StockInDetail() {
   const formInitialized = useRef(false)
   const saveTimer       = useRef(null)
   const pageRef         = useRef(null)
+  const scanGrabRef     = useRef(null) // hidden input untuk cegah DevTools capture scanner
   const [form, setForm] = useState({ date: fmtDate(), WarehouseId: '', note: '' })
 
   useEffect(() => {
@@ -340,11 +341,22 @@ export default function StockInDetail() {
     queryFn:  () => warehousesApi.list({ limit: 100 }),
   })
 
-  // Setiap kali draft berubah (karena refetch setelah addItem), kembalikan
-  // focus ke container halaman agar scan berikutnya tetap tertangkap.
+  // Ketika scanner aktif, jaga hidden input selalu terfokus.
+  // Saat focus pergi ke DevTools, document.activeElement kembali ke <body> —
+  // kita deteksi ini dan langsung rebut focus kembali ke hidden input.
   useEffect(() => {
-    if (scannerConnected && isNew) pageRef.current?.focus()
-  }, [draft]) // eslint-disable-line react-hooks/exhaustive-deps
+    if (!scannerConnected || !isNew) return
+    const input = scanGrabRef.current
+    if (!input) return
+    input.focus()
+    const onBlur = () => requestAnimationFrame(() => {
+      if (!document.activeElement || document.activeElement === document.body) {
+        input.focus()
+      }
+    })
+    input.addEventListener('blur', onBlur)
+    return () => input.removeEventListener('blur', onBlur)
+  }, [scannerConnected, isNew])
 
   const draftQueryKey = draftIdParam ? ['stock-in-draft', draftIdParam] : ['stock-in-draft']
 
@@ -400,8 +412,8 @@ export default function StockInDetail() {
     } catch {
       toast.error(`SKU "${code}" tidak ditemukan`)
     }
-    // Kembalikan focus ke halaman agar scan berikutnya tidak jatuh ke DevTools console
-    pageRef.current?.focus()
+    // Kembalikan focus ke hidden scan input agar scan berikutnya tidak jatuh ke DevTools
+    scanGrabRef.current?.focus()
   }
 
   useExternalScanner(handleScan, isNew && scannerConnected)
@@ -512,6 +524,23 @@ export default function StockInDetail() {
 
   return (
     <div className="px-6 py-6 max-w-4xl outline-none" ref={pageRef} tabIndex={-1}>
+      {/* Hidden input: merebut focus dari DevTools ketika scanner aktif */}
+      {scannerConnected && (
+        <input
+          ref={scanGrabRef}
+          aria-hidden="true"
+          tabIndex={-1}
+          style={{ position: 'fixed', opacity: 0, width: 0, height: 0, top: 0, left: 0, pointerEvents: 'none' }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              const code = e.currentTarget.value.trim()
+              e.currentTarget.value = ''
+              if (code.length > 2) handleScan(code)
+            }
+          }}
+          onChange={() => {}}
+        />
+      )}
       <div className="flex items-center gap-3 mb-6">
         <button onClick={() => navigate('/stock-in')} className="p-1.5 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors">
           <ArrowLeft size={16} />
