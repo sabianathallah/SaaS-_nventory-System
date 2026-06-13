@@ -303,6 +303,7 @@ export default function StockInDetail() {
   // Local form, initialized from server draft once
   const formInitialized = useRef(false)
   const saveTimer       = useRef(null)
+  const pageRef         = useRef(null)
   const [form, setForm] = useState({ date: fmtDate(), WarehouseId: '', note: '' })
 
   useEffect(() => {
@@ -339,10 +340,15 @@ export default function StockInDetail() {
     queryFn:  () => warehousesApi.list({ limit: 100 }),
   })
 
+  const draftQueryKey = draftIdParam ? ['stock-in-draft', draftIdParam] : ['stock-in-draft']
+
   const addItemMutation = useMutation({
     mutationFn: (data) => stockInDraftApi.addItem(draftId, data),
-    onSuccess:  ()     => qc.invalidateQueries({ queryKey: ['stock-in-draft'] }),
-    onError:    e      => toast.error(e.response?.data?.message || 'Error'),
+    // Gunakan setQueryData (bukan invalidateQueries) agar tidak ada refetch —
+    // refetch menyebabkan re-render yang bisa menggeser focus keluar halaman,
+    // sehingga scan berikutnya masuk ke DevTools console bukan ke page.
+    onSuccess: (updatedDraft) => qc.setQueryData(draftQueryKey, updatedDraft),
+    onError:   e => toast.error(e.response?.data?.message || 'Error'),
   })
 
   const removeItemMutation = useMutation({
@@ -391,6 +397,8 @@ export default function StockInDetail() {
     } catch {
       toast.error(`SKU "${code}" tidak ditemukan`)
     }
+    // Kembalikan focus ke halaman agar scan berikutnya tidak jatuh ke DevTools console
+    pageRef.current?.focus()
   }
 
   useExternalScanner(handleScan, isNew && scannerConnected)
@@ -500,7 +508,7 @@ export default function StockInDetail() {
   )
 
   return (
-    <div className="px-6 py-6 max-w-4xl">
+    <div className="px-6 py-6 max-w-4xl outline-none" ref={pageRef} tabIndex={-1}>
       <div className="flex items-center gap-3 mb-6">
         <button onClick={() => navigate('/stock-in')} className="p-1.5 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors">
           <ArrowLeft size={16} />
