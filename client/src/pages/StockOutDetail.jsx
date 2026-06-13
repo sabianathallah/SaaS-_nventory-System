@@ -218,8 +218,9 @@ export default function StockOutDetail() {
     queryFn:  draftIdParam
       ? () => stockOutDraftApi.get(draftIdParam)
       : () => stockOutDraftApi.ensure(),
-    enabled:  isNew,
-    staleTime: Infinity,
+    enabled:           isNew,
+    staleTime:         Infinity,
+    structuralSharing: false,
   })
   const draftId    = draft?.id
   const draftItems = draft?.Stock_Out_Draft_Items ?? []
@@ -355,11 +356,15 @@ export default function StockOutDetail() {
     if (!form.warehouseId) return toast.error('Pilih warehouse terlebih dahulu')
     try {
       const sku       = await stockInApi.resolveSku(code)
-      const productId = String(sku.ProductId ?? sku.Product?.id)
-      const skuId     = String(sku.id)
-      const name      = sku.Product?.name ?? code
-      const label     = skuLabel(sku)
-      addItem({ skuId, productId, quantity: 1 })
+      if (!draftId) return toast.error('Draft belum siap, coba lagi')
+      const updated = await stockOutDraftApi.addItem(draftId, {
+        ProductSKUId: sku.id ? Number(sku.id) : undefined,
+        ProductId:    sku.ProductId ? Number(sku.ProductId) : (sku.Product?.id ? Number(sku.Product.id) : undefined),
+        quantity: 1,
+      })
+      qc.setQueryData(draftQueryKey, updated)
+      const name  = sku.Product?.name ?? code
+      const label = skuLabel(sku)
       toast.success(`${name}${label ? ` · ${label}` : ''} +1`)
     } catch {
       toast.error(`SKU "${code}" tidak ditemukan`)

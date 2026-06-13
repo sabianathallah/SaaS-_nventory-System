@@ -294,8 +294,9 @@ export default function StockInDetail() {
     queryFn:  draftIdParam
       ? () => stockInDraftApi.get(draftIdParam)
       : () => stockInDraftApi.ensure(),
-    enabled:  isNew,
-    staleTime: Infinity,
+    enabled:          isNew,
+    staleTime:        Infinity,
+    structuralSharing: false, // selalu re-render saat setQueryData dipanggil
   })
   const draftId    = draft?.id
   const draftItems = draft?.Stock_In_Draft_Items ?? []
@@ -406,13 +407,18 @@ export default function StockInDetail() {
   const handleScan = async (code) => {
     try {
       const sku   = await stockInApi.resolveSku(code)
+      if (!draftId) return toast.error('Draft belum siap, coba lagi')
+      const updated = await stockInDraftApi.addItem(draftId, {
+        ProductSKUId: sku.id,
+        quantity: 1,
+        price: Number(sku.price) || 0,
+      })
+      qc.setQueryData(draftQueryKey, updated)
       const label = skuLabel(sku)
-      addItem({ sku, quantity: 1, price: Number(sku.price) || 0 })
       toast.success(`${sku.Product?.name ?? code}${label ? ` · ${label}` : ''} +1`)
     } catch {
       toast.error(`SKU "${code}" tidak ditemukan`)
     }
-    // Kembalikan focus ke hidden scan input agar scan berikutnya tidak jatuh ke DevTools
     scanGrabRef.current?.focus()
   }
 
