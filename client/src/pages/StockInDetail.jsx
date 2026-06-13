@@ -340,15 +340,18 @@ export default function StockInDetail() {
     queryFn:  () => warehousesApi.list({ limit: 100 }),
   })
 
+  // Setiap kali draft berubah (karena refetch setelah addItem), kembalikan
+  // focus ke container halaman agar scan berikutnya tetap tertangkap.
+  useEffect(() => {
+    if (scannerConnected && isNew) pageRef.current?.focus()
+  }, [draft]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const draftQueryKey = draftIdParam ? ['stock-in-draft', draftIdParam] : ['stock-in-draft']
 
   const addItemMutation = useMutation({
     mutationFn: (data) => stockInDraftApi.addItem(draftId, data),
-    // Gunakan setQueryData (bukan invalidateQueries) agar tidak ada refetch —
-    // refetch menyebabkan re-render yang bisa menggeser focus keluar halaman,
-    // sehingga scan berikutnya masuk ke DevTools console bukan ke page.
-    onSuccess: (updatedDraft) => qc.setQueryData(draftQueryKey, updatedDraft),
-    onError:   e => toast.error(e.response?.data?.message || 'Error'),
+    onSuccess:  ()     => qc.invalidateQueries({ queryKey: draftQueryKey }),
+    onError:    e      => toast.error(e.response?.data?.message || 'Error'),
   })
 
   const removeItemMutation = useMutation({

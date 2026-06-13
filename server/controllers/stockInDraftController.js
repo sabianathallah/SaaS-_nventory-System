@@ -128,6 +128,7 @@ class StockInDraftController {
 
             if (existing) {
                 await existing.increment('quantity', { by: Number(quantity) });
+                await existing.reload(); // flush increment ke in-memory instance
                 if (price !== undefined) await existing.update({ price: Number(price) });
             } else {
                 await Stock_In_Draft_Item.create({

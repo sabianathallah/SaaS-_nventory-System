@@ -146,6 +146,7 @@ class StockOutDraftController {
 
             if (existing) {
                 await existing.increment('quantity', { by: Number(quantity) });
+                await existing.reload(); // flush increment ke in-memory instance
             } else {
                 await Stock_Out_Draft_Item.create({
                     DraftId: draft.id,
