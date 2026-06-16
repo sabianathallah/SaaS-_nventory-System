@@ -352,7 +352,6 @@ export default function StockOutDetail() {
   }
 
   const handleScan = async (code) => {
-    setShowScanner(false)
     if (!form.warehouseId) { toast.error('Pilih warehouse terlebih dahulu'); scanGrabRef.current?.focus(); return }
     if (!draftId) { toast.error('Draft belum siap, coba lagi'); scanGrabRef.current?.focus(); return }
     let sku
@@ -363,6 +362,8 @@ export default function StockOutDetail() {
       scanGrabRef.current?.focus()
       return
     }
+    // Close camera only after SKU resolved — failed scans keep camera open for retry
+    setShowScanner(false)
     try {
       await stockOutDraftApi.addItem(draftId, {
         ProductSKUId: sku.id ? Number(sku.id) : undefined,
@@ -721,6 +722,7 @@ export default function StockOutDetail() {
                       <td className="td py-1.5 text-right">
                         {canManualOutput ? (
                           <input
+                            key={`${it.id}-${it.quantity}`}
                             type="number" min="1"
                             defaultValue={it.quantity}
                             onBlur={e => {

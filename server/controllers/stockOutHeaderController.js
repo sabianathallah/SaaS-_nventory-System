@@ -160,19 +160,45 @@ class StockOutHeaderController {
         try {
             const header = await Stock_Out_Header.findOne({ where: { id: req.params.id, ...companyFilter(req) } });
             if (!header) throw { name: 'NotFound', message: 'Stock out header not found' };
-            const { date, WarehouseId, destination, notes } = req.body;
-            await header.update({ date, WarehouseId, destination, notes });
+            // WarehouseId changes are blocked — moving stock requires delete + recreate
+            if (req.body.WarehouseId && Number(req.body.WarehouseId) !== header.WarehouseId) {
+                return res.status(400).json({ message: 'Gudang tidak dapat diubah. Hapus dan buat ulang dokumen untuk mengganti gudang.' });
+            }
+            const { date, destination, notes } = req.body;
+            await header.update({ date, destination, notes });
             res.status(200).json(header);
         } catch (err) { next(err); }
     }
 
     static async delete(req, res, next) {
+        const t = await sequelize.transaction();
         try {
-            const header = await Stock_Out_Header.findOne({ where: { id: req.params.id, ...companyFilter(req) } });
-            if (!header) throw { name: 'NotFound', message: 'Stock out header not found' };
-            await header.destroy();
+            const header = await Stock_Out_Header.findOne({
+                where: { id: req.params.id, ...companyFilter(req) },
+                transaction: t,
+            });
+            if (!header) { await t.rollback(); throw { name: 'NotFound', message: 'Stock out header not found' }; }
+
+            const movements = await Stock_Movement.findAll({
+                where: { ReferenceId: header.id, type: 'OUT' },
+                transaction: t,
+            });
+            for (const mv of movements) {
+                const stock = await Stock.findOne({
+                    where: { ProductId: mv.ProductId, WarehouseId: mv.WarehouseId },
+                    transaction: t,
+                });
+                if (stock) await stock.increment('quantity', { by: mv.quantity, transaction: t });
+                if (mv.ProductSKUId) {
+                    const sku = await ProductSKU.findByPk(mv.ProductSKUId, { transaction: t });
+                    if (sku) await sku.increment('qty', { by: mv.quantity, transaction: t });
+                }
+            }
+            await Stock_Movement.destroy({ where: { ReferenceId: header.id }, transaction: t });
+            await header.destroy({ transaction: t });
+            await t.commit();
             res.status(200).json({ message: 'Stock out header deleted successfully' });
-        } catch (err) { next(err); }
+        } catch (err) { await t.rollback(); next(err); }
     }
 }
 

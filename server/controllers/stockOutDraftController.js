@@ -119,7 +119,7 @@ class StockOutDraftController {
     static async addItem(req, res, next) {
         try {
             const draft = await Stock_Out_Draft.findOne({
-                where: { id: req.params.id, status: 'draft', ...companyFilter(req) },
+                where: { id: req.params.id, status: 'draft', createdBy: req.user.id, ...companyFilter(req) },
             });
             if (!draft) throw { name: 'NotFound', message: 'Draft tidak ditemukan atau sudah disubmit' };
 
@@ -167,6 +167,8 @@ class StockOutDraftController {
 
     static async updateItem(req, res, next) {
         try {
+            const draft = await Stock_Out_Draft.findOne({ where: { id: req.params.id, createdBy: req.user.id, ...companyFilter(req) } });
+            if (!draft) throw { name: 'NotFound', message: 'Draft tidak ditemukan' };
             const item = await Stock_Out_Draft_Item.findOne({
                 where: { id: req.params.itemId, DraftId: req.params.id },
             });
@@ -181,6 +183,8 @@ class StockOutDraftController {
 
     static async removeItem(req, res, next) {
         try {
+            const draft = await Stock_Out_Draft.findOne({ where: { id: req.params.id, createdBy: req.user.id, ...companyFilter(req) } });
+            if (!draft) throw { name: 'NotFound', message: 'Draft tidak ditemukan' };
             const item = await Stock_Out_Draft_Item.findOne({
                 where: { id: req.params.itemId, DraftId: req.params.id },
             });
@@ -194,7 +198,7 @@ class StockOutDraftController {
         const t = await sequelize.transaction();
         try {
             const draft = await Stock_Out_Draft.findOne({
-                where: { id: req.params.id, ...companyFilter(req) },
+                where: { id: req.params.id, createdBy: req.user.id, ...companyFilter(req) },
                 include: DRAFT_ITEM_INCLUDE,
                 transaction: t,
             });

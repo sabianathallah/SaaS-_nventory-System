@@ -154,6 +154,8 @@ class HandoverController {
 
   static async removeResi(req, res, next) {
     try {
+      const handover = await Handover.findOne({ where: { id: req.params.id, ...companyFilter(req) } });
+      if (!handover) throw { name: 'NotFound', message: 'Handover tidak ditemukan' };
       const item = await Handover_Item.findOne({
         where: { id: req.params.itemId, HandoverId: req.params.id },
       });

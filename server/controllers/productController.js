@@ -18,11 +18,12 @@ class ProductController {
             });
 
             if (req.query.name) {
-                const term = req.query.name.replace(/'/g, "''");
+                const term = req.query.name;
+                const escapedPattern = sequelize.escape(`%${term}%`);
                 filter[Op.or] = [
                     { name: { [Op.iLike]: `%${term}%` } },
                     sequelize.where(
-                        sequelize.literal(`(SELECT COUNT(*) FROM "ProductSKUs" WHERE "ProductSKUs"."ProductId" = "Product"."id" AND "ProductSKUs"."sku_code" ILIKE '%${term}%')`),
+                        sequelize.literal(`(SELECT COUNT(*) FROM "ProductSKUs" WHERE "ProductSKUs"."ProductId" = "Product"."id" AND "ProductSKUs"."sku_code" ILIKE ${escapedPattern})`),
                         { [Op.gt]: 0 }
                     ),
                 ];

@@ -154,19 +154,42 @@ class StockInHeaderController {
     try {
       const header = await Stock_In_Header.findOne({ where: { id: req.params.id, ...companyFilter(req) } });
       if (!header) throw { name: 'NotFound', message: 'Stock in not found' };
-      const { date, SupplierId, WarehouseId, note } = req.body;
-      await header.update({ date, SupplierId, WarehouseId, note });
+      // WarehouseId changes are blocked — moving stock requires delete + recreate
+      if (req.body.WarehouseId && Number(req.body.WarehouseId) !== header.WarehouseId) {
+        return res.status(400).json({ message: 'Gudang tidak dapat diubah. Hapus dan buat ulang dokumen untuk mengganti gudang.' });
+      }
+      const { date, SupplierId, note } = req.body;
+      await header.update({ date, SupplierId, note });
       res.status(200).json(header);
     } catch (err) { next(err); }
   }
 
   static async delete(req, res, next) {
+    const t = await sequelize.transaction();
     try {
-      const header = await Stock_In_Header.findOne({ where: { id: req.params.id, ...companyFilter(req) } });
-      if (!header) throw { name: 'NotFound', message: 'Stock in not found' };
-      await header.destroy();
+      const header = await Stock_In_Header.findOne({
+        where: { id: req.params.id, ...companyFilter(req) },
+        include: [{ model: Stock_In_Item }],
+        transaction: t,
+      });
+      if (!header) { await t.rollback(); throw { name: 'NotFound', message: 'Stock in not found' }; }
+
+      for (const item of (header.Stock_In_Items || [])) {
+        const sku = await ProductSKU.findByPk(item.ProductSKUId, { transaction: t });
+        if (sku) {
+          const stock = await Stock.findOne({
+            where: { ProductId: sku.ProductId, WarehouseId: header.WarehouseId },
+            transaction: t,
+          });
+          if (stock) await stock.decrement('quantity', { by: item.quantity, transaction: t });
+          await sku.decrement('qty', { by: item.quantity, transaction: t });
+        }
+      }
+      await Stock_Movement.destroy({ where: { ReferenceId: header.id }, transaction: t });
+      await header.destroy({ transaction: t });
+      await t.commit();
       res.status(200).json({ message: 'Deleted' });
-    } catch (err) { next(err); }
+    } catch (err) { await t.rollback(); next(err); }
   }
 
   // ── Item sub-routes ──────────────────────────────────────────────────────────

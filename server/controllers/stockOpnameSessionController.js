@@ -78,6 +78,10 @@ class StockOpnameSessionController {
             });
             if (!session) { await t.rollback(); throw { name: 'NotFound', message: 'Stock opname session not found' }; }
 
+            if (session.status === 'closed' && req.body.status === 'open') {
+                await t.rollback();
+                return res.status(400).json({ message: 'Sesi opname yang sudah ditutup tidak dapat dibuka kembali' });
+            }
             const isClosing = req.body.status === 'closed' && session.status !== 'closed';
             await session.update({
                 ...req.body,

@@ -58,7 +58,7 @@ class StockOpnameItemController {
                 return res.status(400).json({ message: 'SessionId, ProductId, dan actualQty wajib diisi' });
             }
 
-            const session = await Stock_Opname_Session.findByPk(SessionId);
+            const session = await Stock_Opname_Session.findOne({ where: { id: SessionId, ...companyFilter(req) } });
             if (!session) return res.status(404).json({ message: 'Opname session tidak ditemukan' });
             if (session.status !== 'open') return res.status(400).json({ message: 'Tidak bisa menambah item ke sesi yang sudah ditutup atau dibatalkan' });
 
@@ -100,8 +100,12 @@ class StockOpnameItemController {
             if (!item) throw { name: 'NotFound', message: 'Stock opname item not found' };
             const { scanned_qty, difference } = req.body;
             const updates = {};
-            if (scanned_qty != null) updates.scanned_qty = Number(scanned_qty);
-            if (difference  != null) updates.difference  = Number(difference);
+            if (scanned_qty != null) {
+                updates.scanned_qty = Number(scanned_qty);
+                // Recalculate difference when scanned_qty changes (unless client sends explicit override)
+                if (difference == null) updates.difference = Number(scanned_qty) - Number(item.system_qty);
+            }
+            if (difference != null) updates.difference = Number(difference);
             await item.update(updates);
             res.status(200).json(item);
         } catch (err) { next(err); }
