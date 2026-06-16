@@ -25,7 +25,7 @@ export function AuthProvider({ children }) {
         localStorage.setItem('user', JSON.stringify(updated))
         setUser(updated)
       })
-      .catch(() => {}) // silently ignore — offline or expired token
+      .catch((err) => { if (err?.response?.status === 401) signOut() })
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const signIn = useCallback(async (email, password) => {

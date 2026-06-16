@@ -33,8 +33,8 @@ async function applyItem(t, { cid, fromWarehouseId, toWarehouseId, productSkuId,
   const sku = await ProductSKU.findByPk(productSkuId, { transaction: t });
   if (!sku) throw { status: 404, message: `SKU ${productSkuId} tidak ditemukan` };
 
-  // Decrement source warehouse stock
-  const srcStock = await Stock.findOne({ where: { ProductId: sku.ProductId, WarehouseId: fromWarehouseId }, transaction: t });
+  // Lock source stock row to prevent concurrent transfers from racing past the sufficiency check
+  const srcStock = await Stock.findOne({ where: { ProductId: sku.ProductId, WarehouseId: fromWarehouseId }, transaction: t, lock: t.LOCK.UPDATE });
   if (!srcStock || srcStock.quantity < qty) {
     throw { status: 400, message: `Stok tidak cukup di gudang asal untuk SKU ${sku.sku_code} (tersedia: ${srcStock?.quantity ?? 0})` };
   }
@@ -159,5 +159,5 @@ exports.destroy = async (req, res, next) => {
     await transfer.destroy({ transaction: t });
     await t.commit();
     res.json({ message: 'Transfer dihapus dan stok dikembalikan' });
-  } catch (err) { await t.rollback(); next(err); }
+  } catch (err) { await t.rollback(); err.status ? res.status(err.status).json({ message: err.message }) : next(err); }
 };

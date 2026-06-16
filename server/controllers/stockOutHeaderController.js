@@ -122,21 +122,16 @@ class StockOutHeaderController {
                 },
                 { transaction: t }
             );
-            // Validate all items have sufficient stock before touching DB
+            // Validate and decrement stock atomically with row lock to prevent TOCTOU race
+            const movements = [];
             for (const item of resolvedItems) {
-                const { ProductId, WarehouseId, quantity } = item;
-                const stock = await Stock.findOne({ where: { ProductId, WarehouseId }, transaction: t });
+                const { ProductId, ProductSKUId, quantity, note, WarehouseId } = item;
+                const stock = await Stock.findOne({ where: { ProductId, WarehouseId }, transaction: t, lock: t.LOCK.UPDATE });
                 const available = stock ? Number(stock.quantity) : 0;
                 if (available < quantity) {
                     await t.rollback();
                     return res.status(400).json({ message: `Stok tidak cukup di gudang yang dipilih (tersedia: ${available}, dibutuhkan: ${quantity})` });
                 }
-            }
-
-            const movements = [];
-            for (const item of resolvedItems) {
-                const { ProductId, ProductSKUId, quantity, note, WarehouseId } = item;
-                const stock = await Stock.findOne({ where: { ProductId, WarehouseId }, transaction: t });
                 await stock.decrement('quantity', { by: quantity, transaction: t });
 
                 if (ProductSKUId) {

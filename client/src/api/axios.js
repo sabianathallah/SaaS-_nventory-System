@@ -34,16 +34,19 @@ api.interceptors.request.use((config) => {
   return config
 })
 
+let _redirectingToLogin = false
+
 api.interceptors.response.use(
   (res) => res,
   (err) => {
-    if (err.response?.status === 401) {
+    if (err.response?.status === 401 && !_redirectingToLogin) {
+      _redirectingToLogin = true
       const msg = err.response?.data?.message ?? ''
       const isExpired = msg.toLowerCase().includes('expired')
       localStorage.removeItem('token')
       localStorage.removeItem('user')
       toast.error(isExpired ? 'Sesi berakhir, silakan login kembali.' : 'Tidak terautentikasi.')
-      setTimeout(() => { window.location.href = '/login' }, 1500)
+      setTimeout(() => { _redirectingToLogin = false; window.location.href = '/login' }, 1500)
     }
     return Promise.reject(err)
   }

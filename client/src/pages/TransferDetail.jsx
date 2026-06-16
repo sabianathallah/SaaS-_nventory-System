@@ -104,6 +104,8 @@ export default function TransferDetail() {
     onSuccess: () => {
       toast.success('Transfer dihapus, stok dikembalikan')
       qc.invalidateQueries({ queryKey: ['transfers'] })
+      qc.invalidateQueries({ queryKey: ['stocks'] })
+      qc.invalidateQueries({ queryKey: ['movements'] })
       navigate('/transfers')
     },
     onError: (err) => toast.error(err?.response?.data?.message ?? 'Gagal menghapus transfer'),

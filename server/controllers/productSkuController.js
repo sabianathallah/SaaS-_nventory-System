@@ -48,7 +48,7 @@ class ProductSkuController {
       // Resolve options for auto SKU generation
       let options = [];
       if (variantOptionIds.length > 0) {
-        options = await ProductVariantOption.findAll({ where: { id: variantOptionIds } });
+        options = await ProductVariantOption.findAll({ where: { id: variantOptionIds, ...companyFilter(req) } });
         if (options.length !== variantOptionIds.length) {
           throw { name: 'BadRequest', message: 'One or more variant option IDs are invalid' };
         }
@@ -89,6 +89,8 @@ class ProductSkuController {
   // body: { sku_code?, price?, qty? }
   static async updateSku(req, res, next) {
     try {
+      const product = await Product.findOne({ where: { id: req.params.productId, ...companyFilter(req) } });
+      if (!product) throw { name: 'NotFound', message: 'Product not found' };
       const sku = await ProductSKU.findOne({
         where: { id: req.params.skuId, ProductId: req.params.productId },
       });
@@ -116,6 +118,8 @@ class ProductSkuController {
   // DELETE /products/:productId/skus/:skuId
   static async deleteSku(req, res, next) {
     try {
+      const product = await Product.findOne({ where: { id: req.params.productId, ...companyFilter(req) } });
+      if (!product) throw { name: 'NotFound', message: 'Product not found' };
       const sku = await ProductSKU.findOne({
         where: { id: req.params.skuId, ProductId: req.params.productId },
       });

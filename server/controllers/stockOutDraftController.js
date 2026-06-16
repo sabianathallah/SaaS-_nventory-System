@@ -235,7 +235,7 @@ class StockOutDraftController {
                 companyId: cid,
             }, { transaction: t });
 
-            // Resolve ProductIds and validate stock before touching DB
+            // Resolve ProductIds then lock + check + decrement atomically to prevent TOCTOU race
             const resolvedItems = [];
             for (const item of items) {
                 let { ProductSKUId, ProductId, quantity } = item;
@@ -244,12 +244,6 @@ class StockOutDraftController {
                     if (sku) ProductId = sku.ProductId;
                 }
                 if (!ProductId) continue;
-                const stock = await Stock.findOne({ where: { ProductId, WarehouseId }, transaction: t });
-                const available = stock ? Number(stock.quantity) : 0;
-                if (available < Number(quantity)) {
-                    await t.rollback();
-                    return res.status(400).json({ message: `Stok tidak cukup di gudang yang dipilih (tersedia: ${available}, dibutuhkan: ${quantity})` });
-                }
                 resolvedItems.push({ ...item.toJSON(), ProductId });
             }
 
@@ -257,14 +251,19 @@ class StockOutDraftController {
             for (const item of resolvedItems) {
                 let { ProductSKUId, ProductId, quantity } = item;
 
-                await Stock.findOrCreate({
+                const [stock] = await Stock.findOrCreate({
                     where: { ProductId, WarehouseId },
                     defaults: { quantity: 0, companyId: cid },
                     transaction: t,
                 });
-
-                const stock = await Stock.findOne({ where: { ProductId, WarehouseId }, transaction: t });
-                await stock.decrement('quantity', { by: Number(quantity), transaction: t });
+                // Re-acquire with row lock after findOrCreate to prevent concurrent decrement race
+                const lockedStock = await Stock.findOne({ where: { ProductId, WarehouseId }, transaction: t, lock: t.LOCK.UPDATE });
+                const available = lockedStock ? Number(lockedStock.quantity) : 0;
+                if (available < Number(quantity)) {
+                    await t.rollback();
+                    return res.status(400).json({ message: `Stok tidak cukup di gudang yang dipilih (tersedia: ${available}, dibutuhkan: ${quantity})` });
+                }
+                await lockedStock.decrement('quantity', { by: Number(quantity), transaction: t });
 
                 if (ProductSKUId) {
                     const sku = await ProductSKU.findByPk(ProductSKUId, { transaction: t });

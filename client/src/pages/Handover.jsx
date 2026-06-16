@@ -89,14 +89,14 @@ export default function Handover() {
               </button>
               <button
                 onClick={() => { if (confirm(`Tutup sesi Handover #${r.id}?`)) closeMutation.mutate(r.id) }}
-                disabled={closeMutation.isPending}
+                disabled={closeMutation.isPending && closeMutation.variables === r.id}
                 className="text-xs px-2.5 py-1.5 rounded font-medium flex items-center gap-1 bg-success-light text-success border border-success/20 hover:bg-success hover:text-white transition-colors disabled:opacity-50"
               >
                 <CheckCircle size={12} /> Tutup
               </button>
               <button
                 onClick={() => { if (confirm(`Batalkan Handover #${r.id}? Semua resi akan terhapus.`)) deleteMutation.mutate(r.id) }}
-                disabled={deleteMutation.isPending}
+                disabled={deleteMutation.isPending && deleteMutation.variables === r.id}
                 className="p-1.5 rounded text-slate-400 hover:text-red-500 hover:bg-red-50 border border-slate-200 transition-colors"
                 title="Batalkan handover"
               >

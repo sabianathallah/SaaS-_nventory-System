@@ -3,6 +3,9 @@ const { User, Company, Role } = require('../models');
 const { Op } = require('sequelize');
 const { paginate, buildFilter, paginatedResponse } = require('../helpers/queryHelper');
 
+const userCompanyFilter = (req) =>
+    req.user?.role === 'SUPER_ADMIN' ? {} : { companyId: req.user?.companyId };
+
 const USER_INCLUDE = [
     { model: Company, as: 'company', attributes: ['id', 'name', 'logo'], required: false },
 ];
@@ -31,7 +34,7 @@ class UserController {
                 companyId: 'exact',
             });
             const { rows, count } = await User.findAndCountAll({
-                where: filter,
+                where: { ...userCompanyFilter(req), ...filter },
                 attributes: { exclude: ['password'] },
                 include: USER_INCLUDE,
                 order: [['name', 'ASC']],
@@ -64,9 +67,15 @@ class UserController {
 
     static async update(req, res, next) {
         try {
-            const user = await User.findByPk(req.params.id);
+            const user = await User.findOne({ where: { id: req.params.id, ...userCompanyFilter(req) } });
             if (!user) throw { name: 'NotFound', message: 'User not found' };
-            await user.update(req.body);
+            const { name, email, role, avatar, companyId: _c, password: _p, ...rest } = req.body;
+            const allowed = {};
+            if (name      !== undefined) allowed.name   = name;
+            if (email     !== undefined) allowed.email  = email;
+            if (role      !== undefined) allowed.role   = role;
+            if (avatar    !== undefined) allowed.avatar = avatar;
+            await user.update(allowed);
             const { password, ...userWithoutPassword } = user.toJSON();
             res.status(200).json(userWithoutPassword);
         } catch (err) { next(err); }
@@ -74,7 +83,7 @@ class UserController {
 
     static async delete(req, res, next) {
         try {
-            const user = await User.findByPk(req.params.id);
+            const user = await User.findOne({ where: { id: req.params.id, ...userCompanyFilter(req) } });
             if (!user) throw { name: 'NotFound', message: 'User not found' };
             await user.destroy();
             res.status(200).json({ message: 'User deleted successfully' });
