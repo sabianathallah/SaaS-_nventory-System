@@ -8,7 +8,7 @@ class StockOpnameSessionController {
         try {
             const { page, limit, offset } = paginate(req.query);
             const filter = buildFilter(req.query, {
-                status:      'exact',
+                status:      'in',   // supports comma-separated e.g. status=open,closed
                 warehouseId: 'exact',
                 dateFrom:    { field: 'started_at', type: 'gte' },
                 dateTo:      { field: 'started_at', type: 'lte' },

@@ -223,8 +223,12 @@ export default function OpnameDetail() {
         }]
       })
       toast.success(`${sku.Product?.name ?? code}${label ? ` · ${label}` : ''} +1`)
-    } catch {
-      toast.error(`SKU "${code}" tidak ditemukan`)
+    } catch (e) {
+      if (e.response?.status === 404) {
+        toast.error(`SKU "${code}" tidak ditemukan`)
+      } else {
+        toast.error(e.response?.data?.message || 'Gagal mencari SKU — coba lagi')
+      }
     }
   }
 

@@ -34,14 +34,16 @@ export default function Opname() {
   const setPage = (p) => setSearchParams(prev => { prev.set('page', String(p)); return prev }, { replace: true })
   const setStatusFilter = (v) => setSearchParams(prev => { v ? prev.set('status', v) : prev.delete('status'); prev.set('page', '1'); return prev }, { replace: true })
   const setWhFilter = (v) => setSearchParams(prev => { v ? prev.set('wh', v) : prev.delete('wh'); prev.set('page', '1'); return prev }, { replace: true })
-  const setShowCancelled = (v) => setSearchParams(prev => { v ? prev.set('cancelled', '1') : prev.delete('cancelled'); return prev }, { replace: true })
+  const setShowCancelled = (v) => setSearchParams(prev => { v ? prev.set('cancelled', '1') : prev.delete('cancelled'); prev.set('page', '1'); return prev }, { replace: true })
 
   const [modal, setModal]                 = useState(null)
   const [form, setForm]                   = useState({ warehouseId: '', notes: '' })
 
+  // When showCancelled=false and no explicit status filter, pass status=open,closed to exclude cancelled server-side
+  const effectiveStatus = statusFilter || (!showCancelled ? 'open,closed' : undefined)
   const { data, isLoading } = useQuery({
-    queryKey: ['opname', { page, limit, status: statusFilter || undefined, warehouseId: whFilter || undefined }],
-    queryFn:  () => opnameSessionsApi.list({ page, limit, status: statusFilter || undefined, warehouseId: whFilter || undefined }),
+    queryKey: ['opname', { page, limit, status: effectiveStatus, warehouseId: whFilter || undefined }],
+    queryFn:  () => opnameSessionsApi.list({ page, limit, status: effectiveStatus, warehouseId: whFilter || undefined }),
   })
   const { data: warehouses } = useQuery({
     queryKey: ['warehouses', { limit: 100 }],
@@ -80,9 +82,8 @@ export default function Opname() {
     onError: e => toast.error(e.response?.data?.message || 'Error'),
   })
 
-  const visibleData = showCancelled
-    ? data?.data
-    : data?.data?.filter(s => s.status !== 'cancelled')
+  // Server already filters cancelled when showCancelled=false (via effectiveStatus=open,closed)
+  const visibleData = data?.data
 
   const columns = [
     { key: 'id',        label: '#',           width: 60,  render: r => <span className="font-mono text-xs text-slate-400">{r.id}</span> },

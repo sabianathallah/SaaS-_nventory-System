@@ -60,9 +60,21 @@ async function reverseItem(t, { cid, fromWarehouseId, toWarehouseId, productSkuI
   const sku = await ProductSKU.findByPk(productSkuId, { transaction: t });
   if (!sku) return;
 
-  await Stock.increment({ quantity:  qty }, { where: { ProductId: sku.ProductId, WarehouseId: fromWarehouseId }, transaction: t });
+  // Restore source stock — verify the row exists so we don't silently lose the reversal
+  const srcStock = await Stock.findOne({ where: { ProductId: sku.ProductId, WarehouseId: fromWarehouseId }, transaction: t });
+  if (srcStock) {
+    await srcStock.increment('quantity', { by: qty, transaction: t });
+  } else {
+    // Row was deleted after transfer — recreate it so stock isn't permanently lost
+    await Stock.create({ ProductId: sku.ProductId, WarehouseId: fromWarehouseId, quantity: qty, companyId: cid }, { transaction: t });
+  }
+
+  // Decrement destination — clamp to 0 to avoid negative stock (units may have been consumed)
   const dstStock = await Stock.findOne({ where: { ProductId: sku.ProductId, WarehouseId: toWarehouseId }, transaction: t });
-  if (dstStock) await dstStock.decrement('quantity', { by: qty, transaction: t });
+  if (dstStock) {
+    const deductable = Math.min(qty, Number(dstStock.quantity));
+    if (deductable > 0) await dstStock.decrement('quantity', { by: deductable, transaction: t });
+  }
 }
 
 exports.list = async (req, res, next) => {

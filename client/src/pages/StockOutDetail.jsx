@@ -80,7 +80,9 @@ function ProductSkuPicker({ onSelect, warehouseId, stocks }) {
   const handleAdd = () => {
     if (!selSku) return toast.error('Pilih SKU / varian terlebih dahulu')
     if (!qty || Number(qty) <= 0) return toast.error('Qty harus lebih dari 0')
-    const avail = selSku.qty ?? 0
+    // Use warehouse-specific stock if loaded, fallback to global SKU qty
+    const warehouseAvail = getAvail(selProduct?.id)
+    const avail = warehouseAvail !== null ? warehouseAvail : (selSku.qty ?? 0)
     if (Number(qty) > avail) {
       toast(`Stok akan menjadi negatif. Tersedia: ${avail}`, { icon: '⚠️' })
     }
@@ -177,11 +179,15 @@ function ProductSkuPicker({ onSelect, warehouseId, stocks }) {
           <div className="flex-1 min-w-0">
             <p className="text-sm font-semibold text-slate-800 truncate">{selProduct?.name}</p>
             <p className="text-xs text-slate-500">{skuLabel(selSku)}</p>
-            {selSku != null && (
-              <p className={`text-xs font-medium ${(selSku.qty ?? 0) === 0 ? 'text-red-500' : 'text-emerald-600'}`}>
-                Stok tersedia: {selSku.qty ?? 0}
-              </p>
-            )}
+            {selSku != null && (() => {
+              const wAvail = getAvail(selProduct?.id)
+              const dispQty = wAvail !== null ? wAvail : (selSku.qty ?? 0)
+              return (
+                <p className={`text-xs font-medium ${dispQty === 0 ? 'text-red-500' : 'text-emerald-600'}`}>
+                  Stok tersedia: {dispQty}
+                </p>
+              )
+            })()}
           </div>
           <input
             type="number" min="1" placeholder="Qty"
@@ -308,7 +314,11 @@ export default function StockOutDetail() {
 
   const updateItemQtyMutation = useMutation({
     mutationFn: ({ itemId, quantity }) => stockOutDraftApi.updateItem(draftId, itemId, { quantity }),
-    onSuccess:  ()                      => qc.invalidateQueries({ queryKey: draftQueryKey }),
+    onSuccess:  ()  => qc.invalidateQueries({ queryKey: draftQueryKey }),
+    onError:    (e) => {
+      toast.error(e.response?.data?.message || 'Gagal mengubah qty')
+      qc.invalidateQueries({ queryKey: draftQueryKey })
+    },
   })
 
   const createMutation = useMutation({
