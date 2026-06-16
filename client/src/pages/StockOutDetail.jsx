@@ -353,21 +353,28 @@ export default function StockOutDetail() {
 
   const handleScan = async (code) => {
     setShowScanner(false)
-    if (!form.warehouseId) return toast.error('Pilih warehouse terlebih dahulu')
+    if (!form.warehouseId) { toast.error('Pilih warehouse terlebih dahulu'); scanGrabRef.current?.focus(); return }
+    if (!draftId) { toast.error('Draft belum siap, coba lagi'); scanGrabRef.current?.focus(); return }
+    let sku
     try {
-      const sku       = await stockInApi.resolveSku(code)
-      if (!draftId) return toast.error('Draft belum siap, coba lagi')
-      const updated = await stockOutDraftApi.addItem(draftId, {
+      sku = await stockInApi.resolveSku(code)
+    } catch {
+      toast.error(`SKU "${code}" tidak ditemukan`)
+      scanGrabRef.current?.focus()
+      return
+    }
+    try {
+      await stockOutDraftApi.addItem(draftId, {
         ProductSKUId: sku.id ? Number(sku.id) : undefined,
         ProductId:    sku.ProductId ? Number(sku.ProductId) : (sku.Product?.id ? Number(sku.Product.id) : undefined),
         quantity: 1,
       })
-      qc.setQueryData(draftQueryKey, updated)
       const name  = sku.Product?.name ?? code
       const label = skuLabel(sku)
       toast.success(`${name}${label ? ` · ${label}` : ''} +1`)
-    } catch {
-      toast.error(`SKU "${code}" tidak ditemukan`)
+      qc.invalidateQueries({ queryKey: draftQueryKey })
+    } catch (e) {
+      toast.error(e.response?.data?.message || 'Gagal menambah item')
     }
     scanGrabRef.current?.focus()
   }
@@ -527,7 +534,7 @@ export default function StockOutDetail() {
 
   return (
     <div className="px-6 py-6 max-w-4xl outline-none" ref={pageRef} tabIndex={-1}>
-      {scannerConnected && (
+      {scannerConnected && canScanOut && (
         <input
           ref={scanGrabRef}
           aria-hidden="true"

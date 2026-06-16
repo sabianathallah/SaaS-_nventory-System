@@ -405,19 +405,26 @@ export default function StockInDetail() {
   }
 
   const handleScan = async (code) => {
+    if (!draftId) { toast.error('Draft belum siap, coba lagi'); scanGrabRef.current?.focus(); return }
+    let sku
     try {
-      const sku   = await stockInApi.resolveSku(code)
-      if (!draftId) return toast.error('Draft belum siap, coba lagi')
-      const updated = await stockInDraftApi.addItem(draftId, {
+      sku = await stockInApi.resolveSku(code)
+    } catch {
+      toast.error(`SKU "${code}" tidak ditemukan`)
+      scanGrabRef.current?.focus()
+      return
+    }
+    try {
+      await stockInDraftApi.addItem(draftId, {
         ProductSKUId: sku.id,
         quantity: 1,
         price: Number(sku.price) || 0,
       })
-      qc.setQueryData(draftQueryKey, updated)
       const label = skuLabel(sku)
       toast.success(`${sku.Product?.name ?? code}${label ? ` · ${label}` : ''} +1`)
-    } catch {
-      toast.error(`SKU "${code}" tidak ditemukan`)
+      qc.invalidateQueries({ queryKey: draftQueryKey })
+    } catch (e) {
+      toast.error(e.response?.data?.message || 'Gagal menambah item')
     }
     scanGrabRef.current?.focus()
   }
