@@ -78,6 +78,8 @@
   .badge-red       { @apply badge bg-red-50 text-red-700 border border-red-200; }
   .badge-amber     { @apply badge bg-amber-50 text-amber-700 border border-amber-200; }
   .badge-teal      { @apply badge bg-blue-50 text-blue-700 border border-blue-200; }
+  .badge-purple    { @apply badge bg-purple-50 text-purple-700 border border-purple-200; }
+  .badge-indigo    { @apply badge bg-indigo-50 text-indigo-700 border border-indigo-200; }
   .badge-muted     { @apply badge bg-slate-100 text-slate-500 border border-slate-200; }
   .badge-brand     {
     @apply badge;

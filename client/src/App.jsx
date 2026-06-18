@@ -35,6 +35,9 @@ import DatabaseLinks from './pages/DatabaseLinks'
 import Laporan from './pages/Laporan'
 import Transfers from './pages/Transfers'
 import TransferDetail from './pages/TransferDetail'
+import ManualShipments from './pages/ManualShipments'
+import ManualShipmentForm from './pages/ManualShipmentForm'
+import ManualShipmentDetail from './pages/ManualShipmentDetail'
 import Landing from './pages/Landing'
 
 function PrivateRoute({ children }) {
@@ -111,6 +114,12 @@ function AppRoutes() {
                 {/* ── Transfer Stok ── */}
                 <Route path="/transfers"     element={<PageVisibleRoute pageKey="transfers"><PermissionRoute permission="stock.transfer.view" page="Transfer Stok"><Transfers /></PermissionRoute></PageVisibleRoute>} />
                 <Route path="/transfers/:id" element={<PageVisibleRoute pageKey="transfers"><PermissionRoute permission="stock.transfer.view" page="Transfer Stok"><TransferDetail /></PermissionRoute></PageVisibleRoute>} />
+
+                {/* ── Shipping Manual ── */}
+                <Route path="/shipping-manual"          element={<PageVisibleRoute pageKey="shipping-manual"><PermissionRoute permission="shipping.manual.view" page="Shipping Manual"><ManualShipments /></PermissionRoute></PageVisibleRoute>} />
+                <Route path="/shipping-manual/new"      element={<PageVisibleRoute pageKey="shipping-manual"><PermissionRoute permission="shipping.manual.create" page="Shipping Manual"><ManualShipmentForm /></PermissionRoute></PageVisibleRoute>} />
+                <Route path="/shipping-manual/:id"      element={<PageVisibleRoute pageKey="shipping-manual"><PermissionRoute permission="shipping.manual.view" page="Shipping Manual"><ManualShipmentDetail /></PermissionRoute></PageVisibleRoute>} />
+                <Route path="/shipping-manual/:id/edit" element={<PageVisibleRoute pageKey="shipping-manual"><PermissionRoute permission="shipping.manual.edit" page="Shipping Manual"><ManualShipmentForm /></PermissionRoute></PageVisibleRoute>} />
 
                 {/* ── Packing ── */}
                 <Route path="/vendors"              element={<PageVisibleRoute pageKey="vendors"><PermissionRoute permission="packing.manage" page="Vendors"><Vendors /></PermissionRoute></PageVisibleRoute>} />

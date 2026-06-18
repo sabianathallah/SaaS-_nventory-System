@@ -10,7 +10,7 @@ import {
   ArrowDownToLine, ArrowUpFromLine, ArrowLeftRight, Repeat2,
   ClipboardList, Users, Building2, BookOpen, LogOut, Bell,
   PackageOpen, Layers, ClipboardCheck, Menu, X, Eye, EyeOff,
-  PackageCheck, Link2, BarChart2, BookMarked, ChevronDown,
+  PackageCheck, Link2, BarChart2, BookMarked, ChevronDown, SendHorizonal,
 } from 'lucide-react'
 import logoPreface from '../assets/logo-preface.jpeg'
 
@@ -42,7 +42,8 @@ const NAV_GROUPS = [
       { to: '/movements', icon: ArrowLeftRight,   label: 'Pergerakan',       pageKey: 'movements' },
       { to: '/transfers', icon: Repeat2,          label: 'Transfer Stok',    pageKey: 'transfers', requirePermission: 'stock.transfer.view' },
       { to: '/opname',    icon: ClipboardList,    label: 'Stock Opname',     pageKey: 'opname' },
-      { to: '/handover',  icon: PackageCheck,     label: 'Handover',         pageKey: 'handover' },
+      { to: '/handover',         icon: PackageCheck,    label: 'Handover',         pageKey: 'handover' },
+      { to: '/shipping-manual', icon: SendHorizonal,   label: 'Shipping Manual',  pageKey: 'shipping-manual', requirePermission: 'shipping.manual.view' },
     ],
   },
   {
@@ -79,7 +80,8 @@ const PAGE_TITLES = {
   '/dashboard': 'Dashboard', '/sop': 'SOP Operasional', '/products': 'Produk', '/catalog': 'Kategori dan Koleksi',
   '/warehouses': 'Gudang', '/suppliers': 'Vendor',
   '/stock-in': 'Penerimaan Stok', '/stock-in/new': 'Penerimaan Stok Baru', '/stock-out': 'Pengeluaran Stok', '/movements': 'Pergerakan',
-  '/opname': 'Stock Opname', '/transfers': 'Transfer Stok', '/handover': 'Handover Pengiriman', '/database-links': 'Database Links', '/users': 'Pengguna', '/companies': 'Perusahaan',
+  '/opname': 'Stock Opname', '/transfers': 'Transfer Stok', '/handover': 'Handover Pengiriman',
+  '/shipping-manual': 'Shipping Manual', '/database-links': 'Database Links', '/users': 'Pengguna', '/companies': 'Perusahaan',
   '/vendors': 'Vendor', '/incoming-goods': 'Barang Masuk',
   '/packing-jobs': 'Pekerjaan Packing', '/form-anak-packing': 'Form Anak Packing',
   '/page-visibility': 'Visibilitas Halaman',

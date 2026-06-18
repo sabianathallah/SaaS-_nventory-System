@@ -1,0 +1,549 @@
+import { useState, useRef } from 'react'
+import { useParams, useNavigate } from 'react-router-dom'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import {
+  ArrowLeft, Package, ShoppingCart, Gift, CheckCircle2, Truck,
+  XCircle, Edit2, Trash2, Upload, Printer, FileText, ImageIcon,
+  ExternalLink, ChevronDown,
+} from 'lucide-react'
+import toast from 'react-hot-toast'
+import { manualShipmentsApi } from '../api'
+import { useAuth } from '../context/AuthContext'
+import logoPreface from '../assets/logo-preface.jpeg'
+
+const fmtRp   = n => 'Rp ' + Number(n || 0).toLocaleString('id-ID')
+const fmtDate = d => d ? new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' }) : '—'
+const fmtDateTime = d => d ? new Date(d).toLocaleString('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'
+
+// ── Status config ─────────────────────────────────────────────────────────────
+const STATUS_CONFIG = {
+  in_progress: { label: 'In Progress', badge: 'badge-amber',   step: 0 },
+  transferred: { label: 'Transferred', badge: 'badge-indigo',  step: 1 },
+  shipped:     { label: 'Shipped',     badge: 'badge-purple',  step: 2 },
+  completed:   { label: 'Completed',   badge: 'badge-green',   step: 3 },
+  cancelled:   { label: 'Dibatalkan',  badge: 'badge-red',     step: -1 },
+}
+
+// ── Status timeline (sales) ───────────────────────────────────────────────────
+const SALES_STEPS    = ['in_progress', 'transferred', 'shipped', 'completed']
+const NONSALES_STEPS = ['in_progress', 'shipped', 'completed']
+
+function StatusTimeline({ status, type }) {
+  const steps  = type === 'sales' ? SALES_STEPS : NONSALES_STEPS
+  const labels = { in_progress: 'In Progress', transferred: 'Transferred', shipped: 'Shipped', completed: 'Completed' }
+  const curIdx = status === 'cancelled' ? -1 : steps.indexOf(status)
+
+  return (
+    <div className="flex items-center gap-0">
+      {steps.map((s, idx) => {
+        const done    = curIdx > idx
+        const active  = curIdx === idx
+        const cancelled = status === 'cancelled'
+        return (
+          <div key={s} className="flex items-center flex-1">
+            <div className="flex flex-col items-center gap-1 flex-shrink-0">
+              <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold border-2 transition-all ${
+                cancelled ? 'border-slate-200 bg-slate-100 text-slate-300'
+                : done ? 'border-green-500 bg-green-500 text-white'
+                : active ? 'border-red-500 bg-red-500 text-white'
+                : 'border-slate-200 bg-white text-slate-300'
+              }`}>
+                {done ? <CheckCircle2 size={14} /> : idx + 1}
+              </div>
+              <span className={`text-[10px] font-medium whitespace-nowrap ${
+                cancelled ? 'text-slate-300'
+                : done || active ? 'text-slate-700'
+                : 'text-slate-400'
+              }`}>{labels[s]}</span>
+            </div>
+            {idx < steps.length - 1 && (
+              <div className={`flex-1 h-0.5 mx-1 mb-4 ${done ? 'bg-green-400' : 'bg-slate-200'}`} />
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+// ── Cancel modal ──────────────────────────────────────────────────────────────
+function CancelModal({ onConfirm, onClose, loading }) {
+  const [reason, setReason] = useState('')
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6 space-y-4">
+        <h3 className="font-semibold text-slate-800">Batalkan Shipping</h3>
+        <div>
+          <label className="label">Alasan Pembatalan</label>
+          <textarea value={reason} onChange={e => setReason(e.target.value)} className="input min-h-[80px] resize-none" placeholder="Opsional..." />
+        </div>
+        <div className="flex gap-2 justify-end">
+          <button onClick={onClose} className="btn-secondary">Kembali</button>
+          <button onClick={() => onConfirm(reason)} disabled={loading} className="btn-danger">
+            {loading ? 'Membatalkan...' : 'Ya, Batalkan'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Print: Resi sementara ─────────────────────────────────────────────────────
+function printResiSementara(shipment) {
+  const w = window.open('', '_blank', 'width=400,height=600')
+  const items = shipment.items ?? []
+  w.document.write(`<!DOCTYPE html><html><head><title>Resi Sementara</title><style>
+    *{margin:0;padding:0;box-sizing:border-box;font-family:sans-serif}
+    body{padding:20px;font-size:12px;color:#111}
+    .center{text-align:center}.logo{width:60px;margin:0 auto 8px}
+    .title{font-size:15px;font-weight:700;margin-bottom:2px}
+    .subtitle{font-size:10px;color:#666;margin-bottom:12px}
+    hr{border:none;border-top:1px dashed #ccc;margin:10px 0}
+    .row{display:flex;justify-content:space-between;margin:3px 0}
+    .label{color:#555}.value{font-weight:600;text-align:right;max-width:60%}
+    table{width:100%;border-collapse:collapse;margin:8px 0;font-size:11px}
+    th{background:#f5f5f5;padding:4px 6px;text-align:left;font-weight:600}
+    td{padding:4px 6px;border-bottom:1px solid #f0f0f0}
+    .note{font-size:10px;color:#888;margin-top:12px;font-style:italic;text-align:center}
+  </style></head><body>
+  <div class="center">
+    <img src="${logoPreface}" class="logo" onerror="this.style.display='none'" />
+    <div class="title">RESI SEMENTARA</div>
+    <div class="subtitle">${shipment.invoiceNumber}</div>
+  </div>
+  <hr/>
+  ${shipment.buyerName ? `
+  <div class="row"><span class="label">Kepada</span><span class="value">${shipment.buyerName}</span></div>
+  ${shipment.buyerAddress ? `<div class="row"><span class="label">Alamat</span><span class="value">${shipment.buyerAddress}</span></div>` : ''}
+  ${shipment.buyerPhone ? `<div class="row"><span class="label">HP</span><span class="value">${shipment.buyerPhone}</span></div>` : ''}
+  ` : shipment.recipientInfo ? `
+  <div class="row"><span class="label">Penerima</span><span class="value">${shipment.recipientInfo}</span></div>
+  ` : ''}
+  ${shipment.expeditionName ? `<div class="row"><span class="label">Ekspedisi</span><span class="value">${shipment.expeditionName}</span></div>` : ''}
+  <hr/>
+  <table><thead><tr><th>Produk</th><th>Qty</th></tr></thead><tbody>
+    ${items.map(i => `<tr><td>${i.productName}${i.variantName ? ` - ${i.variantName}` : ''}</td><td>${i.quantity}</td></tr>`).join('')}
+  </tbody></table>
+  <hr/>
+  <div class="row"><span class="label">Tanggal</span><span class="value">${fmtDate(shipment.createdAt)}</span></div>
+  <p class="note">* Resi kurir akan dikirimkan setelah barang diambil oleh ekspedisi</p>
+  </body></html>`)
+  w.document.close()
+  w.focus()
+  setTimeout(() => { w.print(); w.close() }, 400)
+}
+
+// ── Print: PDF Invoice ────────────────────────────────────────────────────────
+function printInvoice(shipment) {
+  const w = window.open('', '_blank', 'width=700,height=900')
+  const items = shipment.items ?? []
+  const subtotal = Number(shipment.subtotal)
+  const shipping = Number(shipment.shippingCost)
+  const total    = Number(shipment.total)
+  w.document.write(`<!DOCTYPE html><html><head><title>Invoice ${shipment.invoiceNumber}</title><style>
+    *{margin:0;padding:0;box-sizing:border-box;font-family:'Segoe UI',sans-serif}
+    body{padding:40px;font-size:13px;color:#1a1a1a;max-width:720px;margin:0 auto}
+    .header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:32px}
+    .logo{width:70px}.company-name{font-size:20px;font-weight:700;color:#C8102E}
+    .invoice-meta{text-align:right}.invoice-no{font-size:18px;font-weight:700;color:#C8102E}
+    .invoice-date{color:#666;font-size:12px;margin-top:4px}
+    .section{margin-bottom:24px}.section-title{font-size:11px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid #eee}
+    .buyer-name{font-size:15px;font-weight:600}.buyer-info{color:#555;font-size:12px;margin-top:3px;line-height:1.6}
+    table{width:100%;border-collapse:collapse;margin:0}
+    thead tr{background:#f8f8f8}
+    th{padding:10px 12px;text-align:left;font-size:12px;font-weight:600;color:#555;border-bottom:2px solid #eee}
+    td{padding:10px 12px;border-bottom:1px solid #f0f0f0;font-size:13px}
+    .product-img{width:40px;height:40px;object-fit:cover;border-radius:6px;border:1px solid #eee}
+    .product-name{font-weight:500}.product-variant{font-size:11px;color:#888}
+    .totals{margin-top:16px;border-top:2px solid #eee;padding-top:16px}
+    .total-row{display:flex;justify-content:space-between;padding:4px 0;font-size:13px}
+    .total-row.grand{font-size:16px;font-weight:700;color:#C8102E;border-top:1px solid #eee;margin-top:8px;padding-top:8px}
+    .footer{margin-top:40px;padding-top:16px;border-top:1px solid #eee;text-align:center;font-size:11px;color:#999}
+    @media print{body{padding:20px}}
+  </style></head><body>
+  <div class="header">
+    <div>
+      <img src="${logoPreface}" class="logo" onerror="this.style.display='none'" />
+      <div class="company-name">Preface</div>
+    </div>
+    <div class="invoice-meta">
+      <div class="invoice-no">INVOICE</div>
+      <div style="font-size:14px;font-weight:600;margin-top:4px">${shipment.invoiceNumber}</div>
+      <div class="invoice-date">${fmtDate(shipment.createdAt)}</div>
+    </div>
+  </div>
+
+  ${shipment.buyerName ? `
+  <div class="section">
+    <div class="section-title">Kepada</div>
+    <div class="buyer-name">${shipment.buyerName}</div>
+    <div class="buyer-info">
+      ${shipment.buyerAddress ? shipment.buyerAddress + '<br/>' : ''}
+      ${shipment.buyerPhone ? 'HP: ' + shipment.buyerPhone : ''}
+    </div>
+  </div>` : shipment.recipientInfo ? `
+  <div class="section">
+    <div class="section-title">Penerima</div>
+    <div class="buyer-name">${shipment.recipientInfo}</div>
+  </div>` : ''}
+
+  ${shipment.expeditionName ? `
+  <div class="section">
+    <div class="section-title">Ekspedisi</div>
+    <div style="font-weight:500">${shipment.expeditionName}</div>
+  </div>` : ''}
+
+  <div class="section">
+    <div class="section-title">Produk</div>
+    <table>
+      <thead><tr>
+        <th style="width:44px"></th>
+        <th>Produk</th>
+        <th style="text-align:right;width:60px">Qty</th>
+        <th style="text-align:right;width:120px">Harga</th>
+        <th style="text-align:right;width:120px">Subtotal</th>
+      </tr></thead>
+      <tbody>
+        ${items.map(i => `<tr>
+          <td>${i.productImageUrl ? `<img src="${i.productImageUrl}" class="product-img" />` : ''}</td>
+          <td>
+            <div class="product-name">${i.productName}</div>
+            ${i.variantName ? `<div class="product-variant">${i.variantName}</div>` : ''}
+            ${i.sku ? `<div class="product-variant">SKU: ${i.sku}</div>` : ''}
+          </td>
+          <td style="text-align:right">${i.quantity}</td>
+          <td style="text-align:right">${fmtRp(i.unitPrice)}</td>
+          <td style="text-align:right;font-weight:500">${fmtRp(Number(i.unitPrice) * Number(i.quantity))}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>
+    <div class="totals">
+      <div class="total-row"><span>Subtotal</span><span>${fmtRp(subtotal)}</span></div>
+      <div class="total-row"><span>Ongkos Kirim</span><span>${fmtRp(shipping)}</span></div>
+      <div class="total-row grand"><span>Total</span><span>${fmtRp(total)}</span></div>
+    </div>
+  </div>
+
+  ${shipment.notes ? `<div class="section"><div class="section-title">Catatan</div><div style="color:#555;font-size:12px">${shipment.notes}</div></div>` : ''}
+
+  <div class="footer">Terima kasih atas kepercayaan Anda · Preface Internal System</div>
+  </body></html>`)
+  w.document.close()
+  w.focus()
+  setTimeout(() => { w.print(); w.close() }, 400)
+}
+
+// ── Main component ────────────────────────────────────────────────────────────
+export default function ManualShipmentDetail() {
+  const { id }     = useParams()
+  const navigate   = useNavigate()
+  const qc         = useQueryClient()
+  const { isSuperAdmin, hasPermission } = useAuth()
+
+  const [showCancel, setShowCancel]     = useState(false)
+  const [showDelete, setShowDelete]     = useState(false)
+  const [resiNumber, setResiNumber]     = useState('')
+  const [resiFile, setResiFile]         = useState(null)
+  const proofRef = useRef(null)
+  const resiFileRef = useRef(null)
+
+  const perm = (k) => isSuperAdmin || hasPermission(k) || hasPermission('shipping.manual.manage')
+
+  const { data: res, isLoading } = useQuery({
+    queryKey: ['manual-shipment', id],
+    queryFn:  () => manualShipmentsApi.get(id),
+    enabled:  !!id,
+  })
+  const s = res?.data
+
+  const invalidate = () => qc.invalidateQueries({ queryKey: ['manual-shipment', id] })
+
+  const statusMut = useMutation({
+    mutationFn: (data) => manualShipmentsApi.changeStatus(id, data),
+    onSuccess: () => { invalidate(); toast.success('Status diperbarui') },
+    onError: (err) => toast.error(err?.response?.data?.message ?? 'Gagal update status'),
+  })
+
+  const proofMut = useMutation({
+    mutationFn: (file) => manualShipmentsApi.uploadPaymentProof(id, file),
+    onSuccess: () => { invalidate(); toast.success('Bukti transfer diupload') },
+    onError: (err) => toast.error(err?.response?.data?.message ?? 'Gagal upload'),
+  })
+
+  const resiMut = useMutation({
+    mutationFn: (data) => manualShipmentsApi.uploadCourierResi(id, data),
+    onSuccess: () => { invalidate(); toast.success('Resi kurir disimpan'); setResiNumber(''); setResiFile(null) },
+    onError: (err) => toast.error(err?.response?.data?.message ?? 'Gagal simpan resi'),
+  })
+
+  const deleteMut = useMutation({
+    mutationFn: () => manualShipmentsApi.destroy(id),
+    onSuccess: () => { toast.success('Shipping dihapus'); navigate('/shipping-manual') },
+    onError: () => toast.error('Gagal menghapus'),
+  })
+
+  if (isLoading) return <div className="flex items-center justify-center h-64 text-slate-400">Memuat...</div>
+  if (!s) return <div className="flex items-center justify-center h-64 text-slate-400">Data tidak ditemukan</div>
+
+  const cfg       = STATUS_CONFIG[s.status] ?? {}
+  const canEdit   = s.status === 'in_progress' && perm('shipping.manual.edit')
+  const canCancel = !['completed', 'cancelled'].includes(s.status) && perm('shipping.manual.cancel')
+  const canDelete = perm('shipping.manual.delete')
+  const canApprove = s.status === 'in_progress' && s.type === 'sales' && s.paymentProofUrl && perm('shipping.manual.approve_payment')
+  const canShip   = ['in_progress', 'transferred'].includes(s.status) && perm('shipping.manual.manage')
+  const canComplete = s.status === 'shipped' && perm('shipping.manual.manage')
+  const canUploadResi = !['cancelled'].includes(s.status) && perm('shipping.manual.upload_resi')
+
+  return (
+    <div className="px-4 md:px-6 py-6 max-w-6xl mx-auto space-y-6">
+      {/* Back + title */}
+      <div className="flex items-center gap-3">
+        <button onClick={() => navigate('/shipping-manual')} className="btn-ghost p-2 rounded-lg">
+          <ArrowLeft size={18} />
+        </button>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h1 className="text-xl font-bold text-slate-800 font-mono">{s.invoiceNumber}</h1>
+            <span className={cfg.badge}>{cfg.label}</span>
+            {s.type === 'sales'
+              ? <span className="badge-teal flex items-center gap-1"><ShoppingCart size={10}/> Sales</span>
+              : <span className="badge-muted flex items-center gap-1"><Gift size={10}/> Non-Sales {s.category ? `· ${s.category.name}` : ''}</span>
+            }
+          </div>
+          <p className="text-xs text-slate-400 mt-0.5">Dibuat oleh {s.creator?.name ?? '—'} · {fmtDateTime(s.createdAt)}</p>
+        </div>
+      </div>
+
+      {/* Timeline */}
+      {s.status !== 'cancelled' && (
+        <div className="card p-5">
+          <StatusTimeline status={s.status} type={s.type} />
+        </div>
+      )}
+      {s.status === 'cancelled' && (
+        <div className="card p-4 border-l-4 border-red-400 bg-red-50">
+          <div className="flex items-center gap-2 text-red-700 font-semibold"><XCircle size={16}/> Pengiriman Dibatalkan</div>
+          {s.cancelledReason && <p className="text-sm text-red-600 mt-1">{s.cancelledReason}</p>}
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left: main info */}
+        <div className="lg:col-span-2 space-y-5">
+          {/* Buyer info */}
+          <div className="card p-5 space-y-3">
+            <h2 className="font-semibold text-slate-700 text-sm">{s.type === 'sales' ? 'Info Pembeli' : 'Info Penerima'}</h2>
+            {s.type === 'sales' ? (
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div><span className="text-slate-400">Nama</span><div className="font-medium text-slate-800 mt-0.5">{s.buyerName || '—'}</div></div>
+                <div><span className="text-slate-400">No. HP</span><div className="font-medium text-slate-800 mt-0.5">{s.buyerPhone || '—'}</div></div>
+                <div className="col-span-2"><span className="text-slate-400">Alamat</span><div className="font-medium text-slate-800 mt-0.5 leading-relaxed">{s.buyerAddress || '—'}</div></div>
+              </div>
+            ) : (
+              <div className="text-sm">
+                <span className="text-slate-400">Penerima / Keterangan</span>
+                <div className="font-medium text-slate-800 mt-0.5">{s.recipientInfo || '—'}</div>
+              </div>
+            )}
+            <div className="flex gap-6 pt-2 border-t text-sm">
+              <div><span className="text-slate-400">Ekspedisi</span><div className="font-medium text-slate-800 mt-0.5">{s.expeditionName || '—'}</div></div>
+              {s.courierResiNumber && (
+                <div><span className="text-slate-400">No. Resi Kurir</span><div className="font-mono font-semibold text-slate-800 mt-0.5">{s.courierResiNumber}</div></div>
+              )}
+            </div>
+            {s.notes && <div className="text-sm text-slate-500 bg-slate-50 rounded-lg p-3 italic">"{s.notes}"</div>}
+          </div>
+
+          {/* Items */}
+          <div className="card p-5 space-y-3">
+            <h2 className="font-semibold text-slate-700 text-sm">Produk ({s.items?.length ?? 0} item)</h2>
+            <div className="space-y-2">
+              {(s.items ?? []).map(item => (
+                <div key={item.id} className="flex gap-3 items-start bg-slate-50 rounded-lg p-3">
+                  {item.productImageUrl
+                    ? <img src={item.productImageUrl} alt={item.productName} className="w-14 h-14 rounded-lg object-cover border border-slate-200 flex-shrink-0" />
+                    : <div className="w-14 h-14 rounded-lg bg-slate-200 flex items-center justify-center flex-shrink-0"><Package size={18} className="text-slate-400" /></div>
+                  }
+                  <div className="flex-1 min-w-0">
+                    <div className="font-semibold text-slate-800">{item.productName}</div>
+                    {item.variantName && <div className="text-xs text-slate-500">{item.variantName}</div>}
+                    {item.sku && <div className="text-xs text-slate-400 font-mono">SKU: {item.sku}</div>}
+                    <div className="text-xs text-slate-500 mt-1">{item.quantity} × {fmtRp(item.unitPrice)}</div>
+                  </div>
+                  <div className="text-sm font-bold text-slate-700 flex-shrink-0">
+                    {fmtRp(Number(item.subtotal))}
+                  </div>
+                </div>
+              ))}
+            </div>
+            {/* Totals */}
+            <div className="border-t pt-3 space-y-1.5 text-sm">
+              <div className="flex justify-between text-slate-600"><span>Subtotal</span><span>{fmtRp(s.subtotal)}</span></div>
+              <div className="flex justify-between text-slate-600"><span>Ongkos Kirim</span><span>{fmtRp(s.shippingCost)}</span></div>
+              <div className="flex justify-between text-base font-bold text-slate-800 border-t pt-2"><span>Total</span><span>{fmtRp(s.total)}</span></div>
+            </div>
+          </div>
+        </div>
+
+        {/* Right: actions sidebar */}
+        <div className="space-y-4">
+          {/* Print actions */}
+          <div className="card p-4 space-y-2">
+            <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Cetak</h3>
+            <button onClick={() => printResiSementara(s)} className="w-full btn-secondary flex items-center gap-2 justify-center text-sm">
+              <Printer size={15} /> Resi Sementara
+            </button>
+            <button onClick={() => printInvoice(s)} className="w-full btn-secondary flex items-center gap-2 justify-center text-sm">
+              <FileText size={15} /> PDF Invoice
+            </button>
+          </div>
+
+          {/* Payment proof — sales only */}
+          {s.type === 'sales' && (
+            <div className="card p-4 space-y-3">
+              <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Bukti Transfer</h3>
+              {s.paymentProofUrl ? (
+                <div className="space-y-2">
+                  <a href={s.paymentProofUrl} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-sm text-blue-600 hover:underline">
+                    <ImageIcon size={14} /> Lihat Bukti <ExternalLink size={11} />
+                  </a>
+                  {s.paymentProofVerifiedBy && (
+                    <div className="text-xs text-green-600 flex items-center gap-1">
+                      <CheckCircle2 size={12} /> Dikonfirmasi oleh {s.paymentVerifier?.name} · {fmtDateTime(s.paymentProofVerifiedAt)}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <p className="text-xs text-slate-400">Belum ada bukti transfer</p>
+              )}
+
+              {['in_progress', 'transferred'].includes(s.status) && perm('shipping.manual.approve_payment') && (
+                <>
+                  <input type="file" ref={proofRef} accept="image/*" className="hidden" onChange={e => e.target.files[0] && proofMut.mutate(e.target.files[0])} />
+                  <button
+                    onClick={() => proofRef.current?.click()}
+                    disabled={proofMut.isPending}
+                    className="w-full btn-secondary flex items-center gap-2 justify-center text-sm"
+                  >
+                    <Upload size={14} /> {proofMut.isPending ? 'Uploading...' : 'Upload Bukti TF'}
+                  </button>
+                </>
+              )}
+
+              {canApprove && (
+                <button
+                  onClick={() => statusMut.mutate({ status: 'transferred' })}
+                  disabled={statusMut.isPending}
+                  className="w-full btn-primary flex items-center gap-2 justify-center text-sm"
+                >
+                  <CheckCircle2 size={14} /> Konfirmasi Transfer
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Courier resi */}
+          {canUploadResi && (
+            <div className="card p-4 space-y-3">
+              <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Resi Kurir</h3>
+              {s.courierResiImageUrl && (
+                <a href={s.courierResiImageUrl} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-sm text-blue-600 hover:underline">
+                  <ImageIcon size={14} /> Lihat Foto Resi <ExternalLink size={11} />
+                </a>
+              )}
+              <input
+                value={resiNumber}
+                onChange={e => setResiNumber(e.target.value)}
+                placeholder="Nomor resi kurir..."
+                className="input text-sm"
+              />
+              <input type="file" ref={resiFileRef} accept="image/*" className="hidden" onChange={e => setResiFile(e.target.files[0] || null)} />
+              <button onClick={() => resiFileRef.current?.click()} className="w-full btn-secondary text-sm flex items-center gap-2 justify-center">
+                <Upload size={14} /> {resiFile ? resiFile.name : 'Upload Foto Resi'}
+              </button>
+              <button
+                onClick={() => resiMut.mutate({ courierResiNumber: resiNumber, file: resiFile })}
+                disabled={resiMut.isPending || (!resiNumber.trim() && !resiFile)}
+                className="w-full btn-primary text-sm"
+              >
+                {resiMut.isPending ? 'Menyimpan...' : 'Simpan Resi'}
+              </button>
+            </div>
+          )}
+
+          {/* Status actions */}
+          {(canShip || canComplete) && (
+            <div className="card p-4 space-y-2">
+              <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Update Status</h3>
+              {canShip && s.type === 'non_sales' && s.status === 'in_progress' && (
+                <button onClick={() => statusMut.mutate({ status: 'shipped' })} disabled={statusMut.isPending} className="w-full btn-primary flex items-center gap-2 justify-center text-sm">
+                  <Truck size={14} /> Tandai Shipped
+                </button>
+              )}
+              {canShip && s.status === 'transferred' && (
+                <button onClick={() => statusMut.mutate({ status: 'shipped' })} disabled={statusMut.isPending} className="w-full btn-primary flex items-center gap-2 justify-center text-sm">
+                  <Truck size={14} /> Tandai Shipped
+                </button>
+              )}
+              {canComplete && (
+                <button onClick={() => statusMut.mutate({ status: 'completed' })} disabled={statusMut.isPending} className="w-full btn-primary flex items-center gap-2 justify-center text-sm">
+                  <CheckCircle2 size={14} /> Selesaikan
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Edit / Cancel / Delete */}
+          {(canEdit || canCancel || canDelete) && (
+            <div className="card p-4 space-y-2">
+              <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Lainnya</h3>
+              {canEdit && (
+                <button onClick={() => navigate(`/shipping-manual/${id}/edit`)} className="w-full btn-secondary flex items-center gap-2 justify-center text-sm">
+                  <Edit2 size={14} /> Edit Transaksi
+                </button>
+              )}
+              {canCancel && (
+                <button onClick={() => setShowCancel(true)} className="w-full btn-secondary flex items-center gap-2 justify-center text-sm text-amber-600 hover:bg-amber-50">
+                  <XCircle size={14} /> Batalkan
+                </button>
+              )}
+              {canDelete && (
+                <button onClick={() => setShowDelete(true)} className="w-full btn-danger flex items-center gap-2 justify-center text-sm">
+                  <Trash2 size={14} /> Hapus
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Cancel modal */}
+      {showCancel && (
+        <CancelModal
+          loading={statusMut.isPending}
+          onClose={() => setShowCancel(false)}
+          onConfirm={(reason) => {
+            statusMut.mutate({ status: 'cancelled', cancelledReason: reason })
+            setShowCancel(false)
+          }}
+        />
+      )}
+
+      {/* Delete confirm */}
+      {showDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6 space-y-4">
+            <h3 className="font-semibold text-slate-800">Hapus Shipping?</h3>
+            <p className="text-sm text-slate-500">Tindakan ini tidak bisa dibatalkan.</p>
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => setShowDelete(false)} className="btn-secondary">Batal</button>
+              <button onClick={() => deleteMut.mutate()} disabled={deleteMut.isPending} className="btn-danger">
+                {deleteMut.isPending ? 'Menghapus...' : 'Ya, Hapus'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}

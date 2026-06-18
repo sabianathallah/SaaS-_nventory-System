@@ -54,6 +54,17 @@ const ALL_PERMISSIONS = [
   { key: 'packing.jobs',              label: 'Buat & Kelola Packing Job',                  group: 'Penerimaan & Packing',    parent: 'packing.manage',         desc: 'Buat, assign, dan monitor packing job' },
   { key: 'packing.verify',            label: 'Verifikasi Packing & Buat FAP',              group: 'Penerimaan & Packing',    parent: 'packing.manage',         desc: 'Verifikasi hasil packing & terbitkan FAP' },
 
+  // ── Shipping Manual ───────────────────────────────────────────────────────────
+  { key: 'shipping.manual.manage',          label: 'Akses Penuh Shipping Manual',              group: 'Shipping Manual',         isParent: true,  desc: 'Aktifkan semua fitur shipping manual' },
+  { key: 'shipping.manual.view',            label: 'Lihat Shipping Manual',                    group: 'Shipping Manual',         parent: 'shipping.manual.manage',  desc: 'Lihat daftar & detail transaksi shipping manual' },
+  { key: 'shipping.manual.create',          label: 'Buat Shipping Manual',                     group: 'Shipping Manual',         parent: 'shipping.manual.manage',  desc: 'Buat transaksi shipping sales atau non-sales baru' },
+  { key: 'shipping.manual.edit',            label: 'Edit Shipping Manual',                     group: 'Shipping Manual',         parent: 'shipping.manual.manage',  desc: 'Edit transaksi yang masih in_progress' },
+  { key: 'shipping.manual.cancel',          label: 'Batalkan Shipping Manual',                 group: 'Shipping Manual',         parent: 'shipping.manual.manage',  desc: 'Batalkan transaksi shipping yang belum selesai' },
+  { key: 'shipping.manual.approve_payment', label: 'Konfirmasi Bukti Transfer',                group: 'Shipping Manual',         parent: 'shipping.manual.manage',  desc: 'Verifikasi bukti transfer dan ubah status ke transferred' },
+  { key: 'shipping.manual.upload_resi',     label: 'Upload Resi Kurir',                        group: 'Shipping Manual',         parent: 'shipping.manual.manage',  desc: 'Upload nomor & foto resi dari kurir ekspedisi' },
+  { key: 'shipping.manual.delete',          label: 'Hapus Shipping Manual',                    group: 'Shipping Manual',         parent: 'shipping.manual.manage',  desc: 'Hapus permanen transaksi shipping' },
+  { key: 'shipping.manual.category.manage', label: 'Kelola Kategori Non-Sales',                group: 'Shipping Manual',         parent: 'shipping.manual.manage',  desc: 'Tambah, edit, hapus kategori pengiriman non-sales' },
+
   // ── Transfer Stok ────────────────────────────────────────────────────────────
   { key: 'stock.transfer.manage',     label: 'Akses Penuh Transfer Stok',                  group: 'Transfer Stok',           isParent: true,  desc: 'Aktifkan semua fitur transfer antar gudang' },
   { key: 'stock.transfer.view',       label: 'Lihat Transfer Stok',                        group: 'Transfer Stok',           parent: 'stock.transfer.manage',  desc: 'Lihat daftar & detail transfer stok antar gudang' },
@@ -89,6 +100,9 @@ const DEFAULT_PERMISSIONS = {
     'stock.opname.view', 'stock.opname.create', 'stock.opname.scan', 'stock.opname.delete',
     'handover.manage', 'handover.delete',
     'packing.manage', 'packing.incoming', 'packing.incoming.close',
+    'shipping.manual.manage', 'shipping.manual.view', 'shipping.manual.create', 'shipping.manual.edit',
+    'shipping.manual.cancel', 'shipping.manual.approve_payment', 'shipping.manual.upload_resi',
+    'shipping.manual.delete', 'shipping.manual.category.manage',
     'reports.manage',
     'db_link.manage',
   ],

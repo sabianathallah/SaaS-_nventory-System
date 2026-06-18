@@ -194,6 +194,33 @@ export const stockTransfersApi = {
   destroy: (id)     => api.delete(`/stock-transfers/${id}`).then(r => r.data),
 }
 
+export const shipmentCategoriesApi = {
+  list:    ()           => api.get('/shipment-categories').then(r => r.data),
+  create:  (data)       => api.post('/shipment-categories', data).then(r => r.data),
+  update:  (id, data)   => api.put(`/shipment-categories/${id}`, data).then(r => r.data),
+  destroy: (id)         => api.delete(`/shipment-categories/${id}`).then(r => r.data),
+}
+
+export const manualShipmentsApi = {
+  list:             (params)        => api.get('/manual-shipments', { params }).then(r => r.data),
+  get:              (id)            => api.get(`/manual-shipments/${id}`).then(r => r.data),
+  create:           (data)          => api.post('/manual-shipments', data).then(r => r.data),
+  update:           (id, data)      => api.put(`/manual-shipments/${id}`, data).then(r => r.data),
+  changeStatus:     (id, data)      => api.patch(`/manual-shipments/${id}/status`, data).then(r => r.data),
+  uploadPaymentProof: (id, file)    => {
+    const fd = new FormData(); fd.append('paymentProof', file)
+    return api.post(`/manual-shipments/${id}/payment-proof`, fd).then(r => r.data)
+  },
+  uploadCourierResi: (id, data)     => {
+    const fd = new FormData()
+    if (data.courierResiNumber) fd.append('courierResiNumber', data.courierResiNumber)
+    if (data.file instanceof File) fd.append('courierResiImage', data.file)
+    return api.post(`/manual-shipments/${id}/courier-resi`, fd).then(r => r.data)
+  },
+  destroy:          (id)            => api.delete(`/manual-shipments/${id}`).then(r => r.data),
+  expeditionPresets: ()             => api.get('/manual-shipments/expedition-presets').then(r => r.data),
+}
+
 export const reportApi = {
   monthly: (params) => api.get('/reports/monthly', { params }).then(r => r.data),
 }
