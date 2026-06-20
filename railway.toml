@@ -1,9 +1,8 @@
 [build]
 builder = "NIXPACKS"
-buildCommand = "npm install --prefer-offline"
 
 [deploy]
-startCommand = "npm run start:prod"
+startCommand = "cd server && npm start"
 healthcheckPath = "/health"
 healthcheckTimeout = 60
 restartPolicyType = "ON_FAILURE"
