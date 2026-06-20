@@ -21,7 +21,7 @@
     }
   ],
   "rewrites": [
-    { "source": "/api/(.*)", "destination": "https://saas-nventory-system-production.up.railway.app/$1" },
+    { "source": "/api/(.*)", "destination": "https://backend-production-9be2.up.railway.app/$1" },
     { "source": "/((?!api).*)", "destination": "/index.html" }
   ]
 }
