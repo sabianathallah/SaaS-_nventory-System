@@ -48,7 +48,7 @@ class ProductSkuController {
       // Resolve options for auto SKU generation
       let options = [];
       if (variantOptionIds.length > 0) {
-        options = await ProductVariantOption.findAll({ where: { id: variantOptionIds, ...companyFilter(req) } });
+        options = await ProductVariantOption.findAll({ where: { id: variantOptionIds } });
         if (options.length !== variantOptionIds.length) {
           throw { name: 'BadRequest', message: 'One or more variant option IDs are invalid' };
         }
