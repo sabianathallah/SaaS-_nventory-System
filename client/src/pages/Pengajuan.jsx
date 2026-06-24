@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { requestApi, requestTypeApi } from '../api'
 import { useAuth } from '../context/AuthContext'
@@ -24,6 +24,7 @@ const STATUS_COLOR = {
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('id-ID', { day:'2-digit', month:'short', year:'numeric' }) : '—'
 
 export default function Pengajuan() {
+  const navigate = useNavigate()
   const { hasPermission, user } = useAuth()
   const canProcess = hasPermission('request.process') || hasPermission('request.manage')
 
@@ -126,7 +127,7 @@ export default function Pengajuan() {
                 <th className="th py-3 text-left">Pengaju</th>
                 <th className="th py-3 text-left">Penerima</th>
                 <th className="th py-3 text-left">Produk</th>
-                <th className="th py-3 text-center">Kembali?</th>
+                <th className="th py-3 text-left">Dikirim</th>
                 <th className="th py-3 text-center">Status</th>
               </tr>
             </thead>
@@ -142,41 +143,53 @@ export default function Pengajuan() {
               ) : rows.length === 0 ? (
                 <tr><td colSpan={7} className="td py-12 text-center text-slate-400">Belum ada pengajuan</td></tr>
               ) : rows.map(r => (
-                <tr key={r.id} className="border-b border-slate-50 hover:bg-slate-50 transition-colors">
+                <tr key={r.id} onClick={() => navigate(`/pengajuan/${r.id}`)}
+                  className="border-b border-slate-50 hover:bg-indigo-50/40 cursor-pointer transition-colors">
                   <td className="td py-2.5">
-                    <div className="text-xs text-slate-700">{fmtDate(r.createdAt)}</div>
-                    {r.neededAt && <div className="text-xs text-slate-400">Butuh: {fmtDate(r.neededAt)}</div>}
+                    <div className="text-xs text-slate-700 font-mono">#{r.id}</div>
+                    <div className="text-xs text-slate-500">{fmtDate(r.createdAt)}</div>
+                    {r.neededAt && <div className="text-[10px] text-amber-500 mt-0.5">Butuh {fmtDate(r.neededAt)}</div>}
                   </td>
                   <td className="td py-2.5">
-                    <span className="text-xs font-medium text-slate-700">{r.requestType?.name}</span>
+                    <span className="text-xs font-medium text-slate-700">{r.requestType?.name ?? '—'}</span>
+                    {r.needsReturn && <div className="text-[10px] text-amber-600 mt-0.5">↩ Perlu kembali</div>}
                   </td>
                   <td className="td py-2.5">
-                    <div className="text-xs font-medium text-slate-700">{r.requestor?.name}</div>
-                    {r.divisi && <div className="text-xs text-slate-400">{r.divisi}</div>}
+                    <div className="text-xs font-medium text-slate-700">{r.requestor?.name ?? '—'}</div>
+                    {r.divisi && <div className="text-[10px] text-slate-400">{r.divisi}</div>}
                   </td>
                   <td className="td py-2.5">
                     <div className="text-xs text-slate-700 max-w-[140px] truncate">{r.recipientName || '—'}</div>
                   </td>
                   <td className="td py-2.5">
-                    <div className="text-xs text-slate-500">
+                    <div className="text-xs text-slate-500 space-y-0.5">
                       {(r.items ?? []).slice(0, 2).map((item, i) => (
-                        <div key={i}>{item.productName}{item.variantLabel ? ` · ${item.variantLabel}` : ''} ×{item.qty}</div>
+                        <div key={i} className="truncate max-w-[160px]">
+                          {item.productName}{item.variantLabel ? ` · ${item.variantLabel}` : ''} <span className="text-slate-400">×{item.qty}</span>
+                        </div>
                       ))}
-                      {(r.items ?? []).length > 2 && <div className="text-slate-400">+{r.items.length - 2} lainnya</div>}
+                      {(r.items ?? []).length > 2 && (
+                        <div className="text-slate-400">+{r.items.length - 2} lainnya</div>
+                      )}
                     </div>
                   </td>
-                  <td className="td py-2.5 text-center">
-                    <span className={`text-xs px-1.5 py-0.5 rounded ${r.needsReturn ? 'bg-amber-50 text-amber-600' : 'bg-slate-100 text-slate-400'}`}>
-                      {r.needsReturn ? 'Ya' : 'Tidak'}
-                    </span>
+                  <td className="td py-2.5">
+                    {r.sentAt ? (
+                      <div>
+                        <div className="text-xs text-purple-600 font-medium">{fmtDate(r.sentAt)}</div>
+                        {r.trackingNumber && <div className="text-[10px] text-slate-400 font-mono">{r.trackingNumber}</div>}
+                        {r.returnedAt && <div className="text-[10px] text-emerald-600 mt-0.5">↩ {fmtDate(r.returnedAt)}</div>}
+                      </div>
+                    ) : (
+                      <span className="text-xs text-slate-300">—</span>
+                    )}
                   </td>
-                  <td className="td py-2.5 text-center">
-                    <div className="flex flex-col items-center gap-1">
-                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${STATUS_COLOR[r.status]}`}>
+                  <td className="td py-2.5 text-center" onClick={e => e.stopPropagation()}>
+                    <Link to={`/pengajuan/${r.id}`}>
+                      <span className={`text-xs font-medium px-2 py-1 rounded-full border ${STATUS_COLOR[r.status]}`}>
                         {STATUS_LABEL[r.status]}
                       </span>
-                      <Link to={`/pengajuan/${r.id}`} className="text-xs text-indigo-500 hover:underline">Detail</Link>
-                    </div>
+                    </Link>
                   </td>
                 </tr>
               ))}
@@ -184,19 +197,26 @@ export default function Pengajuan() {
           </table>
         </div>
 
-        {pages > 1 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-slate-100">
-            <span className="text-xs text-slate-400">{total} pengajuan</span>
-            <div className="flex gap-1">
-              {Array.from({ length: pages }, (_, i) => i + 1).map(p => (
-                <button key={p} onClick={() => setPage(p)}
-                  className={`w-7 h-7 text-xs rounded ${p === page ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-slate-100'}`}>
-                  {p}
-                </button>
-              ))}
+        <div className="flex items-center justify-between px-4 py-3 border-t border-slate-100">
+          <span className="text-xs text-slate-400">{total} pengajuan</span>
+          {pages > 1 && (
+            <div className="flex items-center gap-1">
+              <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
+                className="w-7 h-7 text-xs rounded text-slate-500 hover:bg-slate-100 disabled:opacity-30">‹</button>
+              {Array.from({ length: Math.min(pages, 7) }, (_, i) => {
+                const p = pages <= 7 ? i + 1 : page <= 4 ? i + 1 : page >= pages - 3 ? pages - 6 + i : page - 3 + i
+                return (
+                  <button key={p} onClick={() => setPage(p)}
+                    className={`w-7 h-7 text-xs rounded ${p === page ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-slate-100'}`}>
+                    {p}
+                  </button>
+                )
+              })}
+              <button onClick={() => setPage(p => Math.min(pages, p + 1))} disabled={page === pages}
+                className="w-7 h-7 text-xs rounded text-slate-500 hover:bg-slate-100 disabled:opacity-30">›</button>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   )
