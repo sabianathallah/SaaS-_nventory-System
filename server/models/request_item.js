@@ -13,6 +13,7 @@ module.exports = (sequelize, DataTypes) => {
     productName:  { type: DataTypes.STRING(300), allowNull: false },
     variantLabel: { type: DataTypes.STRING(200), allowNull: true },
     qty:          { type: DataTypes.INTEGER, allowNull: false, defaultValue: 1 },
+    shippedQty:   { type: DataTypes.INTEGER, allowNull: true },
     note:         { type: DataTypes.TEXT, allowNull: true },
     companyId:    { type: DataTypes.INTEGER, allowNull: true },
   }, {

@@ -169,16 +169,31 @@ export default function Pengajuan() {
                     <div className="text-xs text-slate-700 max-w-[140px] truncate">{r.recipientName || '—'}</div>
                   </td>
                   <td className="td py-2.5">
-                    <div className="text-xs text-slate-500 space-y-0.5">
-                      {(r.items ?? []).slice(0, 2).map((item, i) => (
-                        <div key={i} className="truncate max-w-[160px]">
-                          {item.productName}{item.variantLabel ? ` · ${item.variantLabel}` : ''} <span className="text-slate-400">×{item.qty}</span>
+                    {(() => {
+                      const hasDebt = (r.items ?? []).some(i => i.shippedQty !== null && i.shippedQty < i.qty)
+                      return (
+                        <div className="text-xs text-slate-500 space-y-0.5">
+                          {(r.items ?? []).slice(0, 2).map((item, i) => {
+                            const isP = item.shippedQty !== null && item.shippedQty < item.qty
+                            return (
+                              <div key={i} className="truncate max-w-[160px]">
+                                {item.productName}{item.variantLabel ? ` · ${item.variantLabel}` : ''}{' '}
+                                {isP
+                                  ? <span className="text-amber-600 font-medium">{item.shippedQty}/{item.qty}</span>
+                                  : <span className="text-slate-400">×{item.qty}</span>
+                                }
+                              </div>
+                            )
+                          })}
+                          {(r.items ?? []).length > 2 && (
+                            <div className="text-slate-400">+{r.items.length - 2} lainnya</div>
+                          )}
+                          {hasDebt && (
+                            <div className="text-[10px] text-amber-600 font-medium mt-0.5">⚠ Hutang stok</div>
+                          )}
                         </div>
-                      ))}
-                      {(r.items ?? []).length > 2 && (
-                        <div className="text-slate-400">+{r.items.length - 2} lainnya</div>
-                      )}
-                    </div>
+                      )
+                    })()}
                   </td>
                   <td className="td py-2.5">
                     {r.sentAt ? (

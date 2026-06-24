@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { requestApi, requestTypeApi } from '../api'
 import { useAuth } from '../context/AuthContext'
-import { ArrowLeft, Check, X, Send, RotateCcw, CheckCircle2, Pencil, Save } from 'lucide-react'
+import { ArrowLeft, Check, X, Send, RotateCcw, CheckCircle2, Pencil, Save, PackageCheck } from 'lucide-react'
 
 const STATUS_LABEL = { PENDING:'Menunggu', APPROVED:'Disetujui', REJECTED:'Ditolak', SENT:'Dikirim', DONE:'Selesai' }
 const STATUS_COLOR = {
@@ -48,35 +48,76 @@ function RejectModal({ onConfirm, onClose }) {
   )
 }
 
-function SentModal({ onConfirm, onClose }) {
+function SentModal({ onConfirm, onClose, items }) {
   const today = new Date().toISOString().split('T')[0]
   const [sentAt, setSentAt]                 = useState(today)
   const [trackingNumber, setTrackingNumber] = useState('')
   const [shippingNote, setShippingNote]     = useState('')
+  const [itemQtys, setItemQtys]            = useState(() =>
+    Object.fromEntries((items ?? []).map(i => [i.id, i.qty]))
+  )
+  const isPartial = (items ?? []).some(i => Number(itemQtys[i.id] ?? i.qty) < i.qty)
+
   return (
     <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl shadow-xl p-5 w-full max-w-sm">
+      <div className="bg-white rounded-xl shadow-xl p-5 w-full max-w-md">
         <h3 className="font-semibold text-slate-800 mb-3">Tandai Dikirim</h3>
         <div className="space-y-3">
-          <div>
-            <label className="label mb-1">Tanggal Kirim</label>
-            <input type="date" value={sentAt} onChange={e => setSentAt(e.target.value)} className="input w-full" />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="label mb-1">Tanggal Kirim</label>
+              <input type="date" value={sentAt} onChange={e => setSentAt(e.target.value)} className="input w-full" />
+            </div>
+            <div>
+              <label className="label mb-1">No. Resi (opsional)</label>
+              <input value={trackingNumber} onChange={e => setTrackingNumber(e.target.value)}
+                placeholder="JNE123456" className="input w-full" />
+            </div>
           </div>
-          <div>
-            <label className="label mb-1">No. Resi / Tracking (opsional)</label>
-            <input value={trackingNumber} onChange={e => setTrackingNumber(e.target.value)}
-              placeholder="JNE123456, dll" className="input w-full" />
-          </div>
+
+          {/* Per-item shipped qty */}
+          {(items ?? []).length > 0 && (
+            <div>
+              <label className="label mb-1.5">Qty dikirim per item</label>
+              <div className="space-y-1.5">
+                {(items ?? []).map(item => (
+                  <div key={item.id} className="flex items-center justify-between bg-slate-50 rounded-lg px-3 py-2">
+                    <div className="text-sm text-slate-700 truncate flex-1 min-w-0">
+                      {item.sku?.Product?.name ?? item.productName}
+                      {item.variantLabel && <span className="text-slate-400 ml-1">· {item.variantLabel}</span>}
+                    </div>
+                    <div className="flex items-center gap-1.5 ml-3 flex-shrink-0">
+                      <input
+                        type="number" min={0} max={item.qty}
+                        value={itemQtys[item.id] ?? item.qty}
+                        onChange={e => setItemQtys(q => ({ ...q, [item.id]: Math.min(item.qty, Math.max(0, Number(e.target.value))) }))}
+                        className="input w-14 text-center text-sm py-1"
+                      />
+                      <span className="text-xs text-slate-400">/ {item.qty}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {isPartial && (
+                <p className="text-xs text-amber-600 mt-1.5">⚠ Pengiriman sebagian — sisa item akan tercatat sebagai hutang stok</p>
+              )}
+            </div>
+          )}
+
           <div>
             <label className="label mb-1">Catatan Pengiriman (opsional)</label>
             <textarea value={shippingNote} onChange={e => setShippingNote(e.target.value)}
-              placeholder="Contoh: baru kirim 2 dari 3 item, sisa menyusul minggu depan…"
+              placeholder="Contoh: sisa 1 item menyusul minggu depan…"
               rows={2} className="input w-full resize-none text-sm" />
           </div>
         </div>
         <div className="flex gap-2 justify-end mt-4">
           <button onClick={onClose} className="btn-secondary text-sm">Batal</button>
-          <button onClick={() => onConfirm({ sentAt, trackingNumber, shippingNote: shippingNote.trim() || null })} className="btn-primary text-sm">Simpan</button>
+          <button onClick={() => onConfirm({
+            sentAt, trackingNumber,
+            shippingNote: shippingNote.trim() || null,
+            items: (items ?? []).map(i => ({ id: i.id, shippedQty: Number(itemQtys[i.id] ?? i.qty) })),
+          })} className="btn-primary text-sm">Simpan</button>
         </div>
       </div>
     </div>
@@ -193,8 +234,9 @@ export default function PengajuanDetail() {
   const approve      = useMutation({ mutationFn: () => requestApi.approve(id),               onSuccess: invalidate, onError: e => toast.error(e.response?.data?.message ?? 'Gagal') })
   const reject       = useMutation({ mutationFn: (r) => requestApi.reject(id, r),            onSuccess: invalidate, onError: e => toast.error(e.response?.data?.message ?? 'Gagal') })
   const markSent     = useMutation({ mutationFn: (d) => requestApi.markSent(id, d),           onSuccess: invalidate, onError: e => toast.error(e.response?.data?.message ?? 'Gagal') })
-  const markReturned = useMutation({ mutationFn: (d) => requestApi.markReturned(id, d),       onSuccess: invalidate, onError: e => toast.error(e.response?.data?.message ?? 'Gagal') })
-  const markDone     = useMutation({ mutationFn: () => requestApi.markDone(id),               onSuccess: invalidate, onError: e => toast.error(e.response?.data?.message ?? 'Gagal') })
+  const markReturned = useMutation({ mutationFn: (d) => requestApi.markReturned(id, d),        onSuccess: invalidate, onError: e => toast.error(e.response?.data?.message ?? 'Gagal') })
+  const shipRemaining = useMutation({ mutationFn: () => requestApi.shipRemaining(id),          onSuccess: invalidate, onError: e => toast.error(e.response?.data?.message ?? 'Gagal') })
+  const markDone     = useMutation({ mutationFn: () => requestApi.markDone(id),                onSuccess: invalidate, onError: e => toast.error(e.response?.data?.message ?? 'Gagal') })
   const destroy      = useMutation({ mutationFn: () => requestApi.destroy(id),               onSuccess: () => navigate('/pengajuan'), onError: e => toast.error(e.response?.data?.message ?? 'Gagal') })
 
   const saveEdit = useMutation({
@@ -221,7 +263,7 @@ export default function PengajuanDetail() {
   return (
     <div className="px-6 py-6 max-w-2xl">
       {showReject  && <RejectModal  onClose={() => setShowReject(false)}  onConfirm={(r) => { reject.mutate(r); setShowReject(false) }} />}
-      {showSent    && <SentModal    onClose={() => setShowSent(false)}    onConfirm={(d) => { markSent.mutate(d); setShowSent(false) }} />}
+      {showSent    && <SentModal    onClose={() => setShowSent(false)}    onConfirm={(d) => { markSent.mutate(d); setShowSent(false) }} items={req?.items ?? []} />}
       {showReturn  && <ReturnModal  onClose={() => setShowReturn(false)}  onConfirm={(d) => { markReturned.mutate(d); setShowReturn(false) }} />}
 
       <button onClick={() => navigate('/pengajuan')} className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 mb-4">
@@ -296,22 +338,32 @@ export default function PengajuanDetail() {
             </>
           )}
 
-          {canProcess && req.status === 'SENT' && (
-            <>
-              {req.needsReturn && !req.returnedAt && (
-                <button onClick={() => setShowReturn(true)}
-                  className="btn-primary text-xs flex items-center gap-1 bg-amber-500 border-amber-500 hover:bg-amber-600">
-                  <RotateCcw size={11} /> Tandai Dikembalikan
-                </button>
-              )}
-              {(!req.needsReturn || req.returnedAt) && (
-                <button onClick={() => { if (confirm('Tandai selesai?')) markDone.mutate() }}
-                  className="btn-primary text-xs flex items-center gap-1 bg-emerald-600 border-emerald-600 hover:bg-emerald-700">
-                  <CheckCircle2 size={11} /> Selesaikan
-                </button>
-              )}
-            </>
-          )}
+          {canProcess && req.status === 'SENT' && (() => {
+            const hasDebt = (req.items ?? []).some(i => i.shippedQty !== null && i.shippedQty < i.qty)
+            return (
+              <>
+                {hasDebt && (
+                  <button onClick={() => { if (confirm('Tandai semua sisa item sebagai sudah dikirim?')) shipRemaining.mutate() }}
+                    disabled={shipRemaining.isPending}
+                    className="btn-primary text-xs flex items-center gap-1 bg-indigo-500 border-indigo-500 hover:bg-indigo-600">
+                    <PackageCheck size={11} /> Kirim Sisa
+                  </button>
+                )}
+                {req.needsReturn && !req.returnedAt && (
+                  <button onClick={() => setShowReturn(true)}
+                    className="btn-primary text-xs flex items-center gap-1 bg-amber-500 border-amber-500 hover:bg-amber-600">
+                    <RotateCcw size={11} /> Tandai Dikembalikan
+                  </button>
+                )}
+                {!hasDebt && (!req.needsReturn || req.returnedAt) && (
+                  <button onClick={() => { if (confirm('Tandai selesai?')) markDone.mutate() }}
+                    className="btn-primary text-xs flex items-center gap-1 bg-emerald-600 border-emerald-600 hover:bg-emerald-700">
+                    <CheckCircle2 size={11} /> Selesaikan
+                  </button>
+                )}
+              </>
+            )
+          })()}
         </div>
       </div>
 
@@ -408,28 +460,56 @@ export default function PengajuanDetail() {
 
       {/* Items */}
       <div className="card p-4">
-        <h2 className="text-sm font-semibold text-slate-600 mb-3 border-b border-slate-100 pb-2">
-          Produk ({req.items?.length ?? 0} item)
-        </h2>
-        <div className="space-y-2">
-          {(req.items ?? []).map((item) => {
-            const vLabel = skuVariantLabel(item)
-            return (
-              <div key={item.id} className="flex items-center justify-between bg-slate-50 rounded-lg px-3 py-2.5">
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium text-slate-700 truncate">
-                    {item.sku?.Product?.name ?? item.productName}
-                  </div>
-                  {vLabel && <div className="text-xs text-slate-400 mt-0.5">{vLabel}</div>}
-                  {item.note && !item.note.startsWith('size:') && (
-                    <div className="text-xs text-slate-400 italic">{item.note}</div>
-                  )}
-                </div>
-                <div className="text-sm font-semibold text-indigo-600 ml-3 flex-shrink-0">×{item.qty}</div>
+        {(() => {
+          const hasAnyDebt = (req.items ?? []).some(i => i.shippedQty !== null && i.shippedQty < i.qty)
+          return (
+            <>
+              <h2 className="text-sm font-semibold text-slate-600 mb-3 border-b border-slate-100 pb-2 flex items-center gap-2">
+                Produk ({req.items?.length ?? 0} item)
+                {hasAnyDebt && (
+                  <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 border border-amber-200">
+                    ⚠ Ada hutang stok
+                  </span>
+                )}
+              </h2>
+              <div className="space-y-2">
+                {(req.items ?? []).map((item) => {
+                  const vLabel = skuVariantLabel(item)
+                  const isPartialItem = item.shippedQty !== null && item.shippedQty < item.qty
+                  const remaining = isPartialItem ? item.qty - item.shippedQty : 0
+                  return (
+                    <div key={item.id} className={`flex items-center justify-between rounded-lg px-3 py-2.5 ${isPartialItem ? 'bg-amber-50 border border-amber-200' : 'bg-slate-50'}`}>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium text-slate-700 truncate">
+                          {item.sku?.Product?.name ?? item.productName}
+                        </div>
+                        {vLabel && <div className="text-xs text-slate-400 mt-0.5">{vLabel}</div>}
+                        {isPartialItem && (
+                          <div className="text-xs text-amber-600 mt-0.5 font-medium">Sisa belum dikirim: {remaining}</div>
+                        )}
+                        {item.note && !item.note.startsWith('size:') && (
+                          <div className="text-xs text-slate-400 italic">{item.note}</div>
+                        )}
+                      </div>
+                      <div className="ml-3 flex-shrink-0 text-right">
+                        {item.shippedQty !== null ? (
+                          <div>
+                            <span className={`text-sm font-semibold ${isPartialItem ? 'text-amber-600' : 'text-emerald-600'}`}>
+                              {item.shippedQty}/{item.qty}
+                            </span>
+                            <div className="text-[10px] text-slate-400">dikirim</div>
+                          </div>
+                        ) : (
+                          <div className="text-sm font-semibold text-indigo-600">×{item.qty}</div>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
-            )
-          })}
-        </div>
+            </>
+          )
+        })()}
       </div>
     </div>
   )

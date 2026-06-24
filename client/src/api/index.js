@@ -238,8 +238,9 @@ export const requestApi = {
   approve:      (id)     => api.post(`/requests/${id}/approve`).then(r => r.data),
   reject:       (id, reason) => api.post(`/requests/${id}/reject`, { reason }).then(r => r.data),
   markSent:     (id, data) => api.patch(`/requests/${id}/sent`, data).then(r => r.data),
-  markReturned: (id, data) => api.patch(`/requests/${id}/returned`, data).then(r => r.data),
-  markDone:     (id)     => api.patch(`/requests/${id}/done`).then(r => r.data),
+  markReturned:  (id, data) => api.patch(`/requests/${id}/returned`, data).then(r => r.data),
+  shipRemaining: (id)      => api.patch(`/requests/${id}/ship-remaining`).then(r => r.data),
+  markDone:      (id)      => api.patch(`/requests/${id}/done`).then(r => r.data),
   exportData:   (params) => api.get('/requests/export',   { params }).then(r => r.data),
 }
 

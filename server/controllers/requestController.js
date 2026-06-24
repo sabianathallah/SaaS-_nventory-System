@@ -262,6 +262,15 @@ class RequestController {
       const request = await Request.findOne({ where: { id: req.params.id, ...companyFilter(req) } });
       if (!request)                      return res.status(404).json({ message: 'Pengajuan tidak ditemukan' });
       if (request.status !== 'APPROVED') return res.status(400).json({ message: 'Hanya APPROVED yang bisa ditandai dikirim' });
+      // Update shippedQty per item if provided, else default to full qty
+      const sentItems = Array.isArray(req.body.items) ? req.body.items : [];
+      const fullRequest = await Request.findByPk(request.id, { include: [ITEM_INCLUDE] });
+      for (const item of fullRequest.items) {
+        const override = sentItems.find(i => i.id === item.id);
+        const shipped = override != null ? Math.max(0, Math.min(Number(override.shippedQty), item.qty)) : item.qty;
+        await item.update({ shippedQty: shipped });
+      }
+
       await request.update({
         status: 'SENT',
         sentAt: req.body.sentAt || new Date().toISOString().slice(0, 10),
@@ -287,6 +296,26 @@ class RequestController {
     } catch (err) { next(err); }
   }
 
+  // PATCH /requests/:id/ship-remaining — tandai semua item sisa sudah dikirim
+  static async shipRemaining(req, res, next) {
+    try {
+      await attachPermissions(req);
+      if (!canProcess(req)) return res.status(403).json({ message: 'Forbidden: butuh request.process' });
+      const request = await Request.findOne({ where: { id: req.params.id, ...companyFilter(req) }, include: [ITEM_INCLUDE] });
+      if (!request)                  return res.status(404).json({ message: 'Pengajuan tidak ditemukan' });
+      if (request.status !== 'SENT') return res.status(400).json({ message: 'Hanya SENT yang bisa dilengkapi pengirimannya' });
+
+      for (const item of request.items) {
+        if (item.shippedQty === null || item.shippedQty < item.qty) {
+          await item.update({ shippedQty: item.qty });
+        }
+      }
+
+      const full = await Request.findByPk(request.id, { include: [...BASE_INCLUDE, ITEM_INCLUDE] });
+      res.json(full);
+    } catch (err) { next(err); }
+  }
+
   // PATCH /requests/:id/done
   static async markDone(req, res, next) {
     try {
@@ -297,6 +326,12 @@ class RequestController {
       if (request.status !== 'SENT') return res.status(400).json({ message: 'Hanya SENT yang bisa ditandai selesai' });
       if (request.needsReturn && !request.returnedAt)
         return res.status(400).json({ message: 'Barang harus ditandai dikembalikan terlebih dahulu sebelum diselesaikan' });
+
+      const fullReq = await Request.findByPk(request.id, { include: [ITEM_INCLUDE] });
+      const hasDebt = fullReq.items.some(i => i.shippedQty !== null && i.shippedQty < i.qty);
+      if (hasDebt)
+        return res.status(400).json({ message: 'Masih ada item yang belum sepenuhnya dikirim. Selesaikan pengiriman sisa terlebih dahulu.' });
+
       await request.update({ status: 'DONE', processedBy: req.user.id });
       res.json(request);
     } catch (err) { next(err); }
