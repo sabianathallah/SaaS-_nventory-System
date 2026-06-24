@@ -52,7 +52,7 @@ export default function Pengajuan() {
   })
 
   const rows   = data?.data ?? []
-  const total  = data?.total ?? 0
+  const total  = data?.pagination?.total ?? 0
   const pages  = Math.ceil(total / 20)
 
   async function handleExport() {
