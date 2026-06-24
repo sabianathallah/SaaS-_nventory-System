@@ -10,7 +10,7 @@ import {
   ArrowDownToLine, ArrowUpFromLine, ArrowLeftRight, Repeat2,
   ClipboardList, Users, Building2, BookOpen, LogOut, Bell,
   PackageOpen, Layers, ClipboardCheck, Menu, X, Eye, EyeOff,
-  PackageCheck, Link2, BarChart2, BookMarked, ChevronDown, SendHorizonal,
+  PackageCheck, Link2, BarChart2, BookMarked, ChevronDown, SendHorizonal, FileText,
 } from 'lucide-react'
 import logoPreface from '../assets/logo-preface.jpeg'
 
@@ -61,6 +61,12 @@ const NAV_GROUPS = [
     ],
   },
   {
+    label: 'Pengajuan',
+    items: [
+      { to: '/pengajuan', icon: FileText, label: 'Pengajuan Stok' },
+    ],
+  },
+  {
     label: 'Umum',
     items: [
       { to: '/database-links', icon: Link2, label: 'Database Links', pageKey: 'database-links' },
@@ -86,6 +92,7 @@ const PAGE_TITLES = {
   '/packing-jobs': 'Pekerjaan Packing', '/form-anak-packing': 'Form Anak Packing',
   '/page-visibility': 'Visibilitas Halaman',
   '/laporan': 'Laporan Bulanan',
+  '/pengajuan': 'Pengajuan Stok', '/pengajuan/baru': 'Buat Pengajuan',
 }
 
 function groupHasActivePath(group, pathname) {

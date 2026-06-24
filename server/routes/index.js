@@ -39,6 +39,8 @@ const permissionRouter         = require('./permission');
 const systemSettingRouter      = require('./system_setting');
 const reportRouter             = require('./report');
 const profileRouter            = require('./profile');
+const requestsRouter           = require('./requests');
+const requestTypesRouter       = require('./request_types');
 const { Role, RolePermission } = require('../models');
 const { Op } = require('sequelize');
 
@@ -99,7 +101,9 @@ router.use('/permissions', permissionRouter);
 
 router.use('/me',       profileRouter);
 router.use('/system',   systemSettingRouter);
-router.use('/reports',  reportRouter);
+router.use('/reports',       reportRouter);
+router.use('/requests',      requestsRouter);
+router.use('/request-types', requestTypesRouter);
 
 // Admin only
 router.use('/users',     isAdmin, userRouter);

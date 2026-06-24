@@ -80,6 +80,11 @@ const ALL_PERMISSIONS = [
   { key: 'db_link.view',              label: 'Lihat Database Links',                       group: 'Database Links',          parent: 'db_link.manage',         desc: 'Lihat folder & link database (read-only)' },
   { key: 'db_link.add_link',          label: 'Tambah Link ke Folder',                      group: 'Database Links',          parent: 'db_link.manage',         desc: 'Tambah atau edit link dalam folder database' },
 
+  // ── Pengajuan ────────────────────────────────────────────────────────────────
+  { key: 'request.manage',  label: 'Akses Penuh Pengajuan',       group: 'Pengajuan', isParent: true, desc: 'Kelola semua pengajuan stok (endorse, photoshoot, dll)' },
+  { key: 'request.view',    label: 'Lihat Semua Pengajuan',        group: 'Pengajuan', parent: 'request.manage', desc: 'Lihat pengajuan dari semua user (bukan hanya milik sendiri)' },
+  { key: 'request.process', label: 'Proses Pengajuan',             group: 'Pengajuan', parent: 'request.manage', desc: 'Approve, reject, tandai dikirim, dan selesaikan pengajuan' },
+
   // ── Administrasi ─────────────────────────────────────────────────────────────
   { key: 'admin.manage',              label: 'Akses Penuh Administrasi',                   group: 'Administrasi',            isParent: true,  desc: 'Kelola user, role, dan pengaturan sistem' },
   { key: 'admin.users',               label: 'Kelola Pengguna',                            group: 'Administrasi',            parent: 'admin.manage',           desc: 'Tambah, edit, nonaktifkan user & atur role' },
@@ -105,6 +110,7 @@ const DEFAULT_PERMISSIONS = {
     'shipping.manual.delete', 'shipping.manual.category.manage',
     'reports.manage',
     'db_link.manage',
+    'request.manage', 'request.view', 'request.process',
   ],
 
   HEAD_PACKING: [

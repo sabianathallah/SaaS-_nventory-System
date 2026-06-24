@@ -39,6 +39,9 @@ import ManualShipments from './pages/ManualShipments'
 import ManualShipmentForm from './pages/ManualShipmentForm'
 import ManualShipmentDetail from './pages/ManualShipmentDetail'
 import Landing from './pages/Landing'
+import Pengajuan from './pages/Pengajuan'
+import PengajuanBaru from './pages/PengajuanBaru'
+import PengajuanDetail from './pages/PengajuanDetail'
 
 function PrivateRoute({ children }) {
   const { user } = useAuth()
@@ -131,6 +134,11 @@ function AppRoutes() {
                 {/* ── Umum ── */}
                 <Route path="/database-links" element={<PageVisibleRoute pageKey="database-links"><PermissionRoute permission="db_link.view" page="Database Links"><DatabaseLinks /></PermissionRoute></PageVisibleRoute>} />
                 <Route path="/laporan"        element={<PageVisibleRoute pageKey="laporan"><PermissionRoute permission="reports.manage" page="Laporan"><Laporan /></PermissionRoute></PageVisibleRoute>} />
+
+                {/* ── Pengajuan ── */}
+                <Route path="/pengajuan"         element={<Pengajuan />} />
+                <Route path="/pengajuan/baru"    element={<PengajuanBaru />} />
+                <Route path="/pengajuan/:id"     element={<PengajuanDetail />} />
 
                 {/* ── Administrasi ── */}
                 <Route path="/users"           element={<PageVisibleRoute pageKey="users"><PermissionRoute permission="admin.users" page="Pengguna"><Users /></PermissionRoute></PageVisibleRoute>} />

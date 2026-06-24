@@ -221,6 +221,25 @@ export const manualShipmentsApi = {
   expeditionPresets: ()             => api.get('/manual-shipments/expedition-presets').then(r => r.data),
 }
 
+export const requestTypeApi = {
+  list:   ()     => api.get('/request-types').then(r => r.data),
+  create: (data) => api.post('/request-types', data).then(r => r.data),
+}
+
+export const requestApi = {
+  list:         (params) => api.get('/requests',          { params }).then(r => r.data),
+  get:          (id)     => api.get(`/requests/${id}`).then(r => r.data),
+  create:       (data)   => api.post('/requests', data).then(r => r.data),
+  update:       (id, data) => api.put(`/requests/${id}`, data).then(r => r.data),
+  destroy:      (id)     => api.delete(`/requests/${id}`).then(r => r.data),
+  approve:      (id)     => api.post(`/requests/${id}/approve`).then(r => r.data),
+  reject:       (id, reason) => api.post(`/requests/${id}/reject`, { reason }).then(r => r.data),
+  markSent:     (id, data) => api.patch(`/requests/${id}/sent`, data).then(r => r.data),
+  markReturned: (id, data) => api.patch(`/requests/${id}/returned`, data).then(r => r.data),
+  markDone:     (id)     => api.patch(`/requests/${id}/done`).then(r => r.data),
+  exportData:   (params) => api.get('/requests/export',   { params }).then(r => r.data),
+}
+
 export const reportApi = {
   monthly:       (params) => api.get('/reports/monthly',        { params }).then(r => r.data),
   daily:         (params) => api.get('/reports/daily',          { params }).then(r => r.data),
