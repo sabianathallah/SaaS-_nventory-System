@@ -1,7 +1,7 @@
 import { useState, useMemo, useRef, useEffect } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { stockOutApi, stockOutDraftApi, warehousesApi, stockInApi, productsApi, productSkusApi, stocksApi } from '../api'
+import { stockOutApi, stockOutDraftApi, warehousesApi, stockInApi, productsApi, productSkusApi, stocksApi, skuWarehouseStocksApi } from '../api'
 import { useAuth } from '../context/AuthContext'
 import QRScanner from '../components/QRScanner'
 import SearchableSelect from '../components/SearchableSelect'
@@ -63,10 +63,17 @@ function ProductSkuPicker({ onSelect, warehouseId, stocks }) {
     return list.filter(p => p.name.toLowerCase().includes(q))
   }, [products, search])
 
-  const getAvail = (productId) => {
-    if (!stocks?.data) return null              // belum dimuat — jangan tampilkan badge
-    const found = stocks.data.find(s => String(s.ProductId) === String(productId))
-    return found?.quantity ?? 0                 // tidak ada record = 0 stok
+  const getAvail = (productId, skuId) => {
+    if (!stocks) return null  // belum dimuat
+    const arr = Array.isArray(stocks) ? stocks : (stocks?.data ?? [])
+    if (skuId) {
+      const found = arr.find(s => String(s.ProductSKUId) === String(skuId))
+      return found?.qty ?? 0
+    }
+    // fallback: sum all SKUs of this product
+    const total = arr.filter(s => String(s.ProductSKU?.ProductId ?? s.ProductId) === String(productId))
+                     .reduce((sum, s) => sum + Number(s.qty ?? s.quantity ?? 0), 0)
+    return total
   }
 
   const selectProduct = (prod) => {
@@ -81,7 +88,7 @@ function ProductSkuPicker({ onSelect, warehouseId, stocks }) {
     if (!selSku) return toast.error('Pilih SKU / varian terlebih dahulu')
     if (!qty || Number(qty) <= 0) return toast.error('Qty harus lebih dari 0')
     // Use warehouse-specific stock if loaded, fallback to global SKU qty
-    const warehouseAvail = getAvail(selProduct?.id)
+    const warehouseAvail = getAvail(selProduct?.id, selSku?.id)
     const avail = warehouseAvail !== null ? warehouseAvail : (selSku.qty ?? 0)
     if (Number(qty) > avail) {
       toast(`Stok akan menjadi negatif. Tersedia: ${avail}`, { icon: '⚠️' })
@@ -158,10 +165,14 @@ function ProductSkuPicker({ onSelect, warehouseId, stocks }) {
             }}
             options={[
               { value: '', label: selProduct ? 'Pilih varian…' : '← Pilih produk dulu' },
-              ...(skus ?? []).map(s => ({
-                value: s.id,
-                label: `${skuLabel(s) || s.sku_code} — stok: ${s.qty ?? 0}`,
-              })),
+              ...(skus ?? []).map(s => {
+                const whAvail = getAvail(selProduct?.id, s.id)
+                const displayQty = whAvail !== null ? whAvail : (s.qty ?? 0)
+                return {
+                  value: s.id,
+                  label: `${skuLabel(s) || s.sku_code} — stok: ${displayQty}`,
+                }
+              }),
             ]}
             placeholder={selProduct ? 'Pilih varian…' : '← Pilih produk dulu'}
             disabled={!selProduct || !skus}
@@ -277,11 +288,13 @@ export default function StockOutDetail() {
     enabled:  isNew,
   })
 
-  const { data: stocks } = useQuery({
-    queryKey: ['stocks', { WarehouseId: form.warehouseId, limit: 200 }],
-    queryFn:  () => stocksApi.list({ WarehouseId: form.warehouseId, limit: 200 }),
+  const { data: skuWarehouseStocks } = useQuery({
+    queryKey: ['sku-warehouse-stocks', { WarehouseId: form.warehouseId }],
+    queryFn:  () => skuWarehouseStocksApi.list({ WarehouseId: form.warehouseId }),
     enabled:  !!form.warehouseId && isNew,
   })
+  // Keep backward-compat alias so ProductSkuPicker still receives `stocks`
+  const stocks = skuWarehouseStocks
 
   // Ketika scanner aktif, jaga hidden input selalu terfokus.
   useEffect(() => {

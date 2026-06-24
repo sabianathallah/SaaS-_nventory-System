@@ -127,18 +127,37 @@ class StockOutHeaderController {
             const movements = [];
             for (const item of resolvedItems) {
                 const { ProductId, ProductSKUId, quantity, note, WarehouseId } = item;
-                const stock = await Stock.findOne({ where: { ProductId, WarehouseId }, transaction: t, lock: t.LOCK.UPDATE });
-                const available = stock ? Number(stock.quantity) : 0;
-                if (available < quantity) {
-                    await t.rollback();
-                    return res.status(400).json({ message: `Stok tidak cukup di gudang yang dipilih (tersedia: ${available}, dibutuhkan: ${quantity})` });
-                }
-                await stock.decrement('quantity', { by: quantity, transaction: t });
 
                 if (ProductSKUId) {
+                    // Per-SKU check against SkuWarehouseStocks (source of truth)
+                    const skuStock = await SkuWarehouseStock.findOne({
+                        where: { ProductSKUId, WarehouseId },
+                        transaction: t, lock: t.LOCK.UPDATE,
+                    });
+                    const available = skuStock ? Number(skuStock.qty) : 0;
+                    if (available < quantity) {
+                        await t.rollback();
+                        return res.status(400).json({ message: `Stok tidak cukup di gudang yang dipilih (tersedia: ${available}, dibutuhkan: ${quantity})` });
+                    }
                     const sku = await ProductSKU.findByPk(ProductSKUId, { transaction: t });
                     if (sku) await sku.decrement('qty', { by: quantity, transaction: t });
                     await upsertSkuWarehouseStock(t, SkuWarehouseStock, { ProductSKUId, WarehouseId, delta: -quantity, companyId: cid });
+                } else {
+                    // Fallback: product-level check via Stocks (no SKU assigned)
+                    const stock = await Stock.findOne({ where: { ProductId, WarehouseId }, transaction: t, lock: t.LOCK.UPDATE });
+                    const available = stock ? Number(stock.quantity) : 0;
+                    if (available < quantity) {
+                        await t.rollback();
+                        return res.status(400).json({ message: `Stok tidak cukup di gudang yang dipilih (tersedia: ${available}, dibutuhkan: ${quantity})` });
+                    }
+                    await stock.decrement('quantity', { by: quantity, transaction: t });
+                }
+
+                // Keep Stocks table in sync (secondary, non-blocking)
+                const stock = await Stock.findOne({ where: { ProductId, WarehouseId }, transaction: t });
+                if (stock && ProductSKUId) {
+                    const newQty = Math.max(0, Number(stock.quantity) - quantity);
+                    await stock.update({ quantity: newQty }, { transaction: t });
                 }
 
                 movements.push(await Stock_Movement.create({

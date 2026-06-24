@@ -56,7 +56,10 @@ export const productSkusApi = {
 }
 export const warehousesApi     = crud('/warehouses')
 export const suppliersApi      = crud('/suppliers')
-export const stocksApi         = crud('/stocks')
+export const stocksApi              = crud('/stocks')
+export const skuWarehouseStocksApi  = {
+  list: (params) => api.get('/sku-warehouse-stocks', { params }).then(r => r.data),
+}
 export const stockInApi = {
   ...crud('/stock-in-headers'),
   resolveSku: (code)              => api.get('/stock-in-headers/resolve-sku', { params: { code } }).then(r => r.data),

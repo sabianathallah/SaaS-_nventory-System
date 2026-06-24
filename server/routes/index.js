@@ -38,6 +38,7 @@ const roleRouter               = require('./role');
 const permissionRouter         = require('./permission');
 const systemSettingRouter      = require('./system_setting');
 const reportRouter             = require('./report');
+const skuWarehouseStockRouter  = require('./sku_warehouse_stock');
 const profileRouter            = require('./profile');
 const requestsRouter           = require('./requests');
 const requestTypesRouter       = require('./request_types');
@@ -101,7 +102,8 @@ router.use('/permissions', permissionRouter);
 
 router.use('/me',       profileRouter);
 router.use('/system',   systemSettingRouter);
-router.use('/reports',       reportRouter);
+router.use('/reports',              reportRouter);
+router.use('/sku-warehouse-stocks', skuWarehouseStockRouter);
 router.use('/requests',      requestsRouter);
 router.use('/request-types', requestTypesRouter);
 
