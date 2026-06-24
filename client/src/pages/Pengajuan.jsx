@@ -31,6 +31,7 @@ export default function Pengajuan() {
   const [search,        setSearch]        = useState('')
   const [status,        setStatus]        = useState('')
   const [requestTypeId, setRequestTypeId] = useState('')
+  const [needsReturn,   setNeedsReturn]   = useState('')
   const [dateFrom,      setDateFrom]      = useState('')
   const [dateTo,        setDateTo]        = useState('')
   const [page,          setPage]          = useState(1)
@@ -42,6 +43,7 @@ export default function Pengajuan() {
     ...(search        && { search }),
     ...(status        && { status }),
     ...(requestTypeId && { requestTypeId }),
+    ...(needsReturn   !== '' && { needsReturn }),
     ...(dateFrom      && { dateFrom }),
     ...(dateTo        && { dateTo }),
   }
@@ -111,8 +113,13 @@ export default function Pengajuan() {
         </select>
         <input type="date" value={dateFrom} onChange={e => { setDateFrom(e.target.value); setPage(1) }} className="input text-sm w-36" />
         <input type="date" value={dateTo}   onChange={e => { setDateTo(e.target.value);   setPage(1) }} className="input text-sm w-36" />
-        {(search || status || requestTypeId || dateFrom || dateTo) && (
-          <button onClick={() => { setSearch(''); setStatus(''); setRequestTypeId(''); setDateFrom(''); setDateTo(''); setPage(1) }}
+        <select value={needsReturn} onChange={e => { setNeedsReturn(e.target.value); setPage(1) }} className="input text-sm w-44">
+          <option value="">Semua (kembali/tidak)</option>
+          <option value="true">↩ Perlu Dikembalikan</option>
+          <option value="false">✓ Tidak Perlu Kembali</option>
+        </select>
+        {(search || status || requestTypeId || needsReturn !== '' || dateFrom || dateTo) && (
+          <button onClick={() => { setSearch(''); setStatus(''); setRequestTypeId(''); setNeedsReturn(''); setDateFrom(''); setDateTo(''); setPage(1) }}
             className="text-xs text-slate-400 hover:text-slate-600 px-2">Reset</button>
         )}
       </div>

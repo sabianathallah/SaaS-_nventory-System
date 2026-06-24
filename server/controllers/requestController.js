@@ -64,6 +64,7 @@ class RequestController {
       if (req.query.status)        where.status        = req.query.status;
       if (req.query.requestTypeId) where.requestTypeId = parseInt(req.query.requestTypeId);
       if (req.query.divisi)        where.divisi        = { [Op.iLike]: `%${req.query.divisi}%` };
+      if (req.query.needsReturn !== undefined) where.needsReturn = req.query.needsReturn === 'true';
 
       if (req.query.dateFrom || req.query.dateTo) {
         where.createdAt = {};
