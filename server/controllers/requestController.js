@@ -278,7 +278,8 @@ class RequestController {
         shippingNote: req.body.shippingNote || null,
         processedBy: req.user.id,
       });
-      res.json(request);
+      const updated = await Request.findByPk(request.id, { include: [...BASE_INCLUDE, ITEM_INCLUDE] });
+      res.json(updated);
     } catch (err) { next(err); }
   }
 
