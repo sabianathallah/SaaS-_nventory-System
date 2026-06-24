@@ -75,7 +75,7 @@ export default function StockOut() {
     itemCount:  draft.Stock_Out_Draft_Items?.length ?? 0,
     totalQty:   draft.Stock_Out_Draft_Items?.reduce((s, i) => s + (i.quantity ?? 0), 0) ?? 0,
     grandTotal: draft.Stock_Out_Draft_Items?.reduce((s, i) => s + (i.quantity ?? 0) * (i.price ?? 0), 0) ?? 0,
-    User:       { name: user?.name },
+    User:       draft.User ?? { name: user?.name },
   }))
 
   const tableData = [...draftRows, ...(data?.data ?? [])]
