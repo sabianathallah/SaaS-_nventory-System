@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
@@ -154,18 +154,19 @@ export default function PengajuanDetail() {
   const { data: req, isLoading, error } = useQuery({
     queryKey: ['request', id],
     queryFn:  () => requestApi.get(id),
-    onSuccess: (d) => {
-      if (!form) setForm({
-        requestTypeId:    d.requestTypeId ?? '',
-        recipientName:    d.recipientName  ?? '',
-        recipientAddress: d.recipientAddress ?? '',
-        neededAt:         d.neededAt ? d.neededAt.split('T')[0] : '',
-        divisi:           d.divisi   ?? '',
-        note:             d.note     ?? '',
-        needsReturn:      d.needsReturn ?? false,
-      })
-    },
   })
+
+  useEffect(() => {
+    if (req && !form) setForm({
+      requestTypeId:    req.requestTypeId    ?? '',
+      recipientName:    req.recipientName    ?? '',
+      recipientAddress: req.recipientAddress ?? '',
+      neededAt:         req.neededAt ? req.neededAt.split('T')[0] : '',
+      divisi:           req.divisi           ?? '',
+      note:             req.note             ?? '',
+      needsReturn:      req.needsReturn      ?? false,
+    })
+  }, [req])
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ['request', id] })
 
