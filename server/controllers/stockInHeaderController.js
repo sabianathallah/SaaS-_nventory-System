@@ -131,7 +131,7 @@ class StockInHeaderController {
           await Stock_Movement.create({
             ProductId: sku.ProductId, ProductSKUId: Number(ProductSKUId), WarehouseId,
             type: 'IN', quantity: Number(quantity),
-            ReferenceId: header.id, note: note || null,
+            ReferenceId: header.id, source: 'STOCK_IN', note: note || null,
             date: header.date || new Date(),
             companyId: cid,
           }, { transaction: t });
@@ -231,7 +231,7 @@ class StockInHeaderController {
         await Stock_Movement.create({
           ProductId: sku.ProductId, ProductSKUId: Number(ProductSKUId), WarehouseId: header.WarehouseId,
           type: 'IN', quantity: Number(quantity),
-          ReferenceId: header.id,
+          ReferenceId: header.id, source: 'STOCK_IN',
           date: header.date || new Date(),
           companyId: cid,
         }, { transaction: t });
@@ -274,7 +274,7 @@ class StockInHeaderController {
           await Stock_Movement.create({
             ProductId: sku.ProductId, ProductSKUId: item.ProductSKUId, WarehouseId: header.WarehouseId,
             type: delta > 0 ? 'IN' : 'OUT', quantity: Math.abs(delta),
-            ReferenceId: header.id,
+            ReferenceId: header.id, source: 'STOCK_IN',
             date: header.date || new Date(),
             companyId: companyId(req),
           }, { transaction: t });
@@ -312,7 +312,7 @@ class StockInHeaderController {
           await Stock_Movement.create({
             ProductId: sku.ProductId, ProductSKUId: item.ProductSKUId, WarehouseId: header.WarehouseId,
             type: 'OUT', quantity: item.quantity,
-            ReferenceId: header.id,
+            ReferenceId: header.id, source: 'STOCK_IN',
             note: `Koreksi: item dihapus dari Stock IN #${header.id}`,
             date: header.date || new Date(),
             companyId: companyId(req),

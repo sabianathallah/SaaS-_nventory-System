@@ -279,6 +279,7 @@ class StockOutDraftController {
                     type: 'OUT',
                     quantity: Number(quantity),
                     ReferenceId: header.id,
+                    source: 'STOCK_OUT',
                     date: date || new Date(),
                     companyId: cid,
                 }, { transaction: t }));

@@ -133,6 +133,117 @@ class ReportController {
     } catch (err) { next(err); }
   }
 
+  // GET /reports/daily-activity?date=2026-06-24&warehouseId=1
+  // Activity log for a specific date: stock-in docs, stock-out docs, opname sessions, transfers
+  static async dailyActivity(req, res, next) {
+    try {
+      const { clause, params } = smScope(req);
+      const date        = req.query.date || new Date().toISOString().slice(0, 10);
+      const warehouseId = req.query.warehouseId ? parseInt(req.query.warehouseId) : null;
+
+      const whClause     = warehouseId ? 'AND sm."WarehouseId" = :whId' : '';
+      const replacements = { ...params, date, ...(warehouseId ? { whId: warehouseId } : {}) };
+      const opts         = { type: QueryTypes.SELECT, replacements };
+
+      // Stock In docs
+      const stockIn = await sequelize.query(`
+        SELECT
+          sm."ReferenceId"::int                                     AS id,
+          MIN(sm.date)                                              AS date,
+          COUNT(DISTINCT sm."ProductSKUId")::int                   AS "skuCount",
+          COALESCE(SUM(sm.quantity), 0)::int                       AS "totalQty",
+          COALESCE(SUM(sm.quantity::numeric * COALESCE(ps.price,0)),0)::numeric AS "totalValue",
+          MIN(sih.note)                                            AS note,
+          MIN(w.name)                                              AS "warehouseName",
+          MIN(u.name)                                              AS "createdBy"
+        FROM "Stock_Movements" sm
+        LEFT JOIN "ProductSKUs" ps ON ps.id = sm."ProductSKUId"
+        LEFT JOIN "Stock_In_Headers" sih ON sih.id = sm."ReferenceId"::int
+        LEFT JOIN "Warehouses" w ON w.id = sm."WarehouseId"
+        LEFT JOIN "Users" u ON u.id = sih."createdBy"
+        WHERE sm.source = 'STOCK_IN'
+          AND DATE(sm.date AT TIME ZONE 'Asia/Jakarta') = :date
+          ${clause} ${whClause}
+        GROUP BY sm."ReferenceId"
+        ORDER BY date ASC
+      `, opts);
+
+      // Stock Out docs
+      const stockOut = await sequelize.query(`
+        SELECT
+          sm."ReferenceId"::int                                     AS id,
+          MIN(sm.date)                                              AS date,
+          COUNT(DISTINCT sm."ProductSKUId")::int                   AS "skuCount",
+          COALESCE(SUM(sm.quantity), 0)::int                       AS "totalQty",
+          COALESCE(SUM(sm.quantity::numeric * COALESCE(ps.price,0)),0)::numeric AS "totalValue",
+          MIN(soh.notes)                                           AS note,
+          MIN(soh.purpose)                                         AS purpose,
+          MIN(w.name)                                              AS "warehouseName",
+          MIN(u.name)                                              AS "createdBy"
+        FROM "Stock_Movements" sm
+        LEFT JOIN "ProductSKUs" ps ON ps.id = sm."ProductSKUId"
+        LEFT JOIN "Stock_Out_Headers" soh ON soh.id = sm."ReferenceId"::int
+        LEFT JOIN "Warehouses" w ON w.id = sm."WarehouseId"
+        LEFT JOIN "Users" u ON u.id = soh."createdBy"
+        WHERE sm.source = 'STOCK_OUT'
+          AND DATE(sm.date AT TIME ZONE 'Asia/Jakarta') = :date
+          ${clause} ${whClause}
+        GROUP BY sm."ReferenceId"
+        ORDER BY date ASC
+      `, opts);
+
+      // Opname sessions
+      const opname = await sequelize.query(`
+        SELECT
+          sm."ReferenceId"::int                                     AS id,
+          MIN(sm.date)                                              AS date,
+          COUNT(DISTINCT sm."ProductSKUId")::int                   AS "skuCount",
+          COALESCE(SUM(CASE WHEN sm.quantity > 0 THEN sm.quantity ELSE 0 END),0)::int AS "addQty",
+          COALESCE(SUM(CASE WHEN sm.quantity < 0 THEN ABS(sm.quantity) ELSE 0 END),0)::int AS "subQty",
+          MIN(w.name)                                              AS "warehouseName",
+          MIN(u.name)                                              AS "createdBy"
+        FROM "Stock_Movements" sm
+        LEFT JOIN "Stock_Opname_Sessions" sos ON sos.id = sm."ReferenceId"::int
+        LEFT JOIN "Warehouses" w ON w.id = sm."WarehouseId"
+        LEFT JOIN "Users" u ON u.id = sos."createdBy"
+        WHERE sm.source = 'OPNAME'
+          AND DATE(sm.date AT TIME ZONE 'Asia/Jakarta') = :date
+          ${clause} ${whClause}
+        GROUP BY sm."ReferenceId"
+        ORDER BY date ASC
+      `, opts);
+
+      // Transfers
+      const transfers = await sequelize.query(`
+        SELECT
+          sm."ReferenceId"::int                                     AS id,
+          MIN(sm.date)                                              AS date,
+          COUNT(DISTINCT sm."ProductSKUId")::int                   AS "skuCount",
+          COALESCE(SUM(CASE WHEN sm.type='OUT' THEN sm.quantity ELSE 0 END),0)::int AS "totalQty",
+          MIN(w_from.name)                                         AS "fromWarehouse",
+          MIN(w_to.name)                                           AS "toWarehouse"
+        FROM "Stock_Movements" sm
+        LEFT JOIN "Stock_Transfers" st ON st.id = sm."ReferenceId"::int
+        LEFT JOIN "Warehouses" w_from ON w_from.id = st."fromWarehouseId"
+        LEFT JOIN "Warehouses" w_to   ON w_to.id   = st."toWarehouseId"
+        WHERE sm.source = 'TRANSFER'
+          AND DATE(sm.date AT TIME ZONE 'Asia/Jakarta') = :date
+          ${clause}
+        GROUP BY sm."ReferenceId"
+        ORDER BY date ASC
+      `, opts);
+
+      const n = (v) => Number(v ?? 0);
+      res.json({
+        date,
+        stockIn:   stockIn.map(r => ({ id: r.id, date: r.date, skuCount: n(r.skuCount), totalQty: n(r.totalQty), totalValue: n(r.totalValue), note: r.note, warehouseName: r.warehouseName, createdBy: r.createdBy })),
+        stockOut:  stockOut.map(r => ({ id: r.id, date: r.date, skuCount: n(r.skuCount), totalQty: n(r.totalQty), totalValue: n(r.totalValue), note: r.note, purpose: r.purpose, warehouseName: r.warehouseName, createdBy: r.createdBy })),
+        opname:    opname.map(r => ({ id: r.id, date: r.date, skuCount: n(r.skuCount), addQty: n(r.addQty), subQty: n(r.subQty), warehouseName: r.warehouseName, createdBy: r.createdBy })),
+        transfers: transfers.map(r => ({ id: r.id, date: r.date, skuCount: n(r.skuCount), totalQty: n(r.totalQty), fromWarehouse: r.fromWarehouse, toWarehouse: r.toWarehouse })),
+      });
+    } catch (err) { next(err); }
+  }
+
   // GET /reports/yearly?warehouseId=1&hideInitial=true
   static async yearly(req, res, next) {
     try {

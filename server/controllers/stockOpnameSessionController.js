@@ -111,6 +111,7 @@ class StockOpnameSessionController {
                         type:         'ADJUSTMENT',
                         quantity:     diff,
                         ReferenceId:  session.id,
+                        source:       'OPNAME',
                         note:         `Opname koreksi: ${diff > 0 ? '+' : ''}${diff}`,
                         date:         session.finished_at || new Date(),
                         companyId:    session.companyId

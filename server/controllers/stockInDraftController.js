@@ -242,6 +242,7 @@ class StockInDraftController {
                         type: 'IN',
                         quantity: Number(quantity),
                         ReferenceId: header.id,
+                        source: 'STOCK_IN',
                         date: date || new Date(),
                         companyId: cid,
                     }, { transaction: t });

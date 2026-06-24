@@ -222,10 +222,11 @@ export const manualShipmentsApi = {
 }
 
 export const reportApi = {
-  monthly:  (params) => api.get('/reports/monthly',  { params }).then(r => r.data),
-  daily:    (params) => api.get('/reports/daily',    { params }).then(r => r.data),
-  yearly:   (params) => api.get('/reports/yearly',   { params }).then(r => r.data),
-  snapshot: (params) => api.get('/reports/snapshot', { params }).then(r => r.data),
+  monthly:       (params) => api.get('/reports/monthly',        { params }).then(r => r.data),
+  daily:         (params) => api.get('/reports/daily',          { params }).then(r => r.data),
+  yearly:        (params) => api.get('/reports/yearly',         { params }).then(r => r.data),
+  snapshot:      (params) => api.get('/reports/snapshot',       { params }).then(r => r.data),
+  dailyActivity: (params) => api.get('/reports/daily-activity', { params }).then(r => r.data),
 }
 
 export const profileApi = {
