@@ -89,6 +89,7 @@ class LoginController {
                     role: user.role,
                     companyId: user.companyId,
                     avatar: user.avatar ?? null,
+                    divisi: user.divisi ?? null,
                     permissions,
                     company: user.company ? {
                         id: user.company.id,

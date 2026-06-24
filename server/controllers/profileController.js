@@ -8,7 +8,7 @@ class ProfileController {
   static async get(req, res, next) {
     try {
       const user = await User.findByPk(req.user.id, {
-        attributes: ['id', 'name', 'email', 'role', 'companyId', 'avatar', 'isActive'],
+        attributes: ['id', 'name', 'email', 'role', 'companyId', 'avatar', 'divisi', 'isActive'],
       });
       if (!user) return res.status(404).json({ message: 'User tidak ditemukan' });
       res.json(user);
@@ -22,6 +22,7 @@ class ProfileController {
       if (!user) return res.status(404).json({ message: 'User tidak ditemukan' });
 
       if (req.body.name?.trim()) user.name = req.body.name.trim();
+      if (req.body.divisi !== undefined) user.divisi = req.body.divisi?.trim() || null;
 
       if (req.file) {
         // Delete old avatar from Cloudinary if exists
@@ -30,7 +31,7 @@ class ProfileController {
       }
 
       await user.save();
-      res.json({ id: user.id, name: user.name, email: user.email, role: user.role, companyId: user.companyId, avatar: user.avatar });
+      res.json({ id: user.id, name: user.name, email: user.email, role: user.role, companyId: user.companyId, avatar: user.avatar, divisi: user.divisi });
     } catch (err) { next(err); }
   }
 

@@ -46,6 +46,7 @@ const authentication = async (req, res, next) => {
             companyId: user.companyId,
             name: user.name,
             avatar: user.avatar ?? null,
+            divisi: user.divisi ?? null,
         }
         next()
     } catch (err) {

@@ -89,7 +89,7 @@ function UsersTab({ isSuperAdmin, roles }) {
   const [showPwd, setShowPwd] = useState(false)
 
   const defaultRole = roles.find(r => r.name !== 'SUPER_ADMIN')?.name ?? ''
-  const [form, setForm] = useState({ name: '', email: '', password: '', role: defaultRole, companyId: '' })
+  const [form, setForm] = useState({ name: '', email: '', password: '', role: defaultRole, companyId: '', divisi: '' })
 
   const { data, isLoading } = useQuery({
     queryKey: ['users', { page, limit, name: search }],
@@ -120,7 +120,7 @@ function UsersTab({ isSuperAdmin, roles }) {
     onError: e => toast.error(e.response?.data?.message || 'Error'),
   })
 
-  const openEdit   = (r) => { setForm({ name: r.name, email: r.email, password: '', role: r.role, companyId: r.companyId ?? '' }); setModal({ mode: 'edit', data: r }) }
+  const openEdit   = (r) => { setForm({ name: r.name, email: r.email, password: '', role: r.role, companyId: r.companyId ?? '', divisi: r.divisi ?? '' }); setModal({ mode: 'edit', data: r }) }
   const openCreate = ()  => { setForm({ name: '', email: '', password: '', role: defaultRole, companyId: '' }); setModal({ mode: 'create' }) }
   const set = f => e => setForm(v => ({ ...v, [f]: e.target.value }))
   const initials = (name = '') => name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
@@ -150,7 +150,12 @@ function UsersTab({ isSuperAdmin, roles }) {
       key: 'role', label: 'Role', width: 160,
       render: r => {
         const rd = roleMap[r.role]
-        return <RoleBadge name={r.role} displayName={rd?.displayName ?? r.roleDisplayName ?? r.role} />
+        return (
+          <div>
+            <RoleBadge name={r.role} displayName={rd?.displayName ?? r.roleDisplayName ?? r.role} />
+            {r.divisi && <div className="text-[10px] text-slate-400 mt-0.5">{r.divisi}</div>}
+          </div>
+        )
       },
     },
     {
@@ -221,6 +226,10 @@ function UsersTab({ isSuperAdmin, roles }) {
                 placeholder="Pilih role…"
                 required
               />
+            </div>
+            <div>
+              <label className="label">Divisi</label>
+              <input className="input" value={form.divisi} onChange={set('divisi')} placeholder="MARKETING, PRODUKSI, dll (opsional)" />
             </div>
             {isSuperAdmin && (
               <div className="col-span-2">
