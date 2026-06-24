@@ -157,7 +157,16 @@ export default function PengajuanBaru() {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="label mb-1">Jenis Pengajuan <span className="text-red-400">*</span></label>
-              <select value={requestTypeId} onChange={e => setRequestTypeId(e.target.value)} className="input w-full" required>
+              <select value={requestTypeId} onChange={e => {
+                const id = e.target.value
+                setRequestTypeId(id)
+                const chosen = (types ?? []).find(t => String(t.id) === id)
+                if (chosen) {
+                  const name = chosen.name.toLowerCase()
+                  if (name.includes('photoshoot')) setNeedsReturn(true)
+                  else if (name.includes('endorse')) setNeedsReturn(false)
+                }
+              }} className="input w-full" required>
                 <option value="">— pilih jenis —</option>
                 {(types ?? []).map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
               </select>
