@@ -26,6 +26,7 @@ module.exports = (sequelize, DataTypes) => {
     sentAt:          { type: DataTypes.DATEONLY, allowNull: true },
     trackingNumber:  { type: DataTypes.STRING(200), allowNull: true },
     returnedAt:      { type: DataTypes.DATEONLY, allowNull: true },
+    shippingNote:    { type: DataTypes.TEXT, allowNull: true },
     processedBy:     { type: DataTypes.INTEGER, allowNull: true },
     rejectionReason: { type: DataTypes.TEXT, allowNull: true },
     companyId:       { type: DataTypes.INTEGER, allowNull: true },

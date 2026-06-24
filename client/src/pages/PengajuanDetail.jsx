@@ -14,8 +14,9 @@ const STATUS_COLOR = {
   SENT:     'bg-purple-100 text-purple-700 border-purple-200',
   DONE:     'bg-emerald-100 text-emerald-700 border-emerald-200',
 }
-const STEPS = ['PENDING','APPROVED','SENT','DONE']
-const STEP_LABEL = { PENDING:'Menunggu', APPROVED:'Disetujui', SENT:'Dikirim', DONE:'Selesai' }
+const STEPS_NORMAL  = ['PENDING','APPROVED','SENT','DONE']
+const STEPS_RETURN  = ['PENDING','APPROVED','SENT','RETURNED','DONE']
+const STEP_LABEL = { PENDING:'Menunggu', APPROVED:'Disetujui', SENT:'Dikirim', RETURNED:'Dikembalikan', DONE:'Selesai' }
 
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('id-ID', { day:'2-digit', month:'short', year:'numeric' }) : '—'
 const fmtDt   = (d) => d ? new Date(d).toLocaleString ('id-ID', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' }) : '—'
@@ -51,6 +52,7 @@ function SentModal({ onConfirm, onClose }) {
   const today = new Date().toISOString().split('T')[0]
   const [sentAt, setSentAt]                 = useState(today)
   const [trackingNumber, setTrackingNumber] = useState('')
+  const [shippingNote, setShippingNote]     = useState('')
   return (
     <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-xl shadow-xl p-5 w-full max-w-sm">
@@ -65,10 +67,16 @@ function SentModal({ onConfirm, onClose }) {
             <input value={trackingNumber} onChange={e => setTrackingNumber(e.target.value)}
               placeholder="JNE123456, dll" className="input w-full" />
           </div>
+          <div>
+            <label className="label mb-1">Catatan Pengiriman (opsional)</label>
+            <textarea value={shippingNote} onChange={e => setShippingNote(e.target.value)}
+              placeholder="Contoh: baru kirim 2 dari 3 item, sisa menyusul minggu depan…"
+              rows={2} className="input w-full resize-none text-sm" />
+          </div>
         </div>
         <div className="flex gap-2 justify-end mt-4">
           <button onClick={onClose} className="btn-secondary text-sm">Batal</button>
-          <button onClick={() => onConfirm({ sentAt, trackingNumber })} className="btn-primary text-sm">Simpan</button>
+          <button onClick={() => onConfirm({ sentAt, trackingNumber, shippingNote: shippingNote.trim() || null })} className="btn-primary text-sm">Simpan</button>
         </div>
       </div>
     </div>
@@ -95,7 +103,7 @@ function ReturnModal({ onConfirm, onClose }) {
   )
 }
 
-function StatusStepper({ status }) {
+function StatusStepper({ status, needsReturn, returnedAt }) {
   if (status === 'REJECTED') return (
     <div className="flex items-center gap-2 mb-5 p-3 bg-red-50 border border-red-200 rounded-xl">
       <span className="w-6 h-6 rounded-full bg-red-500 text-white flex items-center justify-center flex-shrink-0">
@@ -105,14 +113,26 @@ function StatusStepper({ status }) {
     </div>
   )
 
-  const currentIdx = STEPS.indexOf(status)
+  const steps = needsReturn ? STEPS_RETURN : STEPS_NORMAL
+
+  // Map logical status → virtual index
+  let currentIdx
+  if (!needsReturn) {
+    currentIdx = STEPS_NORMAL.indexOf(status)
+  } else {
+    if      (status === 'PENDING')                        currentIdx = 0
+    else if (status === 'APPROVED')                       currentIdx = 1
+    else if (status === 'SENT' && !returnedAt)            currentIdx = 2
+    else if (status === 'SENT' && returnedAt)             currentIdx = 3
+    else if (status === 'DONE')                           currentIdx = 4
+    else                                                  currentIdx = 0
+  }
 
   return (
     <div className="flex items-center gap-0 mb-5 overflow-x-auto pb-1">
-      {STEPS.map((step, idx) => {
-        const done    = idx < currentIdx
-        const active  = idx === currentIdx
-        const pending = idx > currentIdx
+      {steps.map((step, idx) => {
+        const done   = idx < currentIdx
+        const active = idx === currentIdx
         return (
           <div key={step} className="flex items-center min-w-0">
             <div className="flex flex-col items-center flex-shrink-0">
@@ -127,7 +147,7 @@ function StatusStepper({ status }) {
                 active ? 'text-indigo-600' : done ? 'text-emerald-600' : 'text-slate-400'
               }`}>{STEP_LABEL[step]}</span>
             </div>
-            {idx < STEPS.length - 1 && (
+            {idx < steps.length - 1 && (
               <div className={`h-0.5 w-10 sm:w-16 mx-1 flex-shrink-0 ${idx < currentIdx ? 'bg-emerald-400' : 'bg-slate-200'}`} />
             )}
           </div>
@@ -209,7 +229,7 @@ export default function PengajuanDetail() {
       </button>
 
       {/* Status stepper */}
-      <StatusStepper status={req.status} />
+      <StatusStepper status={req.status} needsReturn={req.needsReturn} returnedAt={req.returnedAt} />
 
       {/* Header */}
       <div className="flex items-start justify-between mb-4 flex-wrap gap-3">
@@ -280,14 +300,16 @@ export default function PengajuanDetail() {
             <>
               {req.needsReturn && !req.returnedAt && (
                 <button onClick={() => setShowReturn(true)}
-                  className="btn-secondary text-xs flex items-center gap-1">
-                  <RotateCcw size={11} /> Tandai Kembali
+                  className="btn-primary text-xs flex items-center gap-1 bg-amber-500 border-amber-500 hover:bg-amber-600">
+                  <RotateCcw size={11} /> Tandai Dikembalikan
                 </button>
               )}
-              <button onClick={() => { if (confirm('Tandai selesai?')) markDone.mutate() }}
-                className="btn-primary text-xs flex items-center gap-1 bg-emerald-600 border-emerald-600 hover:bg-emerald-700">
-                <CheckCircle2 size={11} /> Selesaikan
-              </button>
+              {(!req.needsReturn || req.returnedAt) && (
+                <button onClick={() => { if (confirm('Tandai selesai?')) markDone.mutate() }}
+                  className="btn-primary text-xs flex items-center gap-1 bg-emerald-600 border-emerald-600 hover:bg-emerald-700">
+                  <CheckCircle2 size={11} /> Selesaikan
+                </button>
+              )}
             </>
           )}
         </div>
@@ -376,6 +398,11 @@ export default function PengajuanDetail() {
               <Field label="Diproses oleh" value={req.processor?.name} />
             )}
           </div>
+          {req.shippingNote && (
+            <div className="mt-3 p-2.5 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">
+              <span className="font-semibold">Catatan pengiriman: </span>{req.shippingNote}
+            </div>
+          )}
         </div>
       )}
 

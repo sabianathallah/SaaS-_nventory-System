@@ -266,6 +266,7 @@ class RequestController {
         status: 'SENT',
         sentAt: req.body.sentAt || new Date().toISOString().slice(0, 10),
         trackingNumber: req.body.trackingNumber || null,
+        shippingNote: req.body.shippingNote || null,
         processedBy: req.user.id,
       });
       res.json(request);
@@ -294,6 +295,8 @@ class RequestController {
       const request = await Request.findOne({ where: { id: req.params.id, ...companyFilter(req) } });
       if (!request)                  return res.status(404).json({ message: 'Pengajuan tidak ditemukan' });
       if (request.status !== 'SENT') return res.status(400).json({ message: 'Hanya SENT yang bisa ditandai selesai' });
+      if (request.needsReturn && !request.returnedAt)
+        return res.status(400).json({ message: 'Barang harus ditandai dikembalikan terlebih dahulu sebelum diselesaikan' });
       await request.update({ status: 'DONE', processedBy: req.user.id });
       res.json(request);
     } catch (err) { next(err); }
