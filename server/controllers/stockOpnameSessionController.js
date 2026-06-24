@@ -1,7 +1,8 @@
 'use strict';
-const { sequelize, Stock_Opname_Session, Stock_Opname_Item, Stock, Stock_Movement, Warehouse, User, Product, ProductSKU, ProductVariantOption } = require('../models');
+const { sequelize, Stock_Opname_Session, Stock_Opname_Item, Stock, Stock_Movement, SkuWarehouseStock, Warehouse, User, Product, ProductSKU, ProductVariantOption } = require('../models');
 const { companyFilter, companyId } = require('../helpers/tenancy');
 const { paginate, buildFilter, paginatedResponse } = require('../helpers/queryHelper');
+const { upsertSkuWarehouseStock } = require('../helpers/skuStock');
 
 class StockOpnameSessionController {
     static async getAll(req, res, next) {
@@ -101,6 +102,7 @@ class StockOpnameSessionController {
                     if (item.ProductSKUId) {
                         const sku = await ProductSKU.findByPk(item.ProductSKUId, { transaction: t });
                         if (sku) await sku.increment('qty', { by: diff, transaction: t });
+                        await upsertSkuWarehouseStock(t, SkuWarehouseStock, { ProductSKUId: item.ProductSKUId, WarehouseId: session.warehouseId, delta: diff, companyId: session.companyId });
                     }
                     await Stock_Movement.create({
                         ProductId:    item.ProductId,

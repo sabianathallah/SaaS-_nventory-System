@@ -1,8 +1,9 @@
 'use strict';
 const {
-  sequelize, Stock_In_Header, Stock_In_Item, Stock_Movement, Stock,
+  sequelize, Stock_In_Header, Stock_In_Item, Stock_Movement, Stock, SkuWarehouseStock,
   Supplier, Warehouse, User, ProductSKU, Product, ProductVariantOption, ProductVariantType,
 } = require('../models');
+const { upsertSkuWarehouseStock } = require('../helpers/skuStock');
 const { companyFilter, companyId } = require('../helpers/tenancy');
 const { paginate, buildFilter, paginatedResponse } = require('../helpers/queryHelper');
 
@@ -125,6 +126,7 @@ class StockInHeaderController {
           });
           await stock.increment('quantity', { by: Number(quantity), transaction: t });
           await sku.increment('qty', { by: Number(quantity), transaction: t });
+          await upsertSkuWarehouseStock(t, SkuWarehouseStock, { ProductSKUId: Number(ProductSKUId), WarehouseId, delta: Number(quantity), companyId: cid });
 
           await Stock_Movement.create({
             ProductId: sku.ProductId, ProductSKUId: Number(ProductSKUId), WarehouseId,
@@ -183,6 +185,7 @@ class StockInHeaderController {
           });
           if (stock) await stock.decrement('quantity', { by: item.quantity, transaction: t });
           await sku.decrement('qty', { by: item.quantity, transaction: t });
+          await upsertSkuWarehouseStock(t, SkuWarehouseStock, { ProductSKUId: item.ProductSKUId, WarehouseId: header.WarehouseId, delta: -item.quantity, companyId: sku.companyId });
         }
       }
       await Stock_Movement.destroy({ where: { ReferenceId: header.id }, transaction: t });
@@ -224,6 +227,7 @@ class StockInHeaderController {
         });
         await stock.increment('quantity', { by: Number(quantity), transaction: t });
         await sku.increment('qty', { by: Number(quantity), transaction: t });
+        await upsertSkuWarehouseStock(t, SkuWarehouseStock, { ProductSKUId: Number(ProductSKUId), WarehouseId: header.WarehouseId, delta: Number(quantity), companyId: cid });
         await Stock_Movement.create({
           ProductId: sku.ProductId, ProductSKUId: Number(ProductSKUId), WarehouseId: header.WarehouseId,
           type: 'IN', quantity: Number(quantity),
@@ -266,6 +270,7 @@ class StockInHeaderController {
           });
           await stock.increment('quantity', { by: delta, transaction: t });
           await sku.increment('qty', { by: delta, transaction: t });
+          await upsertSkuWarehouseStock(t, SkuWarehouseStock, { ProductSKUId: item.ProductSKUId, WarehouseId: header.WarehouseId, delta, companyId: companyId(req) });
           await Stock_Movement.create({
             ProductId: sku.ProductId, ProductSKUId: item.ProductSKUId, WarehouseId: header.WarehouseId,
             type: delta > 0 ? 'IN' : 'OUT', quantity: Math.abs(delta),
@@ -303,6 +308,7 @@ class StockInHeaderController {
             await stock.decrement('quantity', { by: item.quantity, transaction: t });
           }
           await sku.decrement('qty', { by: item.quantity, transaction: t });
+          await upsertSkuWarehouseStock(t, SkuWarehouseStock, { ProductSKUId: item.ProductSKUId, WarehouseId: header.WarehouseId, delta: -item.quantity, companyId: sku.companyId });
           await Stock_Movement.create({
             ProductId: sku.ProductId, ProductSKUId: item.ProductSKUId, WarehouseId: header.WarehouseId,
             type: 'OUT', quantity: item.quantity,

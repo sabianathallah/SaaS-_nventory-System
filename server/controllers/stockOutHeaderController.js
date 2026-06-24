@@ -1,6 +1,7 @@
 'use strict';
-const { sequelize, Stock_Out_Header, Stock_Movement, Stock, User, Product, ProductSKU, ProductVariantOption, Warehouse } = require('../models');
+const { sequelize, Stock_Out_Header, Stock_Movement, Stock, SkuWarehouseStock, User, Product, ProductSKU, ProductVariantOption, Warehouse } = require('../models');
 const { companyFilter, companyId } = require('../helpers/tenancy');
+const { upsertSkuWarehouseStock } = require('../helpers/skuStock');
 const { paginate, buildFilter, paginatedResponse } = require('../helpers/queryHelper');
 
 class StockOutHeaderController {
@@ -137,6 +138,7 @@ class StockOutHeaderController {
                 if (ProductSKUId) {
                     const sku = await ProductSKU.findByPk(ProductSKUId, { transaction: t });
                     if (sku) await sku.decrement('qty', { by: quantity, transaction: t });
+                    await upsertSkuWarehouseStock(t, SkuWarehouseStock, { ProductSKUId, WarehouseId, delta: -quantity, companyId: cid });
                 }
 
                 movements.push(await Stock_Movement.create({
@@ -187,6 +189,7 @@ class StockOutHeaderController {
                 if (mv.ProductSKUId) {
                     const sku = await ProductSKU.findByPk(mv.ProductSKUId, { transaction: t });
                     if (sku) await sku.increment('qty', { by: mv.quantity, transaction: t });
+                    await upsertSkuWarehouseStock(t, SkuWarehouseStock, { ProductSKUId: mv.ProductSKUId, WarehouseId: mv.WarehouseId, delta: mv.quantity, companyId: mv.companyId });
                 }
             }
             await Stock_Movement.destroy({ where: { ReferenceId: header.id }, transaction: t });

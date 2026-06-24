@@ -39,13 +39,13 @@ class ProductController {
             // Warehouse filter — products that have stock in the given warehouse
             const warehouseId = req.query.WarehouseId ? parseInt(req.query.WarehouseId) : null;
             const extraWhere  = warehouseId
-                ? { [Op.and]: sequelize.literal(`EXISTS (SELECT 1 FROM "Stocks" s WHERE s."ProductId" = "Product"."id" AND s."WarehouseId" = ${warehouseId})`) }
+                ? { [Op.and]: sequelize.literal(`EXISTS (SELECT 1 FROM "SkuWarehouseStocks" sws INNER JOIN "ProductSKUs" ps ON ps."id" = sws."ProductSKUId" WHERE ps."ProductId" = "Product"."id" AND sws."WarehouseId" = ${warehouseId} AND sws."qty" > 0)`) }
                 : {};
 
-            // When filtering by warehouse, totalStock reflects only that warehouse's stock
+            // totalStock: per-warehouse from SkuWarehouseStocks, or total from ProductSKU.qty
             const stockSubquery = warehouseId
-                ? `(SELECT COALESCE(SUM(s."quantity"),0) FROM "Stocks" s WHERE s."ProductId" = "Product"."id" AND s."WarehouseId" = ${warehouseId})`
-                : `(SELECT COALESCE(SUM(s."quantity"),0) FROM "Stocks" s WHERE s."ProductId" = "Product"."id")`;
+                ? `(SELECT COALESCE(SUM(sws."qty"),0) FROM "SkuWarehouseStocks" sws INNER JOIN "ProductSKUs" ps ON ps."id" = sws."ProductSKUId" WHERE ps."ProductId" = "Product"."id" AND sws."WarehouseId" = ${warehouseId})`
+                : `(SELECT COALESCE(SUM(ps."qty"),0) FROM "ProductSKUs" ps WHERE ps."ProductId" = "Product"."id")`;
 
             const { rows, count } = await Product.findAndCountAll({
                 where: { ...companyFilter(req), ...filter, ...extraWhere },
@@ -74,7 +74,7 @@ class ProductController {
                 where: { id: req.params.id, ...companyFilter(req) },
                 attributes: {
                     include: [[
-                        sequelize.literal('(SELECT COALESCE(SUM("Stocks"."quantity"),0) FROM "Stocks" WHERE "Stocks"."ProductId" = "Product"."id")'),
+                        sequelize.literal('(SELECT COALESCE(SUM(ps."qty"),0) FROM "ProductSKUs" ps WHERE ps."ProductId" = "Product"."id")'),
                         'totalStock',
                     ]],
                 },

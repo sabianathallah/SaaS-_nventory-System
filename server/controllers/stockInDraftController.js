@@ -1,9 +1,10 @@
 'use strict';
 const {
     sequelize, Stock_In_Draft, Stock_In_Draft_Item,
-    Stock_In_Header, Stock_In_Item, Stock_Movement, Stock,
+    Stock_In_Header, Stock_In_Item, Stock_Movement, Stock, SkuWarehouseStock,
     ProductSKU, Product, ProductVariantOption, ProductVariantType, Warehouse, User,
 } = require('../models');
+const { upsertSkuWarehouseStock } = require('../helpers/skuStock');
 const { companyFilter, companyId } = require('../helpers/tenancy');
 
 const DRAFT_ITEM_INCLUDE = [
@@ -233,6 +234,7 @@ class StockInDraftController {
                     });
                     await stock.increment('quantity', { by: Number(quantity), transaction: t });
                     await sku.increment('qty', { by: Number(quantity), transaction: t });
+                    await upsertSkuWarehouseStock(t, SkuWarehouseStock, { ProductSKUId: Number(ProductSKUId), WarehouseId, delta: Number(quantity), companyId: cid });
                     await Stock_Movement.create({
                         ProductId: sku.ProductId,
                         ProductSKUId: Number(ProductSKUId),

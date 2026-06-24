@@ -1,10 +1,11 @@
 'use strict';
 const {
   sequelize, StockTransfer, StockTransferItem,
-  Stock_Movement, Stock, ProductSKU, Product,
+  Stock_Movement, Stock, SkuWarehouseStock, ProductSKU, Product,
   Warehouse, User, ProductVariantOption, ProductVariantType,
 } = require('../models');
 const { companyFilter, companyId: getCompanyId } = require('../helpers/tenancy');
+const { moveSkuWarehouseStock } = require('../helpers/skuStock');
 
 const VALID_TYPES = ['TRANSFER', 'QC_REJECT_SEMENTARA', 'QC_REJECT_PERMANEN', 'LAINNYA'];
 
@@ -53,6 +54,8 @@ async function applyItem(t, { cid, fromWarehouseId, toWarehouseId, productSkuId,
   await Stock_Movement.create({ ...movBase, WarehouseId: fromWarehouseId, type: 'OUT', quantity: qty }, { transaction: t });
   await Stock_Movement.create({ ...movBase, WarehouseId: toWarehouseId,   type: 'IN',  quantity: qty }, { transaction: t });
 
+  await moveSkuWarehouseStock(t, SkuWarehouseStock, { ProductSKUId: productSkuId, fromWarehouseId, toWarehouseId, qty, companyId: cid });
+
   return await StockTransferItem.create({ transferId, productSkuId, quantity: qty }, { transaction: t });
 }
 
@@ -75,6 +78,9 @@ async function reverseItem(t, { cid, fromWarehouseId, toWarehouseId, productSkuI
     const deductable = Math.min(qty, Number(dstStock.quantity));
     if (deductable > 0) await dstStock.decrement('quantity', { by: deductable, transaction: t });
   }
+
+  // Reverse SkuWarehouseStocks: move back from toWarehouse to fromWarehouse
+  await moveSkuWarehouseStock(t, SkuWarehouseStock, { ProductSKUId: productSkuId, fromWarehouseId: toWarehouseId, toWarehouseId: fromWarehouseId, qty, companyId: cid });
 }
 
 exports.list = async (req, res, next) => {
