@@ -38,8 +38,11 @@ class StockOutDraftController {
     static async current(req, res, next) {
         try {
             const drafts = await Stock_Out_Draft.findAll({
-                where: { status: 'draft', createdBy: req.user.id, ...companyFilter(req) },
-                include: DRAFT_ITEM_INCLUDE,
+                where: { status: 'draft', ...companyFilter(req) },
+                include: [
+                    ...DRAFT_ITEM_INCLUDE,
+                    { model: User, attributes: ['id', 'name', 'avatar'], foreignKey: 'createdBy' },
+                ],
                 order: [['createdAt', 'DESC']],
             });
             res.status(200).json(drafts);
@@ -49,7 +52,7 @@ class StockOutDraftController {
     static async get(req, res, next) {
         try {
             const draft = await Stock_Out_Draft.findOne({
-                where: { id: req.params.id, createdBy: req.user.id, ...companyFilter(req) },
+                where: { id: req.params.id, ...companyFilter(req) },
                 include: DRAFT_ITEM_INCLUDE,
             });
             if (!draft) return res.status(404).json({ message: 'Draft tidak ditemukan' });
@@ -98,7 +101,7 @@ class StockOutDraftController {
     static async update(req, res, next) {
         try {
             const draft = await Stock_Out_Draft.findOne({
-                where: { id: req.params.id, createdBy: req.user.id, ...companyFilter(req) },
+                where: { id: req.params.id, ...companyFilter(req) },
             });
             if (!draft) throw { name: 'NotFound', message: 'Draft tidak ditemukan' };
 
@@ -120,7 +123,7 @@ class StockOutDraftController {
     static async addItem(req, res, next) {
         try {
             const draft = await Stock_Out_Draft.findOne({
-                where: { id: req.params.id, status: 'draft', createdBy: req.user.id, ...companyFilter(req) },
+                where: { id: req.params.id, status: 'draft', ...companyFilter(req) },
             });
             if (!draft) throw { name: 'NotFound', message: 'Draft tidak ditemukan atau sudah disubmit' };
 
@@ -168,7 +171,7 @@ class StockOutDraftController {
 
     static async updateItem(req, res, next) {
         try {
-            const draft = await Stock_Out_Draft.findOne({ where: { id: req.params.id, createdBy: req.user.id, ...companyFilter(req) } });
+            const draft = await Stock_Out_Draft.findOne({ where: { id: req.params.id, ...companyFilter(req) } });
             if (!draft) throw { name: 'NotFound', message: 'Draft tidak ditemukan' };
             const item = await Stock_Out_Draft_Item.findOne({
                 where: { id: req.params.itemId, DraftId: req.params.id },
@@ -184,7 +187,7 @@ class StockOutDraftController {
 
     static async removeItem(req, res, next) {
         try {
-            const draft = await Stock_Out_Draft.findOne({ where: { id: req.params.id, createdBy: req.user.id, ...companyFilter(req) } });
+            const draft = await Stock_Out_Draft.findOne({ where: { id: req.params.id, ...companyFilter(req) } });
             if (!draft) throw { name: 'NotFound', message: 'Draft tidak ditemukan' };
             const item = await Stock_Out_Draft_Item.findOne({
                 where: { id: req.params.itemId, DraftId: req.params.id },
@@ -199,7 +202,7 @@ class StockOutDraftController {
         const t = await sequelize.transaction();
         try {
             const draft = await Stock_Out_Draft.findOne({
-                where: { id: req.params.id, createdBy: req.user.id, ...companyFilter(req) },
+                where: { id: req.params.id, ...companyFilter(req) },
                 include: DRAFT_ITEM_INCLUDE,
                 transaction: t,
             });
@@ -252,24 +255,40 @@ class StockOutDraftController {
             for (const item of resolvedItems) {
                 let { ProductSKUId, ProductId, quantity } = item;
 
-                const [stock] = await Stock.findOrCreate({
-                    where: { ProductId, WarehouseId },
-                    defaults: { quantity: 0, companyId: cid },
-                    transaction: t,
-                });
-                // Re-acquire with row lock after findOrCreate to prevent concurrent decrement race
-                const lockedStock = await Stock.findOne({ where: { ProductId, WarehouseId }, transaction: t, lock: t.LOCK.UPDATE });
-                const available = lockedStock ? Number(lockedStock.quantity) : 0;
-                if (available < Number(quantity)) {
-                    await t.rollback();
-                    return res.status(400).json({ message: `Stok tidak cukup di gudang yang dipilih (tersedia: ${available}, dibutuhkan: ${quantity})` });
-                }
-                await lockedStock.decrement('quantity', { by: Number(quantity), transaction: t });
-
                 if (ProductSKUId) {
+                    // Per-SKU check against SkuWarehouseStocks (source of truth)
+                    const skuStock = await SkuWarehouseStock.findOne({
+                        where: { ProductSKUId, WarehouseId },
+                        transaction: t, lock: t.LOCK.UPDATE,
+                    });
+                    const available = skuStock ? Number(skuStock.qty) : 0;
+                    if (available < Number(quantity)) {
+                        await t.rollback();
+                        return res.status(400).json({ message: `Stok tidak cukup di gudang yang dipilih (tersedia: ${available}, dibutuhkan: ${quantity})` });
+                    }
                     const sku = await ProductSKU.findByPk(ProductSKUId, { transaction: t });
                     if (sku) await sku.decrement('qty', { by: Number(quantity), transaction: t });
                     await upsertSkuWarehouseStock(t, SkuWarehouseStock, { ProductSKUId, WarehouseId, delta: -Number(quantity), companyId: cid });
+                } else {
+                    const [stock] = await Stock.findOrCreate({
+                        where: { ProductId, WarehouseId },
+                        defaults: { quantity: 0, companyId: cid },
+                        transaction: t,
+                    });
+                    const lockedStock = await Stock.findOne({ where: { ProductId, WarehouseId }, transaction: t, lock: t.LOCK.UPDATE });
+                    const available = lockedStock ? Number(lockedStock.quantity) : 0;
+                    if (available < Number(quantity)) {
+                        await t.rollback();
+                        return res.status(400).json({ message: `Stok tidak cukup di gudang yang dipilih (tersedia: ${available}, dibutuhkan: ${quantity})` });
+                    }
+                    await lockedStock.decrement('quantity', { by: Number(quantity), transaction: t });
+                }
+
+                // Keep Stocks table in sync (secondary)
+                const stock = await Stock.findOne({ where: { ProductId, WarehouseId }, transaction: t });
+                if (stock && ProductSKUId) {
+                    const newQty = Math.max(0, Number(stock.quantity) - Number(quantity));
+                    await stock.update({ quantity: newQty }, { transaction: t });
                 }
 
                 movements.push(await Stock_Movement.create({
@@ -295,7 +314,7 @@ class StockOutDraftController {
     static async cancel(req, res, next) {
         try {
             const draft = await Stock_Out_Draft.findOne({
-                where: { id: req.params.id, createdBy: req.user.id, ...companyFilter(req) },
+                where: { id: req.params.id, ...companyFilter(req) },
             });
             if (!draft) throw { name: 'NotFound', message: 'Draft tidak ditemukan' };
             await draft.destroy();
