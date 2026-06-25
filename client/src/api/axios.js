@@ -1,7 +1,10 @@
 import axios from 'axios'
 import toast from 'react-hot-toast'
 
-const api = axios.create({ baseURL: import.meta.env.VITE_API_URL || '/api' })
+const api = axios.create({
+  baseURL: import.meta.env.VITE_API_URL || '/api',
+  timeout: 30_000,
+})
 
 // Module-level company scope — set by SelectedCompanyContext
 let _scopedCompanyId = null
@@ -39,6 +42,10 @@ let _redirectingToLogin = false
 api.interceptors.response.use(
   (res) => res,
   (err) => {
+    if (err.code === 'ECONNABORTED' || err.message?.includes('timeout')) {
+      toast.error('Request timeout — server tidak merespons. Coba lagi.')
+      return Promise.reject(err)
+    }
     if (err.response?.status === 401 && !_redirectingToLogin) {
       _redirectingToLogin = true
       const msg = err.response?.data?.message ?? ''

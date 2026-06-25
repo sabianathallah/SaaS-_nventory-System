@@ -83,7 +83,8 @@ const ALL_PERMISSIONS = [
   // ── Pengajuan ────────────────────────────────────────────────────────────────
   { key: 'request.manage',  label: 'Akses Penuh Pengajuan',       group: 'Pengajuan', isParent: true, desc: 'Kelola semua pengajuan stok (endorse, photoshoot, dll)' },
   { key: 'request.view',    label: 'Lihat Semua Pengajuan',        group: 'Pengajuan', parent: 'request.manage', desc: 'Lihat pengajuan dari semua user (bukan hanya milik sendiri)' },
-  { key: 'request.process', label: 'Proses Pengajuan',             group: 'Pengajuan', parent: 'request.manage', desc: 'Approve, reject, tandai dikirim, dan selesaikan pengajuan' },
+  { key: 'request.create',  label: 'Buat Pengajuan',               group: 'Pengajuan', parent: 'request.manage', desc: 'Ajukan permintaan stok baru (endorse, photoshoot, dll)' },
+  { key: 'request.process', label: 'Proses Pengajuan',             group: 'Pengajuan', parent: 'request.manage', desc: 'Approve, reject, proses pengiriman, dan selesaikan pengajuan' },
 
   // ── Administrasi ─────────────────────────────────────────────────────────────
   { key: 'admin.manage',              label: 'Akses Penuh Administrasi',                   group: 'Administrasi',            isParent: true,  desc: 'Kelola user, role, dan pengaturan sistem' },
@@ -110,7 +111,7 @@ const DEFAULT_PERMISSIONS = {
     'shipping.manual.delete', 'shipping.manual.category.manage',
     'reports.manage',
     'db_link.manage',
-    'request.manage', 'request.view', 'request.process',
+    'request.manage', 'request.view', 'request.create', 'request.process',
   ],
 
   HEAD_PACKING: [
@@ -138,7 +139,11 @@ const DEFAULT_PERMISSIONS = {
     'db_link.view',
   ],
 
-  STAFF: ['inventory.view', 'db_link.view'],
+  STAFF: ['inventory.view', 'db_link.view', 'request.create'],
+
+  MARKETING:         ['inventory.view', 'db_link.view', 'request.create', 'request.view'],
+  PRODUKSI:          ['inventory.view', 'db_link.view', 'request.create'],
+  PRODUK_DEVELOPMENT:['inventory.view', 'db_link.view', 'request.create'],
 };
 
 const EDITABLE_ROLES = ['COMPANY_ADMIN', 'OPERASIONAL', 'TIM_PACKING', 'STAFF'];

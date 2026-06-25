@@ -1,8 +1,9 @@
 'use strict';
 const { Op } = require('sequelize');
-const { Request, RequestItem, RequestType, ProductSKU, Product, ProductVariantOption, User } = require('../models');
+const { sequelize, Request, RequestItem, RequestType, ProductSKU, Product, ProductVariantOption, User, ManualShipment, ManualShipmentItem } = require('../models');
 const { companyFilter, companyId } = require('../helpers/tenancy');
 const { paginate, paginatedResponse } = require('../helpers/queryHelper');
+const manualShipmentCtrl = require('./manualShipmentController');
 
 const ITEM_INCLUDE = {
   model: RequestItem,
@@ -18,10 +19,19 @@ const ITEM_INCLUDE = {
   }],
 };
 
+// Lightweight items for list view — no nested associations
+const LIST_ITEM_INCLUDE = {
+  model: RequestItem,
+  as: 'items',
+  attributes: ['id', 'productName', 'variantLabel', 'qty', 'shippedQty'],
+};
+
 const BASE_INCLUDE = [
-  { model: RequestType, as: 'requestType', attributes: ['id', 'name'] },
-  { model: User, as: 'requestor', attributes: ['id', 'name', 'avatar'] },
-  { model: User, as: 'processor', attributes: ['id', 'name'] },
+  { model: RequestType,    as: 'requestType',   attributes: ['id', 'name', 'requiresShipping'] },
+  { model: User,           as: 'requestor',     attributes: ['id', 'name', 'avatar'] },
+  { model: User,           as: 'processor',     attributes: ['id', 'name'] },
+  { model: User,           as: 'updater',       attributes: ['id', 'name'] },
+  { model: ManualShipment, as: 'manualShipment', attributes: ['id', 'invoiceNumber', 'status'], required: false },
 ];
 
 function canViewAll(req) {
@@ -60,12 +70,18 @@ class RequestController {
       const where = { ...companyFilter(req) };
       if (!canViewAll(req)) where.requestorId = req.user.id;
 
-      const statuses = ['PENDING', 'APPROVED', 'SENT', 'DONE', 'REJECTED'];
-      const counts = await Promise.all(
-        statuses.map(s => Request.count({ where: { ...where, status: s } }))
-      );
-      const result = Object.fromEntries(statuses.map((s, i) => [s, counts[i]]));
-      result.ALL = counts.reduce((a, b) => a + b, 0);
+      const rows = await Request.findAll({
+        where,
+        attributes: ['status', [sequelize.fn('COUNT', sequelize.col('id')), 'count']],
+        group: ['status'],
+        raw: true,
+      });
+
+      const result = { PENDING: 0, APPROVED: 0, SENT: 0, DONE: 0, REJECTED: 0 };
+      for (const row of rows) {
+        if (row.status in result) result[row.status] = parseInt(row.count, 10);
+      }
+      result.ALL = Object.values(result).reduce((a, b) => a + b, 0);
       res.json(result);
     } catch (err) { next(err); }
   }
@@ -98,7 +114,7 @@ class RequestController {
 
       const { rows, count } = await Request.findAndCountAll({
         where,
-        include: BASE_INCLUDE,
+        include: [...BASE_INCLUDE, LIST_ITEM_INCLUDE],
         order: [['createdAt', 'DESC']],
         limit, offset, distinct: true,
       });
@@ -149,7 +165,7 @@ class RequestController {
   static async create(req, res, next) {
     try {
       const cid = companyId(req);
-      const { requestTypeId, recipientName, recipientAddress, neededAt, note, needsReturn, divisi, items } = req.body;
+      const { requestTypeId, recipientName, recipientPhone, recipientAddress, neededAt, note, needsReturn, divisi, items } = req.body;
 
       if (!requestTypeId)        return res.status(400).json({ message: 'Jenis pengajuan wajib dipilih' });
       if (!items?.length)        return res.status(400).json({ message: 'Minimal 1 produk wajib diisi' });
@@ -159,6 +175,7 @@ class RequestController {
         requestorId: req.user.id,
         divisi: divisi || req.user.divisi || null,
         recipientName: recipientName || null,
+        recipientPhone: recipientPhone || null,
         recipientAddress: recipientAddress || null,
         neededAt: neededAt || null,
         note: note || null,
@@ -198,15 +215,17 @@ class RequestController {
       if (!isOwn && !canProcess(req))  return res.status(403).json({ message: 'Forbidden' });
       if (request.status !== 'PENDING') return res.status(400).json({ message: 'Hanya pengajuan berstatus PENDING yang bisa diedit' });
 
-      const { requestTypeId, recipientName, recipientAddress, neededAt, note, needsReturn, divisi, items } = req.body;
+      const { requestTypeId, recipientName, recipientPhone, recipientAddress, neededAt, note, needsReturn, divisi, items } = req.body;
       await request.update({
         ...(requestTypeId    !== undefined && { requestTypeId }),
         ...(recipientName    !== undefined && { recipientName }),
+        ...(recipientPhone   !== undefined && { recipientPhone }),
         ...(recipientAddress !== undefined && { recipientAddress }),
         ...(neededAt         !== undefined && { neededAt }),
         ...(note             !== undefined && { note }),
         ...(needsReturn      !== undefined && { needsReturn: needsReturn === true || needsReturn === 'true' }),
         ...(divisi           !== undefined && { divisi }),
+        updatedBy: req.user.id,
       });
 
       if (items) {
@@ -253,7 +272,7 @@ class RequestController {
       const request = await Request.findOne({ where: { id: req.params.id, ...companyFilter(req) } });
       if (!request)                      return res.status(404).json({ message: 'Pengajuan tidak ditemukan' });
       if (request.status !== 'PENDING')  return res.status(400).json({ message: 'Hanya PENDING yang bisa di-approve' });
-      await request.update({ status: 'APPROVED', processedBy: req.user.id });
+      await request.update({ status: 'APPROVED', processedBy: req.user.id, updatedBy: req.user.id });
       res.json(request);
     } catch (err) { next(err); }
   }
@@ -266,7 +285,7 @@ class RequestController {
       const request = await Request.findOne({ where: { id: req.params.id, ...companyFilter(req) } });
       if (!request)                           return res.status(404).json({ message: 'Pengajuan tidak ditemukan' });
       if (!['PENDING','APPROVED'].includes(request.status)) return res.status(400).json({ message: 'Status tidak valid untuk reject' });
-      await request.update({ status: 'REJECTED', processedBy: req.user.id, rejectionReason: req.body.reason || null });
+      await request.update({ status: 'REJECTED', processedBy: req.user.id, updatedBy: req.user.id, rejectionReason: req.body.reason || null });
       res.json(request);
     } catch (err) { next(err); }
   }
@@ -294,6 +313,7 @@ class RequestController {
         trackingNumber: req.body.trackingNumber || null,
         shippingNote: req.body.shippingNote || null,
         processedBy: req.user.id,
+        updatedBy: req.user.id,
       });
       const updated = await Request.findByPk(request.id, { include: [...BASE_INCLUDE, ITEM_INCLUDE] });
       res.json(updated);
@@ -309,7 +329,7 @@ class RequestController {
       if (!request)                   return res.status(404).json({ message: 'Pengajuan tidak ditemukan' });
       if (request.status !== 'SENT')  return res.status(400).json({ message: 'Hanya SENT yang bisa ditandai dikembalikan' });
       if (!request.needsReturn)       return res.status(400).json({ message: 'Pengajuan ini tidak memerlukan pengembalian' });
-      await request.update({ returnedAt: req.body.returnedAt || new Date().toISOString().slice(0, 10) });
+      await request.update({ returnedAt: req.body.returnedAt || new Date().toISOString().slice(0, 10), updatedBy: req.user.id });
       res.json(request);
     } catch (err) { next(err); }
   }
@@ -331,6 +351,84 @@ class RequestController {
 
       const full = await Request.findByPk(request.id, { include: [...BASE_INCLUDE, ITEM_INCLUDE] });
       res.json(full);
+    } catch (err) { next(err); }
+  }
+
+  // POST /requests/:id/process-shipment — buat draft ManualShipment dari Pengajuan
+  static async processShipment(req, res, next) {
+    try {
+      await attachPermissions(req);
+      if (!canProcess(req)) return res.status(403).json({ message: 'Forbidden: butuh request.process' });
+
+      const request = await Request.findOne({
+        where: { id: req.params.id, ...companyFilter(req) },
+        include: [
+          { model: RequestType, as: 'requestType' },
+          ITEM_INCLUDE,
+        ],
+      });
+      if (!request)                      return res.status(404).json({ message: 'Pengajuan tidak ditemukan' });
+      if (request.status !== 'APPROVED') return res.status(400).json({ message: 'Pengajuan harus berstatus APPROVED' });
+      if (!request.requestType?.requiresShipping) return res.status(400).json({ message: 'Jenis pengajuan ini tidak memerlukan shipping' });
+      if (request.manualShipmentId)      return res.status(400).json({ message: 'Shipping sudah dibuat untuk pengajuan ini' });
+
+      const cid = companyId(req);
+      const db  = require('../models').sequelize;
+      const t   = await db.transaction();
+
+      try {
+        // Generate invoice number (reuse helper dari manualShipmentCtrl)
+        const invoiceNumber = await manualShipmentCtrl.generateInvoiceNumber(cid, t);
+
+        // Hitung subtotal dari items (pakai harga SKU atau 0 untuk non-sales)
+        let subtotal = 0;
+        const itemsPayload = [];
+        for (const item of request.items) {
+          const skuPrice = item.sku ? Number(item.sku.price ?? 0) : 0;
+          const lineTotal = skuPrice * item.qty;
+          subtotal += lineTotal;
+          itemsPayload.push({
+            productId:       item.sku?.ProductId ?? null,
+            productSkuId:    item.ProductSKUId ?? null,
+            productName:     item.sku?.Product?.name ?? item.productName,
+            variantName:     item.variantLabel ?? null,
+            sku:             item.sku?.sku_code ?? null,
+            productImageUrl: item.sku?.Product?.imageUrl ?? null,
+            quantity:        item.qty,
+            unitPrice:       skuPrice,
+            subtotal:        lineTotal,
+          });
+        }
+
+        const shipment = await ManualShipment.create({
+          companyId:       cid,
+          invoiceNumber,
+          type:            'non_sales',
+          status:          'pending',
+          buyerName:       request.recipientName  || null,
+          buyerPhone:      request.recipientPhone || null,
+          buyerAddress:    request.recipientAddress || null,
+          shippingCost:    0,
+          subtotal,
+          total:           subtotal,
+          notes:           request.note || null,
+          sourceRequestId: request.id,
+          createdBy:       req.user.id,
+        }, { transaction: t });
+
+        for (const item of itemsPayload) {
+          await ManualShipmentItem.create({ shipmentId: shipment.id, ...item }, { transaction: t });
+        }
+
+        await request.update({ manualShipmentId: shipment.id }, { transaction: t });
+        await t.commit();
+
+        const full = await Request.findByPk(request.id, { include: [...BASE_INCLUDE, ITEM_INCLUDE] });
+        res.status(201).json(full);
+      } catch (err) {
+        await t.rollback();
+        throw err;
+      }
     } catch (err) { next(err); }
   }
 

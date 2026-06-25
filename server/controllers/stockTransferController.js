@@ -28,6 +28,7 @@ const HEADER_INCLUDE = [
   { model: Warehouse, as: 'FromWarehouse', attributes: ['id', 'name'] },
   { model: Warehouse, as: 'ToWarehouse',   attributes: ['id', 'name'] },
   { model: User,      as: 'Creator',       attributes: ['id', 'name'] },
+  { model: User,      as: 'updater',       attributes: ['id', 'name'] },
 ];
 
 async function applyItem(t, { cid, fromWarehouseId, toWarehouseId, productSkuId, qty, transferId, date, note }) {

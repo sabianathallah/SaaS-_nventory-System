@@ -6,7 +6,9 @@ const { destroyHandoverAttachment } = require('../helpers/cloudinary');
 const ITEM_ORDER = [['scannedAt', 'ASC'], ['id', 'ASC']];
 
 const HANDOVER_INCLUDE = [
-  { model: User, as: 'User', attributes: ['id', 'name'] },
+  { model: User, as: 'User',    attributes: ['id', 'name'] },
+  { model: User, as: 'updater', attributes: ['id', 'name'] },
+  { model: User, as: 'closer',  attributes: ['id', 'name'] },
   { model: Handover_Item, order: ITEM_ORDER },
 ];
 
@@ -88,6 +90,7 @@ class HandoverController {
       if (ekspedisi !== undefined) h.ekspedisi = ekspedisi.trim();
       if (date      !== undefined) h.date      = date;
       if (note      !== undefined) h.note      = note?.trim() || null;
+      h.updatedBy = req.user.id;
       await h.save();
 
       const full = await findHandover(h.id, req);
@@ -108,7 +111,9 @@ class HandoverController {
     try {
       const h = await Handover.findOne({ where: { id: req.params.id, ...companyFilter(req) } });
       if (!h) throw { name: 'NotFound', message: 'Handover tidak ditemukan' };
-      h.status = 'CLOSED';
+      h.status    = 'CLOSED';
+      h.closedBy  = req.user.id;
+      h.updatedBy = req.user.id;
       await h.save();
       const full = await findHandover(h.id, req);
       res.json(full);
@@ -148,6 +153,7 @@ class HandoverController {
         scannedAt: new Date(),
         companyId: companyId(req),
       });
+      await h.update({ updatedBy: req.user.id });
       res.status(201).json(item);
     } catch (err) { next(err); }
   }

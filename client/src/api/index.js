@@ -220,29 +220,33 @@ export const manualShipmentsApi = {
     if (data.file instanceof File) fd.append('courierResiImage', data.file)
     return api.post(`/manual-shipments/${id}/courier-resi`, fd).then(r => r.data)
   },
+  markPrinted:      (id, type)      => api.post(`/manual-shipments/${id}/mark-printed`, { type }).then(r => r.data),
   destroy:          (id)            => api.delete(`/manual-shipments/${id}`).then(r => r.data),
   expeditionPresets: ()             => api.get('/manual-shipments/expedition-presets').then(r => r.data),
 }
 
 export const requestTypeApi = {
-  list:   ()     => api.get('/request-types').then(r => r.data),
-  create: (data) => api.post('/request-types', data).then(r => r.data),
+  list:    ()          => api.get('/request-types').then(r => r.data),
+  create:  (data)      => api.post('/request-types', data).then(r => r.data),
+  update:  (id, data)  => api.put(`/request-types/${id}`, data).then(r => r.data),
+  destroy: (id)        => api.delete(`/request-types/${id}`).then(r => r.data),
 }
 
 export const requestApi = {
-  list:         (params) => api.get('/requests',          { params }).then(r => r.data),
-  statusCounts: (params) => api.get('/requests/status-counts', { params }).then(r => r.data),
-  get:          (id)     => api.get(`/requests/${id}`).then(r => r.data),
-  create:       (data)   => api.post('/requests', data).then(r => r.data),
-  update:       (id, data) => api.put(`/requests/${id}`, data).then(r => r.data),
-  destroy:      (id)     => api.delete(`/requests/${id}`).then(r => r.data),
-  approve:      (id)     => api.post(`/requests/${id}/approve`).then(r => r.data),
-  reject:       (id, reason) => api.post(`/requests/${id}/reject`, { reason }).then(r => r.data),
-  markSent:     (id, data) => api.patch(`/requests/${id}/sent`, data).then(r => r.data),
-  markReturned:  (id, data) => api.patch(`/requests/${id}/returned`, data).then(r => r.data),
-  shipRemaining: (id)      => api.patch(`/requests/${id}/ship-remaining`).then(r => r.data),
-  markDone:      (id)      => api.patch(`/requests/${id}/done`).then(r => r.data),
-  exportData:   (params) => api.get('/requests/export',   { params }).then(r => r.data),
+  list:            (params)     => api.get('/requests',               { params }).then(r => r.data),
+  statusCounts:    (params)     => api.get('/requests/status-counts', { params }).then(r => r.data),
+  get:             (id)         => api.get(`/requests/${id}`).then(r => r.data),
+  create:          (data)       => api.post('/requests', data).then(r => r.data),
+  update:          (id, data)   => api.put(`/requests/${id}`, data).then(r => r.data),
+  destroy:         (id)         => api.delete(`/requests/${id}`).then(r => r.data),
+  approve:         (id)         => api.post(`/requests/${id}/approve`).then(r => r.data),
+  reject:          (id, reason) => api.post(`/requests/${id}/reject`, { reason }).then(r => r.data),
+  processShipment: (id)         => api.post(`/requests/${id}/process-shipment`).then(r => r.data),
+  markSent:        (id, data)   => api.patch(`/requests/${id}/sent`, data).then(r => r.data),
+  markReturned:    (id, data)   => api.patch(`/requests/${id}/returned`, data).then(r => r.data),
+  shipRemaining:   (id)         => api.patch(`/requests/${id}/ship-remaining`).then(r => r.data),
+  markDone:        (id)         => api.patch(`/requests/${id}/done`).then(r => r.data),
+  exportData:      (params)     => api.get('/requests/export', { params }).then(r => r.data),
 }
 
 export const reportApi = {

@@ -256,11 +256,18 @@ export default function Pengajuan() {
                   </td>
                   <td className="td py-2.5">
                     <span className="text-xs font-medium text-slate-700">{r.requestType?.name ?? '—'}</span>
-                    {r.needsReturn && <div className="text-[10px] text-amber-600 mt-0.5">↩ Perlu kembali</div>}
+                    {r.needsReturn && (
+                      r.returnedAt
+                        ? <div className="text-[10px] text-emerald-600 mt-0.5">↩ Kembali {fmtDate(r.returnedAt)}</div>
+                        : <div className="text-[10px] text-amber-600 mt-0.5">↩ Perlu kembali</div>
+                    )}
                   </td>
                   <td className="td py-2.5">
                     <div className="text-xs font-medium text-slate-700">{r.requestor?.name ?? '—'}</div>
                     {r.divisi && <div className="text-[10px] text-slate-400">{r.divisi}</div>}
+                    {r.updater && r.updater.name !== r.requestor?.name && (
+                      <div className="text-[10px] text-slate-400">Diedit: {r.updater.name}</div>
+                    )}
                   </td>
                   <td className="td py-2.5">
                     <div className="text-xs text-slate-700 max-w-[140px] truncate">{r.recipientName || '—'}</div>
@@ -297,7 +304,6 @@ export default function Pengajuan() {
                       <div>
                         <div className="text-xs text-purple-600 font-medium">{fmtDate(r.sentAt)}</div>
                         {r.trackingNumber && <div className="text-[10px] text-slate-400 font-mono">{r.trackingNumber}</div>}
-                        {r.returnedAt && <div className="text-[10px] text-emerald-600 mt-0.5">↩ {fmtDate(r.returnedAt)}</div>}
                       </div>
                     ) : (
                       <span className="text-xs text-slate-300">—</span>

@@ -15,6 +15,12 @@ module.exports = (sequelize, DataTypes) => {
         onDelete: 'CASCADE',
         onUpdate: 'CASCADE'
       });
+      Stock_Out_Header.belongsTo(models.User, {
+        foreignKey: { name: 'updatedBy', allowNull: true },
+        as: 'updater',
+        onDelete: 'SET NULL',
+        onUpdate: 'CASCADE'
+      });
       Stock_Out_Header.belongsTo(models.Warehouse, {
         foreignKey: { name: 'WarehouseId', allowNull: true },
         onDelete: 'SET NULL',
@@ -44,7 +50,8 @@ module.exports = (sequelize, DataTypes) => {
         notNull: { msg: 'Creator is required' },
         notEmpty: { msg: 'Creator is required' }
       }
-    }
+    },
+    updatedBy: { type: DataTypes.INTEGER, allowNull: true },
   }, {
     sequelize,
     modelName: 'Stock_Out_Header',

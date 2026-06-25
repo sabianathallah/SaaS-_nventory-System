@@ -40,6 +40,7 @@ class StockInHeaderController {
           { model: Supplier,  attributes: ['id', 'name'] },
           { model: Warehouse, attributes: ['id', 'name'] },
           { model: User,      foreignKey: 'createdBy', attributes: ['id', 'name'] },
+          { model: User,      foreignKey: 'updatedBy', as: 'updater', attributes: ['id', 'name'] },
           { model: Stock_In_Item, attributes: ['id', 'quantity', 'price'] },
         ],
         order: [['date', 'DESC'], ['id', 'DESC']],
@@ -66,7 +67,8 @@ class StockInHeaderController {
         include: [
           { model: Supplier,  attributes: ['id', 'name'] },
           { model: Warehouse, attributes: ['id', 'name'] },
-          { model: User,      foreignKey: 'createdBy', attributes: ['id', 'name'] },
+          { model: User, foreignKey: 'createdBy', attributes: ['id', 'name'] },
+          { model: User, foreignKey: 'updatedBy', as: 'updater', attributes: ['id', 'name'] },
           {
             model: Stock_In_Item,
             include: SKU_INCLUDE,
@@ -161,7 +163,7 @@ class StockInHeaderController {
         return res.status(400).json({ message: 'Gudang tidak dapat diubah. Hapus dan buat ulang dokumen untuk mengganti gudang.' });
       }
       const { date, SupplierId, note } = req.body;
-      await header.update({ date, SupplierId, note });
+      await header.update({ date, SupplierId, note, updatedBy: req.user.id });
       res.status(200).json(header);
     } catch (err) { next(err); }
   }
@@ -237,6 +239,7 @@ class StockInHeaderController {
         }, { transaction: t });
       }
 
+      await header.update({ updatedBy: req.user.id }, { transaction: t });
       await t.commit();
       const full = await Stock_In_Item.findByPk(item.id, { include: SKU_INCLUDE });
       res.status(201).json(full);
@@ -321,6 +324,7 @@ class StockInHeaderController {
       }
 
       await item.destroy({ transaction: t });
+      if (header) await header.update({ updatedBy: req.user.id }, { transaction: t });
       await t.commit();
       res.status(200).json({ message: 'Item removed' });
     } catch (err) { await t.rollback(); next(err); }

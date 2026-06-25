@@ -12,7 +12,7 @@ import SearchBar from '../components/SearchBar'
 import toast from 'react-hot-toast'
 import { Plus, Pencil, Trash2, UserCircle2, ShieldCheck, Save, Check, Eye, EyeOff,
   LayoutDashboard, Package, Boxes, Truck, PackageCheck, ArrowLeftRight,
-  BarChart2, Link2, Settings, RotateCcw } from 'lucide-react'
+  BarChart2, Link2, Settings, RotateCcw, Send, ClipboardList } from 'lucide-react'
 
 const GROUP_META = {
   'Dasbor':                { icon: LayoutDashboard, color: '#6366F1' },
@@ -20,6 +20,8 @@ const GROUP_META = {
   'Stok':                  { icon: Boxes,           color: '#10B981' },
   'Handover Pengiriman':   { icon: Truck,           color: '#06B6D4' },
   'Penerimaan & Packing':  { icon: PackageCheck,    color: '#8B5CF6' },
+  'Shipping Manual':       { icon: Send,            color: '#3B82F6' },
+  'Pengajuan':             { icon: ClipboardList,   color: '#A855F7' },
   'Transfer Stok':         { icon: ArrowLeftRight,  color: '#14B8A6' },
   'Laporan':               { icon: BarChart2,       color: '#F59E0B' },
   'Database Links':        { icon: Link2,           color: '#64748B' },

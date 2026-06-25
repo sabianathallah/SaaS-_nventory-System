@@ -6,6 +6,7 @@ module.exports = (sequelize, DataTypes) => {
       StockTransfer.belongsTo(models.Warehouse, { foreignKey: 'fromWarehouseId', as: 'FromWarehouse' });
       StockTransfer.belongsTo(models.Warehouse, { foreignKey: 'toWarehouseId',   as: 'ToWarehouse'   });
       StockTransfer.belongsTo(models.User,      { foreignKey: 'createdBy',        as: 'Creator'       });
+      StockTransfer.belongsTo(models.User,      { foreignKey: 'updatedBy',        as: 'updater'       });
       StockTransfer.hasMany(models.StockTransferItem, { foreignKey: 'transferId', as: 'items' });
     }
   }
@@ -17,6 +18,7 @@ module.exports = (sequelize, DataTypes) => {
     note:            { type: DataTypes.TEXT,       allowNull: true },
     date:            { type: DataTypes.DATEONLY,   allowNull: false },
     createdBy:       { type: DataTypes.INTEGER,    allowNull: true },
+    updatedBy:       { type: DataTypes.INTEGER,    allowNull: true },
   }, { sequelize, modelName: 'StockTransfer' });
   return StockTransfer;
 };

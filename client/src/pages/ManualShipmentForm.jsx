@@ -30,6 +30,13 @@ function ProductPickerModal({ onAdd, onClose }) {
 
   useEffect(() => { setSelectedSku(''); setUnitPrice('') }, [selected])
 
+  // Auto-fill harga dari SKU saat varian dipilih
+  useEffect(() => {
+    if (!selectedSku) return
+    const sku = skus.find(s => String(s.id) === String(selectedSku))
+    if (sku?.price) setUnitPrice(String(Math.round(Number(sku.price))))
+  }, [selectedSku, skus])
+
   const handleAdd = () => {
     if (!selected) return toast.error('Pilih produk terlebih dahulu')
     if (skus.length > 0 && !selectedSku) return toast.error('Pilih varian produk')
@@ -133,7 +140,10 @@ function ProductPickerModal({ onAdd, onClose }) {
                 )}
 
                 <div>
-                  <label className="label">Harga Satuan</label>
+                  <label className="label">
+                    Harga Satuan
+                    {unitPrice && <span className="ml-1 text-xs text-indigo-500 font-normal">(dari data produk)</span>}
+                  </label>
                   <input
                     type="number"
                     min="0"

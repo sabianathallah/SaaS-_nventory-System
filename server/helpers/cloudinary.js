@@ -1,4 +1,6 @@
 'use strict';
+const path = require('path');
+const fs   = require('fs');
 const cloudinary = require('cloudinary').v2;
 const multer = require('multer');
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
@@ -48,18 +50,36 @@ async function destroyByUrl(url) {
   catch (e) { console.warn('Cloudinary destroy failed:', e.message); }
 }
 
-// Middleware wrapper that returns a friendly error when Cloudinary envs are
-// missing, instead of a cryptic "cloud_name is disabled".
+// Middleware wrapper — falls back to local disk when Cloudinary is not configured.
 function uploadSingle(field, folder = 'saas-inventory/products') {
-  const singleUpload = createUpload(folder);
+  if (isConfigured) {
+    const singleUpload = createUpload(folder);
+    return (req, res, next) => {
+      if (!req.is('multipart/form-data')) return next();
+      singleUpload.single(field)(req, res, next);
+    };
+  }
+
+  // Local disk fallback
+  const diskDir = path.join(__dirname, '..', 'uploads', folder.replace(/\//g, '-'));
+  fs.mkdirSync(diskDir, { recursive: true });
+  const diskStorage = multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, diskDir),
+    filename:    (_req, file, cb) => {
+      const ext = path.extname(file.originalname).toLowerCase();
+      cb(null, `${field}-${Date.now()}${ext}`);
+    },
+  });
+  const diskUpload = multer({ storage: diskStorage, limits: { fileSize: 5 * 1024 * 1024 } });
+
   return (req, res, next) => {
-    if (!isConfigured && req.is('multipart/form-data')) {
-      return res.status(500).json({
-        message: 'Upload gambar belum dikonfigurasi di server (CLOUDINARY_* env vars kosong).',
-      });
-    }
     if (!req.is('multipart/form-data')) return next();
-    singleUpload.single(field)(req, res, next);
+    diskUpload.single(field)(req, res, (err) => {
+      if (err) return next(err);
+      // Attach a .path property so controllers can read it the same way
+      if (req.file) req.file.path = `/uploads/${folder.replace(/\//g, '-')}/${req.file.filename}`;
+      next();
+    });
   };
 }
 
@@ -78,8 +98,6 @@ function uploadArray(field, maxCount, folder = 'saas-inventory/products') {
 
 // Handover attachment upload — supports PDF + images.
 // Falls back to local disk storage when Cloudinary is not configured.
-const path = require('path');
-const fs   = require('fs');
 
 const UPLOAD_DIR = path.join(__dirname, '..', 'uploads', 'handovers');
 

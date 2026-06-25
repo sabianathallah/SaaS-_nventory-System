@@ -115,7 +115,14 @@ export default function StockOut() {
     }] : []),
     {
       key: 'createdBy', label: 'Dibuat oleh', width: 130,
-      render: r => <span className="text-xs text-slate-500">{r.User?.name ?? '—'}</span>,
+      render: r => (
+        <div>
+          <div className="text-xs text-slate-500">{r.User?.name ?? '—'}</div>
+          {r.updater && r.updater.name !== r.User?.name && (
+            <div className="text-[10px] text-slate-400">Diedit: {r.updater.name}</div>
+          )}
+        </div>
+      ),
     },
     {
       key: 'notes', label: 'Catatan',

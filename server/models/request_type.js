@@ -7,9 +7,10 @@ module.exports = (sequelize, DataTypes) => {
     }
   }
   RequestType.init({
-    name:      { type: DataTypes.STRING(100), allowNull: false },
-    companyId: { type: DataTypes.INTEGER, allowNull: true },
-    isActive:  { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
+    name:             { type: DataTypes.STRING(100), allowNull: false },
+    companyId:        { type: DataTypes.INTEGER, allowNull: true },
+    isActive:         { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
+    requiresShipping: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
   }, {
     sequelize,
     modelName: 'RequestType',

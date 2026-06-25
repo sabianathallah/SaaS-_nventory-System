@@ -91,7 +91,15 @@ export default function Opname() {
     { key: 'status',    label: 'Status',      width: 120, render: r => STATUS_BADGE[r.status] ?? <span className="badge-muted">{r.status}</span> },
     { key: 'started',   label: 'Dibuka',      width: 110, render: r => <span className="text-xs text-slate-400">{fmtDate(r.started_at)}</span> },
     { key: 'finished',  label: 'Ditutup',     width: 110, render: r => <span className="text-xs text-slate-400">{r.finished_at ? fmtDate(r.finished_at) : '—'}</span> },
-    { key: 'createdBy', label: 'Dibuat oleh', width: 130, render: r => <span className="text-xs text-slate-500">{r.User?.name ?? '—'}</span> },
+    { key: 'createdBy', label: 'Dibuat oleh', width: 130, render: r => (
+      <div>
+        <div className="text-xs text-slate-500">{r.User?.name ?? '—'}</div>
+        {r.closer && <div className="text-[10px] text-indigo-500">Ditutup: {r.closer.name}</div>}
+        {r.updater && !r.closer && r.updater.name !== r.User?.name && (
+          <div className="text-[10px] text-slate-400">Diedit: {r.updater.name}</div>
+        )}
+      </div>
+    )},
     { key: 'notes',     label: 'Catatan',                 render: r => <span className="text-xs text-slate-400">{r.notes || '—'}</span> },
     { key: 'actions',   label: '', width: 240, render: r => (
       <div className="flex gap-2">

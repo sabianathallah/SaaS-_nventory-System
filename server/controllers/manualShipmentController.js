@@ -26,6 +26,8 @@ const ITEM_INCLUDE = {
 const HEADER_INCLUDE = [
   { model: ShipmentCategory, as: 'category',        attributes: ['id', 'name'] },
   { model: User,             as: 'creator',         attributes: ['id', 'name'] },
+  { model: User,             as: 'updater',         attributes: ['id', 'name'] },
+  { model: User,             as: 'submitter',       attributes: ['id', 'name'] },
   { model: User,             as: 'paymentVerifier', attributes: ['id', 'name'] },
 ];
 
@@ -35,11 +37,9 @@ async function generateInvoiceNumber(companyId, t) {
   const yyyymm = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`;
   const prefix = `INV/${yyyymm}/`;
 
+  // Search globally (no companyId filter) — invoiceNumber has a global unique constraint
   const last = await ManualShipment.findOne({
-    where: {
-      companyId,
-      invoiceNumber: { [Op.like]: `${prefix}%` },
-    },
+    where: { invoiceNumber: { [Op.like]: `${prefix}%` } },
     order: [['invoiceNumber', 'DESC']],
     lock: t.LOCK.UPDATE,
     transaction: t,
@@ -185,7 +185,7 @@ exports.create = async (req, res, next) => {
       invoiceNumber,
       type,
       shipmentCategoryId: type === 'non_sales' ? (shipmentCategoryId || null) : null,
-      status: 'in_progress',
+      status: 'pending',
       buyerName:    type === 'sales' ? buyerName?.trim()    : null,
       buyerAddress: type === 'sales' ? buyerAddress?.trim() : null,
       buyerPhone:   type === 'sales' ? buyerPhone?.trim()   : null,
@@ -222,9 +222,9 @@ exports.update = async (req, res, next) => {
       transaction: t,
     });
     if (!shipment) { await t.rollback(); return res.status(404).json({ message: 'Shipping tidak ditemukan' }); }
-    if (shipment.status !== 'in_progress') {
+    if (shipment.status !== 'pending') {
       await t.rollback();
-      return res.status(400).json({ message: 'Hanya bisa diedit saat status in_progress' });
+      return res.status(400).json({ message: 'Hanya bisa diedit saat status pending' });
     }
 
     const {
@@ -266,7 +266,7 @@ exports.update = async (req, res, next) => {
       updatePayload.total = currentSubtotal + cost;
     }
 
-    await shipment.update(updatePayload, { transaction: t });
+    await shipment.update({ ...updatePayload, updatedBy: req.user.id }, { transaction: t });
     await t.commit();
 
     const result = await ManualShipment.findByPk(shipment.id, { include: [...HEADER_INCLUDE, ITEM_INCLUDE] });
@@ -288,31 +288,54 @@ exports.changeStatus = async (req, res, next) => {
     const { status, cancelledReason } = req.body;
     const current = shipment.status;
 
-    // Validate transitions — sales must go through transferred first
     const VALID_TRANSITIONS = {
-      in_progress:  shipment.type === 'sales' ? ['transferred', 'cancelled'] : ['shipped', 'cancelled'],
-      transferred:  ['shipped', 'cancelled'],
-      shipped:      ['completed', 'cancelled'],
-      completed:    [],
-      cancelled:    [],
+      pending:   shipment.type === 'sales' ? ['paid', 'cancelled'] : ['shipped', 'cancelled'],
+      paid:      ['shipped', 'cancelled'],
+      shipped:   ['completed', 'cancelled'],
+      completed: [],
+      cancelled: [],
     };
 
     if (!VALID_TRANSITIONS[current]?.includes(status)) {
       return res.status(400).json({ message: `Tidak bisa ubah status dari ${current} ke ${status}` });
     }
 
-    if (status === 'transferred') {
-      if (shipment.type !== 'sales') return res.status(400).json({ message: 'Status transferred hanya untuk transaksi sales' });
+    if (status === 'paid') {
+      if (shipment.type !== 'sales') return res.status(400).json({ message: 'Status paid hanya untuk transaksi sales' });
       if (!shipment.paymentProofUrl) return res.status(400).json({ message: 'Upload bukti transfer terlebih dahulu' });
       await shipment.update({
-        status: 'transferred',
+        status: 'paid',
         paymentProofVerifiedBy: req.user.id,
         paymentProofVerifiedAt: new Date(),
       });
     } else if (status === 'cancelled') {
-      await shipment.update({ status: 'cancelled', cancelledReason: cancelledReason?.trim() || null });
+      await shipment.update({ status: 'cancelled', cancelledReason: cancelledReason?.trim() || null, updatedBy: req.user.id });
     } else {
-      await shipment.update({ status });
+      const isFinalized = ['shipped', 'completed'].includes(status);
+      await shipment.update({
+        status,
+        updatedBy: req.user.id,
+        ...(isFinalized ? { submittedBy: req.user.id } : {}),
+      });
+    }
+
+    // Sync status ke Request asal kalau ada link — wrapped in transaction for atomicity
+    if (shipment.sourceRequestId) {
+      const { Request } = require('../models');
+      const syncT = await sequelize.transaction();
+      try {
+        const linkedRequest = await Request.findByPk(shipment.sourceRequestId, { transaction: syncT });
+        if (linkedRequest) {
+          if (status === 'shipped')   await linkedRequest.update({ status: 'SENT', sentAt: new Date().toISOString().slice(0, 10), processedBy: req.user.id }, { transaction: syncT });
+          if (status === 'completed') await linkedRequest.update({ status: 'DONE', processedBy: req.user.id }, { transaction: syncT });
+          if (status === 'cancelled') await linkedRequest.update({ status: 'APPROVED', manualShipmentId: null }, { transaction: syncT });
+        }
+        if (status === 'cancelled') await shipment.update({ sourceRequestId: null }, { transaction: syncT });
+        await syncT.commit();
+      } catch (syncErr) {
+        await syncT.rollback();
+        throw syncErr;
+      }
     }
 
     const result = await ManualShipment.findByPk(shipment.id, { include: [...HEADER_INCLUDE, ITEM_INCLUDE] });
@@ -328,7 +351,7 @@ exports.uploadPaymentProof = async (req, res, next) => {
     });
     if (!shipment) return res.status(404).json({ message: 'Shipping tidak ditemukan' });
     if (shipment.type !== 'sales') return res.status(400).json({ message: 'Bukti transfer hanya untuk transaksi sales' });
-    if (!['in_progress', 'transferred'].includes(shipment.status)) {
+    if (!['pending', 'paid'].includes(shipment.status)) {
       return res.status(400).json({ message: 'Tidak bisa upload bukti di status ini' });
     }
 
@@ -364,6 +387,24 @@ exports.uploadCourierResi = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+// ── MARK PRINTED ─────────────────────────────────────────────────────────────
+exports.markPrinted = async (req, res, next) => {
+  try {
+    const shipment = await ManualShipment.findOne({
+      where: { id: req.params.id, ...companyFilter(req) },
+    });
+    if (!shipment) return res.status(404).json({ message: 'Shipping tidak ditemukan' });
+
+    const { type } = req.body; // 'resi' | 'invoice'
+    const now = new Date();
+    if (type === 'resi')    await shipment.update({ resiPrintedAt:    now });
+    else if (type === 'invoice') await shipment.update({ invoicePrintedAt: now });
+    else return res.status(400).json({ message: 'type harus resi atau invoice' });
+
+    res.json({ data: { resiPrintedAt: shipment.resiPrintedAt, invoicePrintedAt: shipment.invoicePrintedAt } });
+  } catch (err) { next(err); }
+};
+
 // ── DELETE ────────────────────────────────────────────────────────────────────
 exports.destroy = async (req, res, next) => {
   const t = await sequelize.transaction();
@@ -373,6 +414,12 @@ exports.destroy = async (req, res, next) => {
       transaction: t,
     });
     if (!shipment) { await t.rollback(); return res.status(404).json({ message: 'Shipping tidak ditemukan' }); }
+
+    // Unlink from source request so the request can create a new shipment
+    if (shipment.sourceRequestId) {
+      const { Request } = require('../models');
+      await Request.update({ manualShipmentId: null }, { where: { id: shipment.sourceRequestId }, transaction: t });
+    }
 
     await ManualShipmentItem.destroy({ where: { shipmentId: shipment.id }, transaction: t });
     await shipment.destroy({ transaction: t });
@@ -385,3 +432,6 @@ exports.destroy = async (req, res, next) => {
 exports.expeditionPresets = (_req, res) => {
   res.json({ data: EXPEDITION_PRESETS });
 };
+
+// ── EXPORTED HELPER (used by requestController) ───────────────────────────────
+exports.generateInvoiceNumber = generateInvoiceNumber;

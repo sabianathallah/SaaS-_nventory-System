@@ -5,8 +5,11 @@ module.exports = (sequelize, DataTypes) => {
     static associate(models) {
       ManualShipment.belongsTo(models.ShipmentCategory, { foreignKey: 'shipmentCategoryId', as: 'category' });
       ManualShipment.belongsTo(models.User, { foreignKey: 'createdBy',              as: 'creator' });
+      ManualShipment.belongsTo(models.User, { foreignKey: 'updatedBy',              as: 'updater' });
+      ManualShipment.belongsTo(models.User, { foreignKey: 'submittedBy',            as: 'submitter' });
       ManualShipment.belongsTo(models.User, { foreignKey: 'paymentProofVerifiedBy', as: 'paymentVerifier' });
       ManualShipment.hasMany(models.ManualShipmentItem, { foreignKey: 'shipmentId', as: 'items' });
+      ManualShipment.belongsTo(models.Request, { foreignKey: 'sourceRequestId', as: 'sourceRequest' });
     }
   }
   ManualShipment.init({
@@ -14,7 +17,7 @@ module.exports = (sequelize, DataTypes) => {
     invoiceNumber:          { type: DataTypes.STRING(30),  allowNull: false, unique: true },
     type:                   { type: DataTypes.ENUM('sales', 'non_sales'), allowNull: false },
     shipmentCategoryId:     { type: DataTypes.INTEGER,     allowNull: true },
-    status:                 { type: DataTypes.ENUM('in_progress', 'transferred', 'shipped', 'completed', 'cancelled'), allowNull: false, defaultValue: 'in_progress' },
+    status:                 { type: DataTypes.ENUM('pending', 'paid', 'shipped', 'completed', 'cancelled'), allowNull: false, defaultValue: 'pending' },
     buyerName:              { type: DataTypes.STRING(150), allowNull: true },
     buyerAddress:           { type: DataTypes.TEXT,        allowNull: true },
     buyerPhone:             { type: DataTypes.STRING(30),  allowNull: true },
@@ -30,7 +33,12 @@ module.exports = (sequelize, DataTypes) => {
     courierResiImageUrl:    { type: DataTypes.TEXT,        allowNull: true },
     notes:                  { type: DataTypes.TEXT,        allowNull: true },
     cancelledReason:        { type: DataTypes.TEXT,        allowNull: true },
+    resiPrintedAt:          { type: DataTypes.DATE,        allowNull: true },
+    invoicePrintedAt:       { type: DataTypes.DATE,        allowNull: true },
+    sourceRequestId:        { type: DataTypes.INTEGER,     allowNull: true },
     createdBy:              { type: DataTypes.INTEGER,     allowNull: true },
+    updatedBy:              { type: DataTypes.INTEGER,     allowNull: true },
+    submittedBy:            { type: DataTypes.INTEGER,     allowNull: true },
   }, { sequelize, modelName: 'ManualShipment' });
   return ManualShipment;
 };

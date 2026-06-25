@@ -70,7 +70,14 @@ export default function Transfers() {
     },
     {
       key: 'creator', label: 'Dibuat oleh', width: 120,
-      render: r => <span className="text-xs text-slate-500">{r.Creator?.name ?? '—'}</span>,
+      render: r => (
+        <div>
+          <div className="text-xs text-slate-500">{r.Creator?.name ?? '—'}</div>
+          {r.updater && r.updater.name !== r.Creator?.name && (
+            <div className="text-[10px] text-slate-400">Diedit: {r.updater.name}</div>
+          )}
+        </div>
+      ),
     },
   ]
 

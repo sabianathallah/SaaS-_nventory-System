@@ -17,20 +17,25 @@ const fmtDateTime = d => d ? new Date(d).toLocaleString('id-ID', { day: '2-digit
 
 // ── Status config ─────────────────────────────────────────────────────────────
 const STATUS_CONFIG = {
-  in_progress: { label: 'In Progress', badge: 'badge-amber',  step: 0 },
-  transferred: { label: 'Transferred', badge: 'badge-indigo', step: 1 },
-  shipped:     { label: 'Shipped',     badge: 'badge-purple', step: 2 },
-  completed:   { label: 'Completed',   badge: 'badge-green',  step: 3 },
-  cancelled:   { label: 'Dibatalkan',  badge: 'badge-red',    step: -1 },
+  pending:   { label: 'Menunggu',   badge: 'badge-amber',  step: 0 },
+  paid:      { label: 'Lunas',      badge: 'badge-indigo', step: 1 },
+  shipped:   { label: 'Dikirim',    badge: 'badge-purple', step: 2 },
+  completed: { label: 'Selesai',    badge: 'badge-green',  step: 3 },
+  cancelled: { label: 'Dibatalkan', badge: 'badge-red',    step: -1 },
 }
 
-const SALES_STEPS    = ['in_progress', 'transferred', 'shipped', 'completed']
-const NONSALES_STEPS = ['in_progress', 'shipped', 'completed']
+const SALES_STEPS    = ['pending', 'paid', 'shipped', 'completed']
+const NONSALES_STEPS = ['pending', 'shipped', 'completed']
 
 // ── Timeline ──────────────────────────────────────────────────────────────────
 function StatusTimeline({ status, type }) {
   const steps  = type === 'sales' ? SALES_STEPS : NONSALES_STEPS
-  const labels = { in_progress: 'In Progress', transferred: 'Transferred', shipped: 'Shipped', completed: 'Completed' }
+  const labels = {
+    pending:   type === 'sales' ? 'Belum Bayar' : 'Menunggu',
+    paid:      'Lunas',
+    shipped:   'Dikirim',
+    completed: 'Selesai',
+  }
   const curIdx = status === 'cancelled' ? -1 : steps.indexOf(status)
 
   return (
@@ -68,17 +73,14 @@ function StatusTimeline({ status, type }) {
 }
 
 // ── Guided Next Action Card ───────────────────────────────────────────────────
-function NextActionCard({
-  s, perm, proofRef, resiNumber, setResiNumber, resiFile, setResiFile, resiFileRef,
-  statusMut, proofMut, resiMut,
-}) {
+function NextActionCard({ s, perm, proofRef, statusMut, proofMut }) {
   const { status, type, paymentProofUrl } = s
   const canShip    = perm('shipping.manual.manage')
   const canApprove = perm('shipping.manual.approve_payment')
   const canResi    = perm('shipping.manual.upload_resi')
 
   const configs = {
-    // Sales in_progress — needs proof first
+    // Sales pending — needs proof first
     sales_no_proof: {
       icon: <CreditCard size={16} className="text-amber-500" />,
       title: 'Upload Bukti Transfer',
@@ -94,23 +96,23 @@ function NextActionCard({
         </>
       ),
     },
-    // Sales in_progress — has proof, waiting confirmation
+    // Sales pending — has proof, waiting confirmation
     sales_confirm: {
       icon: <CheckCircle2 size={16} className="text-blue-500" />,
       title: 'Konfirmasi Pembayaran',
       desc: 'Bukti transfer sudah diupload. Konfirmasi pembayaran untuk lanjut ke pengiriman.',
       actions: canApprove && (
-        <button onClick={() => statusMut.mutate({ status: 'transferred' })} disabled={statusMut.isPending}
+        <button onClick={() => statusMut.mutate({ status: 'paid' })} disabled={statusMut.isPending}
           className="btn-primary text-sm flex items-center gap-2 justify-center w-full">
-          <CheckCircle2 size={14} /> {statusMut.isPending ? 'Memproses…' : 'Konfirmasi Transfer'}
+          <CheckCircle2 size={14} /> {statusMut.isPending ? 'Memproses…' : 'Konfirmasi Pembayaran'}
         </button>
       ),
     },
-    // Non-sales in_progress or transferred — ready to ship
+    // paid or non-sales pending — ready to ship
     ready_ship: {
       icon: <Truck size={16} className="text-indigo-500" />,
       title: 'Tandai Dikirim',
-      desc: type === 'transferred'
+      desc: status === 'paid'
         ? 'Pembayaran terkonfirmasi. Tandai barang ketika sudah diserahkan ke ekspedisi.'
         : 'Tandai barang ketika sudah diserahkan ke ekspedisi.',
       actions: canShip && (
@@ -132,9 +134,7 @@ function NextActionCard({
         </button>
       ),
     },
-    // Completed
     completed: null,
-    // Cancelled
     cancelled: null,
   }
 
@@ -143,9 +143,9 @@ function NextActionCard({
     cfgKey = status
   } else if (status === 'shipped') {
     cfgKey = 'shipped'
-  } else if (status === 'transferred') {
+  } else if (status === 'paid') {
     cfgKey = 'ready_ship'
-  } else if (status === 'in_progress') {
+  } else if (status === 'pending') {
     if (type === 'non_sales') cfgKey = 'ready_ship'
     else if (!paymentProofUrl) cfgKey = 'sales_no_proof'
     else cfgKey = 'sales_confirm'
@@ -190,61 +190,86 @@ function CancelModal({ onConfirm, onClose, loading }) {
 }
 
 // ── Print helpers ─────────────────────────────────────────────────────────────
-function printResiSementara(shipment) {
-  const w = window.open('', '_blank', 'width=400,height=600')
+function printViaIframe(html) {
+  const existing = document.getElementById('__pf_print_frame')
+  if (existing) existing.remove()
+  const iframe = document.createElement('iframe')
+  iframe.id = '__pf_print_frame'
+  iframe.style.cssText = 'position:fixed;left:-9999px;top:0;width:1px;height:1px;border:0;'
+  document.body.appendChild(iframe)
+  const doc = iframe.contentDocument || iframe.contentWindow.document
+  doc.open(); doc.write(html); doc.close()
+  setTimeout(() => {
+    iframe.contentWindow.focus()
+    iframe.contentWindow.print()
+    setTimeout(() => iframe.remove(), 2000)
+  }, 400)
+  return true
+}
+
+function printResiSementara(shipment, showItems = true) {
   const items = shipment.items ?? []
-  w.document.write(`<!DOCTYPE html><html><head><title>Resi Sementara</title><style>
-    *{margin:0;padding:0;box-sizing:border-box;font-family:sans-serif}
-    body{padding:20px;font-size:12px;color:#111}
-    .center{text-align:center}.logo{width:60px;margin:0 auto 8px}
-    .title{font-size:15px;font-weight:700;margin-bottom:2px}
-    .subtitle{font-size:10px;color:#666;margin-bottom:12px}
-    hr{border:none;border-top:1px dashed #ccc;margin:10px 0}
-    .row{display:flex;justify-content:space-between;margin:3px 0}
-    .label{color:#555}.value{font-weight:600;text-align:right;max-width:60%}
-    table{width:100%;border-collapse:collapse;margin:8px 0;font-size:11px}
-    th{background:#f5f5f5;padding:4px 6px;text-align:left;font-weight:600}
-    td{padding:4px 6px;border-bottom:1px solid #f0f0f0}
-    .note{font-size:10px;color:#888;margin-top:12px;font-style:italic;text-align:center}
+  const toName    = shipment.buyerName    || shipment.recipientInfo || '-'
+  const toPhone   = shipment.buyerPhone   || ''
+  const toAddress = shipment.buyerAddress || ''
+  return printViaIframe(`<!DOCTYPE html><html><head><title>Resi ${shipment.invoiceNumber}</title><style>
+    @page{size:100mm 150mm;margin:5mm}
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:Arial,sans-serif;color:#000;width:90mm}
+    .top{display:flex;justify-content:space-between;align-items:center;margin-bottom:5px}
+    .logo{height:22px;object-fit:contain}
+    .inv-info{text-align:right;font-size:8px;color:#444;line-height:1.5}
+    .inv-no{font-weight:700;font-size:9px;color:#000}
+    .divider-bold{border:none;border-top:2px solid #000;margin:4px 0}
+    .divider{border:none;border-top:1px dashed #999;margin:5px 0}
+    .block{margin:5px 0}
+    .lbl{font-size:7px;font-weight:700;letter-spacing:1.5px;color:#666;text-transform:uppercase;margin-bottom:2px}
+    .to-name{font-size:18px;font-weight:900;line-height:1.15;word-break:break-word;text-transform:uppercase}
+    .to-phone{font-size:14px;font-weight:700;margin-top:3px;letter-spacing:.5px}
+    .to-addr{font-size:9.5px;margin-top:3px;line-height:1.5;word-break:break-word}
+    .items-lbl{font-size:7px;font-weight:700;letter-spacing:1.5px;color:#666;text-transform:uppercase;margin-bottom:3px}
+    .item{display:flex;justify-content:space-between;font-size:9.5px;padding:2px 0;border-bottom:1px solid #ddd}
+    .item:last-child{border-bottom:none}
+    .iname{flex:1;padding-right:4px;word-break:break-word}
+    .iqty{font-weight:900;white-space:nowrap;font-size:10px}
+    @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
   </style></head><body>
-  <div class="center">
+  <div class="top">
     <img src="${logoPreface}" class="logo" onerror="this.style.display='none'" />
-    <div class="title">RESI SEMENTARA</div>
-    <div class="subtitle">${shipment.invoiceNumber}</div>
+    <div class="inv-info">
+      <div class="inv-no">${shipment.invoiceNumber}</div>
+      <div>${fmtDate(shipment.createdAt)}</div>
+      ${shipment.expeditionName ? `<div>${shipment.expeditionName}</div>` : ''}
+    </div>
   </div>
-  <hr/>
-  ${shipment.buyerName ? `
-  <div class="row"><span class="label">Kepada</span><span class="value">${shipment.buyerName}</span></div>
-  ${shipment.buyerAddress ? `<div class="row"><span class="label">Alamat</span><span class="value">${shipment.buyerAddress}</span></div>` : ''}
-  ${shipment.buyerPhone ? `<div class="row"><span class="label">HP</span><span class="value">${shipment.buyerPhone}</span></div>` : ''}
-  ` : shipment.recipientInfo ? `
-  <div class="row"><span class="label">Penerima</span><span class="value">${shipment.recipientInfo}</span></div>
-  ` : ''}
-  ${shipment.expeditionName ? `<div class="row"><span class="label">Ekspedisi</span><span class="value">${shipment.expeditionName}</span></div>` : ''}
-  <hr/>
-  <table><thead><tr><th>Produk</th><th>Qty</th></tr></thead><tbody>
-    ${items.map(i => `<tr><td>${i.productName}${i.variantName ? ` - ${i.variantName}` : ''}</td><td>${i.quantity}</td></tr>`).join('')}
-  </tbody></table>
-  <hr/>
-  <div class="row"><span class="label">Tanggal</span><span class="value">${fmtDate(shipment.createdAt)}</span></div>
-  <p class="note">* Resi kurir akan dikirimkan setelah barang diambil oleh ekspedisi</p>
+  <hr class="divider-bold"/>
+  <div class="block">
+    <div class="lbl">Kepada</div>
+    <div class="to-name">${toName}</div>
+    ${toPhone   ? `<div class="to-phone">${toPhone}</div>` : ''}
+    ${toAddress ? `<div class="to-addr">${toAddress}</div>` : ''}
+  </div>
+  ${showItems ? `
+  <hr class="divider"/>
+  <div class="items-lbl">Isi Paket</div>
+  ${items.map(i => `
+    <div class="item">
+      <span class="iname">${i.productName}${i.variantName ? ` — ${i.variantName}` : ''}</span>
+      <span class="iqty">×${i.quantity}</span>
+    </div>`).join('')}` : ''}
   </body></html>`)
-  w.document.close()
-  w.focus()
-  setTimeout(() => { w.print(); w.close() }, 400)
 }
 
 function printInvoice(shipment) {
-  const w = window.open('', '_blank', 'width=700,height=900')
   const items    = shipment.items ?? []
   const subtotal = Number(shipment.subtotal)
   const shipping = Number(shipment.shippingCost)
   const total    = Number(shipment.total)
-  w.document.write(`<!DOCTYPE html><html><head><title>Invoice ${shipment.invoiceNumber}</title><style>
+  return printViaIframe(`<!DOCTYPE html><html><head><title>Invoice ${shipment.invoiceNumber}</title><style>
     *{margin:0;padding:0;box-sizing:border-box;font-family:'Segoe UI',sans-serif}
     body{padding:40px;font-size:13px;color:#1a1a1a;max-width:720px;margin:0 auto}
     .header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:32px}
-    .logo{width:70px}.company-name{font-size:20px;font-weight:700;color:#C8102E}
+    .logo{width:70px}
     .invoice-meta{text-align:right}.invoice-no{font-size:18px;font-weight:700;color:#C8102E}
     .invoice-date{color:#666;font-size:12px;margin-top:4px}
     .section{margin-bottom:24px}.section-title{font-size:11px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid #eee}
@@ -264,7 +289,6 @@ function printInvoice(shipment) {
   <div class="header">
     <div>
       <img src="${logoPreface}" class="logo" onerror="this.style.display='none'" />
-      <div class="company-name">Preface</div>
     </div>
     <div class="invoice-meta">
       <div class="invoice-no">INVOICE</div>
@@ -320,11 +344,13 @@ function printInvoice(shipment) {
     </div>
   </div>
   ${shipment.notes ? `<div class="section"><div class="section-title">Catatan</div><div style="color:#555;font-size:12px">${shipment.notes}</div></div>` : ''}
-  <div class="footer">Terima kasih atas kepercayaan Anda · Preface Internal System</div>
+  <div class="footer">
+    <div style="margin-bottom:8px">Transfer pembayaran ke:</div>
+    <div style="font-size:13px;font-weight:700;color:#1a1a1a">BCA 7380687130</div>
+    <div style="font-size:12px;margin-top:2px">a/n Muhamad Akbar Fadillah</div>
+    <div style="margin-top:12px;color:#bbb">Terima kasih atas kepercayaan Anda &nbsp;·&nbsp; Preface Wearhouse</div>
+  </div>
   </body></html>`)
-  w.document.close()
-  w.focus()
-  setTimeout(() => { w.print(); w.close() }, 400)
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
@@ -343,7 +369,7 @@ export default function ManualShipmentDetail() {
 
   const perm = (k) => isSuperAdmin || hasPermission(k) || hasPermission('shipping.manual.manage')
 
-  const { data: res, isLoading } = useQuery({
+  const { data: res, isLoading, isError, refetch } = useQuery({
     queryKey: ['manual-shipment', id],
     queryFn:  () => manualShipmentsApi.get(id),
     enabled:  !!id,
@@ -372,14 +398,24 @@ export default function ManualShipmentDetail() {
     onSuccess: () => { toast.success('Shipping dihapus'); navigate('/shipping-manual') },
     onError: () => toast.error('Gagal menghapus'),
   })
+  const markPrintedMut = useMutation({
+    mutationFn: (type) => manualShipmentsApi.markPrinted(id, type),
+    onSuccess: () => invalidate(),
+  })
 
   if (isLoading) return <div className="flex items-center justify-center h-64 text-slate-400">Memuat…</div>
+  if (isError)   return (
+    <div className="flex flex-col items-center justify-center h-64 gap-3">
+      <p className="text-slate-500 text-sm">Gagal memuat data. Server mungkin sedang tidak aktif.</p>
+      <button onClick={() => refetch()} className="btn-secondary text-sm">Coba Lagi</button>
+    </div>
+  )
   if (!s) return <div className="flex items-center justify-center h-64 text-slate-400">Data tidak ditemukan</div>
 
   const cfg       = STATUS_CONFIG[s.status] ?? {}
-  const canEdit   = s.status === 'in_progress' && perm('shipping.manual.edit')
+  const canEdit   = s.status === 'pending' && perm('shipping.manual.edit')
   const canCancel = !['completed', 'cancelled'].includes(s.status) && perm('shipping.manual.cancel')
-  const canDelete = ['in_progress', 'cancelled'].includes(s.status) && perm('shipping.manual.delete')
+  const canDelete = ['pending', 'cancelled'].includes(s.status) && perm('shipping.manual.delete')
   const canUploadResi = !['completed', 'cancelled'].includes(s.status) && perm('shipping.manual.upload_resi')
 
   return (
@@ -397,6 +433,14 @@ export default function ManualShipmentDetail() {
               ? <span className="badge-teal flex items-center gap-1"><ShoppingCart size={10}/> Sales</span>
               : <span className="badge-muted flex items-center gap-1"><Gift size={10}/> Non-Sales {s.category ? `· ${s.category.name}` : ''}</span>
             }
+            {s.sourceRequestId && (
+              <button
+                onClick={() => navigate(`/pengajuan/${s.sourceRequestId}`)}
+                className="flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full border bg-violet-50 text-violet-700 border-violet-200 hover:bg-violet-100 transition-colors"
+              >
+                Dari Pengajuan #{s.sourceRequestId} <ExternalLink size={9} />
+              </button>
+            )}
           </div>
           <p className="text-xs text-slate-400 mt-0.5">Dibuat oleh {s.creator?.name ?? '—'} · {fmtDateTime(s.createdAt)}</p>
         </div>
@@ -421,7 +465,7 @@ export default function ManualShipmentDetail() {
           {/* Buyer / recipient info */}
           <div className="card p-5 space-y-3">
             <h2 className="font-semibold text-slate-700 text-sm">{s.type === 'sales' ? 'Info Pembeli' : 'Info Penerima'}</h2>
-            {s.type === 'sales' ? (
+            {(s.type === 'sales' || s.buyerName) ? (
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div><span className="text-slate-400 text-xs">Nama</span><div className="font-medium text-slate-800 mt-0.5">{s.buyerName || '—'}</div></div>
                 <div><span className="text-slate-400 text-xs">No. HP</span><div className="font-medium text-slate-800 mt-0.5">{s.buyerPhone || '—'}</div></div>
@@ -476,10 +520,8 @@ export default function ManualShipmentDetail() {
           {s.status !== 'cancelled' && s.status !== 'completed' && (
             <NextActionCard
               s={s} perm={perm}
-              proofRef={proofRef} resiFileRef={resiFileRef}
-              resiNumber={resiNumber} setResiNumber={setResiNumber}
-              resiFile={resiFile} setResiFile={setResiFile}
-              statusMut={statusMut} proofMut={proofMut} resiMut={resiMut}
+              proofRef={proofRef}
+              statusMut={statusMut} proofMut={proofMut}
             />
           )}
 
@@ -502,7 +544,7 @@ export default function ManualShipmentDetail() {
               ) : (
                 <p className="text-xs text-slate-400">Belum ada bukti transfer</p>
               )}
-              {['in_progress', 'transferred'].includes(s.status) && perm('shipping.manual.approve_payment') && s.paymentProofUrl && (
+              {['pending', 'paid'].includes(s.status) && perm('shipping.manual.approve_payment') && s.paymentProofUrl && (
                 <>
                   <input type="file" ref={proofRef} accept="image/*" className="hidden"
                     onChange={e => e.target.files[0] && proofMut.mutate(e.target.files[0])} />
@@ -544,11 +586,40 @@ export default function ManualShipmentDetail() {
           {/* Print */}
           <div className="card p-4 space-y-2">
             <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Cetak</h3>
-            <button onClick={() => printResiSementara(s)} className="w-full btn-secondary flex items-center gap-2 justify-center text-sm">
-              <Printer size={15} /> Resi Sementara
-            </button>
-            <button onClick={() => printInvoice(s)} className="w-full btn-secondary flex items-center gap-2 justify-center text-sm">
-              <FileText size={15} /> PDF Invoice
+            <div className="space-y-1">
+              <p className="text-[10px] text-slate-400 font-medium uppercase tracking-wide">Resi Sementara</p>
+              <div className="grid grid-cols-2 gap-1.5">
+                <button
+                  disabled={markPrintedMut.isPending}
+                  onClick={() => { printResiSementara(s, true); markPrintedMut.mutate('resi') }}
+                  className={`flex items-center gap-1.5 justify-center text-xs py-2 px-2 rounded-lg font-medium transition-all ${s.resiPrintedAt ? 'border border-emerald-300 text-emerald-700 bg-emerald-50 hover:bg-emerald-100' : 'btn-secondary'}`}
+                >
+                  <Printer size={12} />
+                  + Produk
+                </button>
+                <button
+                  disabled={markPrintedMut.isPending}
+                  onClick={() => { printResiSementara(s, false); markPrintedMut.mutate('resi') }}
+                  className={`flex items-center gap-1.5 justify-center text-xs py-2 px-2 rounded-lg font-medium transition-all ${s.resiPrintedAt ? 'border border-emerald-300 text-emerald-700 bg-emerald-50 hover:bg-emerald-100' : 'btn-secondary'}`}
+                >
+                  <Printer size={12} />
+                  Tanpa Produk
+                </button>
+              </div>
+              {s.resiPrintedAt && <p className="text-[10px] text-emerald-500 font-medium text-center">✓ pernah dicetak</p>}
+            </div>
+            <button
+              disabled={markPrintedMut.isPending}
+              onClick={() => {
+                const ok = printInvoice(s)
+                if (!ok) { toast.error('Popup diblokir browser. Izinkan popup lalu coba lagi.'); return }
+                markPrintedMut.mutate('invoice')
+              }}
+              className={`w-full flex items-center gap-2 justify-center text-sm ${s.invoicePrintedAt ? 'btn-ghost border border-emerald-300 text-emerald-700 hover:bg-emerald-50' : 'btn-secondary'}`}
+            >
+              <FileText size={15} />
+              {s.invoicePrintedAt ? 'Cetak Ulang Invoice' : 'Cetak Invoice'}
+              {s.invoicePrintedAt && <span className="ml-auto text-[10px] text-emerald-500 font-medium">✓ pernah dicetak</span>}
             </button>
           </div>
 

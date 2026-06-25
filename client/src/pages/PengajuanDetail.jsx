@@ -8,7 +8,7 @@ import { useAuth } from '../context/AuthContext'
 import {
   ArrowLeft, Check, X, Send, RotateCcw, CheckCircle2,
   Pencil, Save, PackageCheck, Plus, Trash2, ChevronDown,
-  Clock, ThumbsUp, ThumbsDown, AlertTriangle,
+  Clock, ThumbsUp, ThumbsDown, AlertTriangle, Truck, ExternalLink,
 } from 'lucide-react'
 
 const STATUS_LABEL = { PENDING:'Menunggu', APPROVED:'Disetujui', REJECTED:'Ditolak', SENT:'Dikirim', DONE:'Selesai' }
@@ -435,6 +435,7 @@ export default function PengajuanDetail() {
   const buildForm = (r) => ({
     requestTypeId:    r.requestTypeId    ?? '',
     recipientName:    r.recipientName    ?? '',
+    recipientPhone:   r.recipientPhone   ?? '',
     recipientAddress: r.recipientAddress ?? '',
     neededAt:         r.neededAt ? r.neededAt.split('T')[0] : '',
     divisi:           r.divisi           ?? '',
@@ -460,8 +461,13 @@ export default function PengajuanDetail() {
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ['request', id] })
 
-  const approve       = useMutation({ mutationFn: () => requestApi.approve(id),              onSuccess: invalidate, onError: e => toast.error(e.response?.data?.message ?? 'Gagal') })
-  const reject        = useMutation({ mutationFn: (r) => requestApi.reject(id, r),           onSuccess: invalidate, onError: e => toast.error(e.response?.data?.message ?? 'Gagal') })
+  const approve          = useMutation({ mutationFn: () => requestApi.approve(id),              onSuccess: invalidate, onError: e => toast.error(e.response?.data?.message ?? 'Gagal') })
+  const reject           = useMutation({ mutationFn: (r) => requestApi.reject(id, r),           onSuccess: invalidate, onError: e => toast.error(e.response?.data?.message ?? 'Gagal') })
+  const processShipment  = useMutation({
+    mutationFn: () => requestApi.processShipment(id),
+    onSuccess: (data) => { invalidate(); toast.success('Draft shipping berhasil dibuat!'); navigate(`/shipping-manual/${data.manualShipmentId}`) },
+    onError: e => toast.error(e.response?.data?.message ?? 'Gagal membuat shipping'),
+  })
   const markSent      = useMutation({ mutationFn: (d) => requestApi.markSent(id, d),          onSuccess: invalidate, onError: e => toast.error(e.response?.data?.message ?? 'Gagal') })
   const markReturned  = useMutation({ mutationFn: (d) => requestApi.markReturned(id, d),      onSuccess: invalidate, onError: e => toast.error(e.response?.data?.message ?? 'Gagal') })
   const shipRemaining = useMutation({ mutationFn: () => requestApi.shipRemaining(id),         onSuccess: invalidate, onError: e => toast.error(e.response?.data?.message ?? 'Gagal') })
@@ -484,8 +490,13 @@ export default function PengajuanDetail() {
   const canDelete  = canEdit
 
   if (isLoading) return <div className="px-6 py-6 text-sm text-slate-400">Memuat…</div>
-  if (error)     return <div className="px-6 py-6 text-sm text-red-500">Gagal memuat data</div>
-  if (!req)      return null
+  if (error)     return (
+    <div className="flex flex-col items-center justify-center h-64 gap-3">
+      <p className="text-slate-500 text-sm">Gagal memuat data. Server mungkin sedang tidak aktif.</p>
+      <button onClick={() => window.location.reload()} className="btn-secondary text-sm">Refresh</button>
+    </div>
+  )
+  if (!req) return null
 
   const skuVariantLabel = (item) =>
     item.sku ? (item.sku.ProductVariantOptions ?? []).map(v => v.value).join(' / ') : item.variantLabel
@@ -511,12 +522,30 @@ export default function PengajuanDetail() {
             <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${STATUS_COLOR[req.status]}`}>
               {STATUS_LABEL[req.status]}
             </span>
+            {req.manualShipment && (
+              <button
+                onClick={() => navigate(`/shipping-manual/${req.manualShipment.id}`)}
+                className="flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full border bg-violet-50 text-violet-700 border-violet-200 hover:bg-violet-100 transition-colors"
+              >
+                <Truck size={10} /> Shipping {req.manualShipment.invoiceNumber} <ExternalLink size={9} />
+              </button>
+            )}
           </div>
           <p className="text-xs text-slate-400 mt-0.5">{req.requestType?.name} · Dibuat {fmtDt(req.createdAt)}</p>
         </div>
 
         {/* Edit / delete / cancel edit buttons */}
         <div className="flex gap-2 flex-wrap">
+          {/* Proses Pengiriman — tampil kalau APPROVED, requiresShipping, belum ada shipment */}
+          {canProcess && req.status === 'APPROVED' && req.requestType?.requiresShipping && !req.manualShipmentId && (
+            <button
+              onClick={() => { if (confirm('Buat draft Shipping Manual dari pengajuan ini?')) processShipment.mutate() }}
+              disabled={processShipment.isPending}
+              className="btn-primary text-xs flex items-center gap-1"
+            >
+              <Truck size={11} /> {processShipment.isPending ? 'Membuat…' : 'Proses Pengiriman'}
+            </button>
+          )}
           {canEdit && !editing && (
             <button onClick={() => setEditing(true)} className="btn-secondary text-xs flex items-center gap-1">
               <Pencil size={11} /> Edit
@@ -580,6 +609,10 @@ export default function PengajuanDetail() {
                   <input value={form.recipientName} onChange={e => setF('recipientName', e.target.value)} className="input w-full text-sm" />
                 </div>
                 <div>
+                  <label className="label mb-1">No. HP Penerima</label>
+                  <input value={form.recipientPhone} onChange={e => setF('recipientPhone', e.target.value)} placeholder="08xxxxxxxxxx" className="input w-full text-sm" />
+                </div>
+                <div>
                   <label className="label mb-1">Tanggal Butuh</label>
                   <input type="date" value={form.neededAt} onChange={e => setF('neededAt', e.target.value)} className="input w-full text-sm" />
                 </div>
@@ -603,6 +636,7 @@ export default function PengajuanDetail() {
                 <Field label="Pengaju"        value={req.requestor?.name} />
                 <Field label="Divisi"         value={req.divisi} />
                 <Field label="Penerima"       value={req.recipientName} />
+                <Field label="No. HP Penerima" value={req.recipientPhone} />
                 <Field label="Tanggal Butuh"  value={fmtDate(req.neededAt)} />
                 <div className="col-span-2">
                   <Field label="Alamat Pengiriman" value={req.recipientAddress} />

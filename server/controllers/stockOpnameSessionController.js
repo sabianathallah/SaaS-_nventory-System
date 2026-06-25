@@ -18,7 +18,9 @@ class StockOpnameSessionController {
                 where: { ...companyFilter(req), ...filter },
                 include: [
                     { model: Warehouse, attributes: ['id', 'name'] },
-                    { model: User, foreignKey: 'createdBy', attributes: ['id', 'name'] }
+                    { model: User, foreignKey: 'createdBy', attributes: ['id', 'name'] },
+                    { model: User, foreignKey: 'updatedBy', as: 'updater', attributes: ['id', 'name'] },
+                    { model: User, foreignKey: 'closedBy',  as: 'closer',  attributes: ['id', 'name'] },
                 ],
                 order: [['started_at', 'DESC']],
                 limit, offset,
@@ -35,6 +37,8 @@ class StockOpnameSessionController {
                 include: [
                     { model: Warehouse, attributes: ['id', 'name'] },
                     { model: User, foreignKey: 'createdBy', attributes: ['id', 'name'] },
+                    { model: User, foreignKey: 'updatedBy', as: 'updater', attributes: ['id', 'name'] },
+                    { model: User, foreignKey: 'closedBy',  as: 'closer',  attributes: ['id', 'name'] },
                     {
                         model: Stock_Opname_Item,
                         include: [
@@ -86,7 +90,9 @@ class StockOpnameSessionController {
             const isClosing = req.body.status === 'closed' && session.status !== 'closed';
             await session.update({
                 ...req.body,
-                ...(isClosing && !req.body.finished_at ? { finished_at: new Date() } : {})
+                updatedBy: req.user.id,
+                ...(isClosing && !req.body.finished_at ? { finished_at: new Date() } : {}),
+                ...(isClosing ? { closedBy: req.user.id } : {}),
             }, { transaction: t });
 
             if (isClosing) {

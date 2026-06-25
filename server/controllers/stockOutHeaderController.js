@@ -34,6 +34,7 @@ class StockOutHeaderController {
                 },
                 include: [
                     { model: User, foreignKey: 'createdBy', attributes: ['id', 'name'] },
+                    { model: User, foreignKey: 'updatedBy', as: 'updater', attributes: ['id', 'name'] },
                     { model: Warehouse, attributes: ['id', 'name'] },
                 ],
                 order: [['date', 'DESC'], ['id', 'DESC']],
@@ -50,6 +51,7 @@ class StockOutHeaderController {
                 where: { id: req.params.id, ...companyFilter(req) },
                 include: [
                     { model: User, foreignKey: 'createdBy', attributes: ['id', 'name'] },
+                    { model: User, foreignKey: 'updatedBy', as: 'updater', attributes: ['id', 'name'] },
                     { model: Warehouse, attributes: ['id', 'name'] },
                 ]
             });
@@ -181,7 +183,7 @@ class StockOutHeaderController {
                 return res.status(400).json({ message: 'Gudang tidak dapat diubah. Hapus dan buat ulang dokumen untuk mengganti gudang.' });
             }
             const { date, destination, notes } = req.body;
-            await header.update({ date, destination, notes });
+            await header.update({ date, destination, notes, updatedBy: req.user.id });
             res.status(200).json(header);
         } catch (err) { next(err); }
     }

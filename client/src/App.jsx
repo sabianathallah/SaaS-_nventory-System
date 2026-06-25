@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from './context/AuthContext'
 import { PageVisibilityProvider, usePageVisibility } from './context/PageVisibilityContext'
 import { SelectedCompanyProvider } from './context/SelectedCompanyContext'
 import Layout from './components/Layout'
+import ErrorBoundary from './components/ErrorBoundary'
 import NoPermission from './components/NoPermission'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
@@ -85,6 +86,7 @@ function AppRoutes() {
         <PrivateRoute>
           <PageVisibilityProvider>
             <Layout>
+              <ErrorBoundary>
               <Routes>
                 <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="/sop"       element={<SOP />} />
@@ -145,6 +147,7 @@ function AppRoutes() {
                 <Route path="/companies"       element={<SuperRoute><PageVisibleRoute pageKey="companies"><Companies /></PageVisibleRoute></SuperRoute>} />
                 <Route path="/page-visibility" element={<SuperRoute><PageVisibility /></SuperRoute>} />
               </Routes>
+              </ErrorBoundary>
             </Layout>
           </PageVisibilityProvider>
         </PrivateRoute>

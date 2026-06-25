@@ -8,11 +8,11 @@ import { Table, Pagination } from '../components/Table'
 import { useAuth } from '../context/AuthContext'
 
 const STATUS_BADGE = {
-  in_progress: <span className="badge-amber">● In Progress</span>,
-  transferred: <span className="badge-indigo">● Transferred</span>,
-  shipped:     <span className="badge-purple">● Shipped</span>,
-  completed:   <span className="badge-green">● Completed</span>,
-  cancelled:   <span className="badge-red">● Cancelled</span>,
+  pending:   <span className="badge-amber">● Unpaid</span>,
+  paid:      <span className="badge-indigo">● Paid</span>,
+  shipped:   <span className="badge-purple">● Shipped</span>,
+  completed: <span className="badge-green">● Completed</span>,
+  cancelled: <span className="badge-red">● Cancelled</span>,
 }
 
 const TYPE_BADGE = {
@@ -30,12 +30,12 @@ const TYPE_TABS = [
 ]
 
 const STATUS_OPTS = [
-  { value: '', label: 'Semua Status' },
-  { value: 'in_progress', label: 'In Progress' },
-  { value: 'transferred', label: 'Transferred' },
-  { value: 'shipped',     label: 'Shipped' },
-  { value: 'completed',   label: 'Completed' },
-  { value: 'cancelled',   label: 'Cancelled' },
+  { value: '',          label: 'Semua Status' },
+  { value: 'pending',   label: 'Unpaid' },
+  { value: 'paid',      label: 'Paid' },
+  { value: 'shipped',   label: 'Shipped' },
+  { value: 'completed', label: 'Completed' },
+  { value: 'cancelled', label: 'Cancelled' },
 ]
 
 export default function ManualShipments() {
@@ -111,6 +111,29 @@ export default function ManualShipments() {
     {
       key: 'date', label: 'Tanggal', width: 110,
       render: r => <span className="text-xs text-slate-400">{fmtDate(r.createdAt)}</span>,
+    },
+    {
+      key: 'creator', label: 'Dibuat oleh', width: 130,
+      render: r => (
+        <div>
+          <div className="text-xs text-slate-500">{r.creator?.name ?? '—'}</div>
+          {r.updater && r.updater.name !== r.creator?.name && (
+            <div className="text-[10px] text-slate-400">Diedit: {r.updater.name}</div>
+          )}
+          {r.submitter && <div className="text-[10px] text-blue-500">Dikirim: {r.submitter.name}</div>}
+        </div>
+      ),
+    },
+    {
+      key: 'action', label: '', width: 60,
+      render: r => (
+        <button
+          onClick={e => { e.stopPropagation(); navigate(`/shipping-manual/${r.id}`) }}
+          className="btn-secondary text-xs px-2 py-1"
+        >
+          Lihat
+        </button>
+      ),
     },
   ]
 

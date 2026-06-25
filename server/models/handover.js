@@ -8,6 +8,18 @@ module.exports = (sequelize, DataTypes) => {
         onDelete: 'CASCADE',
         onUpdate: 'CASCADE',
       });
+      Handover.belongsTo(models.User, {
+        foreignKey: { name: 'updatedBy', allowNull: true },
+        as: 'updater',
+        onDelete: 'SET NULL',
+        onUpdate: 'CASCADE',
+      });
+      Handover.belongsTo(models.User, {
+        foreignKey: { name: 'closedBy', allowNull: true },
+        as: 'closer',
+        onDelete: 'SET NULL',
+        onUpdate: 'CASCADE',
+      });
       Handover.hasMany(models.Handover_Item, {
         foreignKey: 'HandoverId',
         onDelete: 'CASCADE',
@@ -21,6 +33,8 @@ module.exports = (sequelize, DataTypes) => {
     status:         { type: DataTypes.STRING(10),  allowNull: false, defaultValue: 'OPEN' },
     attachment_url: { type: DataTypes.STRING(500), allowNull: true },
     createdBy:  { type: DataTypes.INTEGER,     allowNull: false },
+    updatedBy:  { type: DataTypes.INTEGER,     allowNull: true },
+    closedBy:   { type: DataTypes.INTEGER,     allowNull: true },
     companyId:  { type: DataTypes.INTEGER,     allowNull: true },
   }, { sequelize, modelName: 'Handover' });
   return Handover;

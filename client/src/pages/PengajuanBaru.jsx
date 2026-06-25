@@ -117,6 +117,7 @@ export default function PengajuanBaru() {
   const [requestTypeId,    setRequestTypeId]    = useState('')
   const [divisi,           setDivisi]           = useState(user?.divisi ?? '')
   const [recipientName,    setRecipientName]    = useState('')
+  const [recipientPhone,   setRecipientPhone]   = useState('')
   const [recipientAddress, setRecipientAddress] = useState('')
   const [neededAt,         setNeededAt]         = useState('')
   const [needsReturn,      setNeedsReturn]      = useState(false)
@@ -140,7 +141,7 @@ export default function PengajuanBaru() {
     e.preventDefault()
     if (!requestTypeId) return toast.error('Pilih jenis pengajuan')
     if (items.length === 0) return toast.error('Tambahkan minimal 1 produk')
-    createMutation.mutate({ requestTypeId: Number(requestTypeId), divisi, recipientName, recipientAddress, neededAt: neededAt || null, needsReturn, note, items })
+    createMutation.mutate({ requestTypeId: Number(requestTypeId), divisi, recipientName, recipientPhone, recipientAddress, neededAt: neededAt || null, needsReturn, note, items })
   }
 
   return (
@@ -184,6 +185,14 @@ export default function PengajuanBaru() {
               <input value={recipientName} onChange={e => setRecipientName(e.target.value)} placeholder="Nama influencer / talent"
                 className="input w-full" />
             </div>
+            <div>
+              <label className="label mb-1">No. HP Penerima</label>
+              <input value={recipientPhone} onChange={e => setRecipientPhone(e.target.value)} placeholder="08xxxxxxxxxx"
+                className="input w-full" />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="label mb-1">Tanggal Butuh</label>
               <input type="date" value={neededAt} onChange={e => setNeededAt(e.target.value)} className="input w-full" />
