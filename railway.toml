@@ -2,6 +2,7 @@
 builder = "NIXPACKS"
 
 [deploy]
+releaseCommand = "cd server && npx sequelize-cli db:migrate"
 startCommand = "cd server && npm start"
 healthcheckPath = "/health"
 healthcheckTimeout = 60
