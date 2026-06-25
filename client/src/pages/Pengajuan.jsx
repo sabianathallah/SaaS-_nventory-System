@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { requestApi, requestTypeApi } from '../api'
 import { useAuth } from '../context/AuthContext'
 import { exportExcel } from '../utils/exportExcel'
-import { Plus, FileDown, Search } from 'lucide-react'
+import { Plus, FileDown, Search, SlidersHorizontal, X } from 'lucide-react'
 
 const STATUS_LABEL = {
   PENDING:  'Menunggu',
@@ -21,34 +21,57 @@ const STATUS_COLOR = {
   DONE:     'bg-emerald-100 text-emerald-700',
 }
 
+const STATUS_TABS = [
+  { value: '',         label: 'Semua',    countKey: 'ALL' },
+  { value: 'PENDING',  label: 'Menunggu', countKey: 'PENDING' },
+  { value: 'APPROVED', label: 'Disetujui',countKey: 'APPROVED' },
+  { value: 'SENT',     label: 'Dikirim',  countKey: 'SENT' },
+  { value: 'DONE',     label: 'Selesai',  countKey: 'DONE' },
+  { value: 'REJECTED', label: 'Ditolak',  countKey: 'REJECTED' },
+]
+
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('id-ID', { day:'2-digit', month:'short', year:'numeric' }) : '—'
 
 export default function Pengajuan() {
   const navigate = useNavigate()
   const { hasPermission, user } = useAuth()
-  const canProcess = hasPermission('request.process') || hasPermission('request.manage')
+  const canProcess = hasPermission('request.process') || hasPermission('request.manage') ||
+                     user?.role === 'SUPER_ADMIN' || user?.role === 'COMPANY_ADMIN'
 
   const [search,        setSearch]        = useState('')
+  const [searchInput,   setSearchInput]   = useState('')
   const [status,        setStatus]        = useState('')
   const [requestTypeId, setRequestTypeId] = useState('')
   const [needsReturn,   setNeedsReturn]   = useState('')
   const [dateFrom,      setDateFrom]      = useState('')
   const [dateTo,        setDateTo]        = useState('')
   const [page,          setPage]          = useState(1)
+  const [showMoreFilters, setShowMoreFilters] = useState(false)
 
   const { data: types } = useQuery({ queryKey: ['request-types'], queryFn: requestTypeApi.list })
+
+  const { data: counts } = useQuery({
+    queryKey: ['request-status-counts', { requestTypeId, needsReturn, dateFrom, dateTo }],
+    queryFn: () => requestApi.statusCounts({
+      ...(requestTypeId && { requestTypeId }),
+      ...(needsReturn !== '' && { needsReturn }),
+      ...(dateFrom && { dateFrom }),
+      ...(dateTo && { dateTo }),
+    }),
+    staleTime: 30_000,
+  })
 
   const filters = {
     page, limit: 20,
     ...(search        && { search }),
     ...(status        && { status }),
     ...(requestTypeId && { requestTypeId }),
-    ...(needsReturn   !== '' && { needsReturn }),
+    ...(needsReturn !== '' && { needsReturn }),
     ...(dateFrom      && { dateFrom }),
     ...(dateTo        && { dateTo }),
   }
 
-  const { data, isLoading, refetch } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ['requests', filters],
     queryFn: () => requestApi.list(filters),
     staleTime: 30_000,
@@ -58,10 +81,17 @@ export default function Pengajuan() {
   const total  = data?.pagination?.total ?? 0
   const pages  = Math.ceil(total / 20)
 
+  const hasExtraFilters = needsReturn !== '' || dateFrom || dateTo
+
+  function resetFilters() {
+    setSearch(''); setSearchInput(''); setRequestTypeId('')
+    setNeedsReturn(''); setDateFrom(''); setDateTo(''); setPage(1)
+  }
+
   async function handleExport() {
     const all = await requestApi.exportData({ status, requestTypeId, dateFrom, dateTo })
     const headers = ['Tgl Pengajuan', 'Jenis', 'Pengaju', 'Divisi', 'Penerima', 'Alamat', 'Tgl Butuh', 'Status', 'Perlu Kembali', 'Tgl Kirim', 'Resi', 'Tgl Kembali', 'Produk']
-    const rows = all.map(r => [
+    const exRows = all.map(r => [
       fmtDate(r.createdAt),
       r.requestType?.name ?? '',
       r.requestor?.name ?? '',
@@ -76,11 +106,12 @@ export default function Pengajuan() {
       fmtDate(r.returnedAt),
       (r.items ?? []).map(i => `${i.productName}${i.variantLabel ? ' - ' + i.variantLabel : ''} (${i.qty})`).join('; '),
     ])
-    exportExcel('pengajuan-stok', { headers, rows, sheetName: 'Pengajuan' })
+    exportExcel('pengajuan-stok', { headers, rows: exRows, sheetName: 'Pengajuan' })
   }
 
   return (
     <div className="px-6 py-6 max-w-6xl">
+      {/* Header */}
       <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
         <div>
           <h1 className="text-lg font-bold text-slate-800">Pengajuan Stok</h1>
@@ -96,33 +127,99 @@ export default function Pengajuan() {
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="flex gap-2 mb-4 flex-wrap">
-        <div className="relative">
-          <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input value={search} onChange={e => { setSearch(e.target.value); setPage(1) }}
-            placeholder="Cari penerima / divisi…" className="input text-sm pl-7 w-52" />
-        </div>
-        <select value={requestTypeId} onChange={e => { setRequestTypeId(e.target.value); setPage(1) }} className="input text-sm w-40">
+      {/* Status tabs */}
+      <div className="flex gap-1 mb-4 overflow-x-auto pb-1">
+        {STATUS_TABS.map(tab => {
+          const count = counts?.[tab.countKey]
+          const isActive = status === tab.value
+          return (
+            <button
+              key={tab.value}
+              onClick={() => { setStatus(tab.value); setPage(1) }}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-all flex-shrink-0 ${
+                isActive
+                  ? 'bg-indigo-600 text-white shadow-sm'
+                  : 'bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-700'
+              }`}
+            >
+              {tab.label}
+              {count != null && count > 0 && (
+                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none ${
+                  isActive ? 'bg-white/20 text-white' : tab.value === 'PENDING' ? 'bg-amber-500 text-white' : 'bg-slate-300 text-slate-600'
+                }`}>
+                  {count}
+                </span>
+              )}
+            </button>
+          )
+        })}
+      </div>
+
+      {/* Search + filter bar */}
+      <div className="flex gap-2 mb-4 flex-wrap items-center">
+        <form onSubmit={e => { e.preventDefault(); setSearch(searchInput.trim()); setPage(1) }} className="flex gap-2 flex-1 min-w-0">
+          <div className="relative flex-1 min-w-[180px] max-w-xs">
+            <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              value={searchInput}
+              onChange={e => setSearchInput(e.target.value)}
+              placeholder="Cari penerima / divisi…"
+              className="input text-sm pl-7 w-full"
+            />
+          </div>
+          <button type="submit" className="btn-secondary text-sm px-3">Cari</button>
+        </form>
+
+        <select
+          value={requestTypeId}
+          onChange={e => { setRequestTypeId(e.target.value); setPage(1) }}
+          className="input text-sm w-40"
+        >
           <option value="">Semua Jenis</option>
           {(types ?? []).map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
         </select>
-        <select value={status} onChange={e => { setStatus(e.target.value); setPage(1) }} className="input text-sm w-40">
-          <option value="">Semua Status</option>
-          {Object.entries(STATUS_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-        </select>
-        <input type="date" value={dateFrom} onChange={e => { setDateFrom(e.target.value); setPage(1) }} className="input text-sm w-36" />
-        <input type="date" value={dateTo}   onChange={e => { setDateTo(e.target.value);   setPage(1) }} className="input text-sm w-36" />
-        <select value={needsReturn} onChange={e => { setNeedsReturn(e.target.value); setPage(1) }} className="input text-sm w-44">
-          <option value="">Semua (kembali/tidak)</option>
-          <option value="true">↩ Perlu Dikembalikan</option>
-          <option value="false">✓ Tidak Perlu Kembali</option>
-        </select>
-        {(search || status || requestTypeId || needsReturn !== '' || dateFrom || dateTo) && (
-          <button onClick={() => { setSearch(''); setStatus(''); setRequestTypeId(''); setNeedsReturn(''); setDateFrom(''); setDateTo(''); setPage(1) }}
-            className="text-xs text-slate-400 hover:text-slate-600 px-2">Reset</button>
+
+        <button
+          onClick={() => setShowMoreFilters(v => !v)}
+          className={`btn-secondary text-sm flex items-center gap-1.5 ${hasExtraFilters ? 'border-indigo-400 text-indigo-600' : ''}`}
+        >
+          <SlidersHorizontal size={13} />
+          Filter
+          {hasExtraFilters && <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 flex-shrink-0" />}
+        </button>
+
+        {(search || requestTypeId || hasExtraFilters) && (
+          <button onClick={resetFilters} className="text-xs text-slate-400 hover:text-slate-600 flex items-center gap-1">
+            <X size={12} /> Reset
+          </button>
         )}
       </div>
+
+      {/* More filters panel */}
+      {showMoreFilters && (
+        <div className="mb-4 p-4 bg-slate-50 rounded-xl border border-slate-200 flex flex-wrap gap-3 items-end">
+          <div>
+            <label className="label mb-1 text-xs">Dari Tanggal</label>
+            <input type="date" value={dateFrom} onChange={e => { setDateFrom(e.target.value); setPage(1) }} className="input text-sm w-36" />
+          </div>
+          <div>
+            <label className="label mb-1 text-xs">Sampai Tanggal</label>
+            <input type="date" value={dateTo} onChange={e => { setDateTo(e.target.value); setPage(1) }} className="input text-sm w-36" />
+          </div>
+          <div>
+            <label className="label mb-1 text-xs">Pengembalian</label>
+            <select value={needsReturn} onChange={e => { setNeedsReturn(e.target.value); setPage(1) }} className="input text-sm w-44">
+              <option value="">Semua</option>
+              <option value="true">↩ Perlu Dikembalikan</option>
+              <option value="false">✓ Tidak Perlu Kembali</option>
+            </select>
+          </div>
+          <button onClick={() => { setNeedsReturn(''); setDateFrom(''); setDateTo('') }}
+            className="text-xs text-slate-400 hover:text-red-500 self-end pb-0.5">
+            Reset filter ini
+          </button>
+        </div>
+      )}
 
       <div className="card overflow-hidden">
         <div className="overflow-x-auto">

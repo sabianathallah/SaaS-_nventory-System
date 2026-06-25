@@ -3,8 +3,9 @@ const express = require('express');
 const router  = express.Router();
 const ctrl    = require('../controllers/requestController');
 
-// Export must come before /:id to avoid clash
-router.get('/export', ctrl.exportData);
+// Static routes must come before /:id to avoid clash
+router.get('/export',        ctrl.exportData);
+router.get('/status-counts', ctrl.statusCounts);
 
 router.get('/',         ctrl.list);
 router.post('/',        ctrl.create);

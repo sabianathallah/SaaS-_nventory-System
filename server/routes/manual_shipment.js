@@ -21,7 +21,7 @@ router.get('/:id',                         canView,           ctrl.get);
 router.post('/',                           canCreate,         ctrl.create);
 router.put('/:id',                         canEdit,           ctrl.update);
 router.patch('/:id/status',                canCancel,         ctrl.changeStatus);
-router.post('/:id/payment-proof', uploadProof, canApprovePayment, ctrl.uploadPaymentProof);
+router.post('/:id/payment-proof', canApprovePayment, uploadProof, ctrl.uploadPaymentProof);
 router.post('/:id/courier-resi',  uploadResi,  canUploadResi,     ctrl.uploadCourierResi);
 router.delete('/:id',                      canDelete,         ctrl.destroy);
 

@@ -231,6 +231,7 @@ export const requestTypeApi = {
 
 export const requestApi = {
   list:         (params) => api.get('/requests',          { params }).then(r => r.data),
+  statusCounts: (params) => api.get('/requests/status-counts', { params }).then(r => r.data),
   get:          (id)     => api.get(`/requests/${id}`).then(r => r.data),
   create:       (data)   => api.post('/requests', data).then(r => r.data),
   update:       (id, data) => api.put(`/requests/${id}`, data).then(r => r.data),

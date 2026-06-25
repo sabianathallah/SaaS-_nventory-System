@@ -288,9 +288,9 @@ exports.changeStatus = async (req, res, next) => {
     const { status, cancelledReason } = req.body;
     const current = shipment.status;
 
-    // Validate transitions
+    // Validate transitions — sales must go through transferred first
     const VALID_TRANSITIONS = {
-      in_progress:  ['transferred', 'shipped', 'cancelled'],  // sales: in_progress→transferred; non_sales: in_progress→shipped
+      in_progress:  shipment.type === 'sales' ? ['transferred', 'cancelled'] : ['shipped', 'cancelled'],
       transferred:  ['shipped', 'cancelled'],
       shipped:      ['completed', 'cancelled'],
       completed:    [],

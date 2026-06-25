@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   ArrowLeft, Package, ShoppingCart, Gift, CheckCircle2, Truck,
   XCircle, Edit2, Trash2, Upload, Printer, FileText, ImageIcon,
-  ExternalLink, ChevronDown,
+  ExternalLink, Clock, CreditCard, AlertCircle,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { manualShipmentsApi } from '../api'
@@ -17,17 +17,17 @@ const fmtDateTime = d => d ? new Date(d).toLocaleString('id-ID', { day: '2-digit
 
 // ── Status config ─────────────────────────────────────────────────────────────
 const STATUS_CONFIG = {
-  in_progress: { label: 'In Progress', badge: 'badge-amber',   step: 0 },
-  transferred: { label: 'Transferred', badge: 'badge-indigo',  step: 1 },
-  shipped:     { label: 'Shipped',     badge: 'badge-purple',  step: 2 },
-  completed:   { label: 'Completed',   badge: 'badge-green',   step: 3 },
-  cancelled:   { label: 'Dibatalkan',  badge: 'badge-red',     step: -1 },
+  in_progress: { label: 'In Progress', badge: 'badge-amber',  step: 0 },
+  transferred: { label: 'Transferred', badge: 'badge-indigo', step: 1 },
+  shipped:     { label: 'Shipped',     badge: 'badge-purple', step: 2 },
+  completed:   { label: 'Completed',   badge: 'badge-green',  step: 3 },
+  cancelled:   { label: 'Dibatalkan',  badge: 'badge-red',    step: -1 },
 }
 
-// ── Status timeline (sales) ───────────────────────────────────────────────────
 const SALES_STEPS    = ['in_progress', 'transferred', 'shipped', 'completed']
 const NONSALES_STEPS = ['in_progress', 'shipped', 'completed']
 
+// ── Timeline ──────────────────────────────────────────────────────────────────
 function StatusTimeline({ status, type }) {
   const steps  = type === 'sales' ? SALES_STEPS : NONSALES_STEPS
   const labels = { in_progress: 'In Progress', transferred: 'Transferred', shipped: 'Shipped', completed: 'Completed' }
@@ -36,32 +36,133 @@ function StatusTimeline({ status, type }) {
   return (
     <div className="flex items-center gap-0">
       {steps.map((s, idx) => {
-        const done    = curIdx > idx
-        const active  = curIdx === idx
+        const done      = curIdx > idx
+        const active    = curIdx === idx
         const cancelled = status === 'cancelled'
         return (
           <div key={s} className="flex items-center flex-1">
             <div className="flex flex-col items-center gap-1 flex-shrink-0">
               <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold border-2 transition-all ${
-                cancelled ? 'border-slate-200 bg-slate-100 text-slate-300'
-                : done ? 'border-green-500 bg-green-500 text-white'
-                : active ? 'border-red-500 bg-red-500 text-white'
-                : 'border-slate-200 bg-white text-slate-300'
+                cancelled  ? 'border-slate-200 bg-slate-100 text-slate-300'
+                : done     ? 'border-emerald-500 bg-emerald-500 text-white'
+                : active   ? 'border-indigo-500 bg-indigo-500 text-white ring-4 ring-indigo-100'
+                           : 'border-slate-200 bg-white text-slate-300'
               }`}>
                 {done ? <CheckCircle2 size={14} /> : idx + 1}
               </div>
               <span className={`text-[10px] font-medium whitespace-nowrap ${
                 cancelled ? 'text-slate-300'
-                : done || active ? 'text-slate-700'
-                : 'text-slate-400'
+                : done    ? 'text-emerald-600'
+                : active  ? 'text-indigo-600'
+                          : 'text-slate-400'
               }`}>{labels[s]}</span>
             </div>
             {idx < steps.length - 1 && (
-              <div className={`flex-1 h-0.5 mx-1 mb-4 ${done ? 'bg-green-400' : 'bg-slate-200'}`} />
+              <div className={`flex-1 h-0.5 mx-1 mb-4 ${done ? 'bg-emerald-400' : 'bg-slate-200'}`} />
             )}
           </div>
         )
       })}
+    </div>
+  )
+}
+
+// ── Guided Next Action Card ───────────────────────────────────────────────────
+function NextActionCard({
+  s, perm, proofRef, resiNumber, setResiNumber, resiFile, setResiFile, resiFileRef,
+  statusMut, proofMut, resiMut,
+}) {
+  const { status, type, paymentProofUrl } = s
+  const canShip    = perm('shipping.manual.manage')
+  const canApprove = perm('shipping.manual.approve_payment')
+  const canResi    = perm('shipping.manual.upload_resi')
+
+  const configs = {
+    // Sales in_progress — needs proof first
+    sales_no_proof: {
+      icon: <CreditCard size={16} className="text-amber-500" />,
+      title: 'Upload Bukti Transfer',
+      desc: 'Minta pembeli upload bukti transfer sebelum barang dikirim.',
+      actions: canApprove && (
+        <>
+          <input type="file" ref={proofRef} accept="image/*" className="hidden"
+            onChange={e => e.target.files[0] && proofMut.mutate(e.target.files[0])} />
+          <button onClick={() => proofRef.current?.click()} disabled={proofMut.isPending}
+            className="btn-primary text-sm flex items-center gap-2 justify-center w-full">
+            <Upload size={14} /> {proofMut.isPending ? 'Uploading…' : 'Upload Bukti TF'}
+          </button>
+        </>
+      ),
+    },
+    // Sales in_progress — has proof, waiting confirmation
+    sales_confirm: {
+      icon: <CheckCircle2 size={16} className="text-blue-500" />,
+      title: 'Konfirmasi Pembayaran',
+      desc: 'Bukti transfer sudah diupload. Konfirmasi pembayaran untuk lanjut ke pengiriman.',
+      actions: canApprove && (
+        <button onClick={() => statusMut.mutate({ status: 'transferred' })} disabled={statusMut.isPending}
+          className="btn-primary text-sm flex items-center gap-2 justify-center w-full">
+          <CheckCircle2 size={14} /> {statusMut.isPending ? 'Memproses…' : 'Konfirmasi Transfer'}
+        </button>
+      ),
+    },
+    // Non-sales in_progress or transferred — ready to ship
+    ready_ship: {
+      icon: <Truck size={16} className="text-indigo-500" />,
+      title: 'Tandai Dikirim',
+      desc: type === 'transferred'
+        ? 'Pembayaran terkonfirmasi. Tandai barang ketika sudah diserahkan ke ekspedisi.'
+        : 'Tandai barang ketika sudah diserahkan ke ekspedisi.',
+      actions: canShip && (
+        <button onClick={() => statusMut.mutate({ status: 'shipped' })} disabled={statusMut.isPending}
+          className="btn-primary text-sm flex items-center gap-2 justify-center w-full">
+          <Truck size={14} /> {statusMut.isPending ? 'Memproses…' : 'Tandai Shipped'}
+        </button>
+      ),
+    },
+    // Shipped — waiting to complete
+    shipped: {
+      icon: <CheckCircle2 size={16} className="text-emerald-500" />,
+      title: 'Siap Diselesaikan',
+      desc: 'Barang sudah dalam perjalanan. Tandai selesai setelah pembeli menerima barang.',
+      actions: canShip && (
+        <button onClick={() => statusMut.mutate({ status: 'completed' })} disabled={statusMut.isPending}
+          className="btn-primary text-sm flex items-center gap-2 justify-center w-full bg-emerald-600 border-emerald-600 hover:bg-emerald-700">
+          <CheckCircle2 size={14} /> {statusMut.isPending ? 'Memproses…' : 'Selesaikan'}
+        </button>
+      ),
+    },
+    // Completed
+    completed: null,
+    // Cancelled
+    cancelled: null,
+  }
+
+  let cfgKey
+  if (status === 'completed' || status === 'cancelled') {
+    cfgKey = status
+  } else if (status === 'shipped') {
+    cfgKey = 'shipped'
+  } else if (status === 'transferred') {
+    cfgKey = 'ready_ship'
+  } else if (status === 'in_progress') {
+    if (type === 'non_sales') cfgKey = 'ready_ship'
+    else if (!paymentProofUrl) cfgKey = 'sales_no_proof'
+    else cfgKey = 'sales_confirm'
+  }
+
+  const cfg = configs[cfgKey]
+  if (!cfg) return null
+
+  return (
+    <div className="card p-4 border-l-4 border-l-indigo-400">
+      <div className="flex items-center gap-2 mb-2">
+        {cfg.icon}
+        <span className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Langkah Selanjutnya</span>
+      </div>
+      <p className="text-sm font-semibold text-slate-800 mb-1">{cfg.title}</p>
+      <p className="text-xs text-slate-500 mb-3 leading-relaxed">{cfg.desc}</p>
+      {cfg.actions}
     </div>
   )
 }
@@ -75,12 +176,12 @@ function CancelModal({ onConfirm, onClose, loading }) {
         <h3 className="font-semibold text-slate-800">Batalkan Shipping</h3>
         <div>
           <label className="label">Alasan Pembatalan</label>
-          <textarea value={reason} onChange={e => setReason(e.target.value)} className="input min-h-[80px] resize-none" placeholder="Opsional..." />
+          <textarea value={reason} onChange={e => setReason(e.target.value)} className="input min-h-[80px] resize-none" placeholder="Opsional…" />
         </div>
         <div className="flex gap-2 justify-end">
           <button onClick={onClose} className="btn-secondary">Kembali</button>
           <button onClick={() => onConfirm(reason)} disabled={loading} className="btn-danger">
-            {loading ? 'Membatalkan...' : 'Ya, Batalkan'}
+            {loading ? 'Membatalkan…' : 'Ya, Batalkan'}
           </button>
         </div>
       </div>
@@ -88,7 +189,7 @@ function CancelModal({ onConfirm, onClose, loading }) {
   )
 }
 
-// ── Print: Resi sementara ─────────────────────────────────────────────────────
+// ── Print helpers ─────────────────────────────────────────────────────────────
 function printResiSementara(shipment) {
   const w = window.open('', '_blank', 'width=400,height=600')
   const items = shipment.items ?? []
@@ -133,10 +234,9 @@ function printResiSementara(shipment) {
   setTimeout(() => { w.print(); w.close() }, 400)
 }
 
-// ── Print: PDF Invoice ────────────────────────────────────────────────────────
 function printInvoice(shipment) {
   const w = window.open('', '_blank', 'width=700,height=900')
-  const items = shipment.items ?? []
+  const items    = shipment.items ?? []
   const subtotal = Number(shipment.subtotal)
   const shipping = Number(shipment.shippingCost)
   const total    = Number(shipment.total)
@@ -172,7 +272,6 @@ function printInvoice(shipment) {
       <div class="invoice-date">${fmtDate(shipment.createdAt)}</div>
     </div>
   </div>
-
   ${shipment.buyerName ? `
   <div class="section">
     <div class="section-title">Kepada</div>
@@ -186,19 +285,16 @@ function printInvoice(shipment) {
     <div class="section-title">Penerima</div>
     <div class="buyer-name">${shipment.recipientInfo}</div>
   </div>` : ''}
-
   ${shipment.expeditionName ? `
   <div class="section">
     <div class="section-title">Ekspedisi</div>
     <div style="font-weight:500">${shipment.expeditionName}</div>
   </div>` : ''}
-
   <div class="section">
     <div class="section-title">Produk</div>
     <table>
       <thead><tr>
-        <th style="width:44px"></th>
-        <th>Produk</th>
+        <th style="width:44px"></th><th>Produk</th>
         <th style="text-align:right;width:60px">Qty</th>
         <th style="text-align:right;width:120px">Harga</th>
         <th style="text-align:right;width:120px">Subtotal</th>
@@ -223,9 +319,7 @@ function printInvoice(shipment) {
       <div class="total-row grand"><span>Total</span><span>${fmtRp(total)}</span></div>
     </div>
   </div>
-
   ${shipment.notes ? `<div class="section"><div class="section-title">Catatan</div><div style="color:#555;font-size:12px">${shipment.notes}</div></div>` : ''}
-
   <div class="footer">Terima kasih atas kepercayaan Anda · Preface Internal System</div>
   </body></html>`)
   w.document.close()
@@ -235,16 +329,16 @@ function printInvoice(shipment) {
 
 // ── Main component ────────────────────────────────────────────────────────────
 export default function ManualShipmentDetail() {
-  const { id }     = useParams()
-  const navigate   = useNavigate()
-  const qc         = useQueryClient()
+  const { id }   = useParams()
+  const navigate = useNavigate()
+  const qc       = useQueryClient()
   const { isSuperAdmin, hasPermission } = useAuth()
 
-  const [showCancel, setShowCancel]     = useState(false)
-  const [showDelete, setShowDelete]     = useState(false)
-  const [resiNumber, setResiNumber]     = useState('')
-  const [resiFile, setResiFile]         = useState(null)
-  const proofRef = useRef(null)
+  const [showCancel, setShowCancel] = useState(false)
+  const [showDelete, setShowDelete] = useState(false)
+  const [resiNumber, setResiNumber] = useState('')
+  const [resiFile,   setResiFile]   = useState(null)
+  const proofRef    = useRef(null)
   const resiFileRef = useRef(null)
 
   const perm = (k) => isSuperAdmin || hasPermission(k) || hasPermission('shipping.manual.manage')
@@ -263,41 +357,35 @@ export default function ManualShipmentDetail() {
     onSuccess: () => { invalidate(); toast.success('Status diperbarui') },
     onError: (err) => toast.error(err?.response?.data?.message ?? 'Gagal update status'),
   })
-
   const proofMut = useMutation({
     mutationFn: (file) => manualShipmentsApi.uploadPaymentProof(id, file),
     onSuccess: () => { invalidate(); toast.success('Bukti transfer diupload') },
     onError: (err) => toast.error(err?.response?.data?.message ?? 'Gagal upload'),
   })
-
   const resiMut = useMutation({
     mutationFn: (data) => manualShipmentsApi.uploadCourierResi(id, data),
     onSuccess: () => { invalidate(); toast.success('Resi kurir disimpan'); setResiNumber(''); setResiFile(null) },
     onError: (err) => toast.error(err?.response?.data?.message ?? 'Gagal simpan resi'),
   })
-
   const deleteMut = useMutation({
     mutationFn: () => manualShipmentsApi.destroy(id),
     onSuccess: () => { toast.success('Shipping dihapus'); navigate('/shipping-manual') },
     onError: () => toast.error('Gagal menghapus'),
   })
 
-  if (isLoading) return <div className="flex items-center justify-center h-64 text-slate-400">Memuat...</div>
+  if (isLoading) return <div className="flex items-center justify-center h-64 text-slate-400">Memuat…</div>
   if (!s) return <div className="flex items-center justify-center h-64 text-slate-400">Data tidak ditemukan</div>
 
   const cfg       = STATUS_CONFIG[s.status] ?? {}
   const canEdit   = s.status === 'in_progress' && perm('shipping.manual.edit')
   const canCancel = !['completed', 'cancelled'].includes(s.status) && perm('shipping.manual.cancel')
-  const canDelete = perm('shipping.manual.delete')
-  const canApprove = s.status === 'in_progress' && s.type === 'sales' && s.paymentProofUrl && perm('shipping.manual.approve_payment')
-  const canShip   = ['in_progress', 'transferred'].includes(s.status) && perm('shipping.manual.manage')
-  const canComplete = s.status === 'shipped' && perm('shipping.manual.manage')
-  const canUploadResi = !['cancelled'].includes(s.status) && perm('shipping.manual.upload_resi')
+  const canDelete = ['in_progress', 'cancelled'].includes(s.status) && perm('shipping.manual.delete')
+  const canUploadResi = !['completed', 'cancelled'].includes(s.status) && perm('shipping.manual.upload_resi')
 
   return (
-    <div className="px-4 md:px-6 py-6 max-w-6xl mx-auto space-y-6">
+    <div className="px-4 md:px-6 py-6 max-w-6xl mx-auto">
       {/* Back + title */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 mb-4">
         <button onClick={() => navigate('/shipping-manual')} className="btn-ghost p-2 rounded-lg">
           <ArrowLeft size={18} />
         </button>
@@ -314,41 +402,41 @@ export default function ManualShipmentDetail() {
         </div>
       </div>
 
-      {/* Timeline */}
-      {s.status !== 'cancelled' && (
-        <div className="card p-5">
+      {/* Timeline (full width) */}
+      {s.status !== 'cancelled' ? (
+        <div className="card p-5 mb-5">
           <StatusTimeline status={s.status} type={s.type} />
         </div>
-      )}
-      {s.status === 'cancelled' && (
-        <div className="card p-4 border-l-4 border-red-400 bg-red-50">
+      ) : (
+        <div className="card p-4 border-l-4 border-red-400 bg-red-50 mb-5">
           <div className="flex items-center gap-2 text-red-700 font-semibold"><XCircle size={16}/> Pengiriman Dibatalkan</div>
           {s.cancelledReason && <p className="text-sm text-red-600 mt-1">{s.cancelledReason}</p>}
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left: main info */}
-        <div className="lg:col-span-2 space-y-5">
-          {/* Buyer info */}
+      {/* 2-column layout */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        {/* Left: main info (2/3) */}
+        <div className="lg:col-span-2 space-y-4">
+          {/* Buyer / recipient info */}
           <div className="card p-5 space-y-3">
             <h2 className="font-semibold text-slate-700 text-sm">{s.type === 'sales' ? 'Info Pembeli' : 'Info Penerima'}</h2>
             {s.type === 'sales' ? (
               <div className="grid grid-cols-2 gap-3 text-sm">
-                <div><span className="text-slate-400">Nama</span><div className="font-medium text-slate-800 mt-0.5">{s.buyerName || '—'}</div></div>
-                <div><span className="text-slate-400">No. HP</span><div className="font-medium text-slate-800 mt-0.5">{s.buyerPhone || '—'}</div></div>
-                <div className="col-span-2"><span className="text-slate-400">Alamat</span><div className="font-medium text-slate-800 mt-0.5 leading-relaxed">{s.buyerAddress || '—'}</div></div>
+                <div><span className="text-slate-400 text-xs">Nama</span><div className="font-medium text-slate-800 mt-0.5">{s.buyerName || '—'}</div></div>
+                <div><span className="text-slate-400 text-xs">No. HP</span><div className="font-medium text-slate-800 mt-0.5">{s.buyerPhone || '—'}</div></div>
+                <div className="col-span-2"><span className="text-slate-400 text-xs">Alamat</span><div className="font-medium text-slate-800 mt-0.5 leading-relaxed">{s.buyerAddress || '—'}</div></div>
               </div>
             ) : (
               <div className="text-sm">
-                <span className="text-slate-400">Penerima / Keterangan</span>
+                <span className="text-slate-400 text-xs">Penerima / Keterangan</span>
                 <div className="font-medium text-slate-800 mt-0.5">{s.recipientInfo || '—'}</div>
               </div>
             )}
             <div className="flex gap-6 pt-2 border-t text-sm">
-              <div><span className="text-slate-400">Ekspedisi</span><div className="font-medium text-slate-800 mt-0.5">{s.expeditionName || '—'}</div></div>
+              <div><span className="text-slate-400 text-xs">Ekspedisi</span><div className="font-medium text-slate-800 mt-0.5">{s.expeditionName || '—'}</div></div>
               {s.courierResiNumber && (
-                <div><span className="text-slate-400">No. Resi Kurir</span><div className="font-mono font-semibold text-slate-800 mt-0.5">{s.courierResiNumber}</div></div>
+                <div><span className="text-slate-400 text-xs">No. Resi Kurir</span><div className="font-mono font-semibold text-slate-800 mt-0.5">{s.courierResiNumber}</div></div>
               )}
             </div>
             {s.notes && <div className="text-sm text-slate-500 bg-slate-50 rounded-lg p-3 italic">"{s.notes}"</div>}
@@ -370,13 +458,10 @@ export default function ManualShipmentDetail() {
                     {item.sku && <div className="text-xs text-slate-400 font-mono">SKU: {item.sku}</div>}
                     <div className="text-xs text-slate-500 mt-1">{item.quantity} × {fmtRp(item.unitPrice)}</div>
                   </div>
-                  <div className="text-sm font-bold text-slate-700 flex-shrink-0">
-                    {fmtRp(Number(item.subtotal))}
-                  </div>
+                  <div className="text-sm font-bold text-slate-700 flex-shrink-0">{fmtRp(Number(item.subtotal))}</div>
                 </div>
               ))}
             </div>
-            {/* Totals */}
             <div className="border-t pt-3 space-y-1.5 text-sm">
               <div className="flex justify-between text-slate-600"><span>Subtotal</span><span>{fmtRp(s.subtotal)}</span></div>
               <div className="flex justify-between text-slate-600"><span>Ongkos Kirim</span><span>{fmtRp(s.shippingCost)}</span></div>
@@ -385,59 +470,47 @@ export default function ManualShipmentDetail() {
           </div>
         </div>
 
-        {/* Right: actions sidebar */}
-        <div className="space-y-4">
-          {/* Print actions */}
-          <div className="card p-4 space-y-2">
-            <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Cetak</h3>
-            <button onClick={() => printResiSementara(s)} className="w-full btn-secondary flex items-center gap-2 justify-center text-sm">
-              <Printer size={15} /> Resi Sementara
-            </button>
-            <button onClick={() => printInvoice(s)} className="w-full btn-secondary flex items-center gap-2 justify-center text-sm">
-              <FileText size={15} /> PDF Invoice
-            </button>
-          </div>
+        {/* Right: action panel (1/3, sticky) */}
+        <div className="space-y-4 lg:sticky lg:top-6 lg:self-start">
+          {/* Guided next action */}
+          {s.status !== 'cancelled' && s.status !== 'completed' && (
+            <NextActionCard
+              s={s} perm={perm}
+              proofRef={proofRef} resiFileRef={resiFileRef}
+              resiNumber={resiNumber} setResiNumber={setResiNumber}
+              resiFile={resiFile} setResiFile={setResiFile}
+              statusMut={statusMut} proofMut={proofMut} resiMut={resiMut}
+            />
+          )}
 
-          {/* Payment proof — sales only */}
+          {/* Payment proof (sales — view + re-upload) */}
           {s.type === 'sales' && (
             <div className="card p-4 space-y-3">
               <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Bukti Transfer</h3>
               {s.paymentProofUrl ? (
-                <div className="space-y-2">
-                  <a href={s.paymentProofUrl} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-sm text-blue-600 hover:underline">
+                <div className="space-y-1">
+                  <a href={s.paymentProofUrl} target="_blank" rel="noreferrer"
+                    className="flex items-center gap-2 text-sm text-blue-600 hover:underline">
                     <ImageIcon size={14} /> Lihat Bukti <ExternalLink size={11} />
                   </a>
                   {s.paymentProofVerifiedBy && (
-                    <div className="text-xs text-green-600 flex items-center gap-1">
-                      <CheckCircle2 size={12} /> Dikonfirmasi oleh {s.paymentVerifier?.name} · {fmtDateTime(s.paymentProofVerifiedAt)}
+                    <div className="text-xs text-emerald-600 flex items-center gap-1">
+                      <CheckCircle2 size={12} /> Dikonfirmasi {s.paymentVerifier?.name} · {fmtDateTime(s.paymentProofVerifiedAt)}
                     </div>
                   )}
                 </div>
               ) : (
                 <p className="text-xs text-slate-400">Belum ada bukti transfer</p>
               )}
-
-              {['in_progress', 'transferred'].includes(s.status) && perm('shipping.manual.approve_payment') && (
+              {['in_progress', 'transferred'].includes(s.status) && perm('shipping.manual.approve_payment') && s.paymentProofUrl && (
                 <>
-                  <input type="file" ref={proofRef} accept="image/*" className="hidden" onChange={e => e.target.files[0] && proofMut.mutate(e.target.files[0])} />
-                  <button
-                    onClick={() => proofRef.current?.click()}
-                    disabled={proofMut.isPending}
-                    className="w-full btn-secondary flex items-center gap-2 justify-center text-sm"
-                  >
-                    <Upload size={14} /> {proofMut.isPending ? 'Uploading...' : 'Upload Bukti TF'}
+                  <input type="file" ref={proofRef} accept="image/*" className="hidden"
+                    onChange={e => e.target.files[0] && proofMut.mutate(e.target.files[0])} />
+                  <button onClick={() => proofRef.current?.click()} disabled={proofMut.isPending}
+                    className="w-full btn-secondary flex items-center gap-2 justify-center text-sm">
+                    <Upload size={14} /> Ganti Bukti TF
                   </button>
                 </>
-              )}
-
-              {canApprove && (
-                <button
-                  onClick={() => statusMut.mutate({ status: 'transferred' })}
-                  disabled={statusMut.isPending}
-                  className="w-full btn-primary flex items-center gap-2 justify-center text-sm"
-                >
-                  <CheckCircle2 size={14} /> Konfirmasi Transfer
-                </button>
               )}
             </div>
           )}
@@ -447,51 +520,37 @@ export default function ManualShipmentDetail() {
             <div className="card p-4 space-y-3">
               <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Resi Kurir</h3>
               {s.courierResiImageUrl && (
-                <a href={s.courierResiImageUrl} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-sm text-blue-600 hover:underline">
+                <a href={s.courierResiImageUrl} target="_blank" rel="noreferrer"
+                  className="flex items-center gap-2 text-sm text-blue-600 hover:underline">
                   <ImageIcon size={14} /> Lihat Foto Resi <ExternalLink size={11} />
                 </a>
               )}
-              <input
-                value={resiNumber}
-                onChange={e => setResiNumber(e.target.value)}
-                placeholder="Nomor resi kurir..."
-                className="input text-sm"
-              />
-              <input type="file" ref={resiFileRef} accept="image/*" className="hidden" onChange={e => setResiFile(e.target.files[0] || null)} />
+              <input value={resiNumber} onChange={e => setResiNumber(e.target.value)}
+                placeholder="Nomor resi kurir…" className="input text-sm" />
+              <input type="file" ref={resiFileRef} accept="image/*" className="hidden"
+                onChange={e => setResiFile(e.target.files[0] || null)} />
               <button onClick={() => resiFileRef.current?.click()} className="w-full btn-secondary text-sm flex items-center gap-2 justify-center">
                 <Upload size={14} /> {resiFile ? resiFile.name : 'Upload Foto Resi'}
               </button>
               <button
                 onClick={() => resiMut.mutate({ courierResiNumber: resiNumber, file: resiFile })}
                 disabled={resiMut.isPending || (!resiNumber.trim() && !resiFile)}
-                className="w-full btn-primary text-sm"
-              >
-                {resiMut.isPending ? 'Menyimpan...' : 'Simpan Resi'}
+                className="w-full btn-primary text-sm">
+                {resiMut.isPending ? 'Menyimpan…' : 'Simpan Resi'}
               </button>
             </div>
           )}
 
-          {/* Status actions */}
-          {(canShip || canComplete) && (
-            <div className="card p-4 space-y-2">
-              <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Update Status</h3>
-              {canShip && s.type === 'non_sales' && s.status === 'in_progress' && (
-                <button onClick={() => statusMut.mutate({ status: 'shipped' })} disabled={statusMut.isPending} className="w-full btn-primary flex items-center gap-2 justify-center text-sm">
-                  <Truck size={14} /> Tandai Shipped
-                </button>
-              )}
-              {canShip && s.status === 'transferred' && (
-                <button onClick={() => statusMut.mutate({ status: 'shipped' })} disabled={statusMut.isPending} className="w-full btn-primary flex items-center gap-2 justify-center text-sm">
-                  <Truck size={14} /> Tandai Shipped
-                </button>
-              )}
-              {canComplete && (
-                <button onClick={() => statusMut.mutate({ status: 'completed' })} disabled={statusMut.isPending} className="w-full btn-primary flex items-center gap-2 justify-center text-sm">
-                  <CheckCircle2 size={14} /> Selesaikan
-                </button>
-              )}
-            </div>
-          )}
+          {/* Print */}
+          <div className="card p-4 space-y-2">
+            <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Cetak</h3>
+            <button onClick={() => printResiSementara(s)} className="w-full btn-secondary flex items-center gap-2 justify-center text-sm">
+              <Printer size={15} /> Resi Sementara
+            </button>
+            <button onClick={() => printInvoice(s)} className="w-full btn-secondary flex items-center gap-2 justify-center text-sm">
+              <FileText size={15} /> PDF Invoice
+            </button>
+          </div>
 
           {/* Edit / Cancel / Delete */}
           {(canEdit || canCancel || canDelete) && (
@@ -522,10 +581,7 @@ export default function ManualShipmentDetail() {
         <CancelModal
           loading={statusMut.isPending}
           onClose={() => setShowCancel(false)}
-          onConfirm={(reason) => {
-            statusMut.mutate({ status: 'cancelled', cancelledReason: reason })
-            setShowCancel(false)
-          }}
+          onConfirm={(reason) => { statusMut.mutate({ status: 'cancelled', cancelledReason: reason }); setShowCancel(false) }}
         />
       )}
 
@@ -538,7 +594,7 @@ export default function ManualShipmentDetail() {
             <div className="flex gap-2 justify-end">
               <button onClick={() => setShowDelete(false)} className="btn-secondary">Batal</button>
               <button onClick={() => deleteMut.mutate()} disabled={deleteMut.isPending} className="btn-danger">
-                {deleteMut.isPending ? 'Menghapus...' : 'Ya, Hapus'}
+                {deleteMut.isPending ? 'Menghapus…' : 'Ya, Hapus'}
               </button>
             </div>
           </div>

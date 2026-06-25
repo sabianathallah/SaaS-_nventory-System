@@ -53,6 +53,23 @@ async function attachPermissions(req) {
 }
 
 class RequestController {
+  // GET /requests/status-counts
+  static async statusCounts(req, res, next) {
+    try {
+      await attachPermissions(req);
+      const where = { ...companyFilter(req) };
+      if (!canViewAll(req)) where.requestorId = req.user.id;
+
+      const statuses = ['PENDING', 'APPROVED', 'SENT', 'DONE', 'REJECTED'];
+      const counts = await Promise.all(
+        statuses.map(s => Request.count({ where: { ...where, status: s } }))
+      );
+      const result = Object.fromEntries(statuses.map((s, i) => [s, counts[i]]));
+      result.ALL = counts.reduce((a, b) => a + b, 0);
+      res.json(result);
+    } catch (err) { next(err); }
+  }
+
   // GET /requests
   static async list(req, res, next) {
     try {
