@@ -48,7 +48,10 @@ exports.list = async (req, res, next) => {
     const { page = 1, limit = 15, sjMissing, selisihFilter } = req.query;
     const offset = (Number(page) - 1) * Number(limit);
     const where = { ...companyFilter(req) };
-    if (sjMissing === 'true') where.sjNumber = null;
+    if (sjMissing === 'true') {
+      where.sjNumber = null;
+      where.sjPhotos = null;
+    }
     if (selisihFilter === 'unclear') where.selisihStatus = 'unclear';
     const { rows, count } = await VendorDelivery.findAndCountAll({
       where,
