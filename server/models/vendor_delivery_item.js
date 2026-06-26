@@ -14,6 +14,8 @@ module.exports = (sequelize, DataTypes) => {
     productSkuId: { type: DataTypes.INTEGER, allowNull: true },
     qtySJ:        { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
     qtyActual:    { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
+    qtyReady:     { type: DataTypes.INTEGER, allowNull: true },
+    qtyReject:    { type: DataTypes.INTEGER, allowNull: true },
     notes:        { type: DataTypes.TEXT, allowNull: true },
   }, { sequelize, modelName: 'VendorDeliveryItem' });
   return VendorDeliveryItem;
