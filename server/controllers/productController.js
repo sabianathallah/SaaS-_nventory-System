@@ -17,8 +17,8 @@ class ProductController {
                 ArticleId:  'exact',
             });
 
-            if (req.query.name) {
-                const term = req.query.name;
+            if (req.query.name || req.query.search) {
+                const term = req.query.name || req.query.search;
                 const escapedPattern = sequelize.escape(`%${term}%`);
                 filter[Op.or] = [
                     { name: { [Op.iLike]: `%${term}%` } },
