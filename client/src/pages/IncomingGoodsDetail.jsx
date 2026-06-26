@@ -7,7 +7,7 @@ import SearchableSelect from '../components/SearchableSelect'
 import toast from 'react-hot-toast'
 import {
   ArrowLeft, Save, Plus, Trash2, Video,
-  AlertTriangle, Check, Upload, X, Printer, ChevronDown, TriangleAlert,
+  AlertTriangle, AlertCircle, Check, Upload, X, Printer, ChevronDown, TriangleAlert,
 } from 'lucide-react'
 import logoPreface from '../assets/logo-preface.jpeg'
 
@@ -523,6 +523,19 @@ export default function IncomingGoodsDetail() {
           )}
         </div>
       </div>
+
+      {/* ── Banner SJ belum dilampirkan ─────────────────────── */}
+      {!isNew && delivery && !delivery.sjNumber && !(Array.isArray(delivery.sjPhotos) ? delivery.sjPhotos.length > 0 : !!delivery.sjPhotos) && (
+        <div className="flex items-start gap-3 px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-800">
+          <AlertCircle size={16} className="flex-shrink-0 mt-0.5 text-amber-500" />
+          <div>
+            <p className="font-semibold">Surat Jalan Belum Dilampirkan</p>
+            <p className="text-xs text-amber-700 mt-0.5">
+              Lengkapi no. SJ atau foto surat jalan di bawah, lalu klik <strong>Simpan Perubahan</strong>.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* ── Banner selisih status ────────────────────────────── */}
       {!isNew && delivery && delivery.selisihStatus === 'unclear' && (
