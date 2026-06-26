@@ -7,7 +7,7 @@ import { useAuth } from '../context/AuthContext'
 import PageHeader from '../components/PageHeader'
 import SearchableSelect from '../components/SearchableSelect'
 import { Table, Pagination } from '../components/Table'
-import { Plus, Eye, Video, AlertCircle, TriangleAlert, BarChart2, List, Package, Truck } from 'lucide-react'
+import { Plus, Eye, Video, TriangleAlert, BarChart2, List, Package, Truck } from 'lucide-react'
 
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'
 const fmtShortDate = (d) => {
@@ -20,14 +20,6 @@ function defaultFrom() {
   const d = new Date()
   d.setDate(d.getDate() - 29)
   return d.toISOString().slice(0, 10)
-}
-
-const sjStatus = (r) => {
-  const hasNumber = !!r.sjNumber
-  const hasPhotos = Array.isArray(r.sjPhotos) ? r.sjPhotos.length > 0 : !!r.sjPhotos
-  if (hasNumber && hasPhotos) return 'complete'
-  if (hasNumber || hasPhotos) return 'partial'
-  return 'missing'
 }
 
 // ── Analytics panel ─────────────────────────────────────────────────────────
@@ -252,7 +244,6 @@ export default function IncomingGoods() {
   const view          = searchParams.get('view')    || 'list'
   const page          = Number(searchParams.get('page')   || '1')
   const limit         = Number(searchParams.get('limit')  || '15')
-  const sjFilter      = searchParams.get('sj')      || 'all'
   const selisihFilter = searchParams.get('selisih') || 'all'
 
   const setView = (v) => setSearchParams(prev => {
@@ -267,17 +258,15 @@ export default function IncomingGoods() {
   const setPage = (p) => setSearchParams(prev => { prev.set('page', String(p)); return prev }, { replace: true })
 
   const applyFilter = (type, value) => setSearchParams(prev => {
-    prev.set('sj',      type === 'sj'      ? value : 'all')
     prev.set('selisih', type === 'selisih' ? value : 'all')
     prev.set('page', '1')
     return prev
   }, { replace: true })
 
   const { data, isLoading } = useQuery({
-    queryKey: ['vendor-deliveries', { page, limit, sjFilter, selisihFilter }],
+    queryKey: ['vendor-deliveries', { page, limit, selisihFilter }],
     queryFn:  () => vendorDeliveriesApi.list({
       page, limit,
-      ...(sjFilter === 'missing' ? { sjMissing: true } : {}),
       ...(selisihFilter === 'unclear' ? { selisihFilter: 'unclear' } : {}),
     }),
     enabled: view === 'list',
@@ -298,36 +287,17 @@ export default function IncomingGoods() {
     },
     {
       key: 'sj', label: 'Surat Jalan', width: 200,
-      render: r => {
-        const status = sjStatus(r)
-        if (status === 'complete') return (
-          <div className="flex flex-col gap-0.5">
-            <span className="text-xs font-mono text-slate-600">{r.sjNumber}</span>
-            {Array.isArray(r.sjPhotos) && r.sjPhotos.length > 0 && (
-              <span className="text-[10px] text-slate-400">{r.sjPhotos.length} foto</span>
-            )}
-          </div>
-        )
-        if (status === 'partial') return (
-          <div className="flex flex-col gap-0.5">
-            {r.sjNumber
-              ? <span className="text-xs font-mono text-slate-600">{r.sjNumber}</span>
-              : <span className="inline-flex items-center gap-1 text-[10px] font-medium text-amber-600 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-full w-fit">
-                  <AlertCircle size={9} /> No. SJ belum diisi
-                </span>
-            }
-            {(!Array.isArray(r.sjPhotos) || r.sjPhotos.length === 0)
-              ? <span className="text-[10px] text-slate-400">Foto belum diunggah</span>
-              : <span className="text-[10px] text-slate-400">{r.sjPhotos.length} foto</span>
-            }
-          </div>
-        )
-        return (
-          <span className="inline-flex items-center gap-1 text-[10px] font-medium text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
-            <AlertCircle size={10} /> SJ Belum Dilampirkan
-          </span>
-        )
-      },
+      render: r => (
+        <div className="flex flex-col gap-0.5">
+          {r.sjNumber
+            ? <span className="text-xs font-mono text-slate-600">{r.sjNumber}</span>
+            : <span className="text-xs text-slate-300">—</span>
+          }
+          {Array.isArray(r.sjPhotos) && r.sjPhotos.length > 0 && (
+            <span className="text-[10px] text-slate-400">{r.sjPhotos.length} foto</span>
+          )}
+        </div>
+      ),
     },
     {
       key: 'items', label: 'Item', width: 100,
@@ -368,9 +338,8 @@ export default function IncomingGoods() {
     },
   ]
 
-  const missingCount  = (data?.data ?? []).filter(r => sjStatus(r) === 'missing').length
   const unclearCount  = (data?.data ?? []).filter(r => r.selisihStatus === 'unclear').length
-  const activeFilter  = selisihFilter === 'unclear' ? 'selisih' : sjFilter !== 'all' ? 'sj' : 'all'
+  const activeFilter  = selisihFilter === 'unclear' ? 'selisih' : 'all'
 
   return (
     <div className="px-6 py-6">
@@ -415,7 +384,7 @@ export default function IncomingGoods() {
           {/* Filter subtabs */}
           <div className="flex items-center gap-1 mb-4">
             <button
-              onClick={() => applyFilter('sj', 'all')}
+              onClick={() => applyFilter('selisih', 'all')}
               className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
                 activeFilter === 'all'
                   ? 'bg-slate-800 text-white'
@@ -423,21 +392,6 @@ export default function IncomingGoods() {
               }`}
             >
               Semua
-            </button>
-            <button
-              onClick={() => applyFilter('sj', 'missing')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
-                activeFilter === 'sj'
-                  ? 'bg-amber-500 text-white'
-                  : 'text-amber-600 hover:bg-amber-50'
-              }`}
-            >
-              <AlertCircle size={11} /> SJ Belum Dilampirkan
-              {activeFilter === 'all' && missingCount > 0 && (
-                <span className="bg-amber-100 text-amber-700 text-[10px] font-bold px-1.5 py-0.5 rounded-full">
-                  {missingCount}
-                </span>
-              )}
             </button>
             <button
               onClick={() => applyFilter('selisih', 'unclear')}
