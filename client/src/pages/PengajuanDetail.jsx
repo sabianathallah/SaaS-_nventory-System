@@ -515,7 +515,8 @@ export default function PengajuanDetail() {
     mutationFn: (data) => requestApi.approve(id, data),
     onSuccess: (updated) => {
       invalidate()
-      const sType = resolveShipmentType(req?.requestType)
+      // Pakai requestType dari response server (lebih reliable dari component state)
+      const sType = resolveShipmentType(updated?.requestType ?? req?.requestType)
       if (sType === 'stock_out') {
         toast.success('Jatah internal disetujui! Stok berhasil dikurangi.')
       } else if ((sType === 'sales' || sType === 'non_sales') && updated?.manualShipmentId) {
@@ -835,7 +836,7 @@ export default function PengajuanDetail() {
             req={req}
             canProcess={canProcess}
             navigate={navigate}
-            resolvedShipmentType={resolveShipmentType(req?.requestType)}
+            resolvedShipmentType={resolveShipmentType(req?.requestType ?? null)}
             onApprove={handleApprove}
             onReject={() => setShowReject(true)}
             onSent={() => setShowSent(true)}
