@@ -9,31 +9,35 @@ const PRODUCT_NAME_MAP = {
   'yamato flame white jersey':  'Yamato Flame White Jersey',
   'jersey japan blue':          'Yamato Flame Blue Jersey',
   'jersey japan white':         'Yamato Flame White Jersey',
-  'ronaldo tee':                'Ronaldo Tee',
+  'ronaldo tee':                'Ronaldo tee',
   'messi black tee':            'Messi Black Tee',
   'zidane white tee':           'Zidane White Tee',
   'three lions barrel denim':   'Three Lions Barrel Denim',
   'three lion barrel denim':    'Three Lions Barrel Denim',
   'hoodie spain':               'La Roja Sprayed Hoodie',
   'hoodie england':             'Three Lions Sprayed Hoodie',
-  'preface soccer ball':        'PREFACE Soccer Ball',
+  'preface soccer ball':        'WC PREFACE BALL',
+  'la roja sprayed hoodie':     'La Roja Sprayed Hoodie',
+  'three lions sprayed hoodie': 'Three Lions Sprayed Hoodie',
+  'wc preface ball':            'WC PREFACE BALL',
   'espana baby polo':           'Espana Baby Polo',
 };
 
 // ── Vendor per DB product name ───────────────────────────────────────────────
+// Key = vendor label in seeder, will be resolved/created in DB
 const PRODUCT_VENDOR_MAP = {
   'Joga Zip Hoodie':            'Deni',
   'Joga Tracktop':              'Deni',
   'Joga Trackpants':            'Deni',
   'Yamato Flame Blue Jersey':   'Nots',
   'Yamato Flame White Jersey':  'Nots',
-  'Ronaldo Tee':                'Ugey',
-  'Messi Black Tee':            'Ugey',
-  'Zidane White Tee':           'Ugey',
+  'Ronaldo tee':                'Ugey Co',
+  'Messi Black Tee':            'Ugey Co',
+  'Zidane White Tee':           'Ugey Co',
   'Three Lions Barrel Denim':   'Iwan',
-  'La Roja Sprayed Hoodie':     'Ugey',
-  'Three Lions Sprayed Hoodie': 'Ugey',
-  'PREFACE Soccer Ball':        'Home Industry Bola',
+  'La Roja Sprayed Hoodie':     'Ugey Co',
+  'Three Lions Sprayed Hoodie': 'Ugey Co',
+  'WC PREFACE BALL':            'Home Industry Bola',
   'Espana Baby Polo':           'Deni',
 };
 
@@ -58,10 +62,10 @@ const RAW_ROWS = [
   { date: '2026-06-16', product: 'Yamato Flame White Jersey',  size: 'M',  qty: 1, ready: 0,    reject: 1    },
   { date: '2026-06-16', product: 'Yamato Flame White Jersey',  size: 'L',  qty: 1, ready: 0,    reject: 1    },
   { date: '2026-06-16', product: 'Yamato Flame White Jersey',  size: 'XL', qty: 1, ready: 0,    reject: 1    },
-  { date: '2026-06-16', product: 'Ronaldo Tee',                size: 'S',  qty: 3, ready: 3,    reject: 0    },
-  { date: '2026-06-16', product: 'Ronaldo Tee',                size: 'M',  qty: 3, ready: 2,    reject: 1    },
-  { date: '2026-06-16', product: 'Ronaldo Tee',                size: 'L',  qty: 2, ready: 2,    reject: 0    },
-  { date: '2026-06-16', product: 'Ronaldo Tee',                size: 'XL', qty: 1, ready: 1,    reject: 0    },
+  { date: '2026-06-16', product: 'Ronaldo tee',                size: 'S',  qty: 3, ready: 3,    reject: 0    },
+  { date: '2026-06-16', product: 'Ronaldo tee',                size: 'M',  qty: 3, ready: 2,    reject: 1    },
+  { date: '2026-06-16', product: 'Ronaldo tee',                size: 'L',  qty: 2, ready: 2,    reject: 0    },
+  { date: '2026-06-16', product: 'Ronaldo tee',                size: 'XL', qty: 1, ready: 1,    reject: 0    },
   { date: '2026-06-16', product: 'Messi Black Tee',            size: 'S',  qty: 2, ready: 2,    reject: 0    },
   { date: '2026-06-16', product: 'Messi Black Tee',            size: 'M',  qty: 4, ready: 4,    reject: 0    },
   { date: '2026-06-16', product: 'Messi Black Tee',            size: 'L',  qty: 3, ready: 1,    reject: 1    },
@@ -90,7 +94,7 @@ const RAW_ROWS = [
   // 19 JUNI
   { date: '2026-06-19', product: 'Zidane White Tee',          size: 'S',  qty: 1, ready: 1,    reject: 0    },
   { date: '2026-06-19', product: 'Zidane White Tee',          size: 'L',  qty: 1, ready: 1,    reject: 0    },
-  { date: '2026-06-19', product: 'Ronaldo Tee',               size: 'S',  qty: 2, ready: 2,    reject: 0    },
+  { date: '2026-06-19', product: 'Ronaldo tee',               size: 'S',  qty: 2, ready: 2,    reject: 0    },
   { date: '2026-06-19', product: 'Yamato Flame Blue Jersey',  size: 'S',  qty: 2, ready: null, reject: null },
   { date: '2026-06-19', product: 'Yamato Flame Blue Jersey',  size: 'M',  qty: 1, ready: null, reject: null },
   { date: '2026-06-19', product: 'Yamato Flame Blue Jersey',  size: 'L',  qty: 1, ready: null, reject: null },
@@ -103,7 +107,7 @@ const RAW_ROWS = [
   { date: '2026-06-22', product: 'Joga Zip Hoodie',          size: 'XL', qty: 1,  ready: 1,    reject: 0    },
   { date: '2026-06-22', product: 'Joga Tracktop',            size: 'L',  qty: 2,  ready: 0,    reject: 2    },
   { date: '2026-06-22', product: 'Joga Trackpants',          size: 'M',  qty: 3,  ready: 0,    reject: 3    },
-  { date: '2026-06-22', product: 'PREFACE Soccer Ball',      size: null, qty: 30, ready: 25,   reject: 5    },
+  { date: '2026-06-22', product: 'WC PREFACE BALL',          size: null, qty: 30, ready: 25,   reject: 5    },
   { date: '2026-06-22', product: 'Yamato Flame Blue Jersey', size: 'M',  qty: 2,  ready: null, reject: null },
   { date: '2026-06-22', product: 'Yamato Flame White Jersey',size: 'S',  qty: 1,  ready: null, reject: null },
   { date: '2026-06-22', product: 'Yamato Flame White Jersey',size: 'M',  qty: 2,  ready: null, reject: null },
@@ -138,35 +142,51 @@ module.exports = {
     const db  = queryInterface.sequelize;
     const sel = async (sql) => { const [rows] = await db.query(sql); return rows; };
 
-    // ── 1. Resolve company via user Sabian Athallah ──────────────────────────
+    // ── 1. Resolve company (Preface Wearhouse) ───────────────────────────────
+    const [companyRow] = await sel(`SELECT id FROM "Companies" WHERE slug = 'preface-wearhouse' LIMIT 1`);
+    if (!companyRow) throw new Error('Company preface-wearhouse tidak ditemukan');
+    const cid = companyRow.id;
+
     const [userRow] = await sel(`
-      SELECT id, "companyId" FROM "Users"
+      SELECT id FROM "Users"
       WHERE LOWER(name) LIKE '%sabian%' AND LOWER(name) LIKE '%athallah%'
       LIMIT 1
     `);
     if (!userRow) throw new Error('User Sabian Athallah tidak ditemukan');
     const userId = userRow.id;
-    const cid    = userRow.companyId;
-    console.log(`✓ User: id=${userId}, companyId=${cid}`);
+    console.log(`✓ Company: id=${cid} | User: id=${userId}`);
 
-    // ── 2. Resolve vendors ───────────────────────────────────────────────────
-    const vendorNames = ['Deni', 'Nots', 'Ugey', 'Iwan', 'Home Industry Bola'];
-    const vendorRows  = await sel(`
+    // ── 2. Resolve vendors (auto-create jika belum ada) ──────────────────────
+    const vendorNames = [...new Set(Object.values(PRODUCT_VENDOR_MAP))];
+    let vendorRows = await sel(`
       SELECT id, name FROM "Vendors"
       WHERE "companyId" = ${cid}
-        AND name IN (${vendorNames.map(n => `'${n}'`).join(', ')})
+        AND name IN (${vendorNames.map(n => `'${n.replace(/'/g,"''")}'`).join(', ')})
     `);
     const vendorMap = Object.fromEntries(vendorRows.map(v => [v.name, v.id]));
-    const missingVendors = vendorNames.filter(n => !vendorMap[n]);
-    if (missingVendors.length) throw new Error(`Vendor tidak ditemukan: ${missingVendors.join(', ')}`);
+
+    // Auto-create vendor yang belum ada
+    for (const vName of vendorNames) {
+      if (!vendorMap[vName]) {
+        const code = 'VND-' + vName.replace(/\s+/g, '').substring(0, 6).toUpperCase() + '-' + cid;
+        await db.query(`
+          INSERT INTO "Vendors" (name, "vendorCode", "companyId", "createdAt", "updatedAt")
+          VALUES ('${vName.replace(/'/g,"''")}', '${code}', ${cid}, NOW(), NOW())
+          ON CONFLICT ("vendorCode") DO NOTHING
+        `);
+        const [newV] = await sel(`SELECT id FROM "Vendors" WHERE name = '${vName.replace(/'/g,"''")}' AND "companyId" = ${cid} LIMIT 1`);
+        vendorMap[vName] = newV.id;
+        console.log(`  + Vendor baru dibuat: ${vName} (id=${newV.id})`);
+      }
+    }
     console.log('✓ Vendors:', vendorMap);
 
     // ── 3. Resolve products ──────────────────────────────────────────────────
-    const dbProductNames = [...new Set(Object.values(PRODUCT_VENDOR_MAP))];
+    const dbProductNames = [...new Set(Object.keys(PRODUCT_VENDOR_MAP))];
     const productRows    = await sel(`
-      SELECT id, name FROM "Products"
+      SELECT id, TRIM(name) AS name FROM "Products"
       WHERE "companyId" = ${cid}
-        AND name IN (${dbProductNames.map(n => `'${n.replace(/'/g, "''")}'`).join(', ')})
+        AND TRIM(name) IN (${dbProductNames.map(n => `'${n.replace(/'/g, "''")}'`).join(', ')})
     `);
     const productMap = Object.fromEntries(productRows.map(p => [p.name, p.id]));
     const missingProducts = dbProductNames.filter(n => !productMap[n]);
@@ -255,19 +275,15 @@ module.exports = {
     const db  = queryInterface.sequelize;
     const sel = async (sql) => { const [rows] = await db.query(sql); return rows; };
 
-    const [userRow] = await sel(`
-      SELECT "companyId" FROM "Users"
-      WHERE LOWER(name) LIKE '%sabian%' AND LOWER(name) LIKE '%athallah%'
-      LIMIT 1
-    `);
-    if (!userRow) return;
+    const [companyRow] = await sel(`SELECT id FROM "Companies" WHERE slug = 'preface-wearhouse' LIMIT 1`);
+    if (!companyRow) return;
 
     const dates = ['2026-06-15','2026-06-16','2026-06-17','2026-06-19',
                    '2026-06-22','2026-06-23','2026-06-24','2026-06-26'];
 
     await db.query(`
       DELETE FROM "VendorDeliveries"
-      WHERE "companyId" = ${userRow.companyId}
+      WHERE "companyId" = ${companyRow.id}
         AND "date" IN (${dates.map(d => `'${d}'`).join(', ')})
     `);
   },
