@@ -247,6 +247,7 @@ export default function IncomingGoods() {
   const page          = Number(searchParams.get('page')   || '1')
   const limit         = Number(searchParams.get('limit')  || '15')
   const sjFilter      = searchParams.get('sj')      || 'all'
+  const statusFilter  = searchParams.get('status')  || 'all'
   const selisihFilter = searchParams.get('selisih') || 'all'
 
   const setView = (v) => setSearchParams(prev => {
@@ -263,16 +264,18 @@ export default function IncomingGoods() {
   const applyFilter = (type, value) => setSearchParams(prev => {
     prev.set('sj',      type === 'sj'      ? value : 'all')
     prev.set('selisih', type === 'selisih' ? value : 'all')
+    prev.set('status',  type === 'status'  ? value : 'all')
     prev.set('page', '1')
     return prev
   }, { replace: true })
 
   const { data, isLoading } = useQuery({
-    queryKey: ['vendor-deliveries', { page, limit, sjFilter, selisihFilter }],
+    queryKey: ['vendor-deliveries', { page, limit, sjFilter, selisihFilter, statusFilter }],
     queryFn:  () => vendorDeliveriesApi.list({
       page, limit,
       ...(sjFilter === 'missing' ? { sjMissing: true } : {}),
       ...(selisihFilter === 'unclear' ? { selisihFilter: 'unclear' } : {}),
+      ...(statusFilter !== 'all' ? { status: statusFilter } : {}),
     }),
     enabled: view === 'list',
   })
@@ -289,6 +292,14 @@ export default function IncomingGoods() {
     {
       key: 'vendor', label: 'Vendor',
       render: r => <span className="font-semibold text-slate-800">{r.Vendor?.name ?? '—'}</span>,
+    },
+    {
+      key: 'status', label: 'Status', width: 90,
+      render: r => {
+        if (r.status === 'draft')  return <span className="badge-muted text-[11px]">Draft</span>
+        if (r.status === 'closed') return <span className="badge-green text-[11px]">Closed</span>
+        return <span className="badge-indigo text-[11px]">Open</span>
+      },
     },
     {
       key: 'sj', label: 'Surat Jalan', width: 200,
@@ -352,7 +363,7 @@ export default function IncomingGoods() {
 
   const missingCount  = (data?.data ?? []).filter(r => !hasSJ(r)).length
   const unclearCount  = (data?.data ?? []).filter(r => r.selisihStatus === 'unclear').length
-  const activeFilter  = selisihFilter === 'unclear' ? 'selisih' : sjFilter !== 'all' ? 'sj' : 'all'
+  const activeFilter  = selisihFilter === 'unclear' ? 'selisih' : sjFilter !== 'all' ? 'sj' : statusFilter !== 'all' ? 'status' : 'all'
 
   return (
     <div className="px-6 py-6">
@@ -405,6 +416,16 @@ export default function IncomingGoods() {
               }`}
             >
               Semua
+            </button>
+            <button
+              onClick={() => applyFilter('status', 'draft')}
+              className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+                activeFilter === 'status' && statusFilter === 'draft'
+                  ? 'bg-slate-600 text-white'
+                  : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'
+              }`}
+            >
+              Draft
             </button>
             <button
               onClick={() => applyFilter('sj', 'missing')}

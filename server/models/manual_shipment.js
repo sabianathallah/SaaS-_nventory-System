@@ -17,7 +17,7 @@ module.exports = (sequelize, DataTypes) => {
     invoiceNumber:          { type: DataTypes.STRING(30),  allowNull: false, unique: true },
     type:                   { type: DataTypes.ENUM('sales', 'non_sales'), allowNull: false },
     shipmentCategoryId:     { type: DataTypes.INTEGER,     allowNull: true },
-    status:                 { type: DataTypes.ENUM('pending', 'paid', 'shipped', 'completed', 'cancelled'), allowNull: false, defaultValue: 'pending' },
+    status:                 { type: DataTypes.ENUM('draft', 'pending', 'paid', 'shipped', 'completed', 'cancelled'), allowNull: false, defaultValue: 'draft' },
     buyerName:              { type: DataTypes.STRING(150), allowNull: true },
     buyerAddress:           { type: DataTypes.TEXT,        allowNull: true },
     buyerPhone:             { type: DataTypes.STRING(30),  allowNull: true },

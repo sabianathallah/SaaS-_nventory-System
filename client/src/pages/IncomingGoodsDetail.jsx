@@ -405,7 +405,7 @@ export default function IncomingGoodsDetail() {
         ? { ...old, data: { ...old.data, status } }
         : old
       )
-      toast.success(status === 'closed' ? 'Barang masuk ditutup' : 'Barang masuk dibuka kembali')
+      toast.success(status === 'closed' ? 'Barang masuk ditutup' : status === 'open' ? 'Barang masuk diaktifkan' : 'Status diperbarui')
     },
     onError: e => toast.error(e.response?.data?.message || 'Error'),
   })
@@ -456,6 +456,7 @@ export default function IncomingGoodsDetail() {
 
   const delivery     = existing?.data
   const isClosed     = delivery?.status === 'closed'
+  const isDraft      = delivery?.status === 'draft'
   const totalQtySJ   = items.reduce((s, i) => s + (i.qtySJ ?? 0), 0)
   const totalActual  = items.reduce((s, i) => s + (i.qtyActual ?? 0), 0)
   const totalSelisih = items.filter(i => (i.qtySJ - i.qtyActual) !== 0).length
@@ -493,6 +494,18 @@ export default function IncomingGoodsDetail() {
               <Printer size={14} /> Print
             </button>
           )}
+          {!isNew && delivery && isDraft && (
+            <span className="badge-muted text-xs px-2 py-1">Draft</span>
+          )}
+          {!isNew && canClose && isDraft && (
+            <button
+              onClick={() => patchStatus.mutate('open')}
+              disabled={patchStatus.isPending}
+              className="btn-primary text-sm flex items-center gap-2"
+            >
+              <Check size={14} /> Aktifkan
+            </button>
+          )}
           {!isNew && canClose && isClosed && (
             <button
               onClick={() => patchStatus.mutate('open')}
@@ -502,7 +515,7 @@ export default function IncomingGoodsDetail() {
               Buka Kembali
             </button>
           )}
-          {!isNew && canClose && !isClosed && (
+          {!isNew && canClose && !isClosed && !isDraft && (
             <button
               onClick={() => patchStatus.mutate('closed')}
               disabled={patchStatus.isPending || isNew}

@@ -17,6 +17,7 @@ const fmtDateTime = d => d ? new Date(d).toLocaleString('id-ID', { day: '2-digit
 
 // ── Status config ─────────────────────────────────────────────────────────────
 const STATUS_CONFIG = {
+  draft:     { label: 'Draft',      badge: 'badge-muted',  step: -1 },
   pending:   { label: 'Menunggu',   badge: 'badge-amber',  step: 0 },
   paid:      { label: 'Lunas',      badge: 'badge-indigo', step: 1 },
   shipped:   { label: 'Dikirim',    badge: 'badge-purple', step: 2 },
@@ -80,6 +81,18 @@ function NextActionCard({ s, perm, proofRef, statusMut, proofMut }) {
   const canResi    = perm('shipping.manual.upload_resi')
 
   const configs = {
+    // Draft — belum diajukan
+    draft: {
+      icon: <Clock size={16} className="text-slate-400" />,
+      title: 'Ajukan Transaksi',
+      desc: 'Transaksi masih dalam status draft. Ajukan untuk memulai proses pembayaran dan pengiriman.',
+      actions: canShip && (
+        <button onClick={() => statusMut.mutate({ status: 'pending' })} disabled={statusMut.isPending}
+          className="btn-primary text-sm flex items-center gap-2 justify-center w-full">
+          <CheckCircle2 size={14} /> {statusMut.isPending ? 'Memproses…' : 'Ajukan Transaksi'}
+        </button>
+      ),
+    },
     // Sales pending — needs proof first
     sales_no_proof: {
       icon: <CreditCard size={16} className="text-amber-500" />,
@@ -141,6 +154,8 @@ function NextActionCard({ s, perm, proofRef, statusMut, proofMut }) {
   let cfgKey
   if (status === 'completed' || status === 'cancelled') {
     cfgKey = status
+  } else if (status === 'draft') {
+    cfgKey = 'draft'
   } else if (status === 'shipped') {
     cfgKey = 'shipped'
   } else if (status === 'paid') {
@@ -413,10 +428,10 @@ export default function ManualShipmentDetail() {
   if (!s) return <div className="flex items-center justify-center h-64 text-slate-400">Data tidak ditemukan</div>
 
   const cfg       = STATUS_CONFIG[s.status] ?? {}
-  const canEdit   = s.status === 'pending' && perm('shipping.manual.edit')
+  const canEdit   = ['draft', 'pending'].includes(s.status) && perm('shipping.manual.edit')
   const canCancel = !['completed', 'cancelled'].includes(s.status) && perm('shipping.manual.cancel')
-  const canDelete = ['pending', 'cancelled'].includes(s.status) && perm('shipping.manual.delete')
-  const canUploadResi = !['completed', 'cancelled'].includes(s.status) && perm('shipping.manual.upload_resi')
+  const canDelete = ['draft', 'pending', 'cancelled'].includes(s.status) && perm('shipping.manual.delete')
+  const canUploadResi = !['draft', 'completed', 'cancelled'].includes(s.status) && perm('shipping.manual.upload_resi')
 
   return (
     <div className="px-4 md:px-6 py-6 max-w-6xl mx-auto">
@@ -447,7 +462,12 @@ export default function ManualShipmentDetail() {
       </div>
 
       {/* Timeline (full width) */}
-      {s.status !== 'cancelled' ? (
+      {s.status === 'draft' ? (
+        <div className="card p-4 border-l-4 border-slate-300 bg-slate-50 mb-5">
+          <div className="flex items-center gap-2 text-slate-500 font-semibold text-sm"><Clock size={15}/> Transaksi ini masih berstatus Draft</div>
+          <p className="text-xs text-slate-400 mt-1">Klik "Ajukan Transaksi" di panel kanan untuk memulai proses.</p>
+        </div>
+      ) : s.status !== 'cancelled' ? (
         <div className="card p-5 mb-5">
           <StatusTimeline status={s.status} type={s.type} />
         </div>

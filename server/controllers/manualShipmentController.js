@@ -185,7 +185,7 @@ exports.create = async (req, res, next) => {
       invoiceNumber,
       type,
       shipmentCategoryId: type === 'non_sales' ? (shipmentCategoryId || null) : null,
-      status: 'pending',
+      status: 'draft',
       buyerName:    type === 'sales' ? buyerName?.trim()    : null,
       buyerAddress: type === 'sales' ? buyerAddress?.trim() : null,
       buyerPhone:   type === 'sales' ? buyerPhone?.trim()   : null,
@@ -222,9 +222,9 @@ exports.update = async (req, res, next) => {
       transaction: t,
     });
     if (!shipment) { await t.rollback(); return res.status(404).json({ message: 'Shipping tidak ditemukan' }); }
-    if (shipment.status !== 'pending') {
+    if (!['draft', 'pending'].includes(shipment.status)) {
       await t.rollback();
-      return res.status(400).json({ message: 'Hanya bisa diedit saat status pending' });
+      return res.status(400).json({ message: 'Hanya bisa diedit saat status draft atau pending' });
     }
 
     const {
@@ -289,6 +289,7 @@ exports.changeStatus = async (req, res, next) => {
     const current = shipment.status;
 
     const VALID_TRANSITIONS = {
+      draft:     ['pending', 'cancelled'],
       pending:   shipment.type === 'sales' ? ['paid', 'cancelled'] : ['shipped', 'cancelled'],
       paid:      ['shipped', 'cancelled'],
       shipped:   ['completed', 'cancelled'],
@@ -414,6 +415,11 @@ exports.destroy = async (req, res, next) => {
       transaction: t,
     });
     if (!shipment) { await t.rollback(); return res.status(404).json({ message: 'Shipping tidak ditemukan' }); }
+
+    if (!['draft', 'pending', 'cancelled'].includes(shipment.status)) {
+      await t.rollback();
+      return res.status(400).json({ message: 'Hanya bisa dihapus saat status draft, pending, atau cancelled' });
+    }
 
     // Unlink from source request so the request can create a new shipment
     if (shipment.sourceRequestId) {

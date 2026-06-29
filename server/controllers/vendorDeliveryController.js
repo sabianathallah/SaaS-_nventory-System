@@ -45,7 +45,7 @@ const ITEM_INCLUDE = [
 
 exports.list = async (req, res, next) => {
   try {
-    const { page = 1, limit = 15, sjMissing, selisihFilter } = req.query;
+    const { page = 1, limit = 15, sjMissing, selisihFilter, status } = req.query;
     const offset = (Number(page) - 1) * Number(limit);
     const where = { ...companyFilter(req) };
     if (sjMissing === 'true') {
@@ -53,6 +53,7 @@ exports.list = async (req, res, next) => {
       where.sjPhotos = null;
     }
     if (selisihFilter === 'unclear') where.selisihStatus = 'unclear';
+    if (status) where.status = status;
     const { rows, count } = await VendorDelivery.findAndCountAll({
       where,
       distinct: true,
@@ -104,6 +105,7 @@ exports.create = async (req, res, next) => {
       sjPhotos:  newPhotos.length > 0 ? newPhotos : null,
       videoLink: videoLink?.trim() || null,
       notes:     notes?.trim()     || null,
+      status:    'draft',
       createdBy: req.user.id,
       companyId: getCompanyId(req),
     });
@@ -221,11 +223,21 @@ exports.patchSelisihStatus = async (req, res, next) => {
 exports.patchStatus = async (req, res, next) => {
   try {
     const { status } = req.body;
-    if (!['open', 'closed'].includes(status)) {
-      return res.status(400).json({ message: 'Status tidak valid. Gunakan: open atau closed' });
+    if (!['draft', 'open', 'closed'].includes(status)) {
+      return res.status(400).json({ message: 'Status tidak valid. Gunakan: draft, open, atau closed' });
     }
     const row = await VendorDelivery.findOne({ where: { id: req.params.id, ...companyFilter(req) } });
     if (!row) return res.status(404).json({ message: 'Barang masuk tidak ditemukan' });
+
+    const VALID_TRANSITIONS = {
+      draft:  ['open', 'closed'],
+      open:   ['closed', 'draft'],
+      closed: ['open'],
+    };
+    if (!VALID_TRANSITIONS[row.status]?.includes(status)) {
+      return res.status(400).json({ message: `Tidak bisa ubah status dari ${row.status} ke ${status}` });
+    }
+
     await row.update({ status });
     res.json({ data: { status } });
   } catch (err) { next(err); }

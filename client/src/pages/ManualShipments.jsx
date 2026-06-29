@@ -8,6 +8,7 @@ import { Table, Pagination } from '../components/Table'
 import { useAuth } from '../context/AuthContext'
 
 const STATUS_BADGE = {
+  draft:     <span className="badge-muted">● Draft</span>,
   pending:   <span className="badge-amber">● Unpaid</span>,
   paid:      <span className="badge-indigo">● Paid</span>,
   shipped:   <span className="badge-purple">● Shipped</span>,
@@ -31,6 +32,7 @@ const TYPE_TABS = [
 
 const STATUS_OPTS = [
   { value: '',          label: 'Semua Status' },
+  { value: 'draft',     label: 'Draft' },
   { value: 'pending',   label: 'Unpaid' },
   { value: 'paid',      label: 'Paid' },
   { value: 'shipped',   label: 'Shipped' },
