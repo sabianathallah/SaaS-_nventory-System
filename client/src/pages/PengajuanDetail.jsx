@@ -107,10 +107,10 @@ function SkuPickerInline({ onAdd }) {
         </div>
         <div>
           <label className="label mb-1 text-xs">Varian / SKU</label>
-          <select value={selSku?.id ?? ''} onChange={e => setSelSku((skusData?.skus ?? []).find(s => s.id == e.target.value) ?? null)}
+          <select value={selSku?.id ?? ''} onChange={e => setSelSku((skusData ?? []).find(s => s.id == e.target.value) ?? null)}
             className="input text-sm bg-white" disabled={!selProduct}>
             <option value="">— pilih varian —</option>
-            {(skusData?.skus ?? []).map(s => (
+            {(skusData ?? []).map(s => (
               <option key={s.id} value={s.id}>{skuVariantLabel(s) || s.sku_code}</option>
             ))}
           </select>
