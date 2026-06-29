@@ -580,7 +580,7 @@ export default function PengajuanDetail() {
       {showWarehouseApprove && <WarehouseApproveModal onClose={() => setShowWarehouseApprove(false)} onConfirm={(wId) => { approve.mutate({ warehouseId: wId }); setShowWarehouseApprove(false) }} />}
 
       {/* Back + header */}
-      <button onClick={() => navigate('/pengajuan')} className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 mb-4">
+      <button onClick={() => navigate(-1)} className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 mb-4">
         <ArrowLeft size={14} /> Semua Pengajuan
       </button>
 

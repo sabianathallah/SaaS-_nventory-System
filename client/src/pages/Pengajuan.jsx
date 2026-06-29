@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { requestApi, requestTypeApi } from '../api'
 import { useAuth } from '../context/AuthContext'
@@ -38,15 +38,27 @@ export default function Pengajuan() {
   const canProcess = hasPermission('request.process') || hasPermission('request.manage') ||
                      user?.role === 'SUPER_ADMIN' || user?.role === 'COMPANY_ADMIN'
 
-  const [search,        setSearch]        = useState('')
-  const [searchInput,   setSearchInput]   = useState('')
-  const [status,        setStatus]        = useState('')
-  const [requestTypeId, setRequestTypeId] = useState('')
-  const [needsReturn,   setNeedsReturn]   = useState('')
-  const [dateFrom,      setDateFrom]      = useState('')
-  const [dateTo,        setDateTo]        = useState('')
-  const [page,          setPage]          = useState(1)
-  const [showMoreFilters, setShowMoreFilters] = useState(false)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const sp = (updates) => setSearchParams(prev => { const n = new URLSearchParams(prev); Object.entries(updates).forEach(([k,v]) => v ? n.set(k,v) : n.delete(k)); return n })
+
+  const search        = searchParams.get('q')      || ''
+  const status        = searchParams.get('status') || ''
+  const requestTypeId = searchParams.get('type')   || ''
+  const needsReturn   = searchParams.get('return') || ''
+  const dateFrom      = searchParams.get('from')   || ''
+  const dateTo        = searchParams.get('to')     || ''
+  const page          = Number(searchParams.get('page') || '1')
+
+  const [searchInput,   setSearchInput]   = useState(search)
+  const [showMoreFilters, setShowMoreFilters] = useState(!!(needsReturn || dateFrom || dateTo))
+
+  const setSearch        = (v) => sp({ q: v, page: '' })
+  const setStatus        = (v) => sp({ status: v, page: '' })
+  const setRequestTypeId = (v) => sp({ type: v, page: '' })
+  const setNeedsReturn   = (v) => sp({ return: v, page: '' })
+  const setDateFrom      = (v) => sp({ from: v, page: '' })
+  const setDateTo        = (v) => sp({ to: v, page: '' })
+  const setPage          = (v) => sp({ page: String(v) })
 
   const { data: types } = useQuery({ queryKey: ['request-types'], queryFn: requestTypeApi.list })
 
@@ -84,8 +96,8 @@ export default function Pengajuan() {
   const hasExtraFilters = needsReturn !== '' || dateFrom || dateTo
 
   function resetFilters() {
-    setSearch(''); setSearchInput(''); setRequestTypeId('')
-    setNeedsReturn(''); setDateFrom(''); setDateTo(''); setPage(1)
+    setSearchInput('')
+    setSearchParams(new URLSearchParams())
   }
 
   async function handleExport() {

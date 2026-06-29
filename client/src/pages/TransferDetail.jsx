@@ -450,7 +450,7 @@ export default function TransferDetail() {
 
       {/* Actions */}
       <div className="flex items-center justify-end gap-3">
-        <button onClick={() => navigate('/transfers')} className="btn-secondary">
+        <button onClick={() => navigate(-1)} className="btn-secondary">
           Batal
         </button>
         <button

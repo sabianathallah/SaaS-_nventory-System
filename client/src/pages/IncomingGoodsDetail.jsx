@@ -467,7 +467,7 @@ export default function IncomingGoodsDetail() {
 
       {/* ── Page header ─────────────────────────────────────── */}
       <div className="flex items-center gap-3">
-        <button onClick={() => navigate('/incoming-goods')} className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100">
+        <button onClick={() => navigate(-1)} className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100">
           <ArrowLeft size={18} />
         </button>
         <div className="flex-1 min-w-0">

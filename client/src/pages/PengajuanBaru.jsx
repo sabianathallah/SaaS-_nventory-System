@@ -146,7 +146,7 @@ export default function PengajuanBaru() {
 
   return (
     <div className="px-6 py-6 max-w-2xl">
-      <button onClick={() => navigate('/pengajuan')} className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 mb-4">
+      <button onClick={() => navigate(-1)} className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 mb-4">
         <ArrowLeft size={14} /> Kembali
       </button>
       <h1 className="text-lg font-bold text-slate-800 mb-5">Buat Pengajuan Baru</h1>
@@ -243,7 +243,7 @@ export default function PengajuanBaru() {
         </div>
 
         <div className="flex gap-2 justify-end">
-          <button type="button" onClick={() => navigate('/pengajuan')} className="btn-secondary">Batal</button>
+          <button type="button" onClick={() => navigate(-1)} className="btn-secondary">Batal</button>
           <button type="submit" disabled={createMutation.isPending} className="btn-primary">
             {createMutation.isPending ? 'Menyimpan…' : 'Kirim Pengajuan'}
           </button>

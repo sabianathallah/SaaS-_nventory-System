@@ -172,7 +172,7 @@ export default function ProductDetail() {
     <div className="flex flex-col items-center justify-center h-64 gap-3">
       <Package size={32} className="text-slate-300" />
       <p className="text-slate-400 text-sm">Produk tidak ditemukan</p>
-      <Link to="/products" className="btn-secondary text-sm"><ArrowLeft size={14} /> Kembali</Link>
+      <button onClick={() => navigate(-1)} className="btn-secondary text-sm flex items-center gap-1"><ArrowLeft size={14} /> Kembali</button>
     </div>
   )
 
@@ -186,9 +186,9 @@ export default function ProductDetail() {
       {/* ── Sticky Header ──────────────────────────────────────────── */}
       <div className="sticky top-0 z-20 bg-white border-b border-slate-200 shadow-sm">
         <div className="flex items-center gap-4 px-6 h-14">
-          <Link to="/products" className="flex items-center gap-1.5 text-sm text-slate-400 hover:text-slate-700 transition-colors flex-shrink-0">
+          <button onClick={() => navigate(-1)} className="flex items-center gap-1.5 text-sm text-slate-400 hover:text-slate-700 transition-colors flex-shrink-0">
             <ArrowLeft size={15} /> Products
-          </Link>
+          </button>
           <ChevronRight size={14} className="text-slate-200" />
           <h1 className="text-sm font-bold text-slate-800 flex-1 truncate">{product.name}</h1>
 

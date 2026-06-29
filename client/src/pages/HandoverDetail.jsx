@@ -212,7 +212,7 @@ export default function HandoverDetail() {
     return (
       <div className="px-6 py-6 max-w-xl">
         <div className="flex items-center gap-3 mb-6">
-          <button onClick={() => navigate('/handover')} className="p-1.5 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors">
+          <button onClick={() => navigate(-1)} className="p-1.5 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors">
             <ArrowLeft size={16} />
           </button>
           <div>
@@ -343,7 +343,7 @@ export default function HandoverDetail() {
       <div className="px-6 py-6 max-w-4xl no-print">
         {/* Header */}
         <div className="flex items-center gap-3 mb-6">
-          <button onClick={() => navigate('/handover')} className="p-1.5 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors">
+          <button onClick={() => navigate(-1)} className="p-1.5 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors">
             <ArrowLeft size={16} />
           </button>
           <div className="flex-1 min-w-0">
@@ -366,7 +366,7 @@ export default function HandoverDetail() {
             {!isClosed && (
               <button
                 type="button"
-                onClick={() => navigate('/handover')}
+                onClick={() => navigate(-1)}
                 className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold bg-amber-100 text-amber-700 border border-amber-300 hover:bg-amber-200 transition-colors"
               >
                 <FileEdit size={13} /> Draft Session

@@ -282,7 +282,7 @@ export default function OpnameDetail() {
     return (
       <div className="px-6 py-6 max-w-4xl">
         <div className="flex items-center gap-3 mb-6">
-          <button onClick={() => navigate('/opname')} className="p-1.5 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors">
+          <button onClick={() => navigate(-1)} className="p-1.5 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors">
             <ArrowLeft size={16} />
           </button>
           <div className="flex-1">
@@ -391,7 +391,7 @@ export default function OpnameDetail() {
   return (
     <div className="px-6 py-6 max-w-5xl">
       <div className="flex items-center gap-3 mb-6">
-        <button onClick={() => navigate('/opname')} className="p-1.5 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors">
+        <button onClick={() => navigate(-1)} className="p-1.5 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors">
           <ArrowLeft size={16} />
         </button>
         <div className="flex-1">
@@ -615,7 +615,7 @@ export default function OpnameDetail() {
       <div className="flex flex-wrap items-center gap-2 pt-4 border-t border-slate-100">
         <button onClick={() => setConfirmMode('cancel')} className="btn-danger text-sm px-3">Batalkan Sesi</button>
         <div className="flex-1" />
-        <button onClick={() => navigate('/opname')} className="btn-secondary text-sm">Tutup</button>
+        <button onClick={() => navigate(-1)} className="btn-secondary text-sm">Tutup</button>
         <button
           onClick={handleCloseClick}
           className="text-sm px-3 py-2 rounded-lg font-medium flex items-center gap-1.5 bg-success-light text-success border border-success/20 hover:bg-success hover:text-white transition-colors"

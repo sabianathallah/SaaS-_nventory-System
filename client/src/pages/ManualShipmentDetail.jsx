@@ -437,7 +437,7 @@ export default function ManualShipmentDetail() {
     <div className="px-4 md:px-6 py-6 max-w-6xl mx-auto">
       {/* Back + title */}
       <div className="flex items-center gap-3 mb-4">
-        <button onClick={() => navigate('/shipping-manual')} className="btn-ghost p-2 rounded-lg">
+        <button onClick={() => navigate(-1)} className="btn-ghost p-2 rounded-lg">
           <ArrowLeft size={18} />
         </button>
         <div className="flex-1 min-w-0">

@@ -444,7 +444,7 @@ export default function StockOutDetail() {
     return (
       <div className="px-6 py-6 max-w-4xl">
         <div className="flex items-center gap-3 mb-6">
-          <button onClick={() => navigate('/stock-out')} className="p-1.5 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors">
+          <button onClick={() => navigate(-1)} className="p-1.5 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors">
             <ArrowLeft size={16} />
           </button>
           <div className="flex-1">
@@ -547,7 +547,7 @@ export default function StockOutDetail() {
   if (needsCompany) return (
     <div className="px-6 py-6 max-w-4xl space-y-4">
       <div className="flex items-center gap-3">
-        <button onClick={() => navigate('/stock-out')} className="p-1.5 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors">
+        <button onClick={() => navigate(-1)} className="p-1.5 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors">
           <ArrowLeft size={16} />
         </button>
         <h1 className="text-lg font-bold text-slate-800">New Stock OUT</h1>
@@ -575,7 +575,7 @@ export default function StockOutDetail() {
         />
       )}
       <div className="flex items-center gap-3 mb-6">
-        <button onClick={() => navigate('/stock-out')} className="p-1.5 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors">
+        <button onClick={() => navigate(-1)} className="p-1.5 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors">
           <ArrowLeft size={16} />
         </button>
         <div className="flex-1">
