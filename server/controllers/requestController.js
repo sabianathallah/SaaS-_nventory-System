@@ -278,8 +278,10 @@ class RequestController {
       if (!request)                     return res.status(404).json({ message: 'Pengajuan tidak ditemukan' });
       if (request.status !== 'PENDING') return res.status(400).json({ message: 'Hanya PENDING yang bisa di-approve' });
 
-      const shipmentType = request.requestType?.shipmentType ?? null;
-      const cid          = companyId(req);
+      // Fallback: jika shipmentType belum diset tapi requiresShipping=true → non_sales
+      const shipmentType = request.requestType?.shipmentType
+        ?? (request.requestType?.requiresShipping ? 'non_sales' : null);
+      const cid = companyId(req);
 
       // ── Jatah Internal: stock-out otomatis → langsung DONE ──────────────────
       if (shipmentType === 'stock_out') {

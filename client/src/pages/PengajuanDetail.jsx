@@ -335,7 +335,7 @@ function StatusStepper({ status, needsReturn, returnedAt }) {
 
 // ── Guided Next Action Card ───────────────────────────────────────────────────
 function NextActionCard({
-  req, canProcess,
+  req, canProcess, resolvedShipmentType,
   onApprove, onReject, onSent, onReturn, onShipRemaining, onDone, navigate,
   loadingApprove, loadingSent, loadingReturn, loadingShipRemaining, loadingDone,
 }) {
@@ -343,7 +343,7 @@ function NextActionCard({
   const { status, needsReturn, returnedAt, items = [] } = req
   const hasDebt = items.some(i => i.shippedQty !== null && i.shippedQty < i.qty)
   const returnSatisfied = !needsReturn || !!returnedAt
-  const shipmentType = req.requestType?.shipmentType
+  const shipmentType = resolvedShipmentType
 
   if (status === 'DONE' || status === 'REJECTED') return null
 
@@ -507,11 +507,15 @@ export default function PengajuanDetail() {
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ['request', id] })
 
+  // Fallback sama dengan backend: jika shipmentType null tapi requiresShipping → non_sales
+  const resolveShipmentType = (rt) =>
+    rt?.shipmentType ?? (rt?.requiresShipping ? 'non_sales' : null)
+
   const approve = useMutation({
     mutationFn: (data) => requestApi.approve(id, data),
     onSuccess: (updated) => {
       invalidate()
-      const sType = req?.requestType?.shipmentType
+      const sType = resolveShipmentType(req?.requestType)
       if (sType === 'stock_out') {
         toast.success('Jatah internal disetujui! Stok berhasil dikurangi.')
       } else if ((sType === 'sales' || sType === 'non_sales') && updated?.manualShipmentId) {
@@ -522,7 +526,7 @@ export default function PengajuanDetail() {
     onError: e => toast.error(e.response?.data?.message ?? 'Gagal'),
   })
   const handleApprove = () => {
-    const sType = req?.requestType?.shipmentType
+    const sType = resolveShipmentType(req?.requestType)
     if (sType === 'stock_out') {
       setShowWarehouseApprove(true)
     } else {
@@ -831,6 +835,7 @@ export default function PengajuanDetail() {
             req={req}
             canProcess={canProcess}
             navigate={navigate}
+            resolvedShipmentType={resolveShipmentType(req?.requestType)}
             onApprove={handleApprove}
             onReject={() => setShowReject(true)}
             onSent={() => setShowSent(true)}

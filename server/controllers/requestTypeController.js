@@ -15,13 +15,14 @@ class RequestTypeController {
 
   static async create(req, res, next) {
     try {
-      const { name, requiresShipping } = req.body;
+      const { name, requiresShipping, shipmentType } = req.body;
       if (!name?.trim()) return res.status(400).json({ message: 'Nama jenis wajib diisi' });
       const type = await RequestType.create({
         name: name.trim(),
         companyId: companyId(req),
         isActive: true,
         requiresShipping: requiresShipping === true || requiresShipping === 'true',
+        shipmentType: shipmentType || null,
       });
       res.status(201).json(type);
     } catch (err) { next(err); }
@@ -31,11 +32,12 @@ class RequestTypeController {
     try {
       const type = await RequestType.findOne({ where: { id: req.params.id, ...companyFilter(req) } });
       if (!type) return res.status(404).json({ message: 'Jenis pengajuan tidak ditemukan' });
-      const { name, requiresShipping, isActive } = req.body;
+      const { name, requiresShipping, isActive, shipmentType } = req.body;
       await type.update({
         ...(name             !== undefined && { name: name.trim() }),
         ...(requiresShipping !== undefined && { requiresShipping: requiresShipping === true || requiresShipping === 'true' }),
         ...(isActive         !== undefined && { isActive }),
+        ...(shipmentType     !== undefined && { shipmentType: shipmentType || null }),
       });
       res.json(type);
     } catch (err) { next(err); }

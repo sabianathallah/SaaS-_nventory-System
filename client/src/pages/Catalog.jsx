@@ -287,14 +287,35 @@ export default function Catalog() {
   })
   const [newReqTypeName, setNewReqTypeName] = useState('')
   const [newReqTypeShipping, setNewReqTypeShipping] = useState(false)
+  const [newReqTypeShipmentType, setNewReqTypeShipmentType] = useState('')
+
+  const SHIPMENT_TYPE_OPTS = [
+    { value: '',          label: '— Tidak ada —' },
+    { value: 'non_sales', label: 'Non-Sales (Endorse dll)' },
+    { value: 'sales',     label: 'Sales (Early Access dll)' },
+    { value: 'stock_out', label: 'Jatah Internal' },
+  ]
 
   const addReqType = useMutation({
-    mutationFn: () => requestTypeApi.create({ name: newReqTypeName.trim(), requiresShipping: newReqTypeShipping }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['request-types'] }); setNewReqTypeName(''); setNewReqTypeShipping(false); toast.success('Jenis pengajuan ditambahkan') },
+    mutationFn: () => requestTypeApi.create({
+      name: newReqTypeName.trim(),
+      requiresShipping: newReqTypeShipping,
+      shipmentType: newReqTypeShipmentType || null,
+    }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['request-types'] })
+      setNewReqTypeName(''); setNewReqTypeShipping(false); setNewReqTypeShipmentType('')
+      toast.success('Jenis pengajuan ditambahkan')
+    },
     onError: e => toast.error(e.response?.data?.message || 'Gagal menambah'),
   })
   const toggleReqTypeShipping = useMutation({
     mutationFn: ([id, val]) => requestTypeApi.update(id, { requiresShipping: val }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['request-types'] }),
+    onError: e => toast.error(e.response?.data?.message || 'Gagal update'),
+  })
+  const setReqTypeShipmentType = useMutation({
+    mutationFn: ([id, val]) => requestTypeApi.update(id, { shipmentType: val || null }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['request-types'] }),
     onError: e => toast.error(e.response?.data?.message || 'Gagal update'),
   })
@@ -376,13 +397,14 @@ export default function Catalog() {
           <thead>
             <tr className="border-b border-slate-100 bg-slate-50/50">
               <th className="px-4 py-2.5 text-left text-xs font-semibold text-slate-400 uppercase tracking-wide">Nama</th>
-              <th className="px-4 py-2.5 text-center text-xs font-semibold text-slate-400 uppercase tracking-wide w-36">Butuh Kirim?</th>
+              <th className="px-4 py-2.5 text-center text-xs font-semibold text-slate-400 uppercase tracking-wide w-32">Butuh Kirim?</th>
+              <th className="px-4 py-2.5 text-left text-xs font-semibold text-slate-400 uppercase tracking-wide">Tipe Transaksi</th>
               <th className="px-4 py-2.5 w-16" />
             </tr>
           </thead>
           <tbody>
             {reqTypesLoading ? (
-              <tr><td colSpan={3} className="px-4 py-6 text-center text-sm text-slate-400">Memuat…</td></tr>
+              <tr><td colSpan={4} className="px-4 py-6 text-center text-sm text-slate-400">Memuat…</td></tr>
             ) : (reqTypes ?? []).map(t => (
               <tr key={t.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/60">
                 <td className="px-4 py-3 text-sm font-medium text-slate-700">{t.name}</td>
@@ -398,6 +420,15 @@ export default function Catalog() {
                     <Truck size={10} />
                     {t.requiresShipping ? 'Ya' : 'Tidak'}
                   </button>
+                </td>
+                <td className="px-4 py-3">
+                  <select
+                    value={t.shipmentType ?? ''}
+                    onChange={e => setReqTypeShipmentType.mutate([t.id, e.target.value])}
+                    className="input py-1 text-xs w-full max-w-[200px]"
+                  >
+                    {SHIPMENT_TYPE_OPTS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  </select>
                 </td>
                 <td className="px-4 py-3 text-right">
                   <button
@@ -430,6 +461,15 @@ export default function Catalog() {
                   <Truck size={10} />
                   {newReqTypeShipping ? 'Ya' : 'Tidak'}
                 </button>
+              </td>
+              <td className="px-4 py-2.5">
+                <select
+                  value={newReqTypeShipmentType}
+                  onChange={e => setNewReqTypeShipmentType(e.target.value)}
+                  className="input py-1 text-xs w-full max-w-[200px]"
+                >
+                  {SHIPMENT_TYPE_OPTS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
               </td>
               <td className="px-4 py-2.5 text-right">
                 <button
