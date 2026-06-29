@@ -11,6 +11,8 @@ module.exports = (sequelize, DataTypes) => {
     companyId:        { type: DataTypes.INTEGER, allowNull: true },
     isActive:         { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
     requiresShipping: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+    // 'sales' | 'non_sales' | 'stock_out' | null
+    shipmentType:     { type: DataTypes.STRING(20), allowNull: true, defaultValue: null },
   }, {
     sequelize,
     modelName: 'RequestType',

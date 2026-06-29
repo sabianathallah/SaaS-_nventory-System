@@ -1,7 +1,8 @@
 'use strict';
 const { Op } = require('sequelize');
-const { sequelize, Request, RequestItem, RequestType, ProductSKU, Product, ProductVariantOption, User, ManualShipment, ManualShipmentItem } = require('../models');
+const { sequelize, Request, RequestItem, RequestType, ProductSKU, Product, ProductVariantOption, User, ManualShipment, ManualShipmentItem, SkuWarehouseStock, Stock_Movement } = require('../models');
 const { companyFilter, companyId } = require('../helpers/tenancy');
+const { upsertSkuWarehouseStock } = require('../helpers/skuStock');
 const { paginate, paginatedResponse } = require('../helpers/queryHelper');
 const manualShipmentCtrl = require('./manualShipmentController');
 
@@ -27,7 +28,7 @@ const LIST_ITEM_INCLUDE = {
 };
 
 const BASE_INCLUDE = [
-  { model: RequestType,    as: 'requestType',   attributes: ['id', 'name', 'requiresShipping'] },
+  { model: RequestType,    as: 'requestType',   attributes: ['id', 'name', 'requiresShipping', 'shipmentType'] },
   { model: User,           as: 'requestor',     attributes: ['id', 'name', 'avatar'] },
   { model: User,           as: 'processor',     attributes: ['id', 'name'] },
   { model: User,           as: 'updater',       attributes: ['id', 'name'] },
@@ -269,11 +270,122 @@ class RequestController {
     try {
       await attachPermissions(req);
       if (!canProcess(req)) return res.status(403).json({ message: 'Forbidden: butuh request.process' });
-      const request = await Request.findOne({ where: { id: req.params.id, ...companyFilter(req) } });
-      if (!request)                      return res.status(404).json({ message: 'Pengajuan tidak ditemukan' });
-      if (request.status !== 'PENDING')  return res.status(400).json({ message: 'Hanya PENDING yang bisa di-approve' });
+
+      const request = await Request.findOne({
+        where: { id: req.params.id, ...companyFilter(req) },
+        include: [{ model: RequestType, as: 'requestType' }, ITEM_INCLUDE],
+      });
+      if (!request)                     return res.status(404).json({ message: 'Pengajuan tidak ditemukan' });
+      if (request.status !== 'PENDING') return res.status(400).json({ message: 'Hanya PENDING yang bisa di-approve' });
+
+      const shipmentType = request.requestType?.shipmentType ?? null;
+      const cid          = companyId(req);
+
+      // ── Jatah Internal: stock-out otomatis → langsung DONE ──────────────────
+      if (shipmentType === 'stock_out') {
+        const { warehouseId } = req.body;
+        if (!warehouseId) return res.status(400).json({ message: 'warehouseId wajib diisi untuk jatah internal' });
+
+        const t = await sequelize.transaction();
+        try {
+          for (const item of request.items) {
+            if (!item.ProductSKUId) continue;
+            const productId = item.sku?.ProductId ?? null;
+            await upsertSkuWarehouseStock(t, SkuWarehouseStock, {
+              ProductSKUId: item.ProductSKUId,
+              WarehouseId:  Number(warehouseId),
+              delta:        -item.qty,
+              companyId:    cid,
+            });
+            if (productId) {
+              await Stock_Movement.create({
+                ProductId:    productId,
+                ProductSKUId: item.ProductSKUId,
+                WarehouseId:  Number(warehouseId),
+                type:         'OUT',
+                quantity:     item.qty,
+                ReferenceId:  request.id,
+                source:       'REQUEST',
+                note:         `Jatah internal - ${request.requestorId}`,
+                date:         new Date(),
+                companyId:    cid,
+              }, { transaction: t });
+            }
+          }
+          await request.update({ status: 'DONE', processedBy: req.user.id, updatedBy: req.user.id }, { transaction: t });
+          await t.commit();
+        } catch (err) { await t.rollback(); throw err; }
+
+        const full = await Request.findByPk(request.id, { include: [...BASE_INCLUDE, ITEM_INCLUDE] });
+        return res.json(full);
+      }
+
+      // ── Sales / Non-Sales: auto-buat ManualShipment draft → APPROVED ────────
+      if (shipmentType === 'sales' || shipmentType === 'non_sales') {
+        if (request.manualShipmentId) {
+          // Sudah ada shipment (misal retry) — langsung approve saja
+          await request.update({ status: 'APPROVED', processedBy: req.user.id, updatedBy: req.user.id });
+        } else {
+          const t = await sequelize.transaction();
+          try {
+            const invoiceNumber = await manualShipmentCtrl.generateInvoiceNumber(cid, t);
+            let subtotal = 0;
+            const itemsPayload = [];
+            for (const item of request.items) {
+              const skuPrice  = shipmentType === 'sales' ? Number(item.sku?.price ?? 0) : 0;
+              const lineTotal = skuPrice * item.qty;
+              subtotal += lineTotal;
+              itemsPayload.push({
+                productId:       item.sku?.ProductId ?? null,
+                productSkuId:    item.ProductSKUId   ?? null,
+                productName:     item.sku?.Product?.name ?? item.productName,
+                variantName:     item.variantLabel    ?? null,
+                sku:             item.sku?.sku_code   ?? null,
+                productImageUrl: item.sku?.Product?.imageUrl ?? null,
+                quantity:        item.qty,
+                unitPrice:       skuPrice,
+                subtotal:        lineTotal,
+              });
+            }
+
+            const shipment = await ManualShipment.create({
+              companyId:       cid,
+              invoiceNumber,
+              type:            shipmentType,
+              status:          'draft',
+              buyerName:       request.recipientName    || null,
+              buyerPhone:      request.recipientPhone   || null,
+              buyerAddress:    request.recipientAddress || null,
+              shippingCost:    0,
+              subtotal,
+              total:           subtotal,
+              notes:           request.note || null,
+              sourceRequestId: request.id,
+              createdBy:       req.user.id,
+            }, { transaction: t });
+
+            for (const item of itemsPayload) {
+              await ManualShipmentItem.create({ shipmentId: shipment.id, ...item }, { transaction: t });
+            }
+
+            await request.update({
+              status:           'APPROVED',
+              processedBy:      req.user.id,
+              updatedBy:        req.user.id,
+              manualShipmentId: shipment.id,
+            }, { transaction: t });
+            await t.commit();
+          } catch (err) { await t.rollback(); throw err; }
+        }
+
+        const full = await Request.findByPk(request.id, { include: [...BASE_INCLUDE, ITEM_INCLUDE] });
+        return res.json(full);
+      }
+
+      // ── Default: approve tanpa auto-action ───────────────────────────────────
       await request.update({ status: 'APPROVED', processedBy: req.user.id, updatedBy: req.user.id });
-      res.json(request);
+      const full = await Request.findByPk(request.id, { include: [...BASE_INCLUDE, ITEM_INCLUDE] });
+      res.json(full);
     } catch (err) { next(err); }
   }
 
@@ -369,22 +481,24 @@ class RequestController {
       });
       if (!request)                      return res.status(404).json({ message: 'Pengajuan tidak ditemukan' });
       if (request.status !== 'APPROVED') return res.status(400).json({ message: 'Pengajuan harus berstatus APPROVED' });
-      if (!request.requestType?.requiresShipping) return res.status(400).json({ message: 'Jenis pengajuan ini tidak memerlukan shipping' });
-      if (request.manualShipmentId)      return res.status(400).json({ message: 'Shipping sudah dibuat untuk pengajuan ini' });
+      const shipType = request.requestType?.shipmentType;
+      if (!request.requestType?.requiresShipping && shipType !== 'sales' && shipType !== 'non_sales') {
+        return res.status(400).json({ message: 'Jenis pengajuan ini tidak memerlukan shipping' });
+      }
+      if (request.manualShipmentId) return res.status(400).json({ message: 'Shipping sudah dibuat untuk pengajuan ini' });
 
       const cid = companyId(req);
       const db  = require('../models').sequelize;
       const t   = await db.transaction();
 
       try {
-        // Generate invoice number (reuse helper dari manualShipmentCtrl)
         const invoiceNumber = await manualShipmentCtrl.generateInvoiceNumber(cid, t);
+        const resolvedType  = (shipType === 'sales' || shipType === 'non_sales') ? shipType : 'non_sales';
 
-        // Hitung subtotal dari items (pakai harga SKU atau 0 untuk non-sales)
         let subtotal = 0;
         const itemsPayload = [];
         for (const item of request.items) {
-          const skuPrice = item.sku ? Number(item.sku.price ?? 0) : 0;
+          const skuPrice  = resolvedType === 'sales' ? Number(item.sku?.price ?? 0) : 0;
           const lineTotal = skuPrice * item.qty;
           subtotal += lineTotal;
           itemsPayload.push({
@@ -403,10 +517,10 @@ class RequestController {
         const shipment = await ManualShipment.create({
           companyId:       cid,
           invoiceNumber,
-          type:            'non_sales',
-          status:          'pending',
-          buyerName:       request.recipientName  || null,
-          buyerPhone:      request.recipientPhone || null,
+          type:            resolvedType,
+          status:          'draft',
+          buyerName:       request.recipientName    || null,
+          buyerPhone:      request.recipientPhone   || null,
           buyerAddress:    request.recipientAddress || null,
           shippingCost:    0,
           subtotal,

@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { requestApi, requestTypeApi } from '../api'
+import { requestApi, requestTypeApi, warehousesApi } from '../api'
 import { productsApi, productSkusApi } from '../api'
 import { useAuth } from '../context/AuthContext'
 import {
@@ -248,6 +248,38 @@ function ReturnModal({ onConfirm, onClose }) {
   )
 }
 
+// ── Warehouse Approve Modal (for jatah internal / stock_out) ─────────────────
+function WarehouseApproveModal({ onClose, onConfirm }) {
+  const [warehouseId, setWarehouseId] = useState('')
+  const { data } = useQuery({ queryKey: ['warehouses'], queryFn: () => warehousesApi.list() })
+  const warehouses = data?.data ?? data ?? []
+  return (
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-xl shadow-xl p-5 w-full max-w-sm">
+        <h3 className="font-semibold text-slate-800 mb-1">Setujui & Proses Jatah Internal</h3>
+        <p className="text-xs text-slate-500 mb-4">Stok akan dikurangi langsung dari gudang yang dipilih.</p>
+        <div className="mb-4">
+          <label className="label mb-1">Gudang Pengambilan</label>
+          <select value={warehouseId} onChange={e => setWarehouseId(e.target.value)} className="input w-full text-sm">
+            <option value="">— Pilih Gudang —</option>
+            {warehouses.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+          </select>
+        </div>
+        <div className="flex gap-2">
+          <button onClick={onClose} className="btn-secondary text-sm flex-1">Batal</button>
+          <button
+            disabled={!warehouseId}
+            onClick={() => onConfirm(Number(warehouseId))}
+            className="btn-primary text-sm flex-1 bg-emerald-600 border-emerald-600 hover:bg-emerald-700 disabled:opacity-50"
+          >
+            Setujui & Kurangi Stok
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Status stepper ────────────────────────────────────────────────────────────
 function StatusStepper({ status, needsReturn, returnedAt }) {
   if (status === 'REJECTED') return (
@@ -304,22 +336,28 @@ function StatusStepper({ status, needsReturn, returnedAt }) {
 // ── Guided Next Action Card ───────────────────────────────────────────────────
 function NextActionCard({
   req, canProcess,
-  onApprove, onReject, onSent, onReturn, onShipRemaining, onDone,
+  onApprove, onReject, onSent, onReturn, onShipRemaining, onDone, navigate,
   loadingApprove, loadingSent, loadingReturn, loadingShipRemaining, loadingDone,
 }) {
   if (!canProcess) return null
   const { status, needsReturn, returnedAt, items = [] } = req
   const hasDebt = items.some(i => i.shippedQty !== null && i.shippedQty < i.qty)
-  const allDebtResolved = !hasDebt
   const returnSatisfied = !needsReturn || !!returnedAt
+  const shipmentType = req.requestType?.shipmentType
 
   if (status === 'DONE' || status === 'REJECTED') return null
+
+  const isAutoShipping = shipmentType === 'sales' || shipmentType === 'non_sales'
 
   const configs = {
     PENDING: {
       icon: <Clock size={16} className="text-amber-500" />,
       title: 'Pengajuan Menunggu Tindakan',
-      desc: 'Tinjau detail pengajuan lalu setujui atau tolak.',
+      desc: shipmentType === 'stock_out'
+        ? 'Tinjau detail pengajuan. Setujui untuk memproses jatah stok langsung.'
+        : isAutoShipping
+        ? 'Tinjau detail pengajuan. Setujui untuk membuat draft Shipping Manual secara otomatis.'
+        : 'Tinjau detail pengajuan lalu setujui atau tolak.',
       actions: (
         <div className="flex flex-col gap-2">
           <button onClick={onApprove} disabled={loadingApprove}
@@ -335,9 +373,16 @@ function NextActionCard({
     },
     APPROVED: {
       icon: <Send size={16} className="text-blue-500" />,
-      title: 'Siap Dikirim',
-      desc: 'Pengajuan sudah disetujui. Tandai barang ketika sudah dikirim ke penerima.',
-      actions: (
+      title: isAutoShipping ? 'Draft Shipping Dibuat' : 'Siap Dikirim',
+      desc: isAutoShipping
+        ? 'Draft Shipping Manual sudah dibuat otomatis. Proses pengiriman di halaman shipping.'
+        : 'Pengajuan sudah disetujui. Tandai barang ketika sudah dikirim ke penerima.',
+      actions: isAutoShipping && req.manualShipmentId ? (
+        <button onClick={() => navigate(`/shipping-manual/${req.manualShipmentId}`)}
+          className="btn-primary text-sm flex items-center gap-2 justify-center w-full">
+          <Truck size={14} /> Lihat Draft Shipping
+        </button>
+      ) : (
         <div className="flex flex-col gap-2">
           <button onClick={onSent} disabled={loadingSent}
             className="btn-primary text-sm flex items-center gap-2 justify-center">
@@ -418,12 +463,13 @@ export default function PengajuanDetail() {
   const qc         = useQueryClient()
   const { user, hasPermission } = useAuth()
 
-  const [showReject,  setShowReject]  = useState(false)
-  const [showSent,    setShowSent]    = useState(false)
-  const [showReturn,  setShowReturn]  = useState(false)
-  const [editing,     setEditing]     = useState(false)
-  const [form,        setForm]        = useState(null)
-  const [formItems,   setFormItems]   = useState([])
+  const [showReject,          setShowReject]          = useState(false)
+  const [showSent,            setShowSent]            = useState(false)
+  const [showReturn,          setShowReturn]          = useState(false)
+  const [showWarehouseApprove, setShowWarehouseApprove] = useState(false)
+  const [editing,             setEditing]             = useState(false)
+  const [form,                setForm]                = useState(null)
+  const [formItems,           setFormItems]           = useState([])
 
   const { data: types } = useQuery({ queryKey: ['request-types'], queryFn: requestTypeApi.list })
 
@@ -461,7 +507,29 @@ export default function PengajuanDetail() {
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ['request', id] })
 
-  const approve          = useMutation({ mutationFn: () => requestApi.approve(id),              onSuccess: invalidate, onError: e => toast.error(e.response?.data?.message ?? 'Gagal') })
+  const approve = useMutation({
+    mutationFn: (data) => requestApi.approve(id, data),
+    onSuccess: (updated) => {
+      invalidate()
+      const sType = req?.requestType?.shipmentType
+      if (sType === 'stock_out') {
+        toast.success('Jatah internal disetujui! Stok berhasil dikurangi.')
+      } else if ((sType === 'sales' || sType === 'non_sales') && updated?.manualShipmentId) {
+        toast.success('Draft shipping otomatis dibuat!')
+        navigate(`/shipping-manual/${updated.manualShipmentId}`)
+      }
+    },
+    onError: e => toast.error(e.response?.data?.message ?? 'Gagal'),
+  })
+  const handleApprove = () => {
+    const sType = req?.requestType?.shipmentType
+    if (sType === 'stock_out') {
+      setShowWarehouseApprove(true)
+    } else {
+      if (!confirm('Setujui pengajuan ini?')) return
+      approve.mutate({})
+    }
+  }
   const reject           = useMutation({ mutationFn: (r) => requestApi.reject(id, r),           onSuccess: invalidate, onError: e => toast.error(e.response?.data?.message ?? 'Gagal') })
   const processShipment  = useMutation({
     mutationFn: () => requestApi.processShipment(id),
@@ -506,9 +574,10 @@ export default function PengajuanDetail() {
   return (
     <div className="px-4 md:px-6 py-6 max-w-6xl mx-auto">
       {/* Modals */}
-      {showReject  && <RejectModal  onClose={() => setShowReject(false)}  onConfirm={(r) => { reject.mutate(r); setShowReject(false) }} />}
-      {showSent    && <SentModal    onClose={() => setShowSent(false)}    onConfirm={(d) => { markSent.mutate(d); setShowSent(false) }} items={req?.items ?? []} />}
-      {showReturn  && <ReturnModal  onClose={() => setShowReturn(false)}  onConfirm={(d) => { markReturned.mutate(d); setShowReturn(false) }} />}
+      {showReject           && <RejectModal           onClose={() => setShowReject(false)}           onConfirm={(r) => { reject.mutate(r); setShowReject(false) }} />}
+      {showSent             && <SentModal             onClose={() => setShowSent(false)}             onConfirm={(d) => { markSent.mutate(d); setShowSent(false) }} items={req?.items ?? []} />}
+      {showReturn           && <ReturnModal           onClose={() => setShowReturn(false)}           onConfirm={(d) => { markReturned.mutate(d); setShowReturn(false) }} />}
+      {showWarehouseApprove && <WarehouseApproveModal onClose={() => setShowWarehouseApprove(false)} onConfirm={(wId) => { approve.mutate({ warehouseId: wId }); setShowWarehouseApprove(false) }} />}
 
       {/* Back + header */}
       <button onClick={() => navigate('/pengajuan')} className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 mb-4">
@@ -536,16 +605,6 @@ export default function PengajuanDetail() {
 
         {/* Edit / delete / cancel edit buttons */}
         <div className="flex gap-2 flex-wrap">
-          {/* Proses Pengiriman — tampil kalau APPROVED, requiresShipping, belum ada shipment */}
-          {canProcess && req.status === 'APPROVED' && req.requestType?.requiresShipping && !req.manualShipmentId && (
-            <button
-              onClick={() => { if (confirm('Buat draft Shipping Manual dari pengajuan ini?')) processShipment.mutate() }}
-              disabled={processShipment.isPending}
-              className="btn-primary text-xs flex items-center gap-1"
-            >
-              <Truck size={11} /> {processShipment.isPending ? 'Membuat…' : 'Proses Pengiriman'}
-            </button>
-          )}
           {canEdit && !editing && (
             <button onClick={() => setEditing(true)} className="btn-secondary text-xs flex items-center gap-1">
               <Pencil size={11} /> Edit
@@ -771,7 +830,8 @@ export default function PengajuanDetail() {
           <NextActionCard
             req={req}
             canProcess={canProcess}
-            onApprove={() => approve.mutate()}
+            navigate={navigate}
+            onApprove={handleApprove}
             onReject={() => setShowReject(true)}
             onSent={() => setShowSent(true)}
             onReturn={() => setShowReturn(true)}
