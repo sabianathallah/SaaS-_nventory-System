@@ -166,13 +166,28 @@ class RequestController {
   static async create(req, res, next) {
     try {
       const cid = companyId(req);
-      const { requestTypeId, recipientName, recipientPhone, recipientAddress, neededAt, note, needsReturn, divisi, items } = req.body;
+      const { requestTypeId, shipmentType: directShipmentType, recipientName, recipientPhone, recipientAddress, neededAt, note, needsReturn, divisi, items } = req.body;
 
-      if (!requestTypeId)        return res.status(400).json({ message: 'Jenis pengajuan wajib dipilih' });
-      if (!items?.length)        return res.status(400).json({ message: 'Minimal 1 produk wajib diisi' });
+      if (!items?.length) return res.status(400).json({ message: 'Minimal 1 produk wajib diisi' });
+
+      // Resolve requestTypeId: bisa dari picker (non_sales) atau auto find-or-create (sales / stock_out)
+      let rtId = requestTypeId ? Number(requestTypeId) : null;
+      if (!rtId && directShipmentType) {
+        const DEFAULT_NAMES = { sales: 'Early Access', stock_out: 'Jatah Internal', non_sales: 'Non-Sales' };
+        const [rt] = await RequestType.findOrCreate({
+          where: { companyId: cid, shipmentType: directShipmentType, isActive: true },
+          defaults: {
+            name:             DEFAULT_NAMES[directShipmentType] ?? directShipmentType,
+            requiresShipping: directShipmentType === 'sales' || directShipmentType === 'non_sales',
+            isActive:         true,
+          },
+        });
+        rtId = rt.id;
+      }
+      if (!rtId) return res.status(400).json({ message: 'Jenis pengajuan wajib dipilih' });
 
       const request = await Request.create({
-        requestTypeId,
+        requestTypeId: rtId,
         requestorId: req.user.id,
         divisi: divisi || req.user.divisi || null,
         recipientName: recipientName || null,
@@ -288,10 +303,16 @@ class RequestController {
         const { warehouseId } = req.body;
         if (!warehouseId) return res.status(400).json({ message: 'warehouseId wajib diisi untuk jatah internal' });
 
+        const missingSkuItems = request.items.filter(i => !i.ProductSKUId);
+        if (missingSkuItems.length > 0) {
+          return res.status(400).json({
+            message: `${missingSkuItems.length} item tidak memiliki SKU terpilih. Pilih varian produk sebelum disetujui.`,
+          });
+        }
+
         const t = await sequelize.transaction();
         try {
           for (const item of request.items) {
-            if (!item.ProductSKUId) continue;
             const productId = item.sku?.ProductId ?? null;
             await upsertSkuWarehouseStock(t, SkuWarehouseStock, {
               ProductSKUId: item.ProductSKUId,

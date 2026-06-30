@@ -19,9 +19,17 @@ const STATUS_COLOR = {
   SENT:     'bg-purple-100 text-purple-700 border-purple-200',
   DONE:     'bg-emerald-100 text-emerald-700 border-emerald-200',
 }
-const STEPS_NORMAL  = ['PENDING','APPROVED','SENT','DONE']
-const STEPS_RETURN  = ['PENDING','APPROVED','SENT','RETURNED','DONE']
+const STEPS_NORMAL   = ['PENDING','APPROVED','SENT','DONE']
+const STEPS_RETURN   = ['PENDING','APPROVED','SENT','RETURNED','DONE']
+const STEPS_INTERNAL = ['PENDING','DONE']
 const STEP_LABEL = { PENDING:'Menunggu', APPROVED:'Disetujui', SENT:'Dikirim', RETURNED:'Dikembalikan', DONE:'Selesai' }
+
+const CAT_BADGE = {
+  sales:     'bg-indigo-100 text-indigo-700 border-indigo-200',
+  non_sales: 'bg-violet-100 text-violet-700 border-violet-200',
+  stock_out: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+}
+const CAT_LABEL = { sales: 'Sales', non_sales: 'Non-Sales', stock_out: 'Jatah Internal' }
 
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('id-ID', { day:'2-digit', month:'short', year:'numeric' }) : '—'
 const fmtDt   = (d) => d ? new Date(d).toLocaleString ('id-ID', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' }) : '—'
@@ -281,7 +289,7 @@ function WarehouseApproveModal({ onClose, onConfirm }) {
 }
 
 // ── Status stepper ────────────────────────────────────────────────────────────
-function StatusStepper({ status, needsReturn, returnedAt }) {
+function StatusStepper({ status, needsReturn, returnedAt, shipmentType }) {
   if (status === 'REJECTED') return (
     <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-xl">
       <span className="w-6 h-6 rounded-full bg-red-500 text-white flex items-center justify-center flex-shrink-0">
@@ -291,9 +299,12 @@ function StatusStepper({ status, needsReturn, returnedAt }) {
     </div>
   )
 
-  const steps = needsReturn ? STEPS_RETURN : STEPS_NORMAL
+  const isInternal = shipmentType === 'stock_out'
+  const steps = isInternal ? STEPS_INTERNAL : needsReturn ? STEPS_RETURN : STEPS_NORMAL
   let currentIdx
-  if (!needsReturn) {
+  if (isInternal) {
+    currentIdx = status === 'DONE' ? 1 : 0
+  } else if (!needsReturn) {
     currentIdx = STEPS_NORMAL.indexOf(status)
   } else {
     if      (status === 'PENDING')              currentIdx = 0
@@ -576,6 +587,12 @@ export default function PengajuanDetail() {
 
   const setF = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
+  const reqShipmentType  = resolveShipmentType(req.requestType)
+  const isInternalReq    = reqShipmentType === 'stock_out'
+  const editReqType      = form ? (types ?? []).find(t => String(t.id) === String(form.requestTypeId)) ?? req.requestType : req.requestType
+  const editShipmentType = resolveShipmentType(editReqType)
+  const isInternalEdit   = editShipmentType === 'stock_out'
+
   return (
     <div className="px-4 md:px-6 py-6 max-w-6xl mx-auto">
       {/* Modals */}
@@ -605,7 +622,14 @@ export default function PengajuanDetail() {
               </button>
             )}
           </div>
-          <p className="text-xs text-slate-400 mt-0.5">{req.requestType?.name} · Dibuat {fmtDt(req.createdAt)}</p>
+          <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+            {resolveShipmentType(req.requestType) && (
+              <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${CAT_BADGE[resolveShipmentType(req.requestType)] ?? 'bg-slate-100 text-slate-500 border-slate-200'}`}>
+                {CAT_LABEL[resolveShipmentType(req.requestType)] ?? resolveShipmentType(req.requestType)}
+              </span>
+            )}
+            <span className="text-xs text-slate-400">{req.requestType?.name} · Dibuat {fmtDt(req.createdAt)}</span>
+          </div>
         </div>
 
         {/* Edit / delete / cancel edit buttons */}
@@ -638,7 +662,12 @@ export default function PengajuanDetail() {
 
       {/* Status stepper (full width) */}
       <div className="card p-4 mb-5">
-        <StatusStepper status={req.status} needsReturn={req.needsReturn} returnedAt={req.returnedAt} />
+        <StatusStepper
+          status={req.status}
+          needsReturn={req.needsReturn}
+          returnedAt={req.returnedAt}
+          shipmentType={resolveShipmentType(req.requestType)}
+        />
       </div>
 
       {/* Rejection reason */}
@@ -659,7 +688,13 @@ export default function PengajuanDetail() {
               <div className="grid grid-cols-2 gap-x-4 gap-y-3">
                 <div>
                   <label className="label mb-1">Jenis Pengajuan</label>
-                  <select value={form.requestTypeId} onChange={e => setF('requestTypeId', e.target.value)} className="input w-full text-sm">
+                  <select value={form.requestTypeId} onChange={e => {
+                    const newId  = e.target.value
+                    const newRt  = (types ?? []).find(t => String(t.id) === newId)
+                    const newSType = resolveShipmentType(newRt ?? null)
+                    setF('requestTypeId', newId)
+                    if (newSType === 'stock_out') setF('needsReturn', false)
+                  }} className="input w-full text-sm">
                     <option value="">— Pilih —</option>
                     {(types ?? []).map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                   </select>
@@ -668,56 +703,79 @@ export default function PengajuanDetail() {
                   <label className="label mb-1">Divisi</label>
                   <input value={form.divisi} onChange={e => setF('divisi', e.target.value)} className="input w-full text-sm" />
                 </div>
-                <div>
-                  <label className="label mb-1">Nama Penerima</label>
-                  <input value={form.recipientName} onChange={e => setF('recipientName', e.target.value)} className="input w-full text-sm" />
-                </div>
-                <div>
-                  <label className="label mb-1">No. HP Penerima</label>
-                  <input value={form.recipientPhone} onChange={e => setF('recipientPhone', e.target.value)} placeholder="08xxxxxxxxxx" className="input w-full text-sm" />
-                </div>
+                {!isInternalEdit && (
+                  <>
+                    <div>
+                      <label className="label mb-1">Nama Penerima</label>
+                      <input value={form.recipientName} onChange={e => setF('recipientName', e.target.value)} className="input w-full text-sm" />
+                    </div>
+                    <div>
+                      <label className="label mb-1">No. HP Penerima</label>
+                      <input value={form.recipientPhone} onChange={e => setF('recipientPhone', e.target.value)} placeholder="08xxxxxxxxxx" className="input w-full text-sm" />
+                    </div>
+                  </>
+                )}
                 <div>
                   <label className="label mb-1">Tanggal Butuh</label>
                   <input type="date" value={form.neededAt} onChange={e => setF('neededAt', e.target.value)} className="input w-full text-sm" />
                 </div>
-                <div className="col-span-2">
-                  <label className="label mb-1">Alamat Pengiriman</label>
-                  <textarea value={form.recipientAddress} onChange={e => setF('recipientAddress', e.target.value)}
-                    rows={2} className="input w-full text-sm resize-none" />
-                </div>
+                {!isInternalEdit && (
+                  <div className="col-span-2">
+                    <label className="label mb-1">Alamat Pengiriman</label>
+                    <textarea value={form.recipientAddress} onChange={e => setF('recipientAddress', e.target.value)}
+                      rows={2} className="input w-full text-sm resize-none" />
+                  </div>
+                )}
                 <div className="col-span-2">
                   <label className="label mb-1">Catatan</label>
                   <input value={form.note} onChange={e => setF('note', e.target.value)} className="input w-full text-sm" />
                 </div>
-                <div className="flex items-center gap-2 col-span-2">
-                  <input type="checkbox" id="needsReturn" checked={form.needsReturn}
-                    onChange={e => setF('needsReturn', e.target.checked)} className="w-4 h-4" />
-                  <label htmlFor="needsReturn" className="text-sm text-slate-700">Perlu dikembalikan</label>
-                </div>
+                {!isInternalEdit && (
+                  <div className="flex items-center gap-2 col-span-2">
+                    <input type="checkbox" id="needsReturn" checked={form.needsReturn}
+                      onChange={e => setF('needsReturn', e.target.checked)} className="w-4 h-4" />
+                    <label htmlFor="needsReturn" className="text-sm text-slate-700">Perlu dikembalikan</label>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="grid grid-cols-2 gap-x-4 gap-y-3">
-                <Field label="Pengaju"        value={req.requestor?.name} />
-                <Field label="Divisi"         value={req.divisi} />
-                <Field label="Penerima"       value={req.recipientName} />
-                <Field label="No. HP Penerima" value={req.recipientPhone} />
-                <Field label="Tanggal Butuh"  value={fmtDate(req.neededAt)} />
-                <div className="col-span-2">
-                  <Field label="Alamat Pengiriman" value={req.recipientAddress} />
-                </div>
+                <Field label="Pengaju" value={req.requestor?.name} />
+                <Field label="Divisi"  value={req.divisi} />
+                {!isInternalReq && (
+                  <>
+                    <Field label="Penerima"        value={req.recipientName} />
+                    <Field label="No. HP Penerima" value={req.recipientPhone} />
+                  </>
+                )}
+                <Field label="Tanggal Butuh" value={fmtDate(req.neededAt)} />
+                {!isInternalReq && (
+                  <div className="col-span-2">
+                    <Field label="Alamat Pengiriman" value={req.recipientAddress} />
+                  </div>
+                )}
                 {req.note && (
                   <div className="col-span-2">
                     <Field label="Catatan" value={req.note} />
                   </div>
                 )}
-                <Field label="Perlu Dikembalikan" value={req.needsReturn ? 'Ya' : 'Tidak'} />
+                {!isInternalReq && (
+                  <Field label="Perlu Dikembalikan" value={req.needsReturn ? 'Ya' : 'Tidak'} />
+                )}
+                {isInternalReq && (
+                  <div className="col-span-2">
+                    <div className="bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 text-xs text-emerald-700">
+                      Stok diambil langsung dari gudang saat disetujui.
+                    </div>
+                  </div>
+                )}
                 {req.processor && <Field label="Diproses oleh" value={req.processor?.name} />}
               </div>
             )}
           </div>
 
-          {/* Info pengiriman */}
-          {(req.status === 'SENT' || req.status === 'DONE' || req.sentAt || req.trackingNumber || req.returnedAt) && (
+          {/* Info pengiriman — tidak relevan untuk jatah internal */}
+          {!isInternalReq && (req.status === 'SENT' || req.status === 'DONE' || req.sentAt || req.trackingNumber || req.returnedAt) && (
             <div className={`card p-4 border-l-4 ${req.status === 'DONE' ? 'border-l-emerald-400' : 'border-l-purple-400'}`}>
               <h2 className="text-sm font-semibold text-slate-600 mb-3 border-b border-slate-100 pb-2 flex items-center gap-2">
                 <Send size={13} className="text-purple-500" /> Info Pengiriman
