@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { useNavigate, useParams, useSearchParams, Link } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   productsApi, categoriesApi, articlesApi,
@@ -530,9 +530,9 @@ export default function ProductEdit() {
       {/* ── Header ──────────────────────────────────────────────────── */}
       <div className="sticky top-0 z-20 bg-white border-b border-slate-200 shadow-sm">
         <div className="flex items-center gap-4 px-6 h-14">
-          <Link to={backPath} className="flex items-center gap-1.5 text-sm text-slate-400 hover:text-slate-700 transition-colors flex-shrink-0">
+          <button onClick={() => navigate(-1)} className="flex items-center gap-1.5 text-sm text-slate-400 hover:text-slate-700 transition-colors flex-shrink-0">
             <ArrowLeft size={15} /> {isNew ? 'Products' : 'Detail Produk'}
-          </Link>
+          </button>
           <ChevronRight size={14} className="text-slate-200" />
           <h1 className="text-sm font-bold text-slate-800 flex-1 truncate">{pageTitle}</h1>
 

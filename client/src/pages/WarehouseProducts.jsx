@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { warehousesApi, productsApi } from '../api'
 import SearchBar from '../components/SearchBar'
@@ -170,9 +170,9 @@ export default function WarehouseProducts() {
       {/* ── Sticky Header ──────────────────────────────────────────── */}
       <div className="sticky top-0 z-20 bg-white border-b border-slate-200 shadow-sm">
         <div className="flex items-center gap-3 px-6 h-14">
-          <Link to="/warehouses" className="flex items-center gap-1.5 text-sm text-slate-400 hover:text-slate-700 transition-colors flex-shrink-0">
+          <button onClick={() => navigate(-1)} className="flex items-center gap-1.5 text-sm text-slate-400 hover:text-slate-700 transition-colors flex-shrink-0">
             <ArrowLeft size={15} /> Warehouses
-          </Link>
+          </button>
           <ChevronRight size={14} className="text-slate-200" />
           <span className="text-sm text-slate-500 truncate">{warehouse?.name ?? '…'}</span>
           <ChevronRight size={14} className="text-slate-200" />
