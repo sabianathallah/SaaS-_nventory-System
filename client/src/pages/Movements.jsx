@@ -288,8 +288,8 @@ export default function Movements() {
       )}
 
       {/* Filters + Table */}
-      <div className="card overflow-hidden">
-        <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/50 flex flex-wrap items-center gap-3">
+      <div className="card">
+        <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/50 rounded-t-lg flex flex-wrap items-center gap-3">
           {/* Date range */}
           <div className="flex items-center gap-1.5">
             <label className="text-xs text-slate-500">From</label>
@@ -375,8 +375,10 @@ export default function Movements() {
           <button onClick={resetFilters} className="text-xs text-slate-400 hover:text-slate-600 underline ml-auto">Reset</button>
         </div>
 
-        <Table columns={columns} data={data?.data} loading={isLoading} emptyText="No movements found" />
-        <Pagination pagination={data?.pagination} onPageChange={setPage} />
+        <div className="overflow-hidden rounded-b-lg">
+          <Table columns={columns} data={data?.data} loading={isLoading} emptyText="No movements found" />
+          <Pagination pagination={data?.pagination} onPageChange={setPage} />
+        </div>
       </div>
     </div>
   )

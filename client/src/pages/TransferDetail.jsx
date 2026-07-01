@@ -355,8 +355,8 @@ export default function TransferDetail() {
       </div>
 
       {/* Items */}
-      <div className="card overflow-hidden">
-        <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
+      <div className="card">
+        <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/50 rounded-t-lg flex items-center justify-between">
           <p className="text-sm font-semibold text-slate-700">Item Transfer</p>
           <span className="text-xs text-slate-400">{items.length} item ditambahkan</span>
         </div>
@@ -416,36 +416,38 @@ export default function TransferDetail() {
         </div>
 
         {/* Items list */}
-        {items.length > 0 ? (
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-slate-100 bg-slate-50/30">
-                <th className="px-4 py-2.5 text-left text-xs font-semibold text-slate-500">Produk</th>
-                <th className="px-4 py-2.5 text-left text-xs font-semibold text-slate-500">Varian / SKU</th>
-                <th className="px-4 py-2.5 text-right text-xs font-semibold text-slate-500 w-24">Qty</th>
-                <th className="w-12" />
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((item, i) => (
-                <tr key={i} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
-                  <td className="px-4 py-3 text-sm font-medium text-slate-800">{item._productName}</td>
-                  <td className="px-4 py-3 text-xs text-slate-500 font-mono">{item._variantLabel}</td>
-                  <td className="px-4 py-3 text-right font-mono font-bold text-slate-700">{item.qty}</td>
-                  <td className="px-4 py-3 text-center">
-                    <button onClick={() => removeItem(i)} className="text-slate-300 hover:text-red-500 transition-colors">
-                      <Trash2 size={14} />
-                    </button>
-                  </td>
+        <div className="overflow-hidden rounded-b-lg">
+          {items.length > 0 ? (
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-slate-100 bg-slate-50/30">
+                  <th className="px-4 py-2.5 text-left text-xs font-semibold text-slate-500">Produk</th>
+                  <th className="px-4 py-2.5 text-left text-xs font-semibold text-slate-500">Varian / SKU</th>
+                  <th className="px-4 py-2.5 text-right text-xs font-semibold text-slate-500 w-24">Qty</th>
+                  <th className="w-12" />
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        ) : (
-          <div className="px-4 py-8 text-center text-slate-400 text-sm">
-            Belum ada item. Tambahkan item di atas.
-          </div>
-        )}
+              </thead>
+              <tbody>
+                {items.map((item, i) => (
+                  <tr key={i} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
+                    <td className="px-4 py-3 text-sm font-medium text-slate-800">{item._productName}</td>
+                    <td className="px-4 py-3 text-xs text-slate-500 font-mono">{item._variantLabel}</td>
+                    <td className="px-4 py-3 text-right font-mono font-bold text-slate-700">{item.qty}</td>
+                    <td className="px-4 py-3 text-center">
+                      <button onClick={() => removeItem(i)} className="text-slate-300 hover:text-red-500 transition-colors">
+                        <Trash2 size={14} />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <div className="px-4 py-8 text-center text-slate-400 text-sm">
+              Belum ada item. Tambahkan item di atas.
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Actions */}

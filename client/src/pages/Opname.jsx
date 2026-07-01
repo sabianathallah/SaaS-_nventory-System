@@ -154,8 +154,8 @@ export default function Opname() {
       </div>
 
       {/* Filters + Table */}
-      <div className="card overflow-hidden">
-        <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/50 flex flex-wrap items-center gap-3">
+      <div className="card">
+        <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/50 rounded-t-lg flex flex-wrap items-center gap-3">
           <SearchableSelect
             value={statusFilter}
             onChange={v => { setStatusFilter(v); setPage(1) }}
@@ -180,8 +180,10 @@ export default function Opname() {
             Tampilkan Dibatalkan
           </label>
         </div>
-        <Table columns={columns} data={visibleData} loading={isLoading} emptyText="Belum ada sesi opname" />
-        <Pagination pagination={data?.pagination} onPageChange={setPage} />
+        <div className="overflow-hidden rounded-b-lg">
+          <Table columns={columns} data={visibleData} loading={isLoading} emptyText="Belum ada sesi opname" />
+          <Pagination pagination={data?.pagination} onPageChange={setPage} />
+        </div>
       </div>
 
       {/* ── CREATE MODAL ──────────────────────────────────────────────────────── */}
