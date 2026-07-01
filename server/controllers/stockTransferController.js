@@ -35,14 +35,25 @@ async function applyItem(t, { cid, fromWarehouseId, toWarehouseId, productSkuId,
   const sku = await ProductSKU.findByPk(productSkuId, { transaction: t });
   if (!sku) throw { status: 404, message: `SKU ${productSkuId} tidak ditemukan` };
 
-  // Lock source stock row to prevent concurrent transfers from racing past the sufficiency check
-  const srcStock = await Stock.findOne({ where: { ProductId: sku.ProductId, WarehouseId: fromWarehouseId }, transaction: t, lock: t.LOCK.UPDATE });
-  if (!srcStock || srcStock.quantity < qty) {
-    throw { status: 400, message: `Stok tidak cukup di gudang asal untuk SKU ${sku.sku_code} (tersedia: ${srcStock?.quantity ?? 0})` };
+  // Per-SKU check against SkuWarehouseStocks (source of truth) — lock row to prevent
+  // concurrent transfers from racing past the sufficiency check. Stock (legacy) is
+  // product-level only, so it can't tell variants apart and must not gate this check.
+  const srcSkuStock = await SkuWarehouseStock.findOne({
+    where: { ProductSKUId: productSkuId, WarehouseId: fromWarehouseId },
+    transaction: t, lock: t.LOCK.UPDATE,
+  });
+  const availableSku = srcSkuStock ? Number(srcSkuStock.qty) : 0;
+  if (availableSku < qty) {
+    throw { status: 400, message: `Stok tidak cukup di gudang asal untuk SKU ${sku.sku_code} (tersedia: ${availableSku})` };
   }
-  await srcStock.decrement('quantity', { by: qty, transaction: t });
+  await moveSkuWarehouseStock(t, SkuWarehouseStock, { ProductSKUId: productSkuId, fromWarehouseId, toWarehouseId, qty, companyId: cid });
 
-  // Increment destination warehouse stock
+  // Keep legacy Stock (product-level aggregate) table in sync — secondary, non-blocking
+  const srcStock = await Stock.findOne({ where: { ProductId: sku.ProductId, WarehouseId: fromWarehouseId }, transaction: t, lock: t.LOCK.UPDATE });
+  if (srcStock) {
+    const newQty = Math.max(0, Number(srcStock.quantity) - qty);
+    await srcStock.update({ quantity: newQty }, { transaction: t });
+  }
   const [dstStock] = await Stock.findOrCreate({
     where: { ProductId: sku.ProductId, WarehouseId: toWarehouseId },
     defaults: { quantity: 0, companyId: cid },
@@ -54,8 +65,6 @@ async function applyItem(t, { cid, fromWarehouseId, toWarehouseId, productSkuId,
   const movBase = { ProductId: sku.ProductId, ProductSKUId: productSkuId, ReferenceId: transferId, source: 'TRANSFER', date, companyId: cid, note };
   await Stock_Movement.create({ ...movBase, WarehouseId: fromWarehouseId, type: 'OUT', quantity: qty }, { transaction: t });
   await Stock_Movement.create({ ...movBase, WarehouseId: toWarehouseId,   type: 'IN',  quantity: qty }, { transaction: t });
-
-  await moveSkuWarehouseStock(t, SkuWarehouseStock, { ProductSKUId: productSkuId, fromWarehouseId, toWarehouseId, qty, companyId: cid });
 
   return await StockTransferItem.create({ transferId, productSkuId, quantity: qty }, { transaction: t });
 }
@@ -80,8 +89,17 @@ async function reverseItem(t, { cid, fromWarehouseId, toWarehouseId, productSkuI
     if (deductable > 0) await dstStock.decrement('quantity', { by: deductable, transaction: t });
   }
 
-  // Reverse SkuWarehouseStocks: move back from toWarehouse to fromWarehouse
-  await moveSkuWarehouseStock(t, SkuWarehouseStock, { ProductSKUId: productSkuId, fromWarehouseId: toWarehouseId, toWarehouseId: fromWarehouseId, qty, companyId: cid });
+  // Reverse SkuWarehouseStocks: move back from toWarehouse to fromWarehouse — clamp to what's
+  // actually still there so a SKU consumed since the transfer (sold, transferred again, etc.)
+  // can't be pushed negative.
+  const dstSkuStock = await SkuWarehouseStock.findOne({
+    where: { ProductSKUId: productSkuId, WarehouseId: toWarehouseId },
+    transaction: t, lock: t.LOCK.UPDATE,
+  });
+  const reversible = Math.min(qty, dstSkuStock ? Number(dstSkuStock.qty) : 0);
+  if (reversible > 0) {
+    await moveSkuWarehouseStock(t, SkuWarehouseStock, { ProductSKUId: productSkuId, fromWarehouseId: toWarehouseId, toWarehouseId: fromWarehouseId, qty: reversible, companyId: cid });
+  }
 }
 
 exports.list = async (req, res, next) => {

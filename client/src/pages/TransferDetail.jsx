@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Plus, Trash2, ArrowRight, AlertTriangle } from 'lucide-react'
 import toast from 'react-hot-toast'
-import { stockTransfersApi, warehousesApi, productsApi, productSkusApi, stocksApi } from '../api'
+import { stockTransfersApi, warehousesApi, productsApi, productSkusApi, skuWarehouseStocksApi } from '../api'
 import PageHeader from '../components/PageHeader'
 import SearchableSelect from '../components/SearchableSelect'
 import { useAuth } from '../context/AuthContext'
@@ -68,20 +68,20 @@ export default function TransferDetail() {
   })
   const skus = skusData ?? []
 
-  // stock available at fromWarehouse for selected SKU
+  // stock available at fromWarehouse — fetched per-SKU (SkuWarehouseStock is the source of
+  // truth for variant-level stock; the legacy Stock table is product-level only and can't
+  // tell variants apart)
   const activeFromId = isNew ? form.fromWarehouseId : transfer?.fromWarehouseId
-  const { data: stockRes } = useQuery({
-    queryKey: ['stock-at', activeFromId, itemRow.productSkuId],
-    queryFn:  async () => {
-      if (!activeFromId || !itemRow.productSkuId) return null
-      const sku = skus.find(s => String(s.id) === String(itemRow.productSkuId))
-      if (!sku) return null
-      const res = await stocksApi.list({ WarehouseId: activeFromId, ProductId: sku.ProductId, limit: 1 })
-      return res?.data?.[0]?.quantity ?? 0
-    },
-    enabled: !!activeFromId && !!itemRow.productSkuId,
+  const { data: skuWarehouseStocks } = useQuery({
+    queryKey: ['sku-warehouse-stocks', activeFromId],
+    queryFn:  () => skuWarehouseStocksApi.list({ WarehouseId: activeFromId }),
+    enabled:  !!activeFromId,
   })
-  const availableStock = stockRes ?? 0
+  const availableStock = useMemo(() => {
+    if (!itemRow.productSkuId) return 0
+    const row = (skuWarehouseStocks ?? []).find(s => String(s.ProductSKUId) === String(itemRow.productSkuId))
+    return row ? Number(row.qty) : 0
+  }, [skuWarehouseStocks, itemRow.productSkuId])
 
   // ── mutations ──────────────────────────────────────────────────────────────
   const createTransfer = useMutation({
