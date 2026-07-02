@@ -1,10 +1,35 @@
 'use strict';
 const { Op } = require('sequelize');
-const { sequelize, Request, RequestItem, RequestType, ProductSKU, Product, ProductVariantOption, User, ManualShipment, ManualShipmentItem, SkuWarehouseStock, Stock_Movement } = require('../models');
+const { sequelize, Request, RequestItem, RequestType, ProductSKU, Product, ProductVariantOption, User, ManualShipment, SkuWarehouseStock, Stock_Movement, Stock_Out_Draft, Stock_Out_Draft_Item } = require('../models');
 const { companyFilter, companyId } = require('../helpers/tenancy');
 const { upsertSkuWarehouseStock } = require('../helpers/skuStock');
 const { paginate, paginatedResponse } = require('../helpers/queryHelper');
-const manualShipmentCtrl = require('./manualShipmentController');
+
+// Sales/Non-Sales pengajuan approval doesn't touch stock directly anymore — it
+// stages a Stock Out Draft (prefilled from the request's items) so a human still
+// has to physically pull and confirm the goods before anything leaves the
+// warehouse. The Shipping Manual draft only gets created once that Stock Out is
+// submitted — see stockOutDraftController.submit().
+async function createStockOutDraftForRequest(request, cid, userId, t) {
+  const draft = await Stock_Out_Draft.create({
+    status: 'draft',
+    note: `Dari Pengajuan #${request.id}${request.divisi ? ' — ' + request.divisi : ''}`,
+    sourceRequestId: request.id,
+    createdBy: userId,
+    companyId: cid,
+  }, { transaction: t });
+
+  for (const item of request.items) {
+    await Stock_Out_Draft_Item.create({
+      DraftId: draft.id,
+      ProductSKUId: item.ProductSKUId || null,
+      ProductId: item.sku?.ProductId || null,
+      quantity: item.qty,
+      companyId: cid,
+    }, { transaction: t });
+  }
+  return draft;
+}
 
 const ITEM_INCLUDE = {
   model: RequestItem,
@@ -343,59 +368,23 @@ class RequestController {
         return res.json(full);
       }
 
-      // ── Sales / Non-Sales: auto-buat ManualShipment draft → APPROVED ────────
+      // ── Sales / Non-Sales: auto-buat Stock Out Draft → APPROVED ──────────────
+      // Stok TIDAK langsung dipotong di sini — draft ini cuma daftar barang yang
+      // perlu dikeluarkan. Shipping Manual baru dibuat setelah Stock Out-nya
+      // benar-benar disubmit (lihat stockOutDraftController.submit()).
       if (shipmentType === 'sales' || shipmentType === 'non_sales') {
-        if (request.manualShipmentId) {
-          // Sudah ada shipment (misal retry) — langsung approve saja
+        if (request.stockOutDraftId || request.manualShipmentId) {
+          // Sudah pernah diproses (misal retry) — langsung approve saja
           await request.update({ status: 'APPROVED', processedBy: req.user.id, updatedBy: req.user.id });
         } else {
           const t = await sequelize.transaction();
           try {
-            const invoiceNumber = await manualShipmentCtrl.generateInvoiceNumber(cid, t);
-            let subtotal = 0;
-            const itemsPayload = [];
-            for (const item of request.items) {
-              const skuPrice  = shipmentType === 'sales' ? Number(item.sku?.price ?? 0) : 0;
-              const lineTotal = skuPrice * item.qty;
-              subtotal += lineTotal;
-              itemsPayload.push({
-                productId:       item.sku?.ProductId ?? null,
-                productSkuId:    item.ProductSKUId   ?? null,
-                productName:     item.sku?.Product?.name ?? item.productName,
-                variantName:     item.variantLabel    ?? null,
-                sku:             item.sku?.sku_code   ?? null,
-                productImageUrl: item.sku?.Product?.imageUrl ?? null,
-                quantity:        item.qty,
-                unitPrice:       skuPrice,
-                subtotal:        lineTotal,
-              });
-            }
-
-            const shipment = await ManualShipment.create({
-              companyId:       cid,
-              invoiceNumber,
-              type:            shipmentType,
-              status:          'draft',
-              buyerName:       request.recipientName    || null,
-              buyerPhone:      request.recipientPhone   || null,
-              buyerAddress:    request.recipientAddress || null,
-              shippingCost:    0,
-              subtotal,
-              total:           subtotal,
-              notes:           request.note || null,
-              sourceRequestId: request.id,
-              createdBy:       req.user.id,
-            }, { transaction: t });
-
-            for (const item of itemsPayload) {
-              await ManualShipmentItem.create({ shipmentId: shipment.id, ...item }, { transaction: t });
-            }
-
+            const draft = await createStockOutDraftForRequest(request, cid, req.user.id, t);
             await request.update({
-              status:           'APPROVED',
-              processedBy:      req.user.id,
-              updatedBy:        req.user.id,
-              manualShipmentId: shipment.id,
+              status:          'APPROVED',
+              processedBy:     req.user.id,
+              updatedBy:       req.user.id,
+              stockOutDraftId: draft.id,
             }, { transaction: t });
             await t.commit();
           } catch (err) { await t.rollback(); throw err; }
@@ -508,56 +497,15 @@ class RequestController {
       if (!request.requestType?.requiresShipping && shipType !== 'sales' && shipType !== 'non_sales') {
         return res.status(400).json({ message: 'Jenis pengajuan ini tidak memerlukan shipping' });
       }
+      if (request.stockOutDraftId) return res.status(400).json({ message: 'Stock Out sudah dibuat untuk pengajuan ini' });
       if (request.manualShipmentId) return res.status(400).json({ message: 'Shipping sudah dibuat untuk pengajuan ini' });
 
       const cid = companyId(req);
-      const db  = require('../models').sequelize;
-      const t   = await db.transaction();
+      const t   = await sequelize.transaction();
 
       try {
-        const invoiceNumber = await manualShipmentCtrl.generateInvoiceNumber(cid, t);
-        const resolvedType  = (shipType === 'sales' || shipType === 'non_sales') ? shipType : 'non_sales';
-
-        let subtotal = 0;
-        const itemsPayload = [];
-        for (const item of request.items) {
-          const skuPrice  = resolvedType === 'sales' ? Number(item.sku?.price ?? 0) : 0;
-          const lineTotal = skuPrice * item.qty;
-          subtotal += lineTotal;
-          itemsPayload.push({
-            productId:       item.sku?.ProductId ?? null,
-            productSkuId:    item.ProductSKUId ?? null,
-            productName:     item.sku?.Product?.name ?? item.productName,
-            variantName:     item.variantLabel ?? null,
-            sku:             item.sku?.sku_code ?? null,
-            productImageUrl: item.sku?.Product?.imageUrl ?? null,
-            quantity:        item.qty,
-            unitPrice:       skuPrice,
-            subtotal:        lineTotal,
-          });
-        }
-
-        const shipment = await ManualShipment.create({
-          companyId:       cid,
-          invoiceNumber,
-          type:            resolvedType,
-          status:          'draft',
-          buyerName:       request.recipientName    || null,
-          buyerPhone:      request.recipientPhone   || null,
-          buyerAddress:    request.recipientAddress || null,
-          shippingCost:    0,
-          subtotal,
-          total:           subtotal,
-          notes:           request.note || null,
-          sourceRequestId: request.id,
-          createdBy:       req.user.id,
-        }, { transaction: t });
-
-        for (const item of itemsPayload) {
-          await ManualShipmentItem.create({ shipmentId: shipment.id, ...item }, { transaction: t });
-        }
-
-        await request.update({ manualShipmentId: shipment.id }, { transaction: t });
+        const draft = await createStockOutDraftForRequest(request, cid, req.user.id, t);
+        await request.update({ stockOutDraftId: draft.id }, { transaction: t });
         await t.commit();
 
         const full = await Request.findByPk(request.id, { include: [...BASE_INCLUDE, ITEM_INCLUDE] });

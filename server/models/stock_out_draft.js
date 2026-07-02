@@ -17,6 +17,12 @@ module.exports = (sequelize, DataTypes) => {
         foreignKey: 'DraftId',
         onDelete: 'CASCADE',
       });
+      Stock_Out_Draft.belongsTo(models.Request, {
+        foreignKey: { name: 'sourceRequestId', allowNull: true },
+        as: 'sourceRequest',
+        onDelete: 'SET NULL',
+        onUpdate: 'CASCADE',
+      });
     }
   }
   Stock_Out_Draft.init({
@@ -27,6 +33,7 @@ module.exports = (sequelize, DataTypes) => {
     status:      { type: DataTypes.STRING,   allowNull: false, defaultValue: 'draft' },
     createdBy:   { type: DataTypes.INTEGER,  allowNull: false },
     companyId:   { type: DataTypes.INTEGER,  allowNull: true },
+    sourceRequestId: { type: DataTypes.INTEGER, allowNull: true },
   }, { sequelize, modelName: 'Stock_Out_Draft' });
   return Stock_Out_Draft;
 };

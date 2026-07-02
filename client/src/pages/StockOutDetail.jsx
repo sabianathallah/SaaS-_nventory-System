@@ -349,8 +349,14 @@ export default function StockOutDetail() {
       qc.invalidateQueries({ queryKey: ['stock-out-draft-current'] })
       qc.invalidateQueries({ queryKey: ['stock-out'] })
       qc.invalidateQueries({ queryKey: ['stocks'] })
-      toast.success('Stock OUT berhasil dicatat')
-      navigate(`/stock-out/${data.id}`, { replace: true })
+      qc.invalidateQueries({ queryKey: ['manual-shipments'] })
+      if (data.manualShipmentId) {
+        toast.success('Stock OUT selesai — draft Shipping Manual otomatis dibuat')
+        navigate(`/shipping-manual/${data.manualShipmentId}`, { replace: true })
+      } else {
+        toast.success('Stock OUT berhasil dicatat')
+        navigate(`/stock-out/${data.id}`, { replace: true })
+      }
     },
     onError: e => toast.error(e.response?.data?.message || 'Error'),
   })
@@ -615,6 +621,21 @@ export default function StockOutDetail() {
           </button>
         )}
       </div>
+
+      {draft?.sourceRequestId && (
+        <div className="card p-3 mb-5 border-l-4 border-violet-400 bg-violet-50 flex items-center justify-between">
+          <span className="text-sm text-violet-700 font-medium">
+            📦 Draft ini dibuat otomatis dari Pengajuan #{draft.sourceRequestId} — Shipping Manual akan dibuat otomatis setelah Stock Out ini disubmit.
+          </span>
+          <button
+            type="button"
+            onClick={() => navigate(`/pengajuan/${draft.sourceRequestId}`)}
+            className="text-xs font-medium text-violet-700 underline hover:text-violet-900 flex-shrink-0 ml-3"
+          >
+            Lihat Pengajuan
+          </button>
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} className="space-y-5">
         <div className="card p-5">

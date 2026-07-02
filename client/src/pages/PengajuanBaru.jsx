@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { requestApi, requestTypeApi } from '../api'
-import { productsApi, productSkusApi } from '../api'
+import { productsApi, productSkusApi, warehousesApi, skuWarehouseStocksApi } from '../api'
 import { useAuth } from '../context/AuthContext'
 import { Plus, Trash2, ChevronDown, ArrowLeft, ShoppingBag, Package, Warehouse } from 'lucide-react'
 
@@ -61,6 +61,27 @@ function SkuPicker({ onAdd }) {
     queryFn: () => productSkusApi.list(selProduct.id),
     enabled: !!selProduct,
   })
+
+  // Live stock hint at "Gudang Ready" — informational only, never blocks the
+  // submission. User can still ajukan even when it reads 0 (item may simply be
+  // in another warehouse, e.g. Gudang Sementara).
+  const { data: warehouses } = useQuery({
+    queryKey: ['warehouses', { limit: 200 }],
+    queryFn: () => warehousesApi.list({ limit: 200 }),
+  })
+  const readyWarehouse = useMemo(() =>
+    (warehouses?.data ?? []).find(w => /ready/i.test(w.name)),
+  [warehouses])
+
+  const { data: readyStocks } = useQuery({
+    queryKey: ['sku-warehouse-stocks', readyWarehouse?.id],
+    queryFn: () => skuWarehouseStocksApi.list({ WarehouseId: readyWarehouse.id }),
+    enabled: !!readyWarehouse,
+  })
+  const readyStock = useMemo(() => {
+    if (!selSku || !readyStocks) return null
+    return Number((readyStocks ?? []).find(s => String(s.ProductSKUId) === String(selSku.id))?.qty ?? 0)
+  }, [readyStocks, selSku])
 
   const filtered = useMemo(() => {
     const list = products?.data ?? []
@@ -121,6 +142,12 @@ function SkuPicker({ onAdd }) {
               <option key={s.id} value={s.id}>{skuVariantLabel(s) || s.sku_code}</option>
             ))}
           </select>
+          {selSku && readyWarehouse && (
+            <p className={`text-[11px] mt-1 ${readyStock === 0 ? 'text-amber-600' : 'text-slate-400'}`}>
+              Stok di {readyWarehouse.name}: <span className="font-semibold">{readyStock ?? '…'}</span>
+              {readyStock === 0 && ' — tetap bisa diajukan, mungkin ada di gudang lain'}
+            </p>
+          )}
         </div>
       </div>
 

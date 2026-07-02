@@ -3,9 +3,60 @@ const {
     sequelize, Stock_Out_Draft, Stock_Out_Draft_Item,
     Stock_Out_Header, Stock_Movement, Stock, SkuWarehouseStock,
     ProductSKU, Product, ProductVariantOption, Warehouse, User,
+    Request, RequestItem, RequestType, ManualShipment, ManualShipmentItem,
 } = require('../models');
 const { upsertSkuWarehouseStock } = require('../helpers/skuStock');
 const { companyFilter, companyId } = require('../helpers/tenancy');
+const manualShipmentCtrl = require('./manualShipmentController');
+
+// If this draft was auto-staged from an approved Sales/Non-Sales pengajuan,
+// finishing the Stock Out is the trigger to create the Shipping Manual draft —
+// mirrors the item-snapshot logic that used to live in requestController.approve().
+async function createShipmentFromRequest(request, cid, userId, t) {
+    const shipmentType = request.requestType?.shipmentType === 'sales' ? 'sales' : 'non_sales';
+    const invoiceNumber = await manualShipmentCtrl.generateInvoiceNumber(cid, t);
+
+    let subtotal = 0;
+    const itemsPayload = [];
+    for (const item of request.items) {
+        const skuPrice  = shipmentType === 'sales' ? Number(item.sku?.price ?? 0) : 0;
+        const lineTotal = skuPrice * item.qty;
+        subtotal += lineTotal;
+        itemsPayload.push({
+            productId:       item.sku?.ProductId ?? null,
+            productSkuId:    item.ProductSKUId   ?? null,
+            productName:     item.sku?.Product?.name ?? item.productName,
+            variantName:     item.variantLabel    ?? null,
+            sku:             item.sku?.sku_code   ?? null,
+            productImageUrl: item.sku?.Product?.imageUrl ?? null,
+            quantity:        item.qty,
+            unitPrice:       skuPrice,
+            subtotal:        lineTotal,
+        });
+    }
+
+    const shipment = await ManualShipment.create({
+        companyId:       cid,
+        invoiceNumber,
+        type:            shipmentType,
+        status:          'draft',
+        buyerName:       request.recipientName    || null,
+        buyerPhone:      request.recipientPhone   || null,
+        buyerAddress:    request.recipientAddress || null,
+        shippingCost:    0,
+        subtotal,
+        total:           subtotal,
+        notes:           request.note || null,
+        sourceRequestId: request.id,
+        createdBy:       userId,
+    }, { transaction: t });
+
+    for (const item of itemsPayload) {
+        await ManualShipmentItem.create({ shipmentId: shipment.id, ...item }, { transaction: t });
+    }
+
+    return shipment;
+}
 
 const DRAFT_ITEM_INCLUDE = [
     {
@@ -304,22 +355,63 @@ class StockOutDraftController {
                 }, { transaction: t }));
             }
 
+            // If this draft was staged from an approved pengajuan, finishing the
+            // Stock Out is what triggers the Shipping Manual draft to exist.
+            let manualShipmentId = null;
+            if (draft.sourceRequestId) {
+                const linkedRequest = await Request.findOne({
+                    where: { id: draft.sourceRequestId },
+                    include: [
+                        { model: RequestType, as: 'requestType' },
+                        {
+                            model: RequestItem,
+                            as: 'items',
+                            include: [{
+                                model: ProductSKU,
+                                as: 'sku',
+                                attributes: ['id', 'sku_code', 'price', 'qty', 'ProductId'],
+                                include: [{ model: Product, attributes: ['id', 'name', 'imageUrl'] }],
+                            }],
+                        },
+                    ],
+                    transaction: t,
+                });
+                if (linkedRequest) {
+                    const shipment = await createShipmentFromRequest(linkedRequest, cid, req.user.id, t);
+                    await linkedRequest.update({ manualShipmentId: shipment.id, stockOutDraftId: null }, { transaction: t });
+                    manualShipmentId = shipment.id;
+                }
+            }
+
             await draft.destroy({ transaction: t });
             await t.commit();
 
-            res.status(201).json({ ...header.toJSON(), movements });
+            res.status(201).json({ ...header.toJSON(), movements, manualShipmentId });
         } catch (err) { await t.rollback(); next(err); }
     }
 
     static async cancel(req, res, next) {
+        const t = await sequelize.transaction();
         try {
             const draft = await Stock_Out_Draft.findOne({
                 where: { id: req.params.id, ...companyFilter(req) },
+                transaction: t,
             });
-            if (!draft) throw { name: 'NotFound', message: 'Draft tidak ditemukan' };
-            await draft.destroy();
+            if (!draft) { await t.rollback(); throw { name: 'NotFound', message: 'Draft tidak ditemukan' }; }
+
+            // Don't leave the originating Request pointing at a row we're about to
+            // delete — clear the link so it can be re-processed (see requestController.approve).
+            if (draft.sourceRequestId) {
+                await Request.update(
+                    { stockOutDraftId: null },
+                    { where: { id: draft.sourceRequestId, stockOutDraftId: draft.id }, transaction: t }
+                );
+            }
+
+            await draft.destroy({ transaction: t });
+            await t.commit();
             res.status(200).json({ message: 'Draft dibatalkan' });
-        } catch (err) { next(err); }
+        } catch (err) { await t.rollback(); next(err); }
     }
 }
 

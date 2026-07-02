@@ -347,8 +347,8 @@ function StatusStepper({ status, needsReturn, returnedAt, shipmentType }) {
 // ── Guided Next Action Card ───────────────────────────────────────────────────
 function NextActionCard({
   req, canProcess, resolvedShipmentType,
-  onApprove, onReject, onSent, onReturn, onShipRemaining, onDone, navigate,
-  loadingApprove, loadingSent, loadingReturn, loadingShipRemaining, loadingDone,
+  onApprove, onReject, onSent, onReturn, onShipRemaining, onDone, onProcessShipment, navigate,
+  loadingApprove, loadingSent, loadingReturn, loadingShipRemaining, loadingDone, loadingProcessShipment,
 }) {
   if (!canProcess) return null
   const { status, needsReturn, returnedAt, items = [] } = req
@@ -367,7 +367,7 @@ function NextActionCard({
       desc: shipmentType === 'stock_out'
         ? 'Tinjau detail pengajuan. Setujui untuk memproses jatah stok langsung.'
         : isAutoShipping
-        ? 'Tinjau detail pengajuan. Setujui untuk membuat draft Shipping Manual secara otomatis.'
+        ? 'Tinjau detail pengajuan. Setujui untuk membuat draft Stock Out — stok baru terpotong setelah Stock Out itu diproses.'
         : 'Tinjau detail pengajuan lalu setujui atau tolak.',
       actions: (
         <div className="flex flex-col gap-2">
@@ -384,14 +384,34 @@ function NextActionCard({
     },
     APPROVED: {
       icon: <Send size={16} className="text-blue-500" />,
-      title: isAutoShipping ? 'Draft Shipping Dibuat' : 'Siap Dikirim',
-      desc: isAutoShipping
-        ? 'Draft Shipping Manual sudah dibuat otomatis. Proses pengiriman di halaman shipping.'
+      title: isAutoShipping && req.manualShipmentId
+        ? 'Draft Shipping Dibuat'
+        : isAutoShipping && req.stockOutDraftId
+        ? 'Menunggu Stock Out'
+        : isAutoShipping
+        ? 'Stock Out Belum Dibuat'
+        : 'Siap Dikirim',
+      desc: isAutoShipping && req.manualShipmentId
+        ? 'Stock Out sudah selesai dan draft Shipping Manual sudah dibuat otomatis. Proses pengiriman di halaman shipping.'
+        : isAutoShipping && req.stockOutDraftId
+        ? 'Barang belum keluar gudang. Proses Stock Out-nya dulu — Shipping Manual baru dibuat otomatis setelah Stock Out selesai.'
+        : isAutoShipping
+        ? 'Draft Stock Out sebelumnya sudah dibatalkan/hilang. Buat ulang untuk melanjutkan.'
         : 'Pengajuan sudah disetujui. Tandai barang ketika sudah dikirim ke penerima.',
       actions: isAutoShipping && req.manualShipmentId ? (
         <button onClick={() => navigate(`/shipping-manual/${req.manualShipmentId}`)}
           className="btn-primary text-sm flex items-center gap-2 justify-center w-full">
           <Truck size={14} /> Lihat Draft Shipping
+        </button>
+      ) : isAutoShipping && req.stockOutDraftId ? (
+        <button onClick={() => navigate(`/stock-out/new?draftId=${req.stockOutDraftId}`)}
+          className="btn-primary text-sm flex items-center gap-2 justify-center w-full bg-amber-600 border-amber-600 hover:bg-amber-700">
+          <PackageCheck size={14} /> Proses Stock Out
+        </button>
+      ) : isAutoShipping ? (
+        <button onClick={onProcessShipment} disabled={loadingProcessShipment}
+          className="btn-secondary text-sm flex items-center gap-2 justify-center w-full">
+          <PackageCheck size={14} /> {loadingProcessShipment ? 'Membuat…' : 'Buat Ulang Stock Out'}
         </button>
       ) : (
         <div className="flex flex-col gap-2">
@@ -549,8 +569,8 @@ export default function PengajuanDetail() {
   const reject           = useMutation({ mutationFn: (r) => requestApi.reject(id, r),           onSuccess: invalidate, onError: e => toast.error(e.response?.data?.message ?? 'Gagal') })
   const processShipment  = useMutation({
     mutationFn: () => requestApi.processShipment(id),
-    onSuccess: (data) => { invalidate(); toast.success('Draft shipping berhasil dibuat!'); navigate(`/shipping-manual/${data.manualShipmentId}`) },
-    onError: e => toast.error(e.response?.data?.message ?? 'Gagal membuat shipping'),
+    onSuccess: (data) => { invalidate(); toast.success('Draft Stock Out berhasil dibuat!'); navigate(`/stock-out/new?draftId=${data.stockOutDraftId}`) },
+    onError: e => toast.error(e.response?.data?.message ?? 'Gagal membuat Stock Out'),
   })
   const markSent      = useMutation({ mutationFn: (d) => requestApi.markSent(id, d),          onSuccess: invalidate, onError: e => toast.error(e.response?.data?.message ?? 'Gagal') })
   const markReturned  = useMutation({ mutationFn: (d) => requestApi.markReturned(id, d),      onSuccess: invalidate, onError: e => toast.error(e.response?.data?.message ?? 'Gagal') })
@@ -901,11 +921,13 @@ export default function PengajuanDetail() {
             onReturn={() => setShowReturn(true)}
             onShipRemaining={() => { if (confirm('Tandai semua sisa item sebagai sudah dikirim?')) shipRemaining.mutate() }}
             onDone={() => { if (confirm('Tandai pengajuan ini selesai?')) markDone.mutate() }}
+            onProcessShipment={() => processShipment.mutate()}
             loadingApprove={approve.isPending}
             loadingSent={markSent.isPending}
             loadingReturn={markReturned.isPending}
             loadingShipRemaining={shipRemaining.isPending}
             loadingDone={markDone.isPending}
+            loadingProcessShipment={processShipment.isPending}
           />
 
           {/* Info card — always show */}

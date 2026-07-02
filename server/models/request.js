@@ -9,6 +9,7 @@ module.exports = (sequelize, DataTypes) => {
       Request.belongsTo(models.User, { foreignKey: 'updatedBy',   as: 'updater' });
       Request.hasMany(models.RequestItem, { foreignKey: 'requestId', as: 'items' });
       Request.belongsTo(models.ManualShipment, { foreignKey: 'manualShipmentId', as: 'manualShipment' });
+      Request.belongsTo(models.Stock_Out_Draft, { foreignKey: 'stockOutDraftId', as: 'stockOutDraft' });
     }
   }
   Request.init({
@@ -34,6 +35,7 @@ module.exports = (sequelize, DataTypes) => {
     updatedBy:        { type: DataTypes.INTEGER, allowNull: true },
     rejectionReason:  { type: DataTypes.TEXT,    allowNull: true },
     manualShipmentId: { type: DataTypes.INTEGER, allowNull: true },
+    stockOutDraftId:  { type: DataTypes.INTEGER, allowNull: true },
     companyId:        { type: DataTypes.INTEGER, allowNull: true },
   }, {
     sequelize,
