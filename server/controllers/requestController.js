@@ -12,7 +12,7 @@ const ITEM_INCLUDE = {
   include: [{
     model: ProductSKU,
     as: 'sku',
-    attributes: ['id', 'sku_code', 'price', 'qty'],
+    attributes: ['id', 'sku_code', 'price', 'qty', 'ProductId'],
     include: [
       { model: Product, attributes: ['id', 'name', 'imageUrl'] },
       { model: ProductVariantOption, attributes: ['id', 'value'], through: { attributes: [] } },
