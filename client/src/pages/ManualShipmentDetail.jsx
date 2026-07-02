@@ -461,6 +461,11 @@ export default function ManualShipmentDetail() {
             )}
           </div>
           <p className="text-xs text-slate-400 mt-0.5">Dibuat oleh {s.creator?.name ?? '—'} · {fmtDateTime(s.createdAt)}</p>
+          {s.sourceRequestId && s.itemsModifiedFromSource && (
+            <p className="text-xs text-amber-600 flex items-center gap-1 mt-1">
+              <AlertCircle size={11} /> Item/harga di sini sudah diedit, mungkin sudah berbeda dari pengajuan asal.
+            </p>
+          )}
         </div>
       </div>
 

@@ -259,6 +259,9 @@ exports.update = async (req, res, next) => {
       updatePayload.shippingCost = cost;
       updatePayload.subtotal = subtotal;
       updatePayload.total = total;
+      // Flag so the detail page can warn that this no longer necessarily matches
+      // the items on the originating Request (they're never re-synced).
+      if (shipment.sourceRequestId) updatePayload.itemsModifiedFromSource = true;
     } else if (shippingCost !== undefined) {
       const cost = parseFloat(shippingCost) || 0;
       const currentSubtotal = parseFloat(shipment.subtotal);
@@ -279,11 +282,15 @@ exports.update = async (req, res, next) => {
 
 // ── CHANGE STATUS ─────────────────────────────────────────────────────────────
 exports.changeStatus = async (req, res, next) => {
+  const t = await sequelize.transaction();
   try {
+    // Lock the row so two concurrent status changes (e.g. double-click, two admins)
+    // can't both pass the transition check against the same stale `current` status.
     const shipment = await ManualShipment.findOne({
       where: { id: req.params.id, ...companyFilter(req) },
+      transaction: t, lock: t.LOCK.UPDATE,
     });
-    if (!shipment) return res.status(404).json({ message: 'Shipping tidak ditemukan' });
+    if (!shipment) { await t.rollback(); return res.status(404).json({ message: 'Shipping tidak ditemukan' }); }
 
     const { status, cancelledReason } = req.body;
     const current = shipment.status;
@@ -298,50 +305,46 @@ exports.changeStatus = async (req, res, next) => {
     };
 
     if (!VALID_TRANSITIONS[current]?.includes(status)) {
+      await t.rollback();
       return res.status(400).json({ message: `Tidak bisa ubah status dari ${current} ke ${status}` });
     }
 
     if (status === 'paid') {
-      if (shipment.type !== 'sales') return res.status(400).json({ message: 'Status paid hanya untuk transaksi sales' });
-      if (!shipment.paymentProofUrl) return res.status(400).json({ message: 'Upload bukti transfer terlebih dahulu' });
+      if (shipment.type !== 'sales') { await t.rollback(); return res.status(400).json({ message: 'Status paid hanya untuk transaksi sales' }); }
+      if (!shipment.paymentProofUrl) { await t.rollback(); return res.status(400).json({ message: 'Upload bukti transfer terlebih dahulu' }); }
       await shipment.update({
         status: 'paid',
         paymentProofVerifiedBy: req.user.id,
         paymentProofVerifiedAt: new Date(),
-      });
+      }, { transaction: t });
     } else if (status === 'cancelled') {
-      await shipment.update({ status: 'cancelled', cancelledReason: cancelledReason?.trim() || null, updatedBy: req.user.id });
+      await shipment.update({ status: 'cancelled', cancelledReason: cancelledReason?.trim() || null, updatedBy: req.user.id }, { transaction: t });
     } else {
       const isFinalized = ['shipped', 'completed'].includes(status);
       await shipment.update({
         status,
         updatedBy: req.user.id,
         ...(isFinalized ? { submittedBy: req.user.id } : {}),
-      });
+      }, { transaction: t });
     }
 
-    // Sync status ke Request asal kalau ada link — wrapped in transaction for atomicity
+    // Sync status ke Request asal kalau ada link
     if (shipment.sourceRequestId) {
       const { Request } = require('../models');
-      const syncT = await sequelize.transaction();
-      try {
-        const linkedRequest = await Request.findByPk(shipment.sourceRequestId, { transaction: syncT });
-        if (linkedRequest) {
-          if (status === 'shipped')   await linkedRequest.update({ status: 'SENT', sentAt: new Date().toISOString().slice(0, 10), processedBy: req.user.id }, { transaction: syncT });
-          if (status === 'completed') await linkedRequest.update({ status: 'DONE', processedBy: req.user.id }, { transaction: syncT });
-          if (status === 'cancelled') await linkedRequest.update({ status: 'APPROVED', manualShipmentId: null }, { transaction: syncT });
-        }
-        if (status === 'cancelled') await shipment.update({ sourceRequestId: null }, { transaction: syncT });
-        await syncT.commit();
-      } catch (syncErr) {
-        await syncT.rollback();
-        throw syncErr;
+      const linkedRequest = await Request.findByPk(shipment.sourceRequestId, { transaction: t });
+      if (linkedRequest) {
+        if (status === 'shipped')   await linkedRequest.update({ status: 'SENT', sentAt: new Date().toISOString().slice(0, 10), processedBy: req.user.id }, { transaction: t });
+        if (status === 'completed') await linkedRequest.update({ status: 'DONE', processedBy: req.user.id }, { transaction: t });
+        if (status === 'cancelled') await linkedRequest.update({ status: 'APPROVED', manualShipmentId: null }, { transaction: t });
       }
+      if (status === 'cancelled') await shipment.update({ sourceRequestId: null }, { transaction: t });
     }
+
+    await t.commit();
 
     const result = await ManualShipment.findByPk(shipment.id, { include: [...HEADER_INCLUDE, ITEM_INCLUDE] });
     res.json({ data: result });
-  } catch (err) { next(err); }
+  } catch (err) { await t.rollback(); next(err); }
 };
 
 // ── UPLOAD PAYMENT PROOF ──────────────────────────────────────────────────────

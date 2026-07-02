@@ -414,7 +414,7 @@ export default function ManualShipmentForm() {
                     <input value={buyerName} onChange={e => setBuyerName(e.target.value)} className="input" placeholder="Nama lengkap pembeli" required />
                   </div>
                   <div>
-                    <label className="label">Alamat Pengiriman *</label>
+                    <label className="label">Alamat Pengiriman</label>
                     <textarea value={buyerAddress} onChange={e => setBuyerAddress(e.target.value)} className="input min-h-[80px] resize-none" placeholder="Alamat lengkap..." />
                   </div>
                   <div>
