@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { productsApi, categoriesApi, articlesApi, warehousesApi, productSkusApi } from '../api'
+import { productsApi, categoriesApi, articlesApi, warehousesApi, productSkusApi, skuWarehouseStocksApi } from '../api'
 import SearchBar from '../components/SearchBar'
 import SearchableSelect from '../components/SearchableSelect'
 import { Pagination } from '../components/Table'
@@ -80,13 +80,22 @@ function EmptyState({ filtered, onAdd }) {
 
 // ── SKU sub-rows (lazy) ───────────────────────────────────────────────────────
 
-function SkuRows({ product, onOpenQr }) {
+function SkuRows({ product, onOpenQr, warehouseId }) {
   const skuCount = product.ProductSKUs?.length ?? 0
 
   const { data: skus, isLoading } = useQuery({
     queryKey: ['product-skus', product.id],
     queryFn:  () => productSkusApi.list(product.id),
     staleTime: 60_000,
+  })
+
+  // When scoped to a warehouse, sku.qty (global total across all warehouses) is
+  // misleading — pull the per-SKU-per-warehouse number from SkuWarehouseStock instead.
+  const { data: warehouseStocks } = useQuery({
+    queryKey: ['sku-warehouse-stocks', warehouseId],
+    queryFn:  () => skuWarehouseStocksApi.list({ WarehouseId: warehouseId }),
+    enabled:  !!warehouseId,
+    staleTime: 30_000,
   })
 
   if (isLoading) {
@@ -121,7 +130,7 @@ function SkuRows({ product, onOpenQr }) {
               style={{ gridTemplateColumns: '1fr 160px 90px 140px 36px' }}>
               <span className="pl-1">SKU / Variant</span>
               <span>Kode SKU</span>
-              <span className="text-right">Stok</span>
+              <span className="text-right">{warehouseId ? 'Stok di Gudang Ini' : 'Stok'}</span>
               <span className="text-right">Harga</span>
               <span />
             </div>
@@ -133,7 +142,9 @@ function SkuRows({ product, onOpenQr }) {
       {skus.map((sku, idx) => {
         const label  = variantLabel(sku)
         const isLast = idx === skus.length - 1
-        const stock  = Number(sku.qty ?? 0)
+        const stock  = warehouseId
+          ? Number((warehouseStocks ?? []).find(s => String(s.ProductSKUId) === String(sku.id))?.qty ?? 0)
+          : Number(sku.qty ?? 0)
         return (
           <tr key={sku.id} className="bg-slate-50/60 hover:bg-slate-100/60 transition-colors">
             <td colSpan={8} className={`py-0 ${isLast ? 'pb-2 border-b border-slate-200' : ''}`}>
@@ -198,7 +209,7 @@ function SkuRows({ product, onOpenQr }) {
 
 // ── Product Row ───────────────────────────────────────────────────────────────
 
-function ProductRow({ product, expanded, onToggle, onDelete, onNavigate, onOpenQr, canEdit, canDelete, canViewValue }) {
+function ProductRow({ product, expanded, onToggle, onDelete, onNavigate, onOpenQr, canEdit, canDelete, canViewValue, warehouseId }) {
   const skus   = product.ProductSKUs ?? []
   const range  = priceRange(skus)
   const stock  = Number(product.totalStock ?? 0)
@@ -339,7 +350,7 @@ function ProductRow({ product, expanded, onToggle, onDelete, onNavigate, onOpenQ
       {/* Expanded rows */}
       {expanded && (
         skuCnt > 0
-          ? <SkuRows product={product} onOpenQr={onOpenQr} />
+          ? <SkuRows product={product} onOpenQr={onOpenQr} warehouseId={warehouseId} />
           : <tr>
               <td colSpan={canViewValue ? 9 : 8} className="border-b border-slate-100 bg-slate-50/60">
                 <div className="ml-14 mr-4 py-4 flex items-center gap-4">
@@ -591,6 +602,7 @@ export default function Products() {
                       canEdit={!blocked && canEdit}
                       canDelete={!blocked && canDelete}
                       canViewValue={canViewValue}
+                      warehouseId={whFilter || undefined}
                       onOpenQr={setQrTarget}
                     />
                   ))}
