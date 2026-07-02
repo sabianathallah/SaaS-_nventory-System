@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Plus, Trash2, ShoppingCart, Gift, Search, X, Package } from 'lucide-react'
+import { ArrowLeft, Plus, Trash2, ShoppingCart, Gift, Search, X, Package, RefreshCw } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { manualShipmentsApi, shipmentCategoriesApi, productsApi, productSkusApi } from '../api'
 
@@ -214,6 +214,7 @@ export default function ManualShipmentForm() {
   const [showPicker, setShowPicker]         = useState(false)
   const [newCategory, setNewCategory]       = useState('')
   const [addingCat, setAddingCat]           = useState(false)
+  const [refreshingPrices, setRefreshingPrices] = useState(false)
 
   // Load for edit
   const { data: existingRes, isLoading: loadingExisting } = useQuery({
@@ -297,6 +298,35 @@ export default function ManualShipmentForm() {
   const handleRemoveItem = (idx) => setItems(prev => prev.filter((_, i) => i !== idx))
   const handleQtyChange  = (idx, val) => setItems(prev => prev.map((it, i) => i === idx ? { ...it, quantity: Number(val) } : it))
   const handlePriceChange = (idx, val) => setItems(prev => prev.map((it, i) => i === idx ? { ...it, unitPrice: Number(String(val).replace(/\D/g, '')) } : it))
+
+  // Re-pull current SKU prices from the product catalog and overwrite the frozen
+  // snapshot — for items added back when the SKU had no price set yet.
+  const handleRefreshPrices = async () => {
+    const productIds = [...new Set(items.map(i => i.productId).filter(Boolean))]
+    if (!productIds.length) return
+    setRefreshingPrices(true)
+    try {
+      const skuLists = await Promise.all(productIds.map(pid => productSkusApi.list(pid)))
+      const skuByProduct = Object.fromEntries(productIds.map((pid, i) => [pid, skuLists[i]]))
+      let updated = 0
+      setItems(prev => prev.map(item => {
+        const skus = skuByProduct[item.productId] ?? []
+        const sku = item.productSkuId
+          ? skus.find(s => String(s.id) === String(item.productSkuId))
+          : null
+        if (!sku || sku.price == null) return item
+        const newPrice = Math.round(Number(sku.price))
+        if (newPrice === item.unitPrice) return item
+        updated++
+        return { ...item, unitPrice: newPrice }
+      }))
+      toast.success(updated > 0 ? `${updated} harga item diperbarui dari data produk` : 'Semua harga sudah sesuai data produk')
+    } catch {
+      toast.error('Gagal mengambil harga terbaru')
+    } finally {
+      setRefreshingPrices(false)
+    }
+  }
 
   const handleSubmit = (e) => {
     e.preventDefault()
@@ -479,9 +509,23 @@ export default function ManualShipmentForm() {
             <div className="card p-5 space-y-4">
               <div className="flex items-center justify-between">
                 <h2 className="font-semibold text-slate-700 text-sm">Produk</h2>
-                <button type="button" onClick={() => setShowPicker(true)} className="btn-primary flex items-center gap-1.5 text-xs py-1.5 px-3">
-                  <Plus size={13} /> Tambah Produk
-                </button>
+                <div className="flex items-center gap-2">
+                  {isEdit && items.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleRefreshPrices}
+                      disabled={refreshingPrices}
+                      title="Ambil ulang harga terbaru dari data produk"
+                      className="btn-secondary flex items-center gap-1.5 text-xs py-1.5 px-3"
+                    >
+                      <RefreshCw size={13} className={refreshingPrices ? 'animate-spin' : ''} />
+                      {refreshingPrices ? 'Memperbarui…' : 'Refresh Harga'}
+                    </button>
+                  )}
+                  <button type="button" onClick={() => setShowPicker(true)} className="btn-primary flex items-center gap-1.5 text-xs py-1.5 px-3">
+                    <Plus size={13} /> Tambah Produk
+                  </button>
+                </div>
               </div>
 
               {items.length === 0 && (

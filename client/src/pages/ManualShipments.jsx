@@ -1,19 +1,43 @@
 import { useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { Plus, ShoppingCart, Gift, Search } from 'lucide-react'
+import { Plus, ShoppingCart, Gift, Search, CreditCard, Truck, PackageCheck, Clock } from 'lucide-react'
 import { manualShipmentsApi } from '../api'
 import PageHeader from '../components/PageHeader'
 import { Table, Pagination } from '../components/Table'
 import { useAuth } from '../context/AuthContext'
 
-const STATUS_BADGE = {
-  draft:     <span className="badge-muted">● Draft</span>,
-  pending:   <span className="badge-amber">● Unpaid</span>,
-  paid:      <span className="badge-indigo">● Paid</span>,
-  shipped:   <span className="badge-purple">● Shipped</span>,
-  completed: <span className="badge-green">● Completed</span>,
-  cancelled: <span className="badge-red">● Cancelled</span>,
+// Sales has a payment leg (pending→paid); non-sales skips straight to ready-to-ship.
+// Keep these labels in sync with STATUS_CONFIG in ManualShipmentDetail.jsx.
+function statusBadge(status, type) {
+  if (status === 'pending') {
+    return type === 'non_sales'
+      ? <span className="badge-indigo">● Siap Diambil</span>
+      : <span className="badge-amber">● Unpaid</span>
+  }
+  const common = {
+    draft:     <span className="badge-muted">● Draft</span>,
+    paid:      <span className="badge-indigo">● Paid</span>,
+    shipped:   <span className="badge-purple">● Shipped</span>,
+    completed: <span className="badge-green">● Completed</span>,
+    cancelled: <span className="badge-red">● Cancelled</span>,
+  }
+  return common[status] ?? <span className="badge-muted">{status}</span>
+}
+
+// One-line hint of what's blocking/next for this row — the "what do I do now" cue.
+function nextActionHint(r) {
+  if (r.status === 'draft')     return { text: 'Ajukan transaksi', icon: Clock, color: 'text-slate-400' }
+  if (r.status === 'cancelled' || r.status === 'completed') return null
+  if (r.status === 'pending') {
+    if (r.type === 'non_sales') return { text: 'Siap dikirim', icon: PackageCheck, color: 'text-indigo-500' }
+    return r.paymentProofUrl
+      ? { text: 'Konfirmasi pembayaran', icon: CreditCard, color: 'text-blue-500' }
+      : { text: 'Tunggu bukti transfer', icon: CreditCard, color: 'text-amber-500' }
+  }
+  if (r.status === 'paid')    return { text: 'Siap dikirim', icon: PackageCheck, color: 'text-indigo-500' }
+  if (r.status === 'shipped') return { text: 'Tunggu diterima', icon: Truck, color: 'text-purple-500' }
+  return null
 }
 
 const TYPE_BADGE = {
@@ -30,15 +54,29 @@ const TYPE_TABS = [
   { value: 'non_sales', label: 'Non-Sales' },
 ]
 
-const STATUS_OPTS = [
-  { value: '',          label: 'Semua Status' },
-  { value: 'draft',     label: 'Draft' },
-  { value: 'pending',   label: 'Unpaid' },
-  { value: 'paid',      label: 'Paid' },
-  { value: 'shipped',   label: 'Shipped' },
-  { value: 'completed', label: 'Completed' },
-  { value: 'cancelled', label: 'Cancelled' },
-]
+// Status filter options adapt to the active type tab — non-sales has no payment leg,
+// so "Paid" doesn't apply and "pending" reads as "Siap Diambil" instead of "Unpaid".
+function statusOpts(type) {
+  if (type === 'non_sales') {
+    return [
+      { value: '',          label: 'Semua Status' },
+      { value: 'draft',     label: 'Draft' },
+      { value: 'pending',   label: 'Siap Diambil' },
+      { value: 'shipped',   label: 'Shipped' },
+      { value: 'completed', label: 'Completed' },
+      { value: 'cancelled', label: 'Cancelled' },
+    ]
+  }
+  return [
+    { value: '',          label: 'Semua Status' },
+    { value: 'draft',     label: 'Draft' },
+    { value: 'pending',   label: 'Unpaid' },
+    { value: 'paid',      label: 'Paid' },
+    { value: 'shipped',   label: 'Shipped' },
+    { value: 'completed', label: 'Completed' },
+    { value: 'cancelled', label: 'Cancelled' },
+  ]
+}
 
 export default function ManualShipments() {
   const navigate = useNavigate()
@@ -92,7 +130,20 @@ export default function ManualShipments() {
     },
     {
       key: 'status', label: 'Status', width: 130,
-      render: r => STATUS_BADGE[r.status] ?? <span className="badge-muted">{r.status}</span>,
+      render: r => statusBadge(r.status, r.type),
+    },
+    {
+      key: 'progress', label: 'Progress', width: 160,
+      render: r => {
+        const hint = nextActionHint(r)
+        if (!hint) return <span className="text-xs text-slate-300">—</span>
+        const Icon = hint.icon
+        return (
+          <span className={`text-xs font-medium flex items-center gap-1.5 ${hint.color}`}>
+            <Icon size={12} /> {hint.text}
+          </span>
+        )
+      },
     },
     {
       key: 'expedition', label: 'Ekspedisi', width: 120,
@@ -160,7 +211,14 @@ export default function ManualShipments() {
           {TYPE_TABS.map(t => (
             <button
               key={t.value}
-              onClick={() => setParam('type', t.value)}
+              onClick={() => {
+                // "paid" doesn't exist for non-sales — drop it rather than filter to nothing
+                if (t.value === 'non_sales' && status === 'paid') {
+                  setSearchParams(prev => { prev.set('type', t.value); prev.delete('status'); prev.delete('page'); return prev }, { replace: true })
+                } else {
+                  setParam('type', t.value)
+                }
+              }}
               className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
                 type === t.value
                   ? 'bg-white text-slate-800 shadow-sm'
@@ -178,7 +236,7 @@ export default function ManualShipments() {
           onChange={e => setParam('status', e.target.value)}
           className="input text-sm h-9 py-0 w-44"
         >
-          {STATUS_OPTS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          {statusOpts(type).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
 
         {/* Search */}

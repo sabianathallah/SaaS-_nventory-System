@@ -32,7 +32,7 @@ const NONSALES_STEPS = ['pending', 'shipped', 'completed']
 function StatusTimeline({ status, type }) {
   const steps  = type === 'sales' ? SALES_STEPS : NONSALES_STEPS
   const labels = {
-    pending:   type === 'sales' ? 'Belum Bayar' : 'Menunggu',
+    pending:   type === 'sales' ? 'Belum Bayar' : 'Siap Diambil',
     paid:      'Lunas',
     shipped:   'Dikirim',
     completed: 'Selesai',
@@ -427,7 +427,10 @@ export default function ManualShipmentDetail() {
   )
   if (!s) return <div className="flex items-center justify-center h-64 text-slate-400">Data tidak ditemukan</div>
 
-  const cfg       = STATUS_CONFIG[s.status] ?? {}
+  const cfg = {
+    ...(STATUS_CONFIG[s.status] ?? {}),
+    ...(s.status === 'pending' && { label: s.type === 'sales' ? 'Belum Bayar' : 'Siap Diambil' }),
+  }
   const canEdit   = ['draft', 'pending'].includes(s.status) && perm('shipping.manual.edit')
   const canCancel = !['completed', 'cancelled'].includes(s.status) && perm('shipping.manual.cancel')
   const canDelete = ['draft', 'pending', 'cancelled'].includes(s.status) && perm('shipping.manual.delete')
