@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import ProfileModal from './ProfileModal'
 import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
@@ -10,7 +10,8 @@ import {
   ArrowDownToLine, ArrowUpFromLine, ArrowLeftRight, Repeat2,
   ClipboardList, Users, Building2, BookOpen, LogOut, Bell,
   PackageOpen, Layers, ClipboardCheck, Menu, X, Eye, EyeOff,
-  PackageCheck, Link2, BarChart2, BookMarked, ChevronDown, SendHorizonal, FileText,
+  PackageCheck, Link2, BarChart2, BookMarked, ChevronDown,
+  SendHorizonal, FileText, PanelLeftClose, PanelLeftOpen,
 } from 'lucide-react'
 import logoPreface from '../assets/logo-preface.jpeg'
 
@@ -29,7 +30,7 @@ const NAV_GROUPS = [
     label: 'Inventori',
     items: [
       { to: '/products',   icon: Package,   label: 'Produk',              pageKey: 'products', staffVisible: true },
-      { to: '/catalog',    icon: BookOpen,  label: 'Kategori dan Koleksi', pageKey: 'catalog' },
+      { to: '/catalog',    icon: BookOpen,  label: 'Kategori & Koleksi',  pageKey: 'catalog' },
       { to: '/warehouses', icon: Warehouse, label: 'Gudang',              pageKey: 'warehouses' },
       { to: '/suppliers',  icon: Truck,     label: 'Vendor',              pageKey: 'suppliers' },
     ],
@@ -37,13 +38,13 @@ const NAV_GROUPS = [
   {
     label: 'Transaksi',
     items: [
-      { to: '/stock-in',  icon: ArrowDownToLine, label: 'Penerimaan Stock', pageKey: 'stock-in' },
-      { to: '/stock-out', icon: ArrowUpFromLine,  label: 'Pengeluaran Stock', pageKey: 'stock-out' },
-      { to: '/movements', icon: ArrowLeftRight,   label: 'Pergerakan',       pageKey: 'movements' },
-      { to: '/transfers', icon: Repeat2,          label: 'Transfer Stok',    pageKey: 'transfers', requirePermission: 'stock.transfer.view' },
-      { to: '/opname',    icon: ClipboardList,    label: 'Stock Opname',     pageKey: 'opname' },
-      { to: '/handover',         icon: PackageCheck,    label: 'Handover',         pageKey: 'handover' },
-      { to: '/shipping-manual', icon: SendHorizonal,   label: 'Shipping Manual',  pageKey: 'shipping-manual', requirePermission: 'shipping.manual.view' },
+      { to: '/stock-in',        icon: ArrowDownToLine, label: 'Penerimaan Stock',  pageKey: 'stock-in' },
+      { to: '/stock-out',       icon: ArrowUpFromLine,  label: 'Pengeluaran Stock', pageKey: 'stock-out' },
+      { to: '/movements',       icon: ArrowLeftRight,   label: 'Pergerakan',        pageKey: 'movements' },
+      { to: '/transfers',       icon: Repeat2,          label: 'Transfer Stok',     pageKey: 'transfers', requirePermission: 'stock.transfer.view' },
+      { to: '/opname',          icon: ClipboardList,    label: 'Stock Opname',      pageKey: 'opname' },
+      { to: '/handover',        icon: PackageCheck,     label: 'Handover',          pageKey: 'handover' },
+      { to: '/shipping-manual', icon: SendHorizonal,    label: 'Shipping Manual',   pageKey: 'shipping-manual', requirePermission: 'shipping.manual.view' },
     ],
   },
   {
@@ -99,22 +100,49 @@ function groupHasActivePath(group, pathname) {
   return group.items.some(item => pathname === item.to || pathname.startsWith(item.to + '/'))
 }
 
+// Tooltip wrapper untuk icon-only mode
+function NavTooltip({ label, children }) {
+  return (
+    <div className="relative group/tooltip">
+      {children}
+      <div
+        className="
+          pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-3 z-50
+          px-2.5 py-1.5 rounded-md text-xs font-semibold whitespace-nowrap
+          bg-slate-800 text-white shadow-lg
+          opacity-0 group-hover/tooltip:opacity-100
+          translate-x-1 group-hover/tooltip:translate-x-0
+          transition-all duration-150
+        "
+      >
+        {label}
+        <div className="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-slate-800" />
+      </div>
+    </div>
+  )
+}
+
 export default function Layout({ children }) {
   const { user, signOut, isSuperAdmin, hasPermission } = useAuth()
   const { needsCompany } = useCompanyGuard()
   const { isPageVisible } = usePageVisibility()
   const navigate  = useNavigate()
   const location  = useLocation()
+
+  // Mobile drawer
   const [sidebarOpen, setSidebarOpen] = useState(false)
+
+  // Desktop collapse — persisted
+  const [collapsed, setCollapsed] = useState(() =>
+    localStorage.getItem('sidebar-collapsed') === 'true'
+  )
+
   const [profileOpen, setProfileOpen] = useState(false)
 
-  // Init open groups: only the group with the active page
-  const [openGroups, setOpenGroups] = useState(() => {
-    const active = NAV_GROUPS.find(g => groupHasActivePath(g, location.pathname))
-    return new Set([active?.label ?? NAV_GROUPS[0].label])
-  })
+  // Accordion groups (hanya relevan saat expanded) — default: buka semua group
+  const [openGroups, setOpenGroups] = useState(() => new Set(NAV_GROUPS.map(g => g.label)))
 
-  // Auto-open group when navigating to a new page
+  // Auto-open group saat navigasi
   useEffect(() => {
     const active = NAV_GROUPS.find(g => groupHasActivePath(g, location.pathname))
     if (active) {
@@ -135,6 +163,25 @@ export default function Layout({ children }) {
     })
   }
 
+  const toggleCollapse = useCallback(() => {
+    setCollapsed(v => {
+      localStorage.setItem('sidebar-collapsed', String(!v))
+      return !v
+    })
+  }, [])
+
+  // ⌘B / Ctrl+B — toggle sidebar
+  useEffect(() => {
+    const onKeyDown = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'b') {
+        e.preventDefault()
+        toggleCollapse()
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [toggleCollapse])
+
   const handleSignOut = () => { signOut(); navigate('/login') }
   const closeSidebar  = () => setSidebarOpen(false)
   const pageTitle = PAGE_TITLES[location.pathname] ?? 'Preface Inventory System'
@@ -143,35 +190,46 @@ export default function Layout({ children }) {
     <div className="flex h-screen overflow-hidden bg-canvas">
       {profileOpen && <ProfileModal onClose={() => setProfileOpen(false)} />}
 
-      {/* ── Mobile backdrop ────────────────────────────────── */}
+      {/* ── Mobile backdrop ──────────────────────────────── */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 z-20 bg-black/40 md:hidden"
+          className="fixed inset-0 z-20 bg-black/40 backdrop-blur-sm md:hidden"
           onClick={closeSidebar}
         />
       )}
 
-      {/* ── Sidebar ────────────────────────────────────────── */}
+      {/* ── Sidebar ──────────────────────────────────────── */}
       <aside
-        className={`
-          fixed md:relative inset-y-0 left-0 z-30
-          w-60 flex-shrink-0 flex flex-col
-          transition-transform duration-250 ease-out
-          ${sidebarOpen ? 'translate-x-0 animate-slide-in-left' : '-translate-x-full md:translate-x-0'}
-        `}
+        className={[
+          'fixed md:relative inset-y-0 left-0 z-30',
+          'flex-shrink-0 flex flex-col',
+          'transition-[width,transform] duration-300 ease-in-out',
+          collapsed ? 'md:w-[60px]' : 'w-60',
+          sidebarOpen ? 'translate-x-0 w-60' : '-translate-x-full md:translate-x-0',
+        ].join(' ')}
         style={{ background: '#F5F3EF', borderRight: '1px solid #E0DDD7', boxShadow: '2px 0 8px rgba(0,0,0,0.04)' }}
       >
-        {/* Logo */}
-        <div className="flex items-center gap-3 px-4 h-14" style={{ borderBottom: '1px solid #E0DDD7' }}>
-          <img src={logoPreface} alt="Preface" className="w-7 h-7 rounded object-cover flex-shrink-0" />
-          <div className="min-w-0">
-            <p className="font-bold text-sm text-slate-800 leading-tight truncate">Preface</p>
-            <p className="text-[10px] text-slate-400 leading-tight truncate">Inventory System</p>
+        {/* ── Logo ── */}
+        <div
+          className="flex items-center h-14 flex-shrink-0 overflow-hidden"
+          style={{ borderBottom: '1px solid #E0DDD7', padding: collapsed ? '0 12px' : '0 16px' }}
+        >
+          <img
+            src={logoPreface}
+            alt="Preface"
+            className="w-7 h-7 rounded object-cover flex-shrink-0"
+          />
+          <div
+            className="ml-3 min-w-0 overflow-hidden transition-all duration-300"
+            style={{ opacity: collapsed ? 0 : 1, width: collapsed ? 0 : 'auto', maxWidth: collapsed ? 0 : 200 }}
+          >
+            <p className="font-bold text-sm text-slate-800 leading-tight whitespace-nowrap">Preface</p>
+            <p className="text-[10px] text-slate-400 leading-tight whitespace-nowrap">Inventory System</p>
           </div>
         </div>
 
-        {/* Nav */}
-        <nav className="flex-1 overflow-y-auto py-3 px-3">
+        {/* ── Nav ── */}
+        <nav className="flex-1 overflow-y-auto overflow-x-hidden py-3" style={{ padding: collapsed ? '12px 8px' : '12px 12px' }}>
           {NAV_GROUPS.map((group) => {
             const navItems = group.items.reduce((acc, item) => {
               if (item.superOnly && !isSuperAdmin) return acc
@@ -184,12 +242,47 @@ export default function Layout({ children }) {
 
             if (!navItems.length) return null
 
-            const isOpen    = openGroups.has(group.label)
-            const isActive  = groupHasActivePath(group, location.pathname)
+            const isOpen   = openGroups.has(group.label)
+            const isActive = groupHasActivePath(group, location.pathname)
 
+            // ── COLLAPSED mode: icon-only, no accordion ──
+            if (collapsed) {
+              return (
+                <div key={group.label} className="mb-3">
+                  {/* Divider antar group */}
+                  <div className="mx-1 mb-2 border-t border-slate-200/80" />
+                  <div className="space-y-0.5">
+                    {navItems.map((item) => {
+                      const Icon = item.icon
+                      return (
+                        <NavTooltip key={item.to} label={item.label}>
+                          <NavLink
+                            to={item.to}
+                            end={item.to === '/'}
+                            onClick={closeSidebar}
+                            style={({ isActive }) => isActive
+                              ? { background: BRAND, color: '#fff', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 44, height: 36, margin: '0 auto' }
+                              : { borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 44, height: 36, margin: '0 auto' }
+                            }
+                            className={({ isActive }) =>
+                              `transition-colors duration-100 ${isActive ? '' : 'text-slate-500 hover:text-slate-800 hover:bg-slate-200/70'}`
+                            }
+                          >
+                            {({ isActive }) => (
+                              <Icon size={16} strokeWidth={isActive ? 2.5 : 1.8} className={item.hidden && !isActive ? 'opacity-40' : ''} />
+                            )}
+                          </NavLink>
+                        </NavTooltip>
+                      )
+                    })}
+                  </div>
+                </div>
+              )
+            }
+
+            // ── EXPANDED mode: accordion groups ──
             return (
               <div key={group.label} className="mb-1">
-                {/* Group header — clickable */}
                 <button
                   onClick={() => toggleGroup(group.label)}
                   className={`
@@ -209,7 +302,6 @@ export default function Layout({ children }) {
                   />
                 </button>
 
-                {/* Items — accordion */}
                 <div
                   style={{
                     maxHeight: isOpen ? '600px' : '0px',
@@ -239,24 +331,16 @@ export default function Layout({ children }) {
                         >
                           {({ isActive }) => (
                             <>
-                              {item.icon ? (
-                                <Icon
-                                  size={14}
-                                  strokeWidth={isActive ? 2.5 : 2}
-                                  className={`flex-shrink-0 ${item.hidden && !isActive ? 'opacity-50' : ''}`}
-                                />
-                              ) : (
-                                <span className="flex-shrink-0 w-[14px]" />
-                              )}
+                              <Icon
+                                size={14}
+                                strokeWidth={isActive ? 2.5 : 2}
+                                className={`flex-shrink-0 ${item.hidden && !isActive ? 'opacity-50' : ''}`}
+                              />
                               <span className={`flex-1 truncate text-[13px] ${item.hidden && !isActive ? 'opacity-60' : ''}`}>
                                 {item.label}
                               </span>
                               {item.hidden && (
-                                <EyeOff
-                                  size={10}
-                                  className="flex-shrink-0 opacity-40"
-                                  title="Halaman disembunyikan"
-                                />
+                                <EyeOff size={10} className="flex-shrink-0 opacity-40" title="Halaman disembunyikan" />
                               )}
                             </>
                           )}
@@ -270,51 +354,86 @@ export default function Layout({ children }) {
           })}
         </nav>
 
-        {/* User footer */}
-        <div style={{ borderTop: '1px solid #E0DDD7' }} className="p-3">
-          <div
-            className="flex items-center gap-2.5 px-2.5 py-2 rounded-md hover:bg-slate-200/50 transition-colors cursor-pointer group"
-            onClick={() => setProfileOpen(true)}
-            title="Edit profil"
-          >
-            {user?.avatar
-              ? <img src={user.avatar} alt="avatar" className="w-7 h-7 rounded-full object-cover flex-shrink-0 border border-slate-200" />
-              : (
-                <div className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: BRAND }}>
-                  <span className="text-xs font-bold text-white">{user?.name?.[0]?.toUpperCase()}</span>
-                </div>
-              )
-            }
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-semibold text-slate-800 truncate">{user?.name}</p>
-              <p className="text-[10px] text-slate-400 truncate">
-                {user?.company?.name ?? user?.role}
-              </p>
-            </div>
-            <button
-              onClick={e => { e.stopPropagation(); handleSignOut() }}
-              className="opacity-0 group-hover:opacity-100 transition-opacity text-slate-400 hover:text-red-600 p-0.5"
-              title="Sign out"
+        {/* ── User footer ── */}
+        <div style={{ borderTop: '1px solid #E0DDD7' }} className="p-2 flex-shrink-0">
+          {collapsed ? (
+            <NavTooltip label={user?.name ?? 'Profil'}>
+              <button
+                onClick={() => setProfileOpen(true)}
+                className="w-full flex items-center justify-center py-2 rounded-md hover:bg-slate-200/50 transition-colors"
+                title="Edit profil"
+              >
+                {user?.avatar
+                  ? <img src={user.avatar} alt="avatar" className="w-7 h-7 rounded-full object-cover border border-slate-200" />
+                  : (
+                    <div className="w-7 h-7 rounded-full flex items-center justify-center" style={{ background: BRAND }}>
+                      <span className="text-xs font-bold text-white">{user?.name?.[0]?.toUpperCase()}</span>
+                    </div>
+                  )
+                }
+              </button>
+            </NavTooltip>
+          ) : (
+            <div
+              className="flex items-center gap-2.5 px-2.5 py-2 rounded-md hover:bg-slate-200/50 transition-colors cursor-pointer group"
+              onClick={() => setProfileOpen(true)}
+              title="Edit profil"
             >
-              <LogOut size={13} />
-            </button>
-          </div>
+              {user?.avatar
+                ? <img src={user.avatar} alt="avatar" className="w-7 h-7 rounded-full object-cover flex-shrink-0 border border-slate-200" />
+                : (
+                  <div className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: BRAND }}>
+                    <span className="text-xs font-bold text-white">{user?.name?.[0]?.toUpperCase()}</span>
+                  </div>
+                )
+              }
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-semibold text-slate-800 truncate">{user?.name}</p>
+                <p className="text-[10px] text-slate-400 truncate">
+                  {user?.company?.name ?? user?.role}
+                </p>
+              </div>
+              <button
+                onClick={e => { e.stopPropagation(); handleSignOut() }}
+                className="opacity-0 group-hover:opacity-100 transition-opacity text-slate-400 hover:text-red-600 p-0.5"
+                title="Sign out"
+              >
+                <LogOut size={13} />
+              </button>
+            </div>
+          )}
         </div>
       </aside>
 
-      {/* ── Main ─────────────────────────────────────────────── */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      {/* ── Main ─────────────────────────────────────────── */}
+      <div className="flex-1 flex flex-col overflow-hidden min-w-0">
         {/* Top bar */}
-        <header className="h-14 bg-white border-b border-slate-200 flex items-center px-4 md:px-6 gap-3 flex-shrink-0 shadow-sm">
+        <header className="h-14 bg-white border-b border-slate-200 flex items-center px-4 gap-3 flex-shrink-0 shadow-sm">
+
+          {/* Mobile hamburger */}
           <button
             className="md:hidden w-8 h-8 flex items-center justify-center text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-md transition-colors flex-shrink-0"
             onClick={() => setSidebarOpen(v => !v)}
           >
             {sidebarOpen ? <X size={18} /> : <Menu size={18} />}
           </button>
+
+          {/* Desktop collapse toggle */}
+          <button
+            className="hidden md:flex w-8 h-8 items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-md transition-colors flex-shrink-0"
+            onClick={toggleCollapse}
+            title={collapsed ? 'Buka sidebar (⌘B)' : 'Sembunyikan sidebar (⌘B)'}
+          >
+            {collapsed
+              ? <PanelLeftOpen size={16} />
+              : <PanelLeftClose size={16} />
+            }
+          </button>
+
           <div className="flex-1 min-w-0">
             <h1 className="text-sm font-bold text-slate-800 truncate">{pageTitle}</h1>
           </div>
+
           <div className="flex items-center gap-2">
             <CompanySwitcher />
             <button className="w-8 h-8 rounded-md flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors">
