@@ -1,5 +1,5 @@
 'use strict';
-const { Stock_Opname_Item, Stock_Opname_Session, Product, ProductSKU, ProductVariantOption, ProductVariantType, Stock } = require('../models');
+const { Stock_Opname_Item, Stock_Opname_Session, Product, ProductSKU, ProductVariantOption, ProductVariantType, Stock, SkuWarehouseStock } = require('../models');
 const { companyFilter } = require('../helpers/tenancy');
 const { paginate, buildFilter, paginatedResponse } = require('../helpers/queryHelper');
 
@@ -65,11 +65,13 @@ class StockOpnameItemController {
             let system_qty = body.system_qty;
             if (system_qty == null) {
                 if (ProductSKUId) {
-                    // Per-SKU qty is the most accurate baseline for variant-level opname.
-                    // In single-warehouse setups (most common) this equals the exact per-warehouse count.
-                    // Stock.quantity would be the product *total* across all SKUs — wrong per-variant.
-                    const sku = await ProductSKU.findByPk(ProductSKUId);
-                    system_qty = sku?.qty ?? 0;
+                    // Per-SKU, per-warehouse qty from SkuWarehouseStocks — the live ledger.
+                    // ProductSKU.qty is a legacy cross-warehouse total and would be wrong
+                    // for any company with more than one warehouse.
+                    const skuStock = await SkuWarehouseStock.findOne({
+                        where: { ProductSKUId, WarehouseId: session.warehouseId },
+                    });
+                    system_qty = skuStock?.qty ?? 0;
                 } else {
                     const stock = await Stock.findOne({
                         where: { ProductId, WarehouseId: session.warehouseId },

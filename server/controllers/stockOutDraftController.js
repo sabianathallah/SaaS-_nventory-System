@@ -356,7 +356,9 @@ class StockOutDraftController {
             }
 
             // If this draft was staged from an approved pengajuan, finishing the
-            // Stock Out is what triggers the Shipping Manual draft to exist.
+            // Stock Out is what triggers the next step: for Sales/Non-Sales that's
+            // the Shipping Manual draft; for Jatah Internal (no shipping involved)
+            // the Stock Out itself is the fulfillment, so the request goes straight to DONE.
             let manualShipmentId = null;
             if (draft.sourceRequestId) {
                 const linkedRequest = await Request.findOne({
@@ -377,9 +379,14 @@ class StockOutDraftController {
                     transaction: t,
                 });
                 if (linkedRequest) {
-                    const shipment = await createShipmentFromRequest(linkedRequest, cid, req.user.id, t);
-                    await linkedRequest.update({ manualShipmentId: shipment.id, stockOutDraftId: null }, { transaction: t });
-                    manualShipmentId = shipment.id;
+                    const shipmentType = linkedRequest.requestType?.shipmentType;
+                    if (shipmentType === 'sales' || shipmentType === 'non_sales') {
+                        const shipment = await createShipmentFromRequest(linkedRequest, cid, req.user.id, t);
+                        await linkedRequest.update({ manualShipmentId: shipment.id, stockOutDraftId: null }, { transaction: t });
+                        manualShipmentId = shipment.id;
+                    } else {
+                        await linkedRequest.update({ status: 'DONE', processedBy: req.user.id, stockOutDraftId: null }, { transaction: t });
+                    }
                 }
             }
 

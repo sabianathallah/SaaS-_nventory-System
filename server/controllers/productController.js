@@ -42,17 +42,23 @@ class ProductController {
                 ? { [Op.and]: sequelize.literal(`EXISTS (SELECT 1 FROM "SkuWarehouseStocks" sws INNER JOIN "ProductSKUs" ps ON ps."id" = sws."ProductSKUId" WHERE ps."ProductId" = "Product"."id" AND sws."WarehouseId" = ${warehouseId} AND sws."qty" > 0)`) }
                 : {};
 
-            // totalStock: per-warehouse from SkuWarehouseStocks, or total from ProductSKU.qty
+            // totalStock: always from SkuWarehouseStocks (the live per-warehouse ledger),
+            // optionally scoped to a single warehouse. ProductSKU.qty is a legacy column
+            // that stock movements no longer update — do not sum it.
             const stockSubquery = warehouseId
                 ? `(SELECT COALESCE(SUM(sws."qty"),0) FROM "SkuWarehouseStocks" sws INNER JOIN "ProductSKUs" ps ON ps."id" = sws."ProductSKUId" WHERE ps."ProductId" = "Product"."id" AND sws."WarehouseId" = ${warehouseId})`
-                : `(SELECT COALESCE(SUM(ps."qty"),0) FROM "ProductSKUs" ps WHERE ps."ProductId" = "Product"."id")`;
+                : `(SELECT COALESCE(SUM(sws."qty"),0) FROM "SkuWarehouseStocks" sws INNER JOIN "ProductSKUs" ps ON ps."id" = sws."ProductSKUId" WHERE ps."ProductId" = "Product"."id")`;
+
+            const valueSubquery = warehouseId
+                ? `(SELECT COALESCE(SUM(sws."qty" * ps."price"),0) FROM "SkuWarehouseStocks" sws INNER JOIN "ProductSKUs" ps ON ps."id" = sws."ProductSKUId" WHERE ps."ProductId" = "Product"."id" AND sws."WarehouseId" = ${warehouseId})`
+                : `(SELECT COALESCE(SUM(sws."qty" * ps."price"),0) FROM "SkuWarehouseStocks" sws INNER JOIN "ProductSKUs" ps ON ps."id" = sws."ProductSKUId" WHERE ps."ProductId" = "Product"."id")`;
 
             const { rows, count } = await Product.findAndCountAll({
                 where: { ...companyFilter(req), ...filter, ...extraWhere },
                 attributes: {
                     include: [
                         [sequelize.literal(stockSubquery), 'totalStock'],
-                        [sequelize.literal(`(SELECT COALESCE(SUM(sku."qty" * sku."price"), 0) FROM "ProductSKUs" sku WHERE sku."ProductId" = "Product"."id")`), 'totalValue'],
+                        [sequelize.literal(valueSubquery), 'totalValue'],
                     ],
                 },
                 include: [
@@ -74,7 +80,7 @@ class ProductController {
                 where: { id: req.params.id, ...companyFilter(req) },
                 attributes: {
                     include: [[
-                        sequelize.literal('(SELECT COALESCE(SUM(ps."qty"),0) FROM "ProductSKUs" ps WHERE ps."ProductId" = "Product"."id")'),
+                        sequelize.literal('(SELECT COALESCE(SUM(sws."qty"),0) FROM "SkuWarehouseStocks" sws INNER JOIN "ProductSKUs" ps ON ps."id" = sws."ProductSKUId" WHERE ps."ProductId" = "Product"."id")'),
                         'totalStock',
                     ]],
                 },

@@ -1,8 +1,7 @@
 'use strict';
 const { Op } = require('sequelize');
-const { sequelize, Request, RequestItem, RequestType, ProductSKU, Product, ProductVariantOption, User, ManualShipment, SkuWarehouseStock, Stock_Movement, Stock_Out_Draft, Stock_Out_Draft_Item } = require('../models');
+const { sequelize, Request, RequestItem, RequestType, ProductSKU, Product, ProductVariantOption, User, ManualShipment, Stock_Out_Draft, Stock_Out_Draft_Item } = require('../models');
 const { companyFilter, companyId } = require('../helpers/tenancy');
-const { upsertSkuWarehouseStock } = require('../helpers/skuStock');
 const { paginate, paginatedResponse } = require('../helpers/queryHelper');
 
 // Sales/Non-Sales pengajuan approval doesn't touch stock directly anymore — it
@@ -323,56 +322,13 @@ class RequestController {
         ?? (request.requestType?.requiresShipping ? 'non_sales' : null);
       const cid = companyId(req);
 
-      // ── Jatah Internal: stock-out otomatis → langsung DONE ──────────────────
-      if (shipmentType === 'stock_out') {
-        const { warehouseId } = req.body;
-        if (!warehouseId) return res.status(400).json({ message: 'warehouseId wajib diisi untuk jatah internal' });
-
-        const missingSkuItems = request.items.filter(i => !i.ProductSKUId);
-        if (missingSkuItems.length > 0) {
-          return res.status(400).json({
-            message: `${missingSkuItems.length} item tidak memiliki SKU terpilih. Pilih varian produk sebelum disetujui.`,
-          });
-        }
-
-        const t = await sequelize.transaction();
-        try {
-          for (const item of request.items) {
-            const productId = item.sku?.ProductId ?? null;
-            await upsertSkuWarehouseStock(t, SkuWarehouseStock, {
-              ProductSKUId: item.ProductSKUId,
-              WarehouseId:  Number(warehouseId),
-              delta:        -item.qty,
-              companyId:    cid,
-            });
-            if (productId) {
-              await Stock_Movement.create({
-                ProductId:    productId,
-                ProductSKUId: item.ProductSKUId,
-                WarehouseId:  Number(warehouseId),
-                type:         'OUT',
-                quantity:     item.qty,
-                ReferenceId:  request.id,
-                source:       'REQUEST',
-                note:         `Jatah internal - ${request.requestorId}`,
-                date:         new Date(),
-                companyId:    cid,
-              }, { transaction: t });
-            }
-          }
-          await request.update({ status: 'DONE', processedBy: req.user.id, updatedBy: req.user.id }, { transaction: t });
-          await t.commit();
-        } catch (err) { await t.rollback(); throw err; }
-
-        const full = await Request.findByPk(request.id, { include: [...BASE_INCLUDE, ITEM_INCLUDE] });
-        return res.json(full);
-      }
-
-      // ── Sales / Non-Sales: auto-buat Stock Out Draft → APPROVED ──────────────
+      // ── Jatah Internal / Sales / Non-Sales: auto-buat Stock Out Draft → APPROVED ──
       // Stok TIDAK langsung dipotong di sini — draft ini cuma daftar barang yang
-      // perlu dikeluarkan. Shipping Manual baru dibuat setelah Stock Out-nya
-      // benar-benar disubmit (lihat stockOutDraftController.submit()).
-      if (shipmentType === 'sales' || shipmentType === 'non_sales') {
+      // perlu dikeluarkan. Stock Out-nya baru benar-benar mengurangi stok saat
+      // disubmit (lihat stockOutDraftController.submit()). Untuk Jatah Internal,
+      // submit itu langsung menyelesaikan request (status DONE) — tidak ada
+      // Shipping Manual yang dibuat, beda dengan sales/non-sales.
+      if (shipmentType === 'stock_out' || shipmentType === 'sales' || shipmentType === 'non_sales') {
         if (request.stockOutDraftId || request.manualShipmentId) {
           // Sudah pernah diproses (misal retry) — langsung approve saja
           await request.update({ status: 'APPROVED', processedBy: req.user.id, updatedBy: req.user.id });

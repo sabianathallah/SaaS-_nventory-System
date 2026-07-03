@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { requestApi, requestTypeApi, warehousesApi } from '../api'
+import { requestApi, requestTypeApi } from '../api'
 import { productsApi, productSkusApi } from '../api'
 import { useAuth } from '../context/AuthContext'
 import {
@@ -21,7 +21,7 @@ const STATUS_COLOR = {
 }
 const STEPS_NORMAL   = ['PENDING','APPROVED','SENT','DONE']
 const STEPS_RETURN   = ['PENDING','APPROVED','SENT','RETURNED','DONE']
-const STEPS_INTERNAL = ['PENDING','DONE']
+const STEPS_INTERNAL = ['PENDING','APPROVED','DONE']
 const STEP_LABEL = { PENDING:'Menunggu', APPROVED:'Disetujui', SENT:'Dikirim', RETURNED:'Dikembalikan', DONE:'Selesai' }
 
 const CAT_BADGE = {
@@ -256,38 +256,6 @@ function ReturnModal({ onConfirm, onClose }) {
   )
 }
 
-// ── Warehouse Approve Modal (for jatah internal / stock_out) ─────────────────
-function WarehouseApproveModal({ onClose, onConfirm }) {
-  const [warehouseId, setWarehouseId] = useState('')
-  const { data } = useQuery({ queryKey: ['warehouses'], queryFn: () => warehousesApi.list() })
-  const warehouses = data?.data ?? data ?? []
-  return (
-    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl shadow-xl p-5 w-full max-w-sm">
-        <h3 className="font-semibold text-slate-800 mb-1">Setujui & Proses Jatah Internal</h3>
-        <p className="text-xs text-slate-500 mb-4">Stok akan dikurangi langsung dari gudang yang dipilih.</p>
-        <div className="mb-4">
-          <label className="label mb-1">Gudang Pengambilan</label>
-          <select value={warehouseId} onChange={e => setWarehouseId(e.target.value)} className="input w-full text-sm">
-            <option value="">— Pilih Gudang —</option>
-            {warehouses.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
-          </select>
-        </div>
-        <div className="flex gap-2">
-          <button onClick={onClose} className="btn-secondary text-sm flex-1">Batal</button>
-          <button
-            disabled={!warehouseId}
-            onClick={() => onConfirm(Number(warehouseId))}
-            className="btn-primary text-sm flex-1 bg-emerald-600 border-emerald-600 hover:bg-emerald-700 disabled:opacity-50"
-          >
-            Setujui & Kurangi Stok
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
 // ── Status stepper ────────────────────────────────────────────────────────────
 function StatusStepper({ status, needsReturn, returnedAt, shipmentType }) {
   if (status === 'REJECTED') return (
@@ -303,7 +271,7 @@ function StatusStepper({ status, needsReturn, returnedAt, shipmentType }) {
   const steps = isInternal ? STEPS_INTERNAL : needsReturn ? STEPS_RETURN : STEPS_NORMAL
   let currentIdx
   if (isInternal) {
-    currentIdx = status === 'DONE' ? 1 : 0
+    currentIdx = status === 'DONE' ? 2 : status === 'APPROVED' ? 1 : 0
   } else if (!needsReturn) {
     currentIdx = STEPS_NORMAL.indexOf(status)
   } else {
@@ -358,15 +326,13 @@ function NextActionCard({
 
   if (status === 'DONE' || status === 'REJECTED') return null
 
-  const isAutoShipping = shipmentType === 'sales' || shipmentType === 'non_sales'
+  const isAutoShipping = shipmentType === 'sales' || shipmentType === 'non_sales' || shipmentType === 'stock_out'
 
   const configs = {
     PENDING: {
       icon: <Clock size={16} className="text-amber-500" />,
       title: 'Pengajuan Menunggu Tindakan',
-      desc: shipmentType === 'stock_out'
-        ? 'Tinjau detail pengajuan. Setujui untuk memproses jatah stok langsung.'
-        : isAutoShipping
+      desc: isAutoShipping
         ? 'Tinjau detail pengajuan. Setujui untuk membuat draft Stock Out — stok baru terpotong setelah Stock Out itu diproses.'
         : 'Tinjau detail pengajuan lalu setujui atau tolak.',
       actions: (
@@ -497,7 +463,6 @@ export default function PengajuanDetail() {
   const [showReject,          setShowReject]          = useState(false)
   const [showSent,            setShowSent]            = useState(false)
   const [showReturn,          setShowReturn]          = useState(false)
-  const [showWarehouseApprove, setShowWarehouseApprove] = useState(false)
   const [editing,             setEditing]             = useState(false)
   const [form,                setForm]                = useState(null)
   const [formItems,           setFormItems]           = useState([])
@@ -548,9 +513,7 @@ export default function PengajuanDetail() {
       invalidate()
       // Pakai requestType dari response server (lebih reliable dari component state)
       const sType = resolveShipmentType(updated?.requestType ?? req?.requestType)
-      if (sType === 'stock_out') {
-        toast.success('Jatah internal disetujui! Stok berhasil dikurangi.')
-      } else if ((sType === 'sales' || sType === 'non_sales') && updated?.manualShipmentId) {
+      if ((sType === 'sales' || sType === 'non_sales') && updated?.manualShipmentId) {
         toast.success('Draft shipping otomatis dibuat!')
         navigate(`/shipping-manual/${updated.manualShipmentId}`)
       }
@@ -558,13 +521,8 @@ export default function PengajuanDetail() {
     onError: e => toast.error(e.response?.data?.message ?? 'Gagal'),
   })
   const handleApprove = () => {
-    const sType = resolveShipmentType(req?.requestType)
-    if (sType === 'stock_out') {
-      setShowWarehouseApprove(true)
-    } else {
-      if (!confirm('Setujui pengajuan ini?')) return
-      approve.mutate({})
-    }
+    if (!confirm('Setujui pengajuan ini?')) return
+    approve.mutate({})
   }
   const reject           = useMutation({ mutationFn: (r) => requestApi.reject(id, r),           onSuccess: invalidate, onError: e => toast.error(e.response?.data?.message ?? 'Gagal') })
   const processShipment  = useMutation({
@@ -619,7 +577,6 @@ export default function PengajuanDetail() {
       {showReject           && <RejectModal           onClose={() => setShowReject(false)}           onConfirm={(r) => { reject.mutate(r); setShowReject(false) }} />}
       {showSent             && <SentModal             onClose={() => setShowSent(false)}             onConfirm={(d) => { markSent.mutate(d); setShowSent(false) }} items={req?.items ?? []} />}
       {showReturn           && <ReturnModal           onClose={() => setShowReturn(false)}           onConfirm={(d) => { markReturned.mutate(d); setShowReturn(false) }} />}
-      {showWarehouseApprove && <WarehouseApproveModal onClose={() => setShowWarehouseApprove(false)} onConfirm={(wId) => { approve.mutate({ warehouseId: wId }); setShowWarehouseApprove(false) }} />}
 
       {/* Back + header */}
       <button onClick={() => navigate(-1)} className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 mb-4">
@@ -785,7 +742,7 @@ export default function PengajuanDetail() {
                 {isInternalReq && (
                   <div className="col-span-2">
                     <div className="bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 text-xs text-emerald-700">
-                      Stok diambil langsung dari gudang saat disetujui.
+                      Setelah disetujui, stok dikeluarkan lewat Stock Out — tidak lewat proses shipping.
                     </div>
                   </div>
                 )}

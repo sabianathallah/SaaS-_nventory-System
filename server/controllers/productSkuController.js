@@ -1,5 +1,5 @@
 'use strict';
-const { Product, ProductSKU, ProductVariantOption, ProductVariantType, ProductSKUVariantOption } = require('../models');
+const { sequelize, Product, ProductSKU, ProductVariantOption, ProductVariantType, ProductSKUVariantOption } = require('../models');
 const { companyFilter, companyId } = require('../helpers/tenancy');
 
 function generateSkuCode(productName, options = []) {
@@ -21,8 +21,16 @@ class ProductSkuController {
       const product = await Product.findOne({ where: { id: req.params.productId, ...companyFilter(req) } });
       if (!product) throw { name: 'NotFound', message: 'Product not found' };
 
+      // qty here is replaced with the live sum from SkuWarehouseStocks (across all
+      // warehouses) — ProductSKU.qty is a legacy column stock movements no longer update.
       const skus = await ProductSKU.findAll({
         where: { ProductId: req.params.productId },
+        attributes: {
+          include: [[
+            sequelize.literal('(SELECT COALESCE(SUM(sws."qty"),0) FROM "SkuWarehouseStocks" sws WHERE sws."ProductSKUId" = "ProductSKU"."id")'),
+            'warehouseQty',
+          ]],
+        },
         include: [{
           model: ProductVariantOption,
           through: { attributes: [] },
@@ -31,7 +39,12 @@ class ProductSkuController {
         order: [['createdAt', 'ASC']],
       });
 
-      res.status(200).json(skus.map(s => s.toJSON()));
+      res.status(200).json(skus.map(s => {
+        const json = s.toJSON();
+        json.qty = Number(json.warehouseQty ?? 0);
+        delete json.warehouseQty;
+        return json;
+      }));
     } catch (err) { next(err); }
   }
 
