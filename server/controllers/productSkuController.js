@@ -21,13 +21,19 @@ class ProductSkuController {
       const product = await Product.findOne({ where: { id: req.params.productId, ...companyFilter(req) } });
       if (!product) throw { name: 'NotFound', message: 'Product not found' };
 
-      // qty here is replaced with the live sum from SkuWarehouseStocks (across all
-      // warehouses) — ProductSKU.qty is a legacy column stock movements no longer update.
+      // qty here is replaced with the live sum from SkuWarehouseStocks, optionally
+      // scoped to a single warehouse — ProductSKU.qty is a legacy column stock
+      // movements no longer update.
+      const warehouseId = req.query.WarehouseId ? parseInt(req.query.WarehouseId) : null;
+      const qtySubquery = warehouseId
+        ? `(SELECT COALESCE(SUM(sws."qty"),0) FROM "SkuWarehouseStocks" sws WHERE sws."ProductSKUId" = "ProductSKU"."id" AND sws."WarehouseId" = ${warehouseId})`
+        : `(SELECT COALESCE(SUM(sws."qty"),0) FROM "SkuWarehouseStocks" sws WHERE sws."ProductSKUId" = "ProductSKU"."id")`;
+
       const skus = await ProductSKU.findAll({
         where: { ProductId: req.params.productId },
         attributes: {
           include: [[
-            sequelize.literal('(SELECT COALESCE(SUM(sws."qty"),0) FROM "SkuWarehouseStocks" sws WHERE sws."ProductSKUId" = "ProductSKU"."id")'),
+            sequelize.literal(qtySubquery),
             'warehouseQty',
           ]],
         },

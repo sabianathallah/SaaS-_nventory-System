@@ -49,7 +49,7 @@ export const productVariantsApi = {
 }
 
 export const productSkusApi = {
-  list:   (pid)         => api.get(`/products/${pid}/skus`).then(r => r.data),
+  list:   (pid, warehouseId) => api.get(`/products/${pid}/skus`, { params: warehouseId ? { WarehouseId: warehouseId } : {} }).then(r => r.data),
   create: (pid, data)   => api.post(`/products/${pid}/skus`, data).then(r => r.data),
   update: (pid, sid, d) => api.put(`/products/${pid}/skus/${sid}`, d).then(r => r.data),
   delete: (pid, sid)    => api.delete(`/products/${pid}/skus/${sid}`).then(r => r.data),

@@ -646,11 +646,12 @@ export default function OpnameDetail() {
 // ── SKU Picker Modal (untuk opname manual) ───────────────────────────────────
 function SkuPickerModal({ stock, onConfirm, onClose }) {
   const productId = stock.ProductId
+  const warehouseId = stock.WarehouseId ?? stock.warehouseId
   const [selSkuId, setSelSkuId] = useState('')
 
   const { data: skus, isLoading } = useQuery({
-    queryKey: ['product-skus', productId],
-    queryFn:  () => productSkusApi.list(productId),
+    queryKey: ['product-skus', productId, warehouseId],
+    queryFn:  () => productSkusApi.list(productId, warehouseId),
   })
 
   const skuLabel = (sku) => {
