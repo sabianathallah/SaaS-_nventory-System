@@ -36,11 +36,10 @@ class ProductController {
                 ? [[sequelize.literal('"totalStock"'), sortOrder]]
                 : [[sortBy, sortOrder]];
 
-            // Warehouse filter — products that have stock in the given warehouse
+            // WarehouseId only scopes totalStock/totalValue below — it no longer hides
+            // products that have zero (or never-stocked) qty in that warehouse. Every
+            // product belonging to the company shows in every warehouse view.
             const warehouseId = req.query.WarehouseId ? parseInt(req.query.WarehouseId) : null;
-            const extraWhere  = warehouseId
-                ? { [Op.and]: sequelize.literal(`EXISTS (SELECT 1 FROM "SkuWarehouseStocks" sws INNER JOIN "ProductSKUs" ps ON ps."id" = sws."ProductSKUId" WHERE ps."ProductId" = "Product"."id" AND sws."WarehouseId" = ${warehouseId} AND sws."qty" > 0)`) }
-                : {};
 
             // totalStock: always from SkuWarehouseStocks (the live per-warehouse ledger),
             // optionally scoped to a single warehouse. ProductSKU.qty is a legacy column
@@ -54,7 +53,7 @@ class ProductController {
                 : `(SELECT COALESCE(SUM(sws."qty" * ps."price"),0) FROM "SkuWarehouseStocks" sws INNER JOIN "ProductSKUs" ps ON ps."id" = sws."ProductSKUId" WHERE ps."ProductId" = "Product"."id")`;
 
             const { rows, count } = await Product.findAndCountAll({
-                where: { ...companyFilter(req), ...filter, ...extraWhere },
+                where: { ...companyFilter(req), ...filter },
                 attributes: {
                     include: [
                         [sequelize.literal(stockSubquery), 'totalStock'],
