@@ -9,8 +9,9 @@ import { useExternalScanner } from '../hooks/useExternalScanner'
 import { useCompanyGuard } from '../hooks/useCompanyGuard'
 import CompanyRequiredBanner from '../components/CompanyRequiredBanner'
 import toast from 'react-hot-toast'
-import { ArrowLeft, PackageMinus, ScanLine, Plus, Trash2, Save, ScanBarcode, ChevronDown, Package, FileSpreadsheet, BookmarkCheck, X } from 'lucide-react'
+import { ArrowLeft, PackageMinus, ScanLine, Plus, Trash2, Save, ScanBarcode, ChevronDown, Package, FileSpreadsheet, BookmarkCheck, X, Printer } from 'lucide-react'
 import { exportExcel } from '../utils/exportExcel'
+import logoPreface from '../assets/logo-preface.jpeg'
 
 const fmt = (n) => Number(n ?? 0).toLocaleString('id-ID')
 
@@ -448,7 +449,8 @@ export default function StockOutDetail() {
     }
 
     return (
-      <div className="px-6 py-6 max-w-4xl">
+      <>
+      <div className="px-6 py-6 max-w-4xl no-print">
         <div className="flex items-center gap-3 mb-6">
           <button onClick={() => navigate(-1)} className="p-1.5 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors">
             <ArrowLeft size={16} />
@@ -460,9 +462,14 @@ export default function StockOutDetail() {
             </p>
           </div>
           {items.length > 0 && (
+            <>
+            <button onClick={() => window.print()} className="btn-secondary text-sm flex items-center gap-1.5">
+              <Printer size={14} /> Print Surat Jalan
+            </button>
             <button onClick={handleExportExcel} className="btn-secondary text-sm flex items-center gap-1.5">
               <FileSpreadsheet size={14} /> Export Excel
             </button>
+            </>
           )}
         </div>
 
@@ -546,6 +553,13 @@ export default function StockOutDetail() {
           </div>
         )}
       </div>
+
+      {items.length > 0 && (
+        <div className="print-only">
+          <StockOutPrintLayout detail={detail} items={items} />
+        </div>
+      )}
+      </>
     )
   }
 
@@ -830,5 +844,131 @@ export default function StockOutDetail() {
         />
       )}
     </div>
+  )
+}
+
+// ── Print Layout (Surat Jalan) ───────────────────────────────────────────────
+function StockOutPrintLayout({ detail, items }) {
+  const fmtPrint = (d) => {
+    if (!d) return '—'
+    return new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })
+  }
+
+  const ROWS_PER_PAGE = 25
+  const totalQty = items.reduce((s, i) => s + (i.quantity ?? 0), 0)
+
+  const pages = []
+  for (let i = 0; i < Math.max(1, items.length); i += ROWS_PER_PAGE) {
+    pages.push(items.slice(i, i + ROWS_PER_PAGE))
+  }
+
+  return (
+    <>
+      {pages.map((pageItems, pageIdx) => (
+        <div key={pageIdx} className="print-page">
+          <div className="print-header">
+            <img src={logoPreface} alt="Preface" className="print-logo" />
+          </div>
+          <div className="print-divider" />
+
+          <div className="print-title">SURAT JALAN</div>
+
+          <div className="print-meta">
+            <table className="print-meta-table">
+              <tbody>
+                <tr>
+                  <td className="print-meta-key">No. Dokumen</td>
+                  <td className="print-meta-sep">:</td>
+                  <td className="print-meta-val"><strong>SJ-{String(detail.id).padStart(4, '0')}</strong></td>
+                  <td className="print-meta-key">Tanggal</td>
+                  <td className="print-meta-sep">:</td>
+                  <td className="print-meta-val">{fmtPrint(detail.date ?? detail.createdAt)}</td>
+                </tr>
+                <tr>
+                  <td className="print-meta-key">Gudang Asal</td>
+                  <td className="print-meta-sep">:</td>
+                  <td className="print-meta-val"><strong>{detail.Warehouse?.name ?? '—'}</strong></td>
+                  <td className="print-meta-key">Tujuan</td>
+                  <td className="print-meta-sep">:</td>
+                  <td className="print-meta-val">{detail.purpose ?? '—'}</td>
+                </tr>
+                <tr>
+                  <td className="print-meta-key">Total Item</td>
+                  <td className="print-meta-sep">:</td>
+                  <td className="print-meta-val"><strong>{items.length} item</strong></td>
+                  <td className="print-meta-key">Dibuat oleh</td>
+                  <td className="print-meta-sep">:</td>
+                  <td className="print-meta-val">{detail.User?.name ?? '—'}</td>
+                </tr>
+                {(detail.notes || detail.note) && (
+                  <tr>
+                    <td className="print-meta-key">Catatan</td>
+                    <td className="print-meta-sep">:</td>
+                    <td className="print-meta-val" colSpan={3}>{detail.notes || detail.note}</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {pages.length > 1 && (
+            <div className="print-page-info">Halaman {pageIdx + 1} dari {pages.length}</div>
+          )}
+
+          <table className="print-table">
+            <thead>
+              <tr>
+                <th className="print-th print-th-no">No.</th>
+                <th className="print-th">Produk</th>
+                <th className="print-th">Varian / SKU</th>
+                <th className="print-th print-th-time">Qty</th>
+              </tr>
+            </thead>
+            <tbody>
+              {pageItems.map((item, idx) => {
+                const sku     = item.ProductSKU
+                const opts    = sku?.ProductVariantOptions ?? []
+                const variant = opts.map(o => o.value).join(' / ') || sku?.sku_code || '—'
+                return (
+                  <tr key={item.id ?? idx} className={idx % 2 === 0 ? 'print-row-even' : ''}>
+                    <td className="print-td print-td-center">{pageIdx * ROWS_PER_PAGE + idx + 1}</td>
+                    <td className="print-td">{item.Product?.name ?? `#${item.ProductId}`}</td>
+                    <td className="print-td print-td-center">{sku ? variant : '—'}</td>
+                    <td className="print-td print-td-center"><strong>{item.quantity}</strong></td>
+                  </tr>
+                )
+              })}
+            </tbody>
+            {pageIdx === pages.length - 1 && (
+              <tfoot>
+                <tr>
+                  <td className="print-td" colSpan={3} style={{ textAlign: 'right', fontWeight: 700 }}>Total Qty</td>
+                  <td className="print-td print-td-center"><strong>{totalQty}</strong></td>
+                </tr>
+              </tfoot>
+            )}
+          </table>
+
+          {pageIdx === pages.length - 1 && (
+            <div className="print-footer">
+              <div className="print-sign-block">
+                <div className="print-sign-title">Mengirim,</div>
+                <div className="print-sign-space" />
+                <div className="print-sign-line" />
+                <div className="print-sign-name">{detail.User?.name ?? ' '}</div>
+                <div className="print-sign-role">Pihak Preface</div>
+              </div>
+              <div className="print-sign-block">
+                <div className="print-sign-title">Menerima,</div>
+                <div className="print-sign-space" />
+                <div className="print-sign-line" />
+                <div className="print-sign-name">&nbsp;</div>
+                <div className="print-sign-role">{detail.purpose ?? 'Perwakilan Penerima'}</div>
+              </div>
+            </div>
+          )}
+        </div>
+      ))}
+    </>
   )
 }
