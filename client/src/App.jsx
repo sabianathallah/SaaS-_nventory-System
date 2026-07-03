@@ -9,6 +9,7 @@ import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import SOP from './pages/SOP'
 import Handbook from './pages/Handbook'
+import HRIS from './pages/HRIS'
 import Products from './pages/Products'
 import ProductDetail from './pages/ProductDetail'
 import ProductEdit from './pages/ProductEdit'
@@ -92,6 +93,7 @@ function AppRoutes() {
                 <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="/sop"       element={<SOP />} />
                 <Route path="/handbook/*" element={<Handbook />} />
+                <Route path="/hris"       element={<HRIS />} />
 
                 {/* ── Produk ── */}
                 <Route path="/products"          element={<PageVisibleRoute pageKey="products"><PermissionRoute permission="inventory.view" page="Produk"><Products /></PermissionRoute></PageVisibleRoute>} />

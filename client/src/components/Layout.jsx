@@ -11,7 +11,7 @@ import {
   ClipboardList, Users, Building2, BookOpen, LogOut, Bell,
   PackageOpen, Layers, ClipboardCheck, Menu, X, Eye, EyeOff,
   PackageCheck, Link2, BarChart2, BookMarked, ChevronDown,
-  SendHorizonal, FileText, PanelLeftClose, PanelLeftOpen,
+  SendHorizonal, FileText, PanelLeftClose, PanelLeftOpen, UserCog,
 } from 'lucide-react'
 import logoPreface from '../assets/logo-preface.jpeg'
 
@@ -97,9 +97,20 @@ const HANDBOOK_NAV_GROUPS = [
   },
 ]
 
+// HRIS module — masih coming soon, satu halaman placeholder saja.
+const HRIS_NAV_GROUPS = [
+  {
+    label: 'HRIS',
+    items: [
+      { to: '/hris', icon: UserCog, label: 'Beranda' },
+    ],
+  },
+]
+
 const PAGE_TITLES = {
   '/dashboard': 'Dashboard', '/sop': 'SOP Operasional', '/products': 'Produk', '/catalog': 'Kategori dan Koleksi',
   '/handbook': 'Company Handbook', '/handbook/kebijakan': 'Kebijakan Perusahaan', '/handbook/struktur': 'Struktur Organisasi',
+  '/hris': 'HRIS',
   '/warehouses': 'Gudang', '/suppliers': 'Vendor',
   '/stock-in': 'Penerimaan Stok', '/stock-in/new': 'Penerimaan Stok Baru', '/stock-out': 'Pengeluaran Stok', '/movements': 'Pergerakan',
   '/opname': 'Stock Opname', '/transfers': 'Transfer Stok', '/handover': 'Handover Pengiriman',
@@ -137,13 +148,13 @@ function NavTooltip({ label, children }) {
   )
 }
 
-// Module switcher — toggle antara Inventory System dan Company Handbook.
-// Sengaja dibuat 2-tombol (bukan dropdown) karena cuma ada 2 mode saat ini.
-function ModuleSwitcher({ collapsed, isHandbook }) {
+// Module switcher — toggle antara Inventory System, Company Handbook, dan HRIS.
+function ModuleSwitcher({ collapsed, activeModule }) {
   const navigate = useNavigate()
   const items = [
-    { key: 'inventory', label: 'Inventory', icon: Package,  to: '/dashboard', active: !isHandbook },
-    { key: 'handbook',  label: 'Handbook',   icon: BookOpen, to: '/handbook',  active: isHandbook },
+    { key: 'inventory', label: 'Inventory', icon: Package,  to: '/dashboard', active: activeModule === 'inventory' },
+    { key: 'handbook',  label: 'Handbook',   icon: BookOpen, to: '/handbook',  active: activeModule === 'handbook' },
+    { key: 'hris',      label: 'HRIS',       icon: UserCog,  to: '/hris',      active: activeModule === 'hris' },
   ]
 
   if (collapsed) {
@@ -180,12 +191,14 @@ function ModuleSwitcher({ collapsed, isHandbook }) {
               key={item.key}
               type="button"
               onClick={() => navigate(item.to)}
-              className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-xs font-semibold transition-colors ${
+              title={item.label}
+              className={`flex-1 flex flex-col items-center justify-center gap-0.5 py-1.5 rounded-md text-[9px] font-semibold leading-none transition-colors ${
                 item.active ? 'text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'
               }`}
               style={item.active ? { background: BRAND } : undefined}
             >
-              <Icon size={13} /> {item.label}
+              <Icon size={14} />
+              <span className="truncate max-w-full">{item.label}</span>
             </button>
           )
         })}
@@ -203,7 +216,9 @@ export default function Layout({ children }) {
 
   // Handbook module — sidebar kiri di-swap total, lihat HANDBOOK_NAV_GROUPS di atas
   const isHandbook  = location.pathname.startsWith('/handbook')
-  const activeGroups = isHandbook ? HANDBOOK_NAV_GROUPS : NAV_GROUPS
+  const isHRIS      = location.pathname.startsWith('/hris')
+  const activeModule = isHandbook ? 'handbook' : isHRIS ? 'hris' : 'inventory'
+  const activeGroups = isHandbook ? HANDBOOK_NAV_GROUPS : isHRIS ? HRIS_NAV_GROUPS : NAV_GROUPS
 
   // Mobile drawer
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -217,7 +232,7 @@ export default function Layout({ children }) {
 
   // Accordion groups (hanya relevan saat expanded) — default: buka semua group
   const [openGroups, setOpenGroups] = useState(() =>
-    new Set([...NAV_GROUPS, ...HANDBOOK_NAV_GROUPS].map(g => g.label))
+    new Set([...NAV_GROUPS, ...HANDBOOK_NAV_GROUPS, ...HRIS_NAV_GROUPS].map(g => g.label))
   )
 
   // Auto-open group saat navigasi
@@ -302,12 +317,14 @@ export default function Layout({ children }) {
             style={{ opacity: collapsed ? 0 : 1, width: collapsed ? 0 : 'auto', maxWidth: collapsed ? 0 : 200 }}
           >
             <p className="font-bold text-sm text-slate-800 leading-tight whitespace-nowrap">Preface</p>
-            <p className="text-[10px] text-slate-400 leading-tight whitespace-nowrap">{isHandbook ? 'Company Handbook' : 'Inventory System'}</p>
+            <p className="text-[10px] text-slate-400 leading-tight whitespace-nowrap">
+              {isHandbook ? 'Company Handbook' : isHRIS ? 'HRIS' : 'Inventory System'}
+            </p>
           </div>
         </div>
 
         {/* ── Nav ── */}
-        <ModuleSwitcher collapsed={collapsed} isHandbook={isHandbook} />
+        <ModuleSwitcher collapsed={collapsed} activeModule={activeModule} />
 
         <nav className="flex-1 overflow-y-auto overflow-x-hidden py-3" style={{ padding: collapsed ? '12px 8px' : '12px 12px' }}>
           {activeGroups.map((group) => {
