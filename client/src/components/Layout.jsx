@@ -83,8 +83,23 @@ const NAV_GROUPS = [
   },
 ]
 
+// Handbook module — sidebar kiri di-swap total ke sini saat pathname mulai
+// dengan /handbook (lihat isHandbook di Layout). Tanpa requirePermission/
+// superOnly/pageKey — visible untuk semua user yang login, sama seperti /sop.
+const HANDBOOK_NAV_GROUPS = [
+  {
+    label: 'Company Handbook',
+    items: [
+      { to: '/handbook',           icon: BookOpen,  label: 'Beranda' },
+      { to: '/handbook/kebijakan', icon: BookMarked, label: 'Kebijakan' },
+      { to: '/handbook/struktur',  icon: Building2, label: 'Struktur Organisasi' },
+    ],
+  },
+]
+
 const PAGE_TITLES = {
   '/dashboard': 'Dashboard', '/sop': 'SOP Operasional', '/products': 'Produk', '/catalog': 'Kategori dan Koleksi',
+  '/handbook': 'Company Handbook', '/handbook/kebijakan': 'Kebijakan Perusahaan', '/handbook/struktur': 'Struktur Organisasi',
   '/warehouses': 'Gudang', '/suppliers': 'Vendor',
   '/stock-in': 'Penerimaan Stok', '/stock-in/new': 'Penerimaan Stok Baru', '/stock-out': 'Pengeluaran Stok', '/movements': 'Pergerakan',
   '/opname': 'Stock Opname', '/transfers': 'Transfer Stok', '/handover': 'Handover Pengiriman',
@@ -122,12 +137,73 @@ function NavTooltip({ label, children }) {
   )
 }
 
+// Module switcher — toggle antara Inventory System dan Company Handbook.
+// Sengaja dibuat 2-tombol (bukan dropdown) karena cuma ada 2 mode saat ini.
+function ModuleSwitcher({ collapsed, isHandbook }) {
+  const navigate = useNavigate()
+  const items = [
+    { key: 'inventory', label: 'Inventory', icon: Package,  to: '/dashboard', active: !isHandbook },
+    { key: 'handbook',  label: 'Handbook',   icon: BookOpen, to: '/handbook',  active: isHandbook },
+  ]
+
+  if (collapsed) {
+    return (
+      <div className="flex flex-col items-center gap-1 py-2 flex-shrink-0" style={{ borderBottom: '1px solid #E0DDD7' }}>
+        {items.map(item => {
+          const Icon = item.icon
+          return (
+            <NavTooltip key={item.key} label={item.label}>
+              <button
+                type="button"
+                onClick={() => navigate(item.to)}
+                className={`w-9 h-9 rounded-lg flex items-center justify-center transition-colors ${
+                  item.active ? 'text-white' : 'text-slate-400 hover:text-slate-700 hover:bg-slate-200/60'
+                }`}
+                style={item.active ? { background: BRAND } : undefined}
+              >
+                <Icon size={15} />
+              </button>
+            </NavTooltip>
+          )
+        })}
+      </div>
+    )
+  }
+
+  return (
+    <div className="px-3 pt-3 pb-2 flex-shrink-0" style={{ borderBottom: '1px solid #E0DDD7' }}>
+      <div className="p-1 rounded-lg bg-slate-200/50 flex gap-1">
+        {items.map(item => {
+          const Icon = item.icon
+          return (
+            <button
+              key={item.key}
+              type="button"
+              onClick={() => navigate(item.to)}
+              className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-xs font-semibold transition-colors ${
+                item.active ? 'text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'
+              }`}
+              style={item.active ? { background: BRAND } : undefined}
+            >
+              <Icon size={13} /> {item.label}
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 export default function Layout({ children }) {
   const { user, signOut, isSuperAdmin, hasPermission } = useAuth()
   const { needsCompany } = useCompanyGuard()
   const { isPageVisible } = usePageVisibility()
   const navigate  = useNavigate()
   const location  = useLocation()
+
+  // Handbook module — sidebar kiri di-swap total, lihat HANDBOOK_NAV_GROUPS di atas
+  const isHandbook  = location.pathname.startsWith('/handbook')
+  const activeGroups = isHandbook ? HANDBOOK_NAV_GROUPS : NAV_GROUPS
 
   // Mobile drawer
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -140,11 +216,13 @@ export default function Layout({ children }) {
   const [profileOpen, setProfileOpen] = useState(false)
 
   // Accordion groups (hanya relevan saat expanded) — default: buka semua group
-  const [openGroups, setOpenGroups] = useState(() => new Set(NAV_GROUPS.map(g => g.label)))
+  const [openGroups, setOpenGroups] = useState(() =>
+    new Set([...NAV_GROUPS, ...HANDBOOK_NAV_GROUPS].map(g => g.label))
+  )
 
   // Auto-open group saat navigasi
   useEffect(() => {
-    const active = NAV_GROUPS.find(g => groupHasActivePath(g, location.pathname))
+    const active = activeGroups.find(g => groupHasActivePath(g, location.pathname))
     if (active) {
       setOpenGroups(prev => {
         if (prev.has(active.label)) return prev
@@ -224,13 +302,15 @@ export default function Layout({ children }) {
             style={{ opacity: collapsed ? 0 : 1, width: collapsed ? 0 : 'auto', maxWidth: collapsed ? 0 : 200 }}
           >
             <p className="font-bold text-sm text-slate-800 leading-tight whitespace-nowrap">Preface</p>
-            <p className="text-[10px] text-slate-400 leading-tight whitespace-nowrap">Inventory System</p>
+            <p className="text-[10px] text-slate-400 leading-tight whitespace-nowrap">{isHandbook ? 'Company Handbook' : 'Inventory System'}</p>
           </div>
         </div>
 
         {/* ── Nav ── */}
+        <ModuleSwitcher collapsed={collapsed} isHandbook={isHandbook} />
+
         <nav className="flex-1 overflow-y-auto overflow-x-hidden py-3" style={{ padding: collapsed ? '12px 8px' : '12px 12px' }}>
-          {NAV_GROUPS.map((group) => {
+          {activeGroups.map((group) => {
             const navItems = group.items.reduce((acc, item) => {
               if (item.superOnly && !isSuperAdmin) return acc
               if (item.requirePermission && !isSuperAdmin && !hasPermission(item.requirePermission)) return acc
