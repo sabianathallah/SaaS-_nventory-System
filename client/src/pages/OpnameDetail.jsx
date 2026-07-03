@@ -8,7 +8,8 @@ import SearchableSelect from '../components/SearchableSelect'
 import { useExternalScanner } from '../hooks/useExternalScanner'
 import toast from 'react-hot-toast'
 import { exportExcel } from '../utils/exportExcel'
-import { ArrowLeft, ClipboardList, ScanLine, Search, X, CheckCircle, FileSpreadsheet, ScanBarcode } from 'lucide-react'
+import { ArrowLeft, ClipboardList, ScanLine, Search, X, CheckCircle, FileSpreadsheet, ScanBarcode, Printer } from 'lucide-react'
+import logoPreface from '../assets/logo-preface.jpeg'
 
 const skuLabel = (sku) => {
   const opts = sku?.ProductVariantOptions ?? []
@@ -280,7 +281,8 @@ export default function OpnameDetail() {
   if (session.status !== 'open') {
     const items = existingItems?.data ?? []
     return (
-      <div className="px-6 py-6 max-w-4xl">
+      <>
+      <div className="px-6 py-6 max-w-4xl no-print">
         <div className="flex items-center gap-3 mb-6">
           <button onClick={() => navigate(-1)} className="p-1.5 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors">
             <ArrowLeft size={16} />
@@ -292,6 +294,13 @@ export default function OpnameDetail() {
             </p>
           </div>
           {items.length > 0 && (
+            <>
+            <button
+              onClick={() => window.print()}
+              className="btn-secondary text-sm flex items-center gap-1.5"
+            >
+              <Printer size={14} /> Print PDF
+            </button>
             <button
               onClick={() => {
                 const headers = ['No', 'Produk', 'SKU', 'Varian', 'Stok Sistem', 'Stok Aktual', 'Selisih']
@@ -307,6 +316,7 @@ export default function OpnameDetail() {
             >
               <FileSpreadsheet size={14} /> Export Excel
             </button>
+            </>
           )}
         </div>
 
@@ -384,6 +394,13 @@ export default function OpnameDetail() {
           <div className="card p-10 text-center text-slate-400 text-sm">Tidak ada data opname tersimpan.</div>
         )}
       </div>
+
+      {items.length > 0 && (
+        <div className="print-only">
+          <OpnamePrintLayout session={session} items={items} />
+        </div>
+      )}
+      </>
     )
   }
 
@@ -640,6 +657,134 @@ export default function OpnameDetail() {
         />
       )}
     </div>
+  )
+}
+
+// ── Print Layout (Hasil Opname) ──────────────────────────────────────────────
+function OpnamePrintLayout({ session, items }) {
+  const fmtPrint = (d) => {
+    if (!d) return '—'
+    return new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })
+  }
+
+  const ROWS_PER_PAGE = 25
+  const totalDiff = items.reduce((s, i) => s + (i.difference ?? 0), 0)
+
+  const pages = []
+  for (let i = 0; i < Math.max(1, items.length); i += ROWS_PER_PAGE) {
+    pages.push(items.slice(i, i + ROWS_PER_PAGE))
+  }
+
+  return (
+    <>
+      {pages.map((pageItems, pageIdx) => (
+        <div key={pageIdx} className="print-page">
+          <div className="print-header">
+            <img src={logoPreface} alt="Preface" className="print-logo" />
+          </div>
+          <div className="print-divider" />
+
+          <div className="print-title">HASIL STOCK OPNAME</div>
+
+          <div className="print-meta">
+            <table className="print-meta-table">
+              <tbody>
+                <tr>
+                  <td className="print-meta-key">Gudang</td>
+                  <td className="print-meta-sep">:</td>
+                  <td className="print-meta-val"><strong>{session.Warehouse?.name ?? '—'}</strong></td>
+                  <td className="print-meta-key">Dimulai</td>
+                  <td className="print-meta-sep">:</td>
+                  <td className="print-meta-val">{fmtPrint(session.started_at)}</td>
+                </tr>
+                <tr>
+                  <td className="print-meta-key">Ditutup</td>
+                  <td className="print-meta-sep">:</td>
+                  <td className="print-meta-val">{fmtPrint(session.finished_at)}</td>
+                  <td className="print-meta-key">Dihitung oleh</td>
+                  <td className="print-meta-sep">:</td>
+                  <td className="print-meta-val">{session.User?.name ?? '—'}</td>
+                </tr>
+                <tr>
+                  <td className="print-meta-key">Total Item</td>
+                  <td className="print-meta-sep">:</td>
+                  <td className="print-meta-val"><strong>{items.length} item</strong></td>
+                  <td className="print-meta-key">Total Selisih</td>
+                  <td className="print-meta-sep">:</td>
+                  <td className="print-meta-val">
+                    <strong>{totalDiff > 0 ? '+' : ''}{totalDiff}</strong>
+                  </td>
+                </tr>
+                {session.notes && (
+                  <tr>
+                    <td className="print-meta-key">Catatan</td>
+                    <td className="print-meta-sep">:</td>
+                    <td className="print-meta-val" colSpan={3}>{session.notes}</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {pages.length > 1 && (
+            <div className="print-page-info">Halaman {pageIdx + 1} dari {pages.length}</div>
+          )}
+
+          <table className="print-table">
+            <thead>
+              <tr>
+                <th className="print-th print-th-no">No.</th>
+                <th className="print-th">Produk</th>
+                <th className="print-th">Varian / SKU</th>
+                <th className="print-th print-th-time">Sistem</th>
+                <th className="print-th print-th-time">Aktual</th>
+                <th className="print-th print-th-time">Selisih</th>
+              </tr>
+            </thead>
+            <tbody>
+              {pageItems.map((item, idx) => {
+                const sku     = item.ProductSKU
+                const opts    = sku?.ProductVariantOptions ?? []
+                const variant = opts.map(o => o.value).join(' / ') || sku?.sku_code || '—'
+                const diff    = item.difference ?? 0
+                const rowClass = diff !== 0
+                  ? (diff > 0 ? 'print-row-plus' : 'print-row-minus')
+                  : (idx % 2 === 0 ? 'print-row-even' : '')
+                return (
+                  <tr key={item.id} className={rowClass}>
+                    <td className="print-td print-td-center">{pageIdx * ROWS_PER_PAGE + idx + 1}</td>
+                    <td className="print-td">{item.Product?.name ?? '—'}</td>
+                    <td className="print-td print-td-center">{variant}</td>
+                    <td className="print-td print-td-center">{item.system_qty}</td>
+                    <td className="print-td print-td-center">{item.scanned_qty}</td>
+                    <td className="print-td print-td-center"><strong>{diff > 0 ? '+' : ''}{diff}</strong></td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+
+          {pageIdx === pages.length - 1 && (
+            <div className="print-footer">
+              <div className="print-sign-block">
+                <div className="print-sign-title">Menghitung,</div>
+                <div className="print-sign-space" />
+                <div className="print-sign-line" />
+                <div className="print-sign-name">{session.User?.name ?? ' '}</div>
+                <div className="print-sign-role">Petugas Gudang</div>
+              </div>
+              <div className="print-sign-block">
+                <div className="print-sign-title">Mengetahui,</div>
+                <div className="print-sign-space" />
+                <div className="print-sign-line" />
+                <div className="print-sign-name">&nbsp;</div>
+                <div className="print-sign-role">Supervisor / Owner</div>
+              </div>
+            </div>
+          )}
+        </div>
+      ))}
+    </>
   )
 }
 

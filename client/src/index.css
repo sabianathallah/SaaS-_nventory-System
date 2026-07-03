@@ -303,6 +303,8 @@
 .print-td-center { text-align: center; color: #64748b; font-size: 8.5pt; }
 .print-td-resi   { font-family: 'Courier New', monospace; font-weight: 600; letter-spacing: 0.5px; }
 .print-row-even  { background: #f8fafc; }
+.print-row-plus  { background: #f0fdf4; }
+.print-row-minus { background: #fef2f2; }
 
 .print-footer {
   display: flex;
