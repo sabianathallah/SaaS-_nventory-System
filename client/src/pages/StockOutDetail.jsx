@@ -192,7 +192,7 @@ function ProductSkuPicker({ onSelect, warehouseId, stocks }) {
             <p className="text-sm font-semibold text-slate-800 truncate">{selProduct?.name}</p>
             <p className="text-xs text-slate-500">{skuLabel(selSku)}</p>
             {selSku != null && (() => {
-              const wAvail = getAvail(selProduct?.id)
+              const wAvail = getAvail(selProduct?.id, selSku?.id)
               const dispQty = wAvail !== null ? wAvail : (selSku.qty ?? 0)
               return (
                 <p className={`text-xs font-medium ${dispQty === 0 ? 'text-red-500' : 'text-emerald-600'}`}>

@@ -13,7 +13,7 @@ exports.list = async (req, res, next) => {
       include: [
         {
           model: ProductSKU,
-          attributes: ['id', 'sku_code', 'price'],
+          attributes: ['id', 'sku_code', 'price', 'ProductId'],
           include: [
             { model: Product, attributes: ['id', 'name', 'imageUrl'] },
             { model: ProductVariantOption, attributes: ['id', 'value'], through: { attributes: [] } },
