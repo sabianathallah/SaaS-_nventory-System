@@ -49,10 +49,12 @@ module.exports = (sequelize, DataTypes) => {
     checkInLat:         { type: DataTypes.DECIMAL(10, 7), allowNull: true },
     checkInLng:         { type: DataTypes.DECIMAL(10, 7), allowNull: true },
     checkInLocationId:  { type: DataTypes.INTEGER, allowNull: true },
+    checkInPhoto:       { type: DataTypes.STRING, allowNull: true },
     checkOutAt:         { type: DataTypes.DATE, allowNull: true },
     checkOutLat:        { type: DataTypes.DECIMAL(10, 7), allowNull: true },
     checkOutLng:        { type: DataTypes.DECIMAL(10, 7), allowNull: true },
     checkOutLocationId: { type: DataTypes.INTEGER, allowNull: true },
+    checkOutPhoto:      { type: DataTypes.STRING, allowNull: true },
     status: {
       type: DataTypes.ENUM('PRESENT', 'LATE', 'ABSENT', 'LEAVE', 'HALF_DAY'),
       allowNull: false,

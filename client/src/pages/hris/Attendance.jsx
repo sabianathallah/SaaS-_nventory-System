@@ -1,9 +1,9 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { hrisApi } from '../../api'
 import { useAuth } from '../../context/AuthContext'
-import { LogIn, LogOut, MapPin, Loader2 } from 'lucide-react'
+import { LogIn, LogOut, MapPin, Loader2, Camera } from 'lucide-react'
 
 const STATUS_LABEL = { PRESENT: 'Hadir', LATE: 'Terlambat', ABSENT: 'Absen', LEAVE: 'Cuti', HALF_DAY: 'Setengah Hari' }
 const STATUS_COLOR = {
@@ -30,6 +30,8 @@ export default function Attendance() {
   const qc = useQueryClient()
   const canViewAll = hasPermission('hris.attendance.edit') || hasPermission('hris.reports.view') || user?.role === 'SUPER_ADMIN' || user?.role === 'COMPANY_ADMIN'
   const [locating, setLocating] = useState(false)
+  const fileInputRef = useRef(null)
+  const pendingActionRef = useRef(null) // 'in' | 'out'
 
   const { data: today } = useQuery({ queryKey: ['hris-today'], queryFn: hrisApi.today })
   const { data: history, isLoading } = useQuery({
@@ -50,23 +52,26 @@ export default function Attendance() {
     onError: (e) => toast.error(e.response?.data?.message ?? 'Gagal check-out'),
   })
 
-  async function handleCheckIn() {
-    setLocating(true)
-    try {
-      const { lat, lng } = await getLocation()
-      checkIn.mutate({ lat, lng })
-    } catch (err) {
-      toast.error(err.message)
-    } finally {
-      setLocating(false)
-    }
+  function startCheckIn() {
+    pendingActionRef.current = 'in'
+    fileInputRef.current?.click()
+  }
+  function startCheckOut() {
+    pendingActionRef.current = 'out'
+    fileInputRef.current?.click()
   }
 
-  async function handleCheckOut() {
+  async function handlePhotoSelected(e) {
+    const photo = e.target.files?.[0]
+    e.target.value = '' // allow re-selecting same file next time
+    if (!photo) return
+
+    const action = pendingActionRef.current
     setLocating(true)
     try {
       const { lat, lng } = await getLocation()
-      checkOut.mutate({ lat, lng })
+      if (action === 'in') checkIn.mutate({ lat, lng, photo })
+      else checkOut.mutate({ lat, lng, photo })
     } catch (err) {
       toast.error(err.message)
     } finally {
@@ -81,8 +86,17 @@ export default function Attendance() {
     <div className="px-6 py-6 max-w-5xl">
       <div className="mb-5">
         <h1 className="text-lg font-bold text-slate-800">Presensi</h1>
-        <p className="text-xs text-slate-400 mt-0.5">Check-in dan check-out memerlukan izin lokasi (GPS) untuk validasi jarak ke kantor</p>
+        <p className="text-xs text-slate-400 mt-0.5">Check-in dan check-out memerlukan izin lokasi (GPS) dan foto selfie untuk validasi</p>
       </div>
+
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        capture="user"
+        className="hidden"
+        onChange={handlePhotoSelected}
+      />
 
       <div className="card p-5 mb-6 flex items-center justify-between flex-wrap gap-4">
         <div className="flex items-center gap-3">
@@ -99,13 +113,13 @@ export default function Attendance() {
         </div>
         <div className="flex gap-2">
           {!today?.checkInAt && (
-            <button onClick={handleCheckIn} disabled={busy} className="btn-primary text-sm">
-              {busy ? <Loader2 size={14} className="animate-spin" /> : <LogIn size={14} />} Check-in
+            <button onClick={startCheckIn} disabled={busy} className="btn-primary text-sm">
+              {busy ? <Loader2 size={14} className="animate-spin" /> : <Camera size={14} />} Check-in
             </button>
           )}
           {today?.checkInAt && !today?.checkOutAt && (
-            <button onClick={handleCheckOut} disabled={busy} className="btn-primary text-sm">
-              {busy ? <Loader2 size={14} className="animate-spin" /> : <LogOut size={14} />} Check-out
+            <button onClick={startCheckOut} disabled={busy} className="btn-primary text-sm">
+              {busy ? <Loader2 size={14} className="animate-spin" /> : <Camera size={14} />} Check-out
             </button>
           )}
           {today?.checkInAt && today?.checkOutAt && (
@@ -139,8 +153,26 @@ export default function Attendance() {
                 <tr key={r.id} className="tr">
                   <td className="td">{fmtDate(r.date)}</td>
                   {canViewAll && <td className="td">{r.user?.name ?? '—'}</td>}
-                  <td className="td">{fmtTime(r.checkInAt)}</td>
-                  <td className="td">{fmtTime(r.checkOutAt)}</td>
+                  <td className="td">
+                    <div className="flex items-center gap-2">
+                      {r.checkInPhoto && (
+                        <a href={r.checkInPhoto} target="_blank" rel="noreferrer">
+                          <img src={r.checkInPhoto} alt="Foto check-in" className="w-7 h-7 rounded-full object-cover border border-slate-200" />
+                        </a>
+                      )}
+                      {fmtTime(r.checkInAt)}
+                    </div>
+                  </td>
+                  <td className="td">
+                    <div className="flex items-center gap-2">
+                      {r.checkOutPhoto && (
+                        <a href={r.checkOutPhoto} target="_blank" rel="noreferrer">
+                          <img src={r.checkOutPhoto} alt="Foto check-out" className="w-7 h-7 rounded-full object-cover border border-slate-200" />
+                        </a>
+                      )}
+                      {fmtTime(r.checkOutAt)}
+                    </div>
+                  </td>
                   <td className="td">{r.shift?.name ?? '—'}</td>
                   <td className="td text-center"><span className={STATUS_COLOR[r.status]}>{STATUS_LABEL[r.status]}</span></td>
                 </tr>

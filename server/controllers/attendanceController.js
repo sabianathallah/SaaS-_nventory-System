@@ -53,6 +53,9 @@ class AttendanceController {
             if (lat === undefined || lng === undefined) {
                 throw { name: 'BadRequest', message: 'Lokasi (lat, lng) wajib diisi' };
             }
+            if (!req.file) {
+                throw { name: 'BadRequest', message: 'Foto selfie wajib diambil saat check-in' };
+            }
 
             const date = todayDateOnly();
             let attendance = await Attendance.findOne({ where: { userId: req.user.id, date } });
@@ -82,6 +85,7 @@ class AttendanceController {
                 checkInLat: lat,
                 checkInLng: lng,
                 checkInLocationId: location.id,
+                checkInPhoto: req.file.path,
                 status,
                 note: note || null,
                 companyId: companyId(req) ?? req.user.companyId,
@@ -103,6 +107,9 @@ class AttendanceController {
             if (lat === undefined || lng === undefined) {
                 throw { name: 'BadRequest', message: 'Lokasi (lat, lng) wajib diisi' };
             }
+            if (!req.file) {
+                throw { name: 'BadRequest', message: 'Foto selfie wajib diambil saat check-out' };
+            }
 
             const date = todayDateOnly();
             const attendance = await Attendance.findOne({ where: { userId: req.user.id, date } });
@@ -120,6 +127,7 @@ class AttendanceController {
                 checkOutLat: lat,
                 checkOutLng: lng,
                 checkOutLocationId: location.id,
+                checkOutPhoto: req.file.path,
                 note: note || attendance.note,
             });
 

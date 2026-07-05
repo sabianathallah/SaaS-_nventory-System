@@ -261,8 +261,20 @@ export const hrisApi = {
   today:          ()         => api.get('/hris/attendance/today').then(r => r.data),
   summary:        (params)   => api.get('/hris/attendance/summary', { params }).then(r => r.data),
   attendanceList: (params)   => api.get('/hris/attendance', { params }).then(r => r.data),
-  checkIn:        (data)     => api.post('/hris/attendance/check-in', data).then(r => r.data),
-  checkOut:       (data)     => api.post('/hris/attendance/check-out', data).then(r => r.data),
+  checkIn:        ({ lat, lng, note, photo }) => {
+    const fd = new FormData()
+    fd.append('lat', lat); fd.append('lng', lng)
+    if (note) fd.append('note', note)
+    fd.append('photo', photo)
+    return api.post('/hris/attendance/check-in', fd).then(r => r.data)
+  },
+  checkOut:       ({ lat, lng, note, photo }) => {
+    const fd = new FormData()
+    fd.append('lat', lat); fd.append('lng', lng)
+    if (note) fd.append('note', note)
+    fd.append('photo', photo)
+    return api.post('/hris/attendance/check-out', fd).then(r => r.data)
+  },
   updateAttendance: (id, data) => api.patch(`/hris/attendance/${id}`, data).then(r => r.data),
 
   leaveTypes:       ()         => api.get('/hris/leave-types').then(r => r.data),

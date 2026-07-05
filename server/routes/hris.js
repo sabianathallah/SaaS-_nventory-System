@@ -3,6 +3,7 @@ const express = require('express');
 const router = express.Router();
 
 const requirePermission = require('../middlewares/requirePermission');
+const { uploadSingle } = require('../helpers/cloudinary');
 const AttendanceController = require('../controllers/attendanceController');
 const LeaveController = require('../controllers/leaveController');
 const OvertimeController = require('../controllers/overtimeController');
@@ -16,8 +17,8 @@ router.use(requirePermission('hris.view'));
 router.get('/attendance/today',   AttendanceController.today);
 router.get('/attendance/summary', AttendanceController.summary);
 router.get('/attendance',         AttendanceController.list);
-router.post('/attendance/check-in',  AttendanceController.checkIn);
-router.post('/attendance/check-out', AttendanceController.checkOut);
+router.post('/attendance/check-in',  uploadSingle('photo', 'saas-inventory/attendance'), AttendanceController.checkIn);
+router.post('/attendance/check-out', uploadSingle('photo', 'saas-inventory/attendance'), AttendanceController.checkOut);
 router.patch('/attendance/:id', requirePermission('hris.attendance.edit'), AttendanceController.update);
 
 // ── Leave ────────────────────────────────────────────────────────────────────
