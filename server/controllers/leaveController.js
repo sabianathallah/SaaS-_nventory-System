@@ -144,14 +144,12 @@ class LeaveController {
         try {
             const { status, reviewNote } = req.body;
             if (!['APPROVED', 'REJECTED'].includes(status)) {
-                await t.rollback();
                 throw { name: 'BadRequest', message: 'Status harus APPROVED atau REJECTED' };
             }
 
             const request = await LeaveRequest.findOne({ where: { id: req.params.id, ...companyFilter(req) }, transaction: t });
-            if (!request) { await t.rollback(); throw { name: 'NotFound', message: 'Pengajuan cuti tidak ditemukan' }; }
+            if (!request) throw { name: 'NotFound', message: 'Pengajuan cuti tidak ditemukan' };
             if (request.status !== 'PENDING') {
-                await t.rollback();
                 throw { name: 'BadRequest', message: 'Pengajuan sudah direview' };
             }
 

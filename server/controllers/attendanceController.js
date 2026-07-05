@@ -5,12 +5,9 @@ const { companyFilter, companyId } = require('../helpers/tenancy');
 const { paginate, buildFilter, paginatedResponse } = require('../helpers/queryHelper');
 const { distanceInMeters } = require('../helpers/geo');
 const { userHasPermission } = require('../helpers/permCheck');
+const { todayDateOnly, nowPartsInJakarta } = require('../helpers/timezone');
 
 const USER_ATTRS = ['id', 'name', 'email', 'divisi'];
-
-function todayDateOnly() {
-    return new Date().toISOString().slice(0, 10);
-}
 
 async function resolveOfficeLocation(req, lat, lng) {
     const locations = await OfficeLocation.findAll({ where: { ...companyFilter(req) } });
@@ -69,11 +66,12 @@ class AttendanceController {
             let status = 'PRESENT';
             const now = new Date();
             if (user.shift) {
+                const { hour, minute } = nowPartsInJakarta();
+                const nowMinutes = hour * 60 + minute;
                 const [h, m] = user.shift.startTime.split(':').map(Number);
-                const shiftStart = new Date(now);
-                shiftStart.setHours(h, m, 0, 0);
-                const graceMs = 15 * 60 * 1000;
-                if (now.getTime() > shiftStart.getTime() + graceMs) status = 'LATE';
+                const shiftStartMinutes = h * 60 + m;
+                const graceMinutes = 15;
+                if (nowMinutes > shiftStartMinutes + graceMinutes) status = 'LATE';
             }
 
             const payload = {
