@@ -42,6 +42,7 @@ const skuWarehouseStockRouter  = require('./sku_warehouse_stock');
 const profileRouter            = require('./profile');
 const requestsRouter           = require('./requests');
 const requestTypesRouter       = require('./request_types');
+const hrisRouter                = require('./hris');
 const { Role, RolePermission } = require('../models');
 const { Op } = require('sequelize');
 
@@ -106,6 +107,7 @@ router.use('/reports',              reportRouter);
 router.use('/sku-warehouse-stocks', skuWarehouseStockRouter);
 router.use('/requests',      requestsRouter);
 router.use('/request-types', requestTypesRouter);
+router.use('/hris',          hrisRouter);
 
 // Admin only
 router.use('/users',     isAdmin, userRouter);

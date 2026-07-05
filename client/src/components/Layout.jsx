@@ -97,12 +97,23 @@ const HANDBOOK_NAV_GROUPS = [
   },
 ]
 
-// HRIS module — masih coming soon, satu halaman placeholder saja.
+// HRIS module — presensi, cuti, lembur, dan pengaturan HR.
 const HRIS_NAV_GROUPS = [
   {
     label: 'HRIS',
     items: [
-      { to: '/hris', icon: UserCog, label: 'Beranda' },
+      { to: '/hris',           icon: UserCog,       label: 'Beranda',   requirePermission: 'hris.view' },
+      { to: '/hris/attendance', icon: ClipboardCheck, label: 'Presensi', requirePermission: 'hris.view' },
+      { to: '/hris/leave',      icon: FileText,      label: 'Cuti',      requirePermission: 'hris.view' },
+      { to: '/hris/overtime',   icon: ClipboardList, label: 'Lembur',    requirePermission: 'hris.view' },
+    ],
+  },
+  {
+    label: 'Pengaturan HR',
+    items: [
+      { to: '/hris/admin/shifts',    icon: BarChart2, label: 'Shift',         requirePermission: 'hris.shift.manage' },
+      { to: '/hris/admin/locations', icon: Warehouse, label: 'Lokasi Kantor', requirePermission: 'hris.location.manage' },
+      { to: '/hris/reports',         icon: BarChart2, label: 'Laporan HRIS', requirePermission: 'hris.reports.view' },
     ],
   },
 ]
@@ -110,7 +121,8 @@ const HRIS_NAV_GROUPS = [
 const PAGE_TITLES = {
   '/dashboard': 'Dashboard', '/sop': 'SOP Operasional', '/products': 'Produk', '/catalog': 'Kategori dan Koleksi',
   '/handbook': 'Company Handbook', '/handbook/kebijakan': 'Kebijakan Perusahaan', '/handbook/struktur': 'Struktur Organisasi',
-  '/hris': 'HRIS',
+  '/hris': 'HRIS', '/hris/attendance': 'Presensi', '/hris/leave': 'Cuti', '/hris/overtime': 'Lembur',
+  '/hris/admin/shifts': 'Kelola Shift', '/hris/admin/locations': 'Kelola Lokasi Kantor', '/hris/reports': 'Laporan HRIS',
   '/warehouses': 'Gudang', '/suppliers': 'Vendor',
   '/stock-in': 'Penerimaan Stok', '/stock-in/new': 'Penerimaan Stok Baru', '/stock-out': 'Pengeluaran Stok', '/movements': 'Pergerakan',
   '/opname': 'Stock Opname', '/transfers': 'Transfer Stok', '/handover': 'Handover Pengiriman',
@@ -151,10 +163,13 @@ function NavTooltip({ label, children }) {
 // Module switcher — toggle antara Inventory System, Company Handbook, dan HRIS.
 function ModuleSwitcher({ collapsed, activeModule }) {
   const navigate = useNavigate()
+  const { hasPermission, isSuperAdmin } = useAuth()
   const items = [
     { key: 'inventory', label: 'Inventory', icon: Package,  to: '/dashboard', active: activeModule === 'inventory' },
     { key: 'handbook',  label: 'Handbook',   icon: BookOpen, to: '/handbook',  active: activeModule === 'handbook' },
-    { key: 'hris',      label: 'HRIS',       icon: UserCog,  to: '/hris',      active: activeModule === 'hris' },
+    ...(isSuperAdmin || hasPermission('hris.view')
+      ? [{ key: 'hris', label: 'HRIS', icon: UserCog, to: '/hris', active: activeModule === 'hris' }]
+      : []),
   ]
 
   if (collapsed) {

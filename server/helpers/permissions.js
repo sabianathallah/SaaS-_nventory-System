@@ -89,6 +89,16 @@ const ALL_PERMISSIONS = [
   // ── Administrasi ─────────────────────────────────────────────────────────────
   { key: 'admin.manage',              label: 'Akses Penuh Administrasi',                   group: 'Administrasi',            isParent: true,  desc: 'Kelola user, role, dan pengaturan sistem' },
   { key: 'admin.users',               label: 'Kelola Pengguna',                            group: 'Administrasi',            parent: 'admin.manage',           desc: 'Tambah, edit, nonaktifkan user & atur role' },
+
+  // ── HRIS ─────────────────────────────────────────────────────────────────────
+  { key: 'hris.manage',               label: 'Akses Penuh HRIS',                           group: 'HRIS',                    isParent: true,  desc: 'Aktifkan semua fitur HRIS sekaligus' },
+  { key: 'hris.view',                 label: 'Gunakan HRIS (Self-Service)',                group: 'HRIS',                    parent: 'hris.manage',            desc: 'Check-in/out presensi, ajukan cuti & lembur, lihat riwayat sendiri' },
+  { key: 'hris.attendance.edit',      label: 'Edit Data Absensi',                          group: 'HRIS',                    parent: 'hris.manage',            desc: 'Koreksi data check-in/out milik siapa pun' },
+  { key: 'hris.leave.review',         label: 'Review Pengajuan Cuti',                      group: 'HRIS',                    parent: 'hris.manage',            desc: 'Approve atau reject pengajuan cuti karyawan' },
+  { key: 'hris.overtime.review',      label: 'Review Pengajuan Lembur',                    group: 'HRIS',                    parent: 'hris.manage',            desc: 'Approve atau reject pengajuan lembur karyawan' },
+  { key: 'hris.shift.manage',         label: 'Kelola Shift',                               group: 'HRIS',                    parent: 'hris.manage',            desc: 'Tambah, edit, hapus shift & assign shift ke user' },
+  { key: 'hris.location.manage',      label: 'Kelola Lokasi Kantor',                       group: 'HRIS',                    parent: 'hris.manage',            desc: 'Tambah, edit, hapus lokasi kantor untuk validasi presensi' },
+  { key: 'hris.reports.view',         label: 'Lihat Laporan HRIS',                         group: 'HRIS',                    parent: 'hris.manage',            desc: 'Lihat laporan rekap absensi, cuti, dan lembur' },
 ];
 
 const ALL_KEYS = ALL_PERMISSIONS.map(p => p.key);
@@ -112,6 +122,7 @@ const DEFAULT_PERMISSIONS = {
     'reports.manage',
     'db_link.manage',
     'request.manage', 'request.view', 'request.create', 'request.process',
+    'hris.view',
   ],
 
   HEAD_PACKING: [
@@ -122,11 +133,16 @@ const DEFAULT_PERMISSIONS = {
     'packing.manage', 'packing.incoming', 'packing.incoming.close',
     'reports.manage',
     'db_link.view',
+    'hris.view',
   ],
 
-  TIM_PACKING: ['packing.view', 'packing.incoming', 'packing.jobs'],
+  TIM_PACKING: ['packing.view', 'packing.incoming', 'packing.jobs', 'hris.view'],
 
-  HR: ['admin.manage', 'admin.users', 'reports.manage', 'db_link.view'],
+  HR: [
+    'admin.manage', 'admin.users', 'reports.manage', 'db_link.view',
+    'hris.manage', 'hris.view', 'hris.attendance.edit', 'hris.leave.review',
+    'hris.overtime.review', 'hris.shift.manage', 'hris.location.manage', 'hris.reports.view',
+  ],
 
   CEO: [
     'dashboard.manage',
@@ -137,13 +153,14 @@ const DEFAULT_PERMISSIONS = {
     'packing.view',
     'reports.manage',
     'db_link.view',
+    'hris.view', 'hris.reports.view',
   ],
 
-  STAFF: ['inventory.view', 'db_link.view', 'request.create'],
+  STAFF: ['inventory.view', 'db_link.view', 'request.create', 'hris.view'],
 
-  MARKETING:         ['inventory.view', 'db_link.view', 'request.create', 'request.view'],
-  PRODUKSI:          ['inventory.view', 'db_link.view', 'request.create'],
-  PRODUK_DEVELOPMENT:['inventory.view', 'db_link.view', 'request.create'],
+  MARKETING:         ['inventory.view', 'db_link.view', 'request.create', 'request.view', 'hris.view'],
+  PRODUKSI:          ['inventory.view', 'db_link.view', 'request.create', 'hris.view'],
+  PRODUK_DEVELOPMENT:['inventory.view', 'db_link.view', 'request.create', 'hris.view'],
 };
 
 const EDITABLE_ROLES = ['COMPANY_ADMIN', 'OPERASIONAL', 'TIM_PACKING', 'STAFF'];

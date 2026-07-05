@@ -7,7 +7,7 @@ import {
   Package, BookOpen, Warehouse, Truck,
   ArrowDownToLine, ArrowUpFromLine, ArrowLeftRight,
   ClipboardList, PackageOpen, Layers,
-  ClipboardCheck, Users, Building2, Eye, EyeOff, Save, PackageCheck, Link2, BarChart2,
+  ClipboardCheck, Users, Building2, Eye, EyeOff, Save, PackageCheck, Link2, BarChart2, UserCog,
 } from 'lucide-react'
 
 const PAGE_GROUPS = [
@@ -54,6 +54,12 @@ const PAGE_GROUPS = [
     label: 'Umum',
     items: [
       { key: 'database-links', label: 'Database Links', icon: Link2 },
+    ],
+  },
+  {
+    label: 'HRIS',
+    items: [
+      { key: 'hris', label: 'HRIS', icon: UserCog },
     ],
   },
   {

@@ -10,6 +10,12 @@ import Dashboard from './pages/Dashboard'
 import SOP from './pages/SOP'
 import Handbook from './pages/Handbook'
 import HRIS from './pages/HRIS'
+import HrisAttendance from './pages/hris/Attendance'
+import HrisLeave from './pages/hris/Leave'
+import HrisOvertime from './pages/hris/Overtime'
+import HrisReports from './pages/hris/Reports'
+import HrisShifts from './pages/hris/admin/Shifts'
+import HrisLocations from './pages/hris/admin/Locations'
 import Products from './pages/Products'
 import ProductDetail from './pages/ProductDetail'
 import ProductEdit from './pages/ProductEdit'
@@ -93,7 +99,13 @@ function AppRoutes() {
                 <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="/sop"       element={<SOP />} />
                 <Route path="/handbook/*" element={<Handbook />} />
-                <Route path="/hris"       element={<HRIS />} />
+                <Route path="/hris"               element={<PageVisibleRoute pageKey="hris"><PermissionRoute permission="hris.view" page="HRIS"><HRIS /></PermissionRoute></PageVisibleRoute>} />
+                <Route path="/hris/attendance"     element={<PageVisibleRoute pageKey="hris"><PermissionRoute permission="hris.view" page="Presensi"><HrisAttendance /></PermissionRoute></PageVisibleRoute>} />
+                <Route path="/hris/leave"          element={<PageVisibleRoute pageKey="hris"><PermissionRoute permission="hris.view" page="Cuti"><HrisLeave /></PermissionRoute></PageVisibleRoute>} />
+                <Route path="/hris/overtime"       element={<PageVisibleRoute pageKey="hris"><PermissionRoute permission="hris.view" page="Lembur"><HrisOvertime /></PermissionRoute></PageVisibleRoute>} />
+                <Route path="/hris/reports"        element={<PageVisibleRoute pageKey="hris"><PermissionRoute permission="hris.reports.view" page="Laporan HRIS"><HrisReports /></PermissionRoute></PageVisibleRoute>} />
+                <Route path="/hris/admin/shifts"   element={<PageVisibleRoute pageKey="hris"><PermissionRoute permission="hris.shift.manage" page="Kelola Shift"><HrisShifts /></PermissionRoute></PageVisibleRoute>} />
+                <Route path="/hris/admin/locations" element={<PageVisibleRoute pageKey="hris"><PermissionRoute permission="hris.location.manage" page="Lokasi Kantor"><HrisLocations /></PermissionRoute></PageVisibleRoute>} />
 
                 {/* ── Produk ── */}
                 <Route path="/products"          element={<PageVisibleRoute pageKey="products"><PermissionRoute permission="inventory.view" page="Produk"><Products /></PermissionRoute></PageVisibleRoute>} />

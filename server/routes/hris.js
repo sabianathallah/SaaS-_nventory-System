@@ -1,0 +1,57 @@
+'use strict';
+const express = require('express');
+const router = express.Router();
+
+const requirePermission = require('../middlewares/requirePermission');
+const AttendanceController = require('../controllers/attendanceController');
+const LeaveController = require('../controllers/leaveController');
+const OvertimeController = require('../controllers/overtimeController');
+const ShiftController = require('../controllers/shiftController');
+const OfficeLocationController = require('../controllers/officeLocationController');
+const HrisReportController = require('../controllers/hrisReportController');
+
+router.use(requirePermission('hris.view'));
+
+// ── Attendance ───────────────────────────────────────────────────────────────
+router.get('/attendance/today',   AttendanceController.today);
+router.get('/attendance/summary', AttendanceController.summary);
+router.get('/attendance',         AttendanceController.list);
+router.post('/attendance/check-in',  AttendanceController.checkIn);
+router.post('/attendance/check-out', AttendanceController.checkOut);
+router.patch('/attendance/:id', requirePermission('hris.attendance.edit'), AttendanceController.update);
+
+// ── Leave ────────────────────────────────────────────────────────────────────
+router.get('/leave-types',    LeaveController.listTypes);
+router.post('/leave-types',   requirePermission('hris.manage'), LeaveController.createType);
+router.put('/leave-types/:id', requirePermission('hris.manage'), LeaveController.updateType);
+router.delete('/leave-types/:id', requirePermission('hris.manage'), LeaveController.deleteType);
+router.get('/leave-balances', LeaveController.getBalances);
+router.get('/leave-requests', LeaveController.list);
+router.post('/leave-requests', LeaveController.create);
+router.patch('/leave-requests/:id/review', requirePermission('hris.leave.review'), LeaveController.review);
+router.patch('/leave-requests/:id/cancel', LeaveController.cancel);
+
+// ── Overtime ─────────────────────────────────────────────────────────────────
+router.get('/overtime',            OvertimeController.list);
+router.post('/overtime',           OvertimeController.create);
+router.patch('/overtime/:id/review', requirePermission('hris.overtime.review'), OvertimeController.review);
+router.patch('/overtime/:id/cancel', OvertimeController.cancel);
+
+// ── Shifts ───────────────────────────────────────────────────────────────────
+router.get('/shifts',        ShiftController.list);
+router.post('/shifts',       requirePermission('hris.shift.manage'), ShiftController.create);
+router.put('/shifts/:id',    requirePermission('hris.shift.manage'), ShiftController.update);
+router.delete('/shifts/:id', requirePermission('hris.shift.manage'), ShiftController.destroy);
+router.post('/shifts/assign', requirePermission('hris.shift.manage'), ShiftController.assign);
+router.get('/shifts/users',   requirePermission('hris.shift.manage'), ShiftController.listUsers);
+
+// ── Office Locations ─────────────────────────────────────────────────────────
+router.get('/office-locations',        OfficeLocationController.list);
+router.post('/office-locations',       requirePermission('hris.location.manage'), OfficeLocationController.create);
+router.put('/office-locations/:id',    requirePermission('hris.location.manage'), OfficeLocationController.update);
+router.delete('/office-locations/:id', requirePermission('hris.location.manage'), OfficeLocationController.destroy);
+
+// ── Reports ──────────────────────────────────────────────────────────────────
+router.get('/reports/attendance', requirePermission('hris.reports.view'), HrisReportController.attendanceReport);
+
+module.exports = router;

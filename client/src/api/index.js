@@ -257,6 +257,44 @@ export const reportApi = {
   dailyActivity: (params) => api.get('/reports/daily-activity', { params }).then(r => r.data),
 }
 
+export const hrisApi = {
+  today:          ()         => api.get('/hris/attendance/today').then(r => r.data),
+  summary:        (params)   => api.get('/hris/attendance/summary', { params }).then(r => r.data),
+  attendanceList: (params)   => api.get('/hris/attendance', { params }).then(r => r.data),
+  checkIn:        (data)     => api.post('/hris/attendance/check-in', data).then(r => r.data),
+  checkOut:       (data)     => api.post('/hris/attendance/check-out', data).then(r => r.data),
+  updateAttendance: (id, data) => api.patch(`/hris/attendance/${id}`, data).then(r => r.data),
+
+  leaveTypes:       ()         => api.get('/hris/leave-types').then(r => r.data),
+  createLeaveType:  (data)     => api.post('/hris/leave-types', data).then(r => r.data),
+  updateLeaveType:  (id, data) => api.put(`/hris/leave-types/${id}`, data).then(r => r.data),
+  deleteLeaveType:  (id)       => api.delete(`/hris/leave-types/${id}`).then(r => r.data),
+  leaveBalances:    (params)   => api.get('/hris/leave-balances', { params }).then(r => r.data),
+  leaveRequests:    (params)   => api.get('/hris/leave-requests', { params }).then(r => r.data),
+  createLeave:      (data)     => api.post('/hris/leave-requests', data).then(r => r.data),
+  reviewLeave:      (id, data) => api.patch(`/hris/leave-requests/${id}/review`, data).then(r => r.data),
+  cancelLeave:      (id)       => api.patch(`/hris/leave-requests/${id}/cancel`).then(r => r.data),
+
+  overtimeList:    (params)   => api.get('/hris/overtime', { params }).then(r => r.data),
+  createOvertime:  (data)     => api.post('/hris/overtime', data).then(r => r.data),
+  reviewOvertime:  (id, data) => api.patch(`/hris/overtime/${id}/review`, data).then(r => r.data),
+  cancelOvertime:  (id)       => api.patch(`/hris/overtime/${id}/cancel`).then(r => r.data),
+
+  shifts:        ()         => api.get('/hris/shifts').then(r => r.data),
+  createShift:   (data)     => api.post('/hris/shifts', data).then(r => r.data),
+  updateShift:   (id, data) => api.put(`/hris/shifts/${id}`, data).then(r => r.data),
+  deleteShift:   (id)       => api.delete(`/hris/shifts/${id}`).then(r => r.data),
+  assignShift:   (data)     => api.post('/hris/shifts/assign', data).then(r => r.data),
+  shiftUsers:    ()         => api.get('/hris/shifts/users').then(r => r.data),
+
+  officeLocations:       ()         => api.get('/hris/office-locations').then(r => r.data),
+  createOfficeLocation:  (data)     => api.post('/hris/office-locations', data).then(r => r.data),
+  updateOfficeLocation:  (id, data) => api.put(`/hris/office-locations/${id}`, data).then(r => r.data),
+  deleteOfficeLocation:  (id)       => api.delete(`/hris/office-locations/${id}`).then(r => r.data),
+
+  attendanceReport: (params) => api.get('/hris/reports/attendance', { params }).then(r => r.data),
+}
+
 export const profileApi = {
   get:            ()           => api.get('/me').then(r => r.data),
   update:         (data)       => {

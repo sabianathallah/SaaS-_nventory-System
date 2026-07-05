@@ -18,6 +18,7 @@ const DEFAULT_VISIBILITY = {
   handover:          true,
   users:             true,
   companies:         true,
+  hris:              true,
 };
 
 class SystemSettingController {

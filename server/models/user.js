@@ -25,6 +25,48 @@ module.exports = (sequelize, DataTypes) => {
         onDelete: 'CASCADE',
         onUpdate: 'CASCADE'
       });
+      User.hasMany(models.Attendance, {
+        foreignKey: { name: 'userId', allowNull: false },
+        as: 'attendances',
+        onDelete: 'CASCADE',
+        onUpdate: 'CASCADE'
+      });
+      User.hasMany(models.LeaveRequest, {
+        foreignKey: { name: 'userId', allowNull: false },
+        as: 'leaveRequests',
+        onDelete: 'CASCADE',
+        onUpdate: 'CASCADE'
+      });
+      User.hasMany(models.LeaveRequest, {
+        foreignKey: { name: 'reviewedBy', allowNull: true },
+        as: 'reviewedLeaveRequests',
+        onDelete: 'SET NULL',
+        onUpdate: 'CASCADE'
+      });
+      User.hasMany(models.LeaveBalance, {
+        foreignKey: { name: 'userId', allowNull: false },
+        as: 'leaveBalances',
+        onDelete: 'CASCADE',
+        onUpdate: 'CASCADE'
+      });
+      User.hasMany(models.OvertimeRequest, {
+        foreignKey: { name: 'userId', allowNull: false },
+        as: 'overtimeRequests',
+        onDelete: 'CASCADE',
+        onUpdate: 'CASCADE'
+      });
+      User.hasMany(models.OvertimeRequest, {
+        foreignKey: { name: 'reviewedBy', allowNull: true },
+        as: 'reviewedOvertimeRequests',
+        onDelete: 'SET NULL',
+        onUpdate: 'CASCADE'
+      });
+      User.belongsTo(models.Shift, {
+        foreignKey: { name: 'shiftId', allowNull: true },
+        as: 'shift',
+        onDelete: 'SET NULL',
+        onUpdate: 'CASCADE'
+      });
     }
   }
   User.init({
@@ -78,6 +120,10 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.BOOLEAN,
       allowNull: false,
       defaultValue: true
+    },
+    shiftId: {
+      type: DataTypes.INTEGER,
+      allowNull: true
     }
   }, {
     sequelize,
