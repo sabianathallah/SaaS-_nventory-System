@@ -3,13 +3,15 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { hrisApi } from '../../api'
 import { useAuth } from '../../context/AuthContext'
-import { LogIn, LogOut, MapPin, Loader2, Camera } from 'lucide-react'
+import { LogOut, MapPin, Loader2, Camera, Building2, Laptop, Briefcase, X } from 'lucide-react'
 
 const STATUS_LABEL = { PRESENT: 'Hadir', LATE: 'Terlambat', ABSENT: 'Absen', LEAVE: 'Cuti', HALF_DAY: 'Setengah Hari' }
 const STATUS_COLOR = {
   PRESENT: 'badge-green', LATE: 'badge-amber', ABSENT: 'badge-red',
   LEAVE: 'badge-purple', HALF_DAY: 'badge-teal',
 }
+const MODE_LABEL = { ON_SITE: 'On-site', WFA: 'WFA', FIELD: 'Lapangan' }
+const MODE_COLOR = { ON_SITE: 'badge-muted', WFA: 'badge-indigo', FIELD: 'badge-teal' }
 
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'
 const fmtTime = (d) => d ? new Date(d).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '—'
@@ -25,13 +27,23 @@ function getLocation() {
   })
 }
 
+const CHECKIN_MODES = [
+  { value: 'ON_SITE', label: 'On-site', desc: 'Bekerja dari kantor', icon: Building2 },
+  { value: 'WFA', label: 'WFA', desc: 'Butuh pengajuan yang sudah disetujui', icon: Laptop },
+  { value: 'FIELD', label: 'Kerja Lapangan', desc: 'Kunjungan vendor / kerja di luar kantor', icon: Briefcase },
+]
+
 export default function Attendance() {
   const { hasPermission, user } = useAuth()
   const qc = useQueryClient()
   const canViewAll = hasPermission('hris.attendance.edit') || hasPermission('hris.reports.view') || user?.role === 'SUPER_ADMIN' || user?.role === 'COMPANY_ADMIN'
   const [locating, setLocating] = useState(false)
+  const [showModePicker, setShowModePicker] = useState(false)
+  const [showFieldNote, setShowFieldNote] = useState(false)
+  const [fieldNote, setFieldNote] = useState('')
   const fileInputRef = useRef(null)
   const pendingActionRef = useRef(null) // 'in' | 'out'
+  const pendingModeRef = useRef('ON_SITE')
 
   const { data: today } = useQuery({ queryKey: ['hris-today'], queryFn: hrisApi.today })
   const { data: history, isLoading } = useQuery({
@@ -53,11 +65,27 @@ export default function Attendance() {
   })
 
   function startCheckIn() {
-    pendingActionRef.current = 'in'
-    fileInputRef.current?.click()
+    setShowModePicker(true)
   }
   function startCheckOut() {
     pendingActionRef.current = 'out'
+    fileInputRef.current?.click()
+  }
+
+  function pickMode(mode) {
+    pendingModeRef.current = mode
+    pendingActionRef.current = 'in'
+    setShowModePicker(false)
+    if (mode === 'FIELD') {
+      setShowFieldNote(true)
+    } else {
+      fileInputRef.current?.click()
+    }
+  }
+
+  function confirmFieldNote() {
+    if (!fieldNote.trim()) return toast.error('Catatan tujuan wajib diisi')
+    setShowFieldNote(false)
     fileInputRef.current?.click()
   }
 
@@ -70,8 +98,12 @@ export default function Attendance() {
     setLocating(true)
     try {
       const { lat, lng } = await getLocation()
-      if (action === 'in') checkIn.mutate({ lat, lng, photo })
-      else checkOut.mutate({ lat, lng, photo })
+      if (action === 'in') {
+        checkIn.mutate({ lat, lng, photo, workMode: pendingModeRef.current, note: pendingModeRef.current === 'FIELD' ? fieldNote.trim() : undefined })
+        setFieldNote('')
+      } else {
+        checkOut.mutate({ lat, lng, photo })
+      }
     } catch (err) {
       toast.error(err.message)
     } finally {
@@ -108,6 +140,9 @@ export default function Attendance() {
             <p className="text-xs text-slate-500 mt-0.5">
               {today?.checkInAt ? `Check-in ${fmtTime(today.checkInAt)}` : 'Belum check-in'}
               {today?.checkOutAt && ` · Check-out ${fmtTime(today.checkOutAt)}`}
+              {today?.workMode && today.workMode !== 'ON_SITE' && (
+                <span className={`ml-2 ${MODE_COLOR[today.workMode]}`}>{MODE_LABEL[today.workMode]}</span>
+              )}
             </p>
           </div>
         </div>
@@ -128,6 +163,48 @@ export default function Attendance() {
         </div>
       </div>
 
+      {showModePicker && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4" onClick={() => setShowModePicker(false)}>
+          <div className="card w-full max-w-sm p-5" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <p className="text-sm font-semibold text-slate-800">Pilih Cara Absen</p>
+              <button onClick={() => setShowModePicker(false)} className="text-slate-400 hover:text-slate-600"><X size={16} /></button>
+            </div>
+            <div className="space-y-2">
+              {CHECKIN_MODES.map(({ value, label, desc, icon: Icon }) => (
+                <button
+                  key={value}
+                  onClick={() => pickMode(value)}
+                  className="w-full flex items-center gap-3 p-3 rounded-lg border border-slate-200 hover:border-brand hover:bg-brand-50 transition-colors text-left"
+                >
+                  <div className="w-9 h-9 rounded-lg bg-slate-100 flex items-center justify-center text-slate-600 flex-shrink-0">
+                    <Icon size={16} />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-slate-800">{label}</p>
+                    <p className="text-xs text-slate-400">{desc}</p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showFieldNote && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4" onClick={() => setShowFieldNote(false)}>
+          <div className="card w-full max-w-sm p-5" onClick={e => e.stopPropagation()}>
+            <p className="text-sm font-semibold text-slate-800 mb-1">Catatan Tujuan</p>
+            <p className="text-xs text-slate-400 mb-3">Wajib diisi untuk kerja lapangan, misal: "Kunjungan ke Vendor ABC"</p>
+            <textarea autoFocus className="input mb-3" rows={3} value={fieldNote} onChange={e => setFieldNote(e.target.value)} />
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setShowFieldNote(false)} className="btn-secondary text-sm">Batal</button>
+              <button onClick={confirmFieldNote} className="btn-primary text-sm">Lanjutkan</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="card overflow-hidden">
         <div className="px-4 py-3 border-b border-slate-100">
           <p className="text-sm font-semibold text-slate-700">Riwayat Presensi</p>
@@ -140,15 +217,16 @@ export default function Attendance() {
                 {canViewAll && <th className="th">Nama</th>}
                 <th className="th">Check-in</th>
                 <th className="th">Check-out</th>
+                <th className="th">Mode</th>
                 <th className="th">Shift</th>
                 <th className="th text-center">Status</th>
               </tr>
             </thead>
             <tbody>
               {isLoading ? (
-                <tr><td colSpan={6} className="td py-8 text-center text-slate-400">Memuat…</td></tr>
+                <tr><td colSpan={7} className="td py-8 text-center text-slate-400">Memuat…</td></tr>
               ) : rows.length === 0 ? (
-                <tr><td colSpan={6} className="td py-8 text-center text-slate-400">Belum ada data presensi</td></tr>
+                <tr><td colSpan={7} className="td py-8 text-center text-slate-400">Belum ada data presensi</td></tr>
               ) : rows.map(r => (
                 <tr key={r.id} className="tr">
                   <td className="td">{fmtDate(r.date)}</td>
@@ -172,6 +250,10 @@ export default function Attendance() {
                       )}
                       {fmtTime(r.checkOutAt)}
                     </div>
+                  </td>
+                  <td className="td">
+                    <span className={MODE_COLOR[r.workMode] ?? 'badge-muted'}>{MODE_LABEL[r.workMode] ?? '—'}</span>
+                    {r.workMode === 'FIELD' && r.note && <div className="text-[10px] text-slate-400 mt-0.5 max-w-[140px] truncate">{r.note}</div>}
                   </td>
                   <td className="td">{r.shift?.name ?? '—'}</td>
                   <td className="td text-center"><span className={STATUS_COLOR[r.status]}>{STATUS_LABEL[r.status]}</span></td>

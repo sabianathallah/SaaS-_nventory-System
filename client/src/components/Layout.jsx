@@ -12,6 +12,7 @@ import {
   PackageOpen, Layers, ClipboardCheck, Menu, X, Eye, EyeOff,
   PackageCheck, Link2, BarChart2, BookMarked, ChevronDown,
   SendHorizonal, FileText, PanelLeftClose, PanelLeftOpen, UserCog,
+  Laptop, Wallet, CalendarClock,
 } from 'lucide-react'
 import logoPreface from '../assets/logo-preface.jpeg'
 
@@ -105,15 +106,19 @@ const HRIS_NAV_GROUPS = [
       { to: '/hris',           icon: UserCog,       label: 'Beranda',   requirePermission: 'hris.view' },
       { to: '/hris/attendance', icon: ClipboardCheck, label: 'Presensi', requirePermission: 'hris.view' },
       { to: '/hris/leave',      icon: FileText,      label: 'Cuti',      requirePermission: 'hris.view' },
+      { to: '/hris/wfa',        icon: Laptop,        label: 'WFA',       requirePermission: 'hris.view' },
       { to: '/hris/overtime',   icon: ClipboardList, label: 'Lembur',    requirePermission: 'hris.view' },
     ],
   },
   {
     label: 'Pengaturan HR',
     items: [
-      { to: '/hris/admin/shifts',    icon: BarChart2, label: 'Shift',         requirePermission: 'hris.shift.manage' },
-      { to: '/hris/admin/locations', icon: Warehouse, label: 'Lokasi Kantor', requirePermission: 'hris.location.manage' },
-      { to: '/hris/reports',         icon: BarChart2, label: 'Laporan HRIS', requirePermission: 'hris.reports.view' },
+      { to: '/hris/admin/shifts',       icon: CalendarClock, label: 'Shift',         requirePermission: 'hris.shift.manage' },
+      { to: '/hris/admin/locations',    icon: Warehouse,     label: 'Lokasi Kantor', requirePermission: 'hris.location.manage' },
+      { to: '/hris/admin/leave-quota',  icon: FileText,      label: 'Kuota Cuti',    requirePermission: 'hris.manage' },
+      { to: '/hris/admin/wfa-quota',    icon: Laptop,        label: 'Kuota WFA',     requirePermission: 'hris.manage' },
+      { to: '/hris/payment-adjustments', icon: Wallet,       label: 'Penyesuaian Payment', requirePermission: 'hris.reports.view' },
+      { to: '/hris/reports',            icon: BarChart2,     label: 'Laporan HRIS', requirePermission: 'hris.reports.view' },
     ],
   },
 ]
@@ -121,8 +126,9 @@ const HRIS_NAV_GROUPS = [
 const PAGE_TITLES = {
   '/dashboard': 'Dashboard', '/sop': 'SOP Operasional', '/products': 'Produk', '/catalog': 'Kategori dan Koleksi',
   '/handbook': 'Company Handbook', '/handbook/kebijakan': 'Kebijakan Perusahaan', '/handbook/struktur': 'Struktur Organisasi',
-  '/hris': 'HRIS', '/hris/attendance': 'Presensi', '/hris/leave': 'Cuti', '/hris/overtime': 'Lembur',
+  '/hris': 'HRIS', '/hris/attendance': 'Presensi', '/hris/leave': 'Cuti', '/hris/wfa': 'WFA', '/hris/overtime': 'Lembur',
   '/hris/admin/shifts': 'Kelola Shift', '/hris/admin/locations': 'Kelola Lokasi Kantor', '/hris/reports': 'Laporan HRIS',
+  '/hris/admin/leave-quota': 'Kuota Cuti', '/hris/admin/wfa-quota': 'Kuota WFA', '/hris/payment-adjustments': 'Penyesuaian Payment',
   '/warehouses': 'Gudang', '/suppliers': 'Vendor',
   '/stock-in': 'Penerimaan Stok', '/stock-in/new': 'Penerimaan Stok Baru', '/stock-out': 'Pengeluaran Stok', '/movements': 'Pergerakan',
   '/opname': 'Stock Opname', '/transfers': 'Transfer Stok', '/handover': 'Handover Pengiriman',

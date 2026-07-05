@@ -16,6 +16,10 @@ import HrisOvertime from './pages/hris/Overtime'
 import HrisReports from './pages/hris/Reports'
 import HrisShifts from './pages/hris/admin/Shifts'
 import HrisLocations from './pages/hris/admin/Locations'
+import HrisLeaveQuota from './pages/hris/admin/LeaveQuota'
+import HrisWfa from './pages/hris/Wfa'
+import HrisWfaQuota from './pages/hris/admin/WfaQuota'
+import HrisPaymentAdjustments from './pages/hris/PaymentAdjustments'
 import Products from './pages/Products'
 import ProductDetail from './pages/ProductDetail'
 import ProductEdit from './pages/ProductEdit'
@@ -106,6 +110,10 @@ function AppRoutes() {
                 <Route path="/hris/reports"        element={<PageVisibleRoute pageKey="hris"><PermissionRoute permission="hris.reports.view" page="Laporan HRIS"><HrisReports /></PermissionRoute></PageVisibleRoute>} />
                 <Route path="/hris/admin/shifts"   element={<PageVisibleRoute pageKey="hris"><PermissionRoute permission="hris.shift.manage" page="Kelola Shift"><HrisShifts /></PermissionRoute></PageVisibleRoute>} />
                 <Route path="/hris/admin/locations" element={<PageVisibleRoute pageKey="hris"><PermissionRoute permission="hris.location.manage" page="Lokasi Kantor"><HrisLocations /></PermissionRoute></PageVisibleRoute>} />
+                <Route path="/hris/admin/leave-quota" element={<PageVisibleRoute pageKey="hris"><PermissionRoute permission="hris.manage" page="Kuota Cuti"><HrisLeaveQuota /></PermissionRoute></PageVisibleRoute>} />
+                <Route path="/hris/wfa"             element={<PageVisibleRoute pageKey="hris"><PermissionRoute permission="hris.view" page="WFA"><HrisWfa /></PermissionRoute></PageVisibleRoute>} />
+                <Route path="/hris/admin/wfa-quota" element={<PageVisibleRoute pageKey="hris"><PermissionRoute permission="hris.manage" page="Kuota WFA"><HrisWfaQuota /></PermissionRoute></PageVisibleRoute>} />
+                <Route path="/hris/payment-adjustments" element={<PageVisibleRoute pageKey="hris"><PermissionRoute permission="hris.reports.view" page="Penyesuaian Payment"><HrisPaymentAdjustments /></PermissionRoute></PageVisibleRoute>} />
 
                 {/* ── Produk ── */}
                 <Route path="/products"          element={<PageVisibleRoute pageKey="products"><PermissionRoute permission="inventory.view" page="Produk"><Products /></PermissionRoute></PageVisibleRoute>} />

@@ -261,10 +261,11 @@ export const hrisApi = {
   today:          ()         => api.get('/hris/attendance/today').then(r => r.data),
   summary:        (params)   => api.get('/hris/attendance/summary', { params }).then(r => r.data),
   attendanceList: (params)   => api.get('/hris/attendance', { params }).then(r => r.data),
-  checkIn:        ({ lat, lng, note, photo }) => {
+  checkIn:        ({ lat, lng, note, photo, workMode }) => {
     const fd = new FormData()
     fd.append('lat', lat); fd.append('lng', lng)
     if (note) fd.append('note', note)
+    if (workMode) fd.append('workMode', workMode)
     fd.append('photo', photo)
     return api.post('/hris/attendance/check-in', fd).then(r => r.data)
   },
@@ -282,10 +283,23 @@ export const hrisApi = {
   updateLeaveType:  (id, data) => api.put(`/hris/leave-types/${id}`, data).then(r => r.data),
   deleteLeaveType:  (id)       => api.delete(`/hris/leave-types/${id}`).then(r => r.data),
   leaveBalances:    (params)   => api.get('/hris/leave-balances', { params }).then(r => r.data),
+  leaveBalancesAdmin: (params) => api.get('/hris/leave-balances/admin', { params }).then(r => r.data),
+  adjustLeaveBalance: (data)   => api.put('/hris/leave-balances/adjust', data).then(r => r.data),
   leaveRequests:    (params)   => api.get('/hris/leave-requests', { params }).then(r => r.data),
   createLeave:      (data)     => api.post('/hris/leave-requests', data).then(r => r.data),
   reviewLeave:      (id, data) => api.patch(`/hris/leave-requests/${id}/review`, data).then(r => r.data),
   cancelLeave:      (id)       => api.patch(`/hris/leave-requests/${id}/cancel`).then(r => r.data),
+
+  wfaSettings:       ()         => api.get('/hris/wfa/settings').then(r => r.data),
+  updateWfaSettings: (data)     => api.put('/hris/wfa/settings', data).then(r => r.data),
+  wfaQuota:          (params)   => api.get('/hris/wfa/quota', { params }).then(r => r.data),
+  wfaQuotaAdmin:     (params)   => api.get('/hris/wfa/quota/admin', { params }).then(r => r.data),
+  adjustWfaQuota:    (data)     => api.put('/hris/wfa/quota/adjust', data).then(r => r.data),
+  wfaRequests:       (params)   => api.get('/hris/wfa/requests', { params }).then(r => r.data),
+  createWfa:         (data)     => api.post('/hris/wfa/requests', data).then(r => r.data),
+  reviewWfa:         (id, data) => api.patch(`/hris/wfa/requests/${id}/review`, data).then(r => r.data),
+  cancelWfa:         (id)       => api.patch(`/hris/wfa/requests/${id}/cancel`).then(r => r.data),
+  paymentAdjustments: (params)  => api.get('/hris/wfa/payment-adjustments', { params }).then(r => r.data),
 
   overtimeList:    (params)   => api.get('/hris/overtime', { params }).then(r => r.data),
   createOvertime:  (data)     => api.post('/hris/overtime', data).then(r => r.data),

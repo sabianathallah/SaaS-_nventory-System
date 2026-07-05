@@ -67,6 +67,30 @@ module.exports = (sequelize, DataTypes) => {
         onDelete: 'SET NULL',
         onUpdate: 'CASCADE'
       });
+      User.hasMany(models.WfaRequest, {
+        foreignKey: { name: 'userId', allowNull: false },
+        as: 'wfaRequests',
+        onDelete: 'CASCADE',
+        onUpdate: 'CASCADE'
+      });
+      User.hasMany(models.WfaRequest, {
+        foreignKey: { name: 'reviewedBy', allowNull: true },
+        as: 'reviewedWfaRequests',
+        onDelete: 'SET NULL',
+        onUpdate: 'CASCADE'
+      });
+      User.hasMany(models.WfaQuota, {
+        foreignKey: { name: 'userId', allowNull: false },
+        as: 'wfaQuotas',
+        onDelete: 'CASCADE',
+        onUpdate: 'CASCADE'
+      });
+      User.hasMany(models.PaymentAdjustment, {
+        foreignKey: { name: 'userId', allowNull: false },
+        as: 'paymentAdjustments',
+        onDelete: 'CASCADE',
+        onUpdate: 'CASCADE'
+      });
     }
   }
   User.init({

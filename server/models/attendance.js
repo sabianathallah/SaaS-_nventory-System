@@ -60,6 +60,11 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: false,
       defaultValue: 'PRESENT',
     },
+    workMode: {
+      type: DataTypes.ENUM('ON_SITE', 'WFA', 'FIELD'),
+      allowNull: false,
+      defaultValue: 'ON_SITE',
+    },
     note:      { type: DataTypes.TEXT, allowNull: true },
     editedBy:  { type: DataTypes.INTEGER, allowNull: true },
     companyId: { type: DataTypes.INTEGER, allowNull: true },

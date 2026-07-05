@@ -10,6 +10,7 @@ const OvertimeController = require('../controllers/overtimeController');
 const ShiftController = require('../controllers/shiftController');
 const OfficeLocationController = require('../controllers/officeLocationController');
 const HrisReportController = require('../controllers/hrisReportController');
+const WfaController = require('../controllers/wfaController');
 
 router.use(requirePermission('hris.view'));
 
@@ -27,6 +28,8 @@ router.post('/leave-types',   requirePermission('hris.manage'), LeaveController.
 router.put('/leave-types/:id', requirePermission('hris.manage'), LeaveController.updateType);
 router.delete('/leave-types/:id', requirePermission('hris.manage'), LeaveController.deleteType);
 router.get('/leave-balances', LeaveController.getBalances);
+router.get('/leave-balances/admin', requirePermission('hris.manage'), LeaveController.listBalancesForAdmin);
+router.put('/leave-balances/adjust', requirePermission('hris.manage'), LeaveController.adjustBalance);
 router.get('/leave-requests', LeaveController.list);
 router.post('/leave-requests', LeaveController.create);
 router.patch('/leave-requests/:id/review', requirePermission('hris.leave.review'), LeaveController.review);
@@ -54,5 +57,17 @@ router.delete('/office-locations/:id', requirePermission('hris.location.manage')
 
 // ── Reports ──────────────────────────────────────────────────────────────────
 router.get('/reports/attendance', requirePermission('hris.reports.view'), HrisReportController.attendanceReport);
+
+// ── WFA (Work From Anywhere) ──────────────────────────────────────────────────
+router.get('/wfa/settings',       WfaController.getSettings);
+router.put('/wfa/settings',       requirePermission('hris.manage'), WfaController.updateSettings);
+router.get('/wfa/quota',          WfaController.getMyQuota);
+router.get('/wfa/quota/admin',    requirePermission('hris.manage'), WfaController.listQuotasForAdmin);
+router.put('/wfa/quota/adjust',   requirePermission('hris.manage'), WfaController.adjustQuota);
+router.get('/wfa/requests',       WfaController.list);
+router.post('/wfa/requests',      WfaController.create);
+router.patch('/wfa/requests/:id/review', requirePermission('hris.leave.review'), WfaController.review);
+router.patch('/wfa/requests/:id/cancel', WfaController.cancel);
+router.get('/wfa/payment-adjustments', requirePermission('hris.reports.view'), WfaController.listPaymentAdjustments);
 
 module.exports = router;

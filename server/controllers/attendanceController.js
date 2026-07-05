@@ -1,6 +1,6 @@
 'use strict';
 const { Op } = require('sequelize');
-const { Attendance, Shift, OfficeLocation, User } = require('../models');
+const { Attendance, Shift, OfficeLocation, User, WfaRequest } = require('../models');
 const { companyFilter, companyId } = require('../helpers/tenancy');
 const { paginate, buildFilter, paginatedResponse } = require('../helpers/queryHelper');
 const { distanceInMeters } = require('../helpers/geo');
@@ -32,6 +32,36 @@ async function resolveOfficeLocation(req, lat, lng) {
     return nearest;
 }
 
+const WORK_MODES = ['ON_SITE', 'WFA', 'FIELD'];
+
+// Menentukan lokasi & mode kerja saat check-in/out. ON_SITE tetap divalidasi
+// jarak ke kantor; WFA butuh pengajuan yang sudah APPROVED untuk tanggal itu;
+// FIELD (kerja lapangan) self-declared, wajib isi catatan tujuan (hanya saat
+// check-in), tanpa approval.
+async function resolveWorkContext(req, { lat, lng, note, workMode, date, requireFieldNote = false }) {
+    const mode = WORK_MODES.includes(workMode) ? workMode : 'ON_SITE';
+
+    if (mode === 'FIELD') {
+        if (requireFieldNote && (!note || !note.trim())) {
+            throw { name: 'BadRequest', message: 'Catatan tujuan wajib diisi untuk mode Kerja Lapangan' };
+        }
+        return { mode, locationId: null };
+    }
+
+    if (mode === 'WFA') {
+        const approved = await WfaRequest.findOne({
+            where: { userId: req.user.id, date, status: 'APPROVED' },
+        });
+        if (!approved) {
+            throw { name: 'BadRequest', message: 'Belum ada pengajuan WFA yang disetujui untuk tanggal ini' };
+        }
+        return { mode, locationId: null };
+    }
+
+    const location = await resolveOfficeLocation(req, lat, lng);
+    return { mode: 'ON_SITE', locationId: location.id };
+}
+
 class AttendanceController {
     static async today(req, res, next) {
         try {
@@ -49,7 +79,7 @@ class AttendanceController {
 
     static async checkIn(req, res, next) {
         try {
-            const { lat, lng, note } = req.body;
+            const { lat, lng, note, workMode } = req.body;
             if (lat === undefined || lng === undefined) {
                 throw { name: 'BadRequest', message: 'Lokasi (lat, lng) wajib diisi' };
             }
@@ -63,7 +93,7 @@ class AttendanceController {
                 throw { name: 'BadRequest', message: 'Anda sudah check-in hari ini' };
             }
 
-            const location = await resolveOfficeLocation(req, lat, lng);
+            const { mode, locationId } = await resolveWorkContext(req, { lat, lng, note, workMode, date, requireFieldNote: true });
 
             const user = await User.findByPk(req.user.id, { include: [{ model: Shift, as: 'shift' }] });
             let status = 'PRESENT';
@@ -84,9 +114,10 @@ class AttendanceController {
                 checkInAt: now,
                 checkInLat: lat,
                 checkInLng: lng,
-                checkInLocationId: location.id,
+                checkInLocationId: locationId,
                 checkInPhoto: req.file.path,
                 status,
+                workMode: mode,
                 note: note || null,
                 companyId: companyId(req) ?? req.user.companyId,
             };
@@ -120,13 +151,14 @@ class AttendanceController {
                 throw { name: 'BadRequest', message: 'Anda sudah check-out hari ini' };
             }
 
-            const location = await resolveOfficeLocation(req, lat, lng);
+            // Mode kerja mengikuti yang dipakai saat check-in, bukan input baru.
+            const { locationId } = await resolveWorkContext(req, { lat, lng, note, workMode: attendance.workMode, date });
 
             await attendance.update({
                 checkOutAt: new Date(),
                 checkOutLat: lat,
                 checkOutLng: lng,
-                checkOutLocationId: location.id,
+                checkOutLocationId: locationId,
                 checkOutPhoto: req.file.path,
                 note: note || attendance.note,
             });

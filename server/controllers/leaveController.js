@@ -82,6 +82,61 @@ class LeaveController {
         } catch (err) { next(err); }
     }
 
+    // Admin: semua user x saldo cuti untuk tahun tertentu (buat halaman adjust kuota)
+    static async listBalancesForAdmin(req, res, next) {
+        try {
+            const year = parseInt(req.query.year) || new Date().getFullYear();
+
+            const users = await User.findAll({
+                where: { ...companyFilter(req), isActive: true },
+                attributes: ['id', 'name', 'email', 'divisi'],
+                order: [['name', 'ASC']],
+            });
+            const types = await LeaveType.findAll({ where: { ...companyFilter(req) }, order: [['name', 'ASC']] });
+            const balances = await LeaveBalance.findAll({ where: { year, ...companyFilter(req) } });
+
+            const byUserType = {};
+            balances.forEach(b => { byUserType[`${b.userId}:${b.leaveTypeId}`] = b; });
+
+            const result = users.map(u => ({
+                userId: u.id,
+                userName: u.name,
+                divisi: u.divisi,
+                balances: types.map(t => {
+                    const bal = byUserType[`${u.id}:${t.id}`];
+                    const allocated = bal?.allocated ?? t.maxDaysPerYear;
+                    const used = bal?.used ?? 0;
+                    return { leaveTypeId: t.id, leaveTypeName: t.name, allocated, used, remaining: allocated - used };
+                }),
+            }));
+            res.json({ year, types, users: result });
+        } catch (err) { next(err); }
+    }
+
+    // Admin: set allocated kuota cuti untuk 1 user + 1 jenis cuti + tahun tertentu
+    static async adjustBalance(req, res, next) {
+        try {
+            const { userId, leaveTypeId, year, allocated } = req.body;
+            if (!userId || !leaveTypeId || !year || allocated === undefined) {
+                throw { name: 'BadRequest', message: 'userId, leaveTypeId, year, dan allocated wajib diisi' };
+            }
+            if (Number(allocated) < 0) throw { name: 'BadRequest', message: 'allocated tidak boleh negatif' };
+
+            const user = await User.findOne({ where: { id: userId, ...companyFilter(req) } });
+            if (!user) throw { name: 'NotFound', message: 'User tidak ditemukan' };
+            const leaveType = await LeaveType.findOne({ where: { id: leaveTypeId, ...companyFilter(req) } });
+            if (!leaveType) throw { name: 'NotFound', message: 'Jenis cuti tidak ditemukan' };
+
+            const [balance, created] = await LeaveBalance.findOrCreate({
+                where: { userId, leaveTypeId, year },
+                defaults: { allocated: Number(allocated), used: 0, companyId: companyId(req) ?? user.companyId },
+            });
+            if (!created) await balance.update({ allocated: Number(allocated) });
+
+            res.json(balance);
+        } catch (err) { next(err); }
+    }
+
     static async list(req, res, next) {
         try {
             const { page, limit, offset } = paginate(req.query);
