@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { hrisApi } from '../../api'
 import { useAuth } from '../../context/AuthContext'
+import CameraCapture from '../../components/CameraCapture'
 import { LogOut, MapPin, Loader2, Camera, Building2, Laptop, Briefcase, X } from 'lucide-react'
 
 const STATUS_LABEL = { PRESENT: 'Hadir', LATE: 'Terlambat', ABSENT: 'Absen', LEAVE: 'Cuti', HALF_DAY: 'Setengah Hari' }
@@ -40,8 +41,8 @@ export default function Attendance() {
   const [locating, setLocating] = useState(false)
   const [showModePicker, setShowModePicker] = useState(false)
   const [showFieldNote, setShowFieldNote] = useState(false)
+  const [showCamera, setShowCamera] = useState(false)
   const [fieldNote, setFieldNote] = useState('')
-  const fileInputRef = useRef(null)
   const pendingActionRef = useRef(null) // 'in' | 'out'
   const pendingModeRef = useRef('ON_SITE')
 
@@ -69,7 +70,7 @@ export default function Attendance() {
   }
   function startCheckOut() {
     pendingActionRef.current = 'out'
-    fileInputRef.current?.click()
+    setShowCamera(true)
   }
 
   function pickMode(mode) {
@@ -79,21 +80,18 @@ export default function Attendance() {
     if (mode === 'FIELD') {
       setShowFieldNote(true)
     } else {
-      fileInputRef.current?.click()
+      setShowCamera(true)
     }
   }
 
   function confirmFieldNote() {
     if (!fieldNote.trim()) return toast.error('Catatan tujuan wajib diisi')
     setShowFieldNote(false)
-    fileInputRef.current?.click()
+    setShowCamera(true)
   }
 
-  async function handlePhotoSelected(e) {
-    const photo = e.target.files?.[0]
-    e.target.value = '' // allow re-selecting same file next time
-    if (!photo) return
-
+  async function handlePhotoCaptured(photo) {
+    setShowCamera(false)
     const action = pendingActionRef.current
     setLocating(true)
     try {
@@ -120,15 +118,6 @@ export default function Attendance() {
         <h1 className="text-lg font-bold text-slate-800">Presensi</h1>
         <p className="text-xs text-slate-400 mt-0.5">Check-in dan check-out memerlukan izin lokasi (GPS) dan foto selfie untuk validasi</p>
       </div>
-
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/*"
-        capture="user"
-        className="hidden"
-        onChange={handlePhotoSelected}
-      />
 
       <div className="card p-5 mb-6 flex items-center justify-between flex-wrap gap-4">
         <div className="flex items-center gap-3">
@@ -203,6 +192,10 @@ export default function Attendance() {
             </div>
           </div>
         </div>
+      )}
+
+      {showCamera && (
+        <CameraCapture onCapture={handlePhotoCaptured} onClose={() => setShowCamera(false)} />
       )}
 
       <div className="card overflow-hidden">
