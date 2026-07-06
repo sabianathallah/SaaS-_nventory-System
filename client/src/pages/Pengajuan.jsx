@@ -147,7 +147,7 @@ export default function Pengajuan() {
           return (
             <button
               key={tab.value}
-              onClick={() => { setStatus(tab.value); setPage(1) }}
+              onClick={() => setStatus(tab.value)}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-all flex-shrink-0 ${
                 isActive
                   ? 'bg-indigo-600 text-white shadow-sm'
@@ -169,7 +169,7 @@ export default function Pengajuan() {
 
       {/* Search + filter bar */}
       <div className="flex gap-2 mb-4 flex-wrap items-center">
-        <form onSubmit={e => { e.preventDefault(); setSearch(searchInput.trim()); setPage(1) }} className="flex gap-2 flex-1 min-w-0">
+        <form onSubmit={e => { e.preventDefault(); setSearch(searchInput.trim()) }} className="flex gap-2 flex-1 min-w-0">
           <div className="relative flex-1 min-w-[180px] max-w-xs">
             <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
@@ -184,7 +184,7 @@ export default function Pengajuan() {
 
         <select
           value={requestTypeId}
-          onChange={e => { setRequestTypeId(e.target.value); setPage(1) }}
+          onChange={e => setRequestTypeId(e.target.value)}
           className="input text-sm w-40"
         >
           <option value="">Semua Jenis</option>
@@ -212,15 +212,15 @@ export default function Pengajuan() {
         <div className="mb-4 p-4 bg-slate-50 rounded-xl border border-slate-200 flex flex-wrap gap-3 items-end">
           <div>
             <label className="label mb-1 text-xs">Dari Tanggal</label>
-            <input type="date" value={dateFrom} onChange={e => { setDateFrom(e.target.value); setPage(1) }} className="input text-sm w-36" />
+            <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="input text-sm w-36" />
           </div>
           <div>
             <label className="label mb-1 text-xs">Sampai Tanggal</label>
-            <input type="date" value={dateTo} onChange={e => { setDateTo(e.target.value); setPage(1) }} className="input text-sm w-36" />
+            <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="input text-sm w-36" />
           </div>
           <div>
             <label className="label mb-1 text-xs">Pengembalian</label>
-            <select value={needsReturn} onChange={e => { setNeedsReturn(e.target.value); setPage(1) }} className="input text-sm w-44">
+            <select value={needsReturn} onChange={e => setNeedsReturn(e.target.value)} className="input text-sm w-44">
               <option value="">Semua</option>
               <option value="true">↩ Perlu Dikembalikan</option>
               <option value="false">✓ Tidak Perlu Kembali</option>
