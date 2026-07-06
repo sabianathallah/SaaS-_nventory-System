@@ -77,7 +77,6 @@ const NAV_GROUPS = [
   {
     label: 'Administrasi',
     items: [
-      { to: '/users',           icon: Users,     label: 'Pengguna',            pageKey: 'users' },
       { to: '/companies',       icon: Building2, label: 'Perusahaan',          pageKey: 'companies', superOnly: true },
       { to: '/page-visibility', icon: Eye,       label: 'Visibilitas Halaman',                       superOnly: true },
     ],
@@ -107,12 +106,14 @@ const HRIS_NAV_GROUPS = [
       { to: '/hris/attendance', icon: ClipboardCheck, label: 'Presensi', requirePermission: 'hris.view' },
       { to: '/hris/leave',      icon: FileText,      label: 'Cuti',      requirePermission: 'hris.view' },
       { to: '/hris/wfa',        icon: Laptop,        label: 'WFA',       requirePermission: 'hris.view' },
-      { to: '/hris/overtime',   icon: ClipboardList, label: 'Lembur',    requirePermission: 'hris.view' },
+      // Lembur disembunyikan sementara dari nav — route tetap ada di App.jsx
+      // { to: '/hris/overtime', icon: ClipboardList, label: 'Lembur',    requirePermission: 'hris.view' },
     ],
   },
   {
     label: 'Pengaturan HR',
     items: [
+      { to: '/users',                   icon: Users,         label: 'Pengguna',      pageKey: 'users' },
       { to: '/hris/admin/shifts',       icon: CalendarClock, label: 'Shift',         requirePermission: 'hris.shift.manage' },
       { to: '/hris/admin/locations',    icon: Warehouse,     label: 'Lokasi Kantor', requirePermission: 'hris.location.manage' },
       { to: '/hris/admin/leave-quota',  icon: FileText,      label: 'Kuota Cuti',    requirePermission: 'hris.manage' },
@@ -240,6 +241,10 @@ export default function Layout({ children }) {
   const isHRIS      = location.pathname.startsWith('/hris')
   const activeModule = isHandbook ? 'handbook' : isHRIS ? 'hris' : 'inventory'
   const activeGroups = isHandbook ? HANDBOOK_NAV_GROUPS : isHRIS ? HRIS_NAV_GROUPS : NAV_GROUPS
+  // Path yang punya "anak" (mis. /hris punya /hris/attendance, dst) butuh `end`
+  // di NavLink, kalau tidak dia akan tetap ke-highlight walau lagi di sub-route.
+  const allNavPaths = activeGroups.flatMap(g => g.items.map(i => i.to))
+  const needsEndMatch = (to) => to === '/' || allNavPaths.some(p => p !== to && p.startsWith(to + '/'))
 
   // Mobile drawer
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -376,7 +381,7 @@ export default function Layout({ children }) {
                         <NavTooltip key={item.to} label={item.label}>
                           <NavLink
                             to={item.to}
-                            end={item.to === '/'}
+                            end={needsEndMatch(item.to)}
                             onClick={closeSidebar}
                             style={({ isActive }) => isActive
                               ? { background: BRAND, color: '#fff', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 44, height: 36, margin: '0 auto' }
@@ -434,7 +439,7 @@ export default function Layout({ children }) {
                         <NavLink
                           key={item.to}
                           to={item.to}
-                          end={item.to === '/'}
+                          end={needsEndMatch(item.to)}
                           onClick={closeSidebar}
                           style={({ isActive }) => isActive
                             ? { background: BRAND, color: '#fff', borderRadius: '6px' }
