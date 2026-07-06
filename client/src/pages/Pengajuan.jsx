@@ -226,7 +226,7 @@ export default function Pengajuan() {
               <option value="false">✓ Tidak Perlu Kembali</option>
             </select>
           </div>
-          <button onClick={() => { setNeedsReturn(''); setDateFrom(''); setDateTo('') }}
+          <button onClick={() => sp({ return: '', from: '', to: '', page: '' })}
             className="text-xs text-slate-400 hover:text-red-500 self-end pb-0.5">
             Reset filter ini
           </button>
