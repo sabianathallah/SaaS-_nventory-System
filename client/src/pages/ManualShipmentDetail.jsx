@@ -224,9 +224,12 @@ function printViaIframe(html) {
 
 function printResiSementara(shipment, showItems = true) {
   const items = shipment.items ?? []
-  const toName    = shipment.buyerName    || shipment.recipientInfo || '-'
-  const toPhone   = shipment.buyerPhone   || ''
-  const toAddress = shipment.buyerAddress || ''
+  // recipientName/Address/Phone are the current shared fields (both sales &
+  // non-sales); buyerName/buyerAddress/buyerPhone/recipientInfo are legacy
+  // fields kept as-is on old records that predate the unification.
+  const toName    = shipment.recipientName    || shipment.buyerName    || shipment.recipientInfo || '-'
+  const toPhone   = shipment.recipientPhone   || shipment.buyerPhone   || ''
+  const toAddress = shipment.recipientAddress || shipment.buyerAddress || ''
   return printViaIframe(`<!DOCTYPE html><html><head><title>Resi ${shipment.invoiceNumber}</title><style>
     @page{size:100mm 150mm;margin:5mm}
     *{margin:0;padding:0;box-sizing:border-box}
@@ -311,19 +314,21 @@ function printInvoice(shipment) {
       <div class="invoice-date">${fmtDate(shipment.createdAt)}</div>
     </div>
   </div>
-  ${shipment.buyerName ? `
+  ${(() => {
+    const name    = shipment.recipientName    || shipment.buyerName    || shipment.recipientInfo
+    const address = shipment.recipientAddress || shipment.buyerAddress
+    const phone   = shipment.recipientPhone   || shipment.buyerPhone
+    if (!name) return ''
+    return `
   <div class="section">
     <div class="section-title">Kepada</div>
-    <div class="buyer-name">${shipment.buyerName}</div>
+    <div class="buyer-name">${name}</div>
     <div class="buyer-info">
-      ${shipment.buyerAddress ? shipment.buyerAddress + '<br/>' : ''}
-      ${shipment.buyerPhone ? 'HP: ' + shipment.buyerPhone : ''}
+      ${address ? address + '<br/>' : ''}
+      ${phone ? 'HP: ' + phone : ''}
     </div>
-  </div>` : shipment.recipientInfo ? `
-  <div class="section">
-    <div class="section-title">Penerima</div>
-    <div class="buyer-name">${shipment.recipientInfo}</div>
-  </div>` : ''}
+  </div>`
+  })()}
   ${shipment.expeditionName ? `
   <div class="section">
     <div class="section-title">Ekspedisi</div>
@@ -490,21 +495,25 @@ export default function ManualShipmentDetail() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         {/* Left: main info (2/3) */}
         <div className="lg:col-span-2 space-y-4">
-          {/* Buyer / recipient info */}
+          {/* Recipient info */}
           <div className="card p-5 space-y-3">
-            <h2 className="font-semibold text-slate-700 text-sm">{s.type === 'sales' ? 'Info Pembeli' : 'Info Penerima'}</h2>
-            {(s.type === 'sales' || s.buyerName) ? (
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                <div><span className="text-slate-400 text-xs">Nama</span><div className="font-medium text-slate-800 mt-0.5">{s.buyerName || '—'}</div></div>
-                <div><span className="text-slate-400 text-xs">No. HP</span><div className="font-medium text-slate-800 mt-0.5">{s.buyerPhone || '—'}</div></div>
-                <div className="col-span-2"><span className="text-slate-400 text-xs">Alamat</span><div className="font-medium text-slate-800 mt-0.5 leading-relaxed">{s.buyerAddress || '—'}</div></div>
-              </div>
-            ) : (
-              <div className="text-sm">
-                <span className="text-slate-400 text-xs">Penerima / Keterangan</span>
-                <div className="font-medium text-slate-800 mt-0.5">{s.recipientInfo || '—'}</div>
-              </div>
-            )}
+            <h2 className="font-semibold text-slate-700 text-sm">Info Penerima</h2>
+            {(() => {
+              // recipientName/Address/Phone are the shared fields going forward;
+              // legacy rows created before the unification only have
+              // buyerName/buyerAddress/buyerPhone (sales) or recipientInfo
+              // (non-sales) — fall back to those without touching old data.
+              const name    = s.recipientName    || s.buyerName    || s.recipientInfo
+              const address = s.recipientAddress || s.buyerAddress
+              const phone   = s.recipientPhone   || s.buyerPhone
+              return (
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div><span className="text-slate-400 text-xs">Nama</span><div className="font-medium text-slate-800 mt-0.5">{name || '—'}</div></div>
+                  <div><span className="text-slate-400 text-xs">No. HP</span><div className="font-medium text-slate-800 mt-0.5">{phone || '—'}</div></div>
+                  <div className="col-span-2"><span className="text-slate-400 text-xs">Alamat</span><div className="font-medium text-slate-800 mt-0.5 leading-relaxed">{address || '—'}</div></div>
+                </div>
+              )
+            })()}
             <div className="flex gap-6 pt-2 border-t text-sm">
               <div><span className="text-slate-400 text-xs">Ekspedisi</span><div className="font-medium text-slate-800 mt-0.5">{s.expeditionName || '—'}</div></div>
               {s.courierResiNumber && (

@@ -119,7 +119,8 @@ exports.list = async (req, res, next) => {
     if (search) {
       where[Op.or] = [
         { invoiceNumber: { [Op.iLike]: `%${search}%` } },
-        { buyerName:     { [Op.iLike]: `%${search}%` } },
+        { buyerName:      { [Op.iLike]: `%${search}%` } },
+        { recipientName:  { [Op.iLike]: `%${search}%` } },
       ];
     }
 
@@ -161,13 +162,13 @@ exports.create = async (req, res, next) => {
   try {
     const {
       type, shipmentCategoryId,
-      buyerName, buyerAddress, buyerPhone, recipientInfo,
+      recipientName, recipientAddress, recipientPhone,
       shippingCost = 0, expeditionName, notes,
       items = [],
     } = req.body;
 
     if (!['sales', 'non_sales'].includes(type)) throw { status: 400, message: 'type harus sales atau non_sales' };
-    if (type === 'sales' && !buyerName?.trim())  throw { status: 400, message: 'Nama pembeli wajib diisi untuk sales' };
+    if (!recipientName?.trim())                  throw { status: 400, message: 'Nama penerima wajib diisi' };
     if (!items.length)                           throw { status: 400, message: 'Minimal satu item diperlukan' };
 
     const cid = getCompanyId(req);
@@ -186,10 +187,9 @@ exports.create = async (req, res, next) => {
       type,
       shipmentCategoryId: type === 'non_sales' ? (shipmentCategoryId || null) : null,
       status: 'draft',
-      buyerName:    type === 'sales' ? buyerName?.trim()    : null,
-      buyerAddress: type === 'sales' ? buyerAddress?.trim() : null,
-      buyerPhone:   type === 'sales' ? buyerPhone?.trim()   : null,
-      recipientInfo: type === 'non_sales' ? recipientInfo?.trim() : null,
+      recipientName:    recipientName.trim(),
+      recipientAddress: recipientAddress?.trim() || null,
+      recipientPhone:   recipientPhone?.trim()    || null,
       shippingCost: parseFloat(shippingCost) || 0,
       subtotal,
       total,
@@ -228,15 +228,14 @@ exports.update = async (req, res, next) => {
     }
 
     const {
-      buyerName, buyerAddress, buyerPhone, recipientInfo,
+      recipientName, recipientAddress, recipientPhone,
       shipmentCategoryId, shippingCost, expeditionName, notes, items,
     } = req.body;
 
     const updatePayload = {
-      buyerName:    buyerName?.trim()    ?? shipment.buyerName,
-      buyerAddress: buyerAddress?.trim() ?? shipment.buyerAddress,
-      buyerPhone:   buyerPhone?.trim()   ?? shipment.buyerPhone,
-      recipientInfo: recipientInfo?.trim() ?? shipment.recipientInfo,
+      recipientName:    recipientName?.trim()    ?? shipment.recipientName,
+      recipientAddress: recipientAddress?.trim() ?? shipment.recipientAddress,
+      recipientPhone:   recipientPhone?.trim()    ?? shipment.recipientPhone,
       shipmentCategoryId: shipmentCategoryId ?? shipment.shipmentCategoryId,
       expeditionName: expeditionName?.trim() ?? shipment.expeditionName,
       notes: notes?.trim() ?? shipment.notes,

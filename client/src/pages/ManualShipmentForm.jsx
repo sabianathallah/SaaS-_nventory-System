@@ -201,10 +201,9 @@ export default function ManualShipmentForm() {
 
   const [type, setType]                     = useState('sales')
   const [shipmentCategoryId, setCategoryId] = useState('')
-  const [buyerName, setBuyerName]           = useState('')
-  const [buyerAddress, setBuyerAddress]     = useState('')
-  const [buyerPhone, setBuyerPhone]         = useState('')
-  const [recipientInfo, setRecipientInfo]   = useState('')
+  const [recipientName, setRecipientName]       = useState('')
+  const [recipientAddress, setRecipientAddress] = useState('')
+  const [recipientPhone, setRecipientPhone]     = useState('')
   const [shippingCost, setShippingCost]     = useState('')
   const [expeditionName, setExpeditionName] = useState('')
   const [expedCustom, setExpedCustom]       = useState('')
@@ -228,10 +227,12 @@ export default function ManualShipmentForm() {
     const d = existingRes.data
     setType(d.type)
     setCategoryId(d.shipmentCategoryId ? String(d.shipmentCategoryId) : '')
-    setBuyerName(d.buyerName || '')
-    setBuyerAddress(d.buyerAddress || '')
-    setBuyerPhone(d.buyerPhone || '')
-    setRecipientInfo(d.recipientInfo || '')
+    // Fall back to the legacy sales/non-sales fields for shipments created
+    // before recipientName/Address/Phone existed — old rows are left as-is
+    // in the DB, but editing prefills from whichever field has the data.
+    setRecipientName(d.recipientName || d.buyerName || d.recipientInfo || '')
+    setRecipientAddress(d.recipientAddress || d.buyerAddress || '')
+    setRecipientPhone(d.recipientPhone || d.buyerPhone || '')
     setShippingCost(d.shippingCost ? String(d.shippingCost) : '')
     setNotes(d.notes || '')
     if (d.expeditionName) {
@@ -331,16 +332,15 @@ export default function ManualShipmentForm() {
   const handleSubmit = (e) => {
     e.preventDefault()
     if (items.length === 0) return toast.error('Tambahkan minimal satu produk')
-    if (type === 'sales' && !buyerName.trim()) return toast.error('Nama pembeli wajib diisi')
+    if (!recipientName.trim()) return toast.error('Nama penerima wajib diisi')
 
     const finalExpedition = expedCustomMode ? expedCustom.trim() : expeditionName
     saveMutation.mutate({
       type,
       shipmentCategoryId: type === 'non_sales' && shipmentCategoryId ? Number(shipmentCategoryId) : undefined,
-      buyerName:    type === 'sales' ? buyerName.trim()    : undefined,
-      buyerAddress: type === 'sales' ? buyerAddress.trim() : undefined,
-      buyerPhone:   type === 'sales' ? buyerPhone.trim()   : undefined,
-      recipientInfo: type === 'non_sales' ? recipientInfo.trim() : undefined,
+      recipientName:    recipientName.trim(),
+      recipientAddress: recipientAddress.trim() || undefined,
+      recipientPhone:   recipientPhone.trim()   || undefined,
       shippingCost: cost,
       expeditionName: finalExpedition || undefined,
       notes: notes.trim() || undefined,
@@ -401,76 +401,64 @@ export default function ManualShipmentForm() {
               </div>
             </div>
 
-            {/* Info pembeli / penerima */}
+            {/* Info penerima */}
             <div className="card p-5 space-y-4">
-              <h2 className="font-semibold text-slate-700 text-sm">
-                {type === 'sales' ? 'Info Pembeli' : 'Info Penerima'}
-              </h2>
-
-              {type === 'sales' && (
-                <>
-                  <div>
-                    <label className="label">Nama Pembeli *</label>
-                    <input value={buyerName} onChange={e => setBuyerName(e.target.value)} className="input" placeholder="Nama lengkap pembeli" required />
-                  </div>
-                  <div>
-                    <label className="label">Alamat Pengiriman</label>
-                    <textarea value={buyerAddress} onChange={e => setBuyerAddress(e.target.value)} className="input min-h-[80px] resize-none" placeholder="Alamat lengkap..." />
-                  </div>
-                  <div>
-                    <label className="label">Nomor HP</label>
-                    <input value={buyerPhone} onChange={e => setBuyerPhone(e.target.value)} className="input" placeholder="08xxxxxxxxxx" />
-                  </div>
-                </>
-              )}
+              <h2 className="font-semibold text-slate-700 text-sm">Info Penerima</h2>
 
               {type === 'non_sales' && (
-                <>
-                  <div>
-                    <label className="label">Kategori</label>
-                    <div className="flex gap-2">
-                      <select
-                        value={shipmentCategoryId}
-                        onChange={e => setCategoryId(e.target.value)}
-                        className="input flex-1"
-                      >
-                        <option value="">-- Pilih Kategori --</option>
-                        {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                      </select>
+                <div>
+                  <label className="label">Kategori</label>
+                  <div className="flex gap-2">
+                    <select
+                      value={shipmentCategoryId}
+                      onChange={e => setCategoryId(e.target.value)}
+                      className="input flex-1"
+                    >
+                      <option value="">-- Pilih Kategori --</option>
+                      {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => setAddingCat(v => !v)}
+                      className="btn-secondary px-3 flex-shrink-0"
+                    >
+                      <Plus size={14} />
+                    </button>
+                  </div>
+                  {addingCat && (
+                    <div className="flex gap-2 mt-2">
+                      <input
+                        value={newCategory}
+                        onChange={e => setNewCategory(e.target.value)}
+                        placeholder="Nama kategori baru..."
+                        className="input flex-1 text-sm"
+                        onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), newCategory.trim() && createCatMutation.mutate())}
+                      />
                       <button
                         type="button"
-                        onClick={() => setAddingCat(v => !v)}
-                        className="btn-secondary px-3 flex-shrink-0"
+                        onClick={() => newCategory.trim() && createCatMutation.mutate()}
+                        disabled={createCatMutation.isPending || !newCategory.trim()}
+                        className="btn-primary text-xs px-3"
                       >
-                        <Plus size={14} />
+                        Simpan
                       </button>
                     </div>
-                    {addingCat && (
-                      <div className="flex gap-2 mt-2">
-                        <input
-                          value={newCategory}
-                          onChange={e => setNewCategory(e.target.value)}
-                          placeholder="Nama kategori baru..."
-                          className="input flex-1 text-sm"
-                          onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), newCategory.trim() && createCatMutation.mutate())}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => newCategory.trim() && createCatMutation.mutate()}
-                          disabled={createCatMutation.isPending || !newCategory.trim()}
-                          className="btn-primary text-xs px-3"
-                        >
-                          Simpan
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                  <div>
-                    <label className="label">Penerima / Keterangan</label>
-                    <textarea value={recipientInfo} onChange={e => setRecipientInfo(e.target.value)} className="input min-h-[80px] resize-none" placeholder="Siapa yang menerima / untuk apa..." />
-                  </div>
-                </>
+                  )}
+                </div>
               )}
+
+              <div>
+                <label className="label">Nama Penerima *</label>
+                <input value={recipientName} onChange={e => setRecipientName(e.target.value)} className="input" placeholder={type === 'sales' ? 'Nama lengkap pembeli' : 'Nama penerima / keterangan'} required />
+              </div>
+              <div>
+                <label className="label">Alamat Pengiriman</label>
+                <textarea value={recipientAddress} onChange={e => setRecipientAddress(e.target.value)} className="input min-h-[80px] resize-none" placeholder="Alamat lengkap..." />
+              </div>
+              <div>
+                <label className="label">Nomor HP</label>
+                <input value={recipientPhone} onChange={e => setRecipientPhone(e.target.value)} className="input" placeholder="08xxxxxxxxxx" />
+              </div>
             </div>
 
             {/* Info pengiriman */}

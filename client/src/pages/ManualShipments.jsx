@@ -122,7 +122,7 @@ export default function ManualShipments() {
       render: r => (
         <div>
           <div className="text-sm font-medium text-slate-800 truncate max-w-[180px]">
-            {r.buyerName || r.recipientInfo || '—'}
+            {r.recipientName || r.buyerName || r.recipientInfo || '—'}
           </div>
           {r.category && <div className="text-xs text-slate-400">{r.category.name}</div>}
         </div>
