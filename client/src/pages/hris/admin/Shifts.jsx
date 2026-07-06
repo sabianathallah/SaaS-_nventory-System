@@ -3,9 +3,12 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { hrisApi } from '../../../api'
 import { Plus, X, Trash2, Users } from 'lucide-react'
+import { useCompanyGuard } from '../../../hooks/useCompanyGuard'
+import CompanyRequiredBanner from '../../../components/CompanyRequiredBanner'
 
 export default function Shifts() {
   const qc = useQueryClient()
+  const { needsCompany } = useCompanyGuard()
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState({ name: '', startTime: '', endTime: '' })
   const [assigning, setAssigning] = useState(null)
@@ -38,10 +41,18 @@ export default function Shifts() {
           <h1 className="text-lg font-bold text-slate-800">Kelola Shift</h1>
           <p className="text-xs text-slate-400 mt-0.5">Buat shift dan tetapkan ke karyawan</p>
         </div>
-        <button onClick={() => setShowForm(v => !v)} className="btn-primary text-sm flex items-center gap-1.5">
+        <button
+          onClick={() => {
+            if (!showForm && needsCompany) return toast.error('Pilih perusahaan terlebih dahulu')
+            setShowForm(v => !v)
+          }}
+          className="btn-primary text-sm flex items-center gap-1.5"
+        >
           {showForm ? <X size={14} /> : <Plus size={14} />} {showForm ? 'Batal' : 'Tambah Shift'}
         </button>
       </div>
+
+      {needsCompany && <div className="mb-6"><CompanyRequiredBanner action="mengelola shift" /></div>}
 
       {showForm && (
         <form
@@ -83,7 +94,7 @@ export default function Shifts() {
                   <td className="td">{s.name}</td>
                   <td className="td">{s.startTime} – {s.endTime}</td>
                   <td className="td text-center">
-                    <button title="Hapus" onClick={() => destroy.mutate(s.id)} className="w-7 h-7 rounded flex items-center justify-center text-red-500 hover:bg-red-50">
+                    <button disabled={needsCompany} title="Hapus" onClick={() => destroy.mutate(s.id)} className="w-7 h-7 rounded flex items-center justify-center text-red-500 hover:bg-red-50 disabled:opacity-40 disabled:cursor-not-allowed">
                       <Trash2 size={14} />
                     </button>
                   </td>
@@ -109,7 +120,8 @@ export default function Shifts() {
                   <td className="td">{u.divisi || '—'}</td>
                   <td className="td">
                     <select
-                      className="select text-xs w-40"
+                      disabled={needsCompany}
+                      className="select text-xs w-40 disabled:opacity-40 disabled:cursor-not-allowed"
                       value={assigning?.id === u.id ? assigning.shiftId : (u.shiftId ?? '')}
                       onChange={e => {
                         const shiftId = e.target.value || null

@@ -3,9 +3,12 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { hrisApi } from '../../../api'
 import { Save } from 'lucide-react'
+import { useCompanyGuard } from '../../../hooks/useCompanyGuard'
+import CompanyRequiredBanner from '../../../components/CompanyRequiredBanner'
 
 export default function LeaveQuota() {
   const qc = useQueryClient()
+  const { needsCompany } = useCompanyGuard()
   const [year, setYear] = useState(new Date().getFullYear())
   const [drafts, setDrafts] = useState({}) // `${userId}:${leaveTypeId}` -> value
 
@@ -26,6 +29,7 @@ export default function LeaveQuota() {
   function keyOf(userId, leaveTypeId) { return `${userId}:${leaveTypeId}` }
 
   function handleSave(userId, leaveTypeId) {
+    if (needsCompany) return toast.error('Pilih perusahaan terlebih dahulu')
     const k = keyOf(userId, leaveTypeId)
     const value = drafts[k]
     if (value === undefined || value === '') return
@@ -43,6 +47,8 @@ export default function LeaveQuota() {
           {[year - 1, year, year + 1].map(y => <option key={y} value={y}>{y}</option>)}
         </select>
       </div>
+
+      {needsCompany && <div className="mb-4"><CompanyRequiredBanner action="mengatur kuota cuti" /></div>}
 
       <div className="card overflow-hidden">
         <div className="overflow-x-auto">
@@ -73,14 +79,16 @@ export default function LeaveQuota() {
                         <div className="flex items-center justify-center gap-1">
                           <input
                             type="number" min="0"
-                            className="input w-16 text-center text-xs py-1"
+                            disabled={needsCompany}
+                            className="input w-16 text-center text-xs py-1 disabled:opacity-40 disabled:cursor-not-allowed"
                             value={value}
                             onChange={e => setDrafts(d => ({ ...d, [k]: e.target.value }))}
                           />
                           <button
+                            disabled={needsCompany}
                             title="Simpan"
                             onClick={() => handleSave(u.userId, b.leaveTypeId)}
-                            className="w-6 h-6 rounded flex items-center justify-center text-brand hover:bg-brand-50"
+                            className="w-6 h-6 rounded flex items-center justify-center text-brand hover:bg-brand-50 disabled:opacity-40 disabled:cursor-not-allowed"
                           >
                             <Save size={12} />
                           </button>

@@ -3,11 +3,14 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { hrisApi } from '../../../api'
 import { Save } from 'lucide-react'
+import { useCompanyGuard } from '../../../hooks/useCompanyGuard'
+import CompanyRequiredBanner from '../../../components/CompanyRequiredBanner'
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des']
 
 export default function WfaQuota() {
   const qc = useQueryClient()
+  const { needsCompany } = useCompanyGuard()
   const now = new Date()
   const [month, setMonth] = useState(now.getMonth() + 1)
   const [year, setYear] = useState(now.getFullYear())
@@ -42,12 +45,17 @@ export default function WfaQuota() {
         <p className="text-xs text-slate-400 mt-0.5">Atur jatah WFA default per bulan, dan override per karyawan bila perlu</p>
       </div>
 
+      {needsCompany && <div className="mb-6"><CompanyRequiredBanner action="mengatur kuota WFA" /></div>}
+
       <div className="card p-4 mb-6 flex items-center gap-3 flex-wrap">
         <label className="label mb-0">Default Kuota / Bulan</label>
-        <input type="number" min="0" className="input w-24" value={defaultDraft} onChange={e => setDefaultDraft(e.target.value)} />
+        <input type="number" min="0" disabled={needsCompany} className="input w-24 disabled:opacity-40 disabled:cursor-not-allowed" value={defaultDraft} onChange={e => setDefaultDraft(e.target.value)} />
         <button
-          onClick={() => updateSettings.mutate({ defaultMonthlyQuota: Number(defaultDraft) })}
-          disabled={updateSettings.isPending}
+          onClick={() => {
+            if (needsCompany) return toast.error('Pilih perusahaan terlebih dahulu')
+            updateSettings.mutate({ defaultMonthlyQuota: Number(defaultDraft) })
+          }}
+          disabled={updateSettings.isPending || needsCompany}
           className="btn-primary text-sm"
         >
           Simpan Default
@@ -92,7 +100,8 @@ export default function WfaQuota() {
                     <td className="td text-center">
                       <input
                         type="number" min="0"
-                        className="input w-16 text-center text-xs py-1 mx-auto"
+                        disabled={needsCompany}
+                        className="input w-16 text-center text-xs py-1 mx-auto disabled:opacity-40 disabled:cursor-not-allowed"
                         value={value}
                         onChange={e => setDrafts(d => ({ ...d, [u.userId]: e.target.value }))}
                       />
@@ -101,9 +110,13 @@ export default function WfaQuota() {
                     <td className="td text-center">{u.remaining}</td>
                     <td className="td text-center">
                       <button
+                        disabled={needsCompany}
                         title="Simpan"
-                        onClick={() => adjust.mutate({ userId: u.userId, month, year, allocated: Number(value) })}
-                        className="w-7 h-7 rounded flex items-center justify-center text-brand hover:bg-brand-50 mx-auto"
+                        onClick={() => {
+                          if (needsCompany) return toast.error('Pilih perusahaan terlebih dahulu')
+                          adjust.mutate({ userId: u.userId, month, year, allocated: Number(value) })
+                        }}
+                        className="w-7 h-7 rounded flex items-center justify-center text-brand hover:bg-brand-50 mx-auto disabled:opacity-40 disabled:cursor-not-allowed"
                       >
                         <Save size={13} />
                       </button>
