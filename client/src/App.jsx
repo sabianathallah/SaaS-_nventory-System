@@ -36,6 +36,7 @@ import Movements from './pages/Movements'
 import Opname from './pages/Opname'
 import OpnameDetail from './pages/OpnameDetail'
 import Users from './pages/Users'
+import Roles from './pages/Roles'
 import Companies from './pages/Companies'
 import Catalog from './pages/Catalog'
 import Vendors from './pages/Vendors'
@@ -205,6 +206,7 @@ function AppRoutes() {
 
                 {/* ── Administrasi ── */}
                 <Route path="/users"           element={<PageVisibleRoute pageKey="users"><PermissionRoute permission="admin.users" page="Pengguna"><Users /></PermissionRoute></PageVisibleRoute>} />
+                <Route path="/roles"           element={<PageVisibleRoute pageKey="users"><PermissionRoute permission="admin.users" page="Roles & Permission"><Roles /></PermissionRoute></PageVisibleRoute>} />
                 <Route path="/companies"       element={<SuperRoute><PageVisibleRoute pageKey="companies"><Companies /></PageVisibleRoute></SuperRoute>} />
                 <Route path="/page-visibility" element={<SuperRoute><PageVisibility /></SuperRoute>} />
               </Routes>

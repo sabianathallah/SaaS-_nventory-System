@@ -128,7 +128,8 @@ const ADMIN_NAV_GROUPS = [
   {
     label: 'Administrasi',
     items: [
-      { to: '/users',           icon: Users,     label: 'Pengguna & Roles',    pageKey: 'users' },
+      { to: '/users',           icon: Users,     label: 'Pengguna',            pageKey: 'users' },
+      { to: '/roles',           icon: ShieldCheck, label: 'Roles & Permission', pageKey: 'users' },
       { to: '/companies',       icon: Building2, label: 'Perusahaan',          pageKey: 'companies', superOnly: true },
       { to: '/page-visibility', icon: Eye,       label: 'Visibilitas Halaman',                       superOnly: true },
     ],
@@ -144,7 +145,7 @@ const PAGE_TITLES = {
   '/warehouses': 'Gudang', '/suppliers': 'Vendor',
   '/stock-in': 'Penerimaan Stok', '/stock-in/new': 'Penerimaan Stok Baru', '/stock-out': 'Pengeluaran Stok', '/movements': 'Pergerakan',
   '/opname': 'Stock Opname', '/transfers': 'Transfer Stok', '/handover': 'Handover Pengiriman',
-  '/shipping-manual': 'Shipping Manual', '/database-links': 'Database Links', '/users': 'Pengguna & Roles', '/companies': 'Perusahaan',
+  '/shipping-manual': 'Shipping Manual', '/database-links': 'Database Links', '/users': 'Pengguna', '/roles': 'Roles & Permission', '/companies': 'Perusahaan',
   '/vendors': 'Vendor', '/incoming-goods': 'Barang Masuk',
   '/packing-jobs': 'Pekerjaan Packing', '/form-anak-packing': 'Form Anak Packing',
   '/page-visibility': 'Visibilitas Halaman',
@@ -253,7 +254,7 @@ export default function Layout({ children }) {
   // Handbook module — sidebar kiri di-swap total, lihat HANDBOOK_NAV_GROUPS di atas
   const isHandbook  = location.pathname.startsWith('/handbook')
   const isHRIS      = location.pathname.startsWith('/hris')
-  const isAdminModule = ['/users', '/companies', '/page-visibility'].some(
+  const isAdminModule = ['/users', '/roles', '/companies', '/page-visibility'].some(
     (p) => location.pathname === p || location.pathname.startsWith(p + '/')
   )
   const activeModule = isHandbook ? 'handbook' : isHRIS ? 'hris' : isAdminModule ? 'admin' : 'inventory'
