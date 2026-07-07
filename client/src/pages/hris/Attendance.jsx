@@ -4,7 +4,7 @@ import toast from 'react-hot-toast'
 import { hrisApi } from '../../api'
 import { useAuth } from '../../context/AuthContext'
 import CameraCapture from '../../components/CameraCapture'
-import { LogOut, MapPin, Loader2, Camera, Building2, Laptop, Briefcase, X } from 'lucide-react'
+import { LogOut, MapPin, Loader2, Camera, Building2, Laptop, Briefcase, X, Pencil, Plus } from 'lucide-react'
 
 const STATUS_LABEL = { PRESENT: 'Hadir', LATE: 'Terlambat', ABSENT: 'Absen', LEAVE: 'Cuti', HALF_DAY: 'Setengah Hari' }
 const STATUS_COLOR = {
@@ -18,6 +18,25 @@ const REVIEW_COLOR = { PENDING_REVIEW: 'badge-amber', APPROVED: 'badge-green', R
 
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'
 const fmtTime = (d) => d ? new Date(d).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '—'
+
+function toDatetimeLocal(iso) {
+  if (!iso) return ''
+  const d = new Date(iso)
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+function fromDatetimeLocal(value) {
+  if (!value) return null
+  return new Date(value).toISOString()
+}
+
+const EDIT_MODES = [
+  { value: 'ON_SITE', label: 'On-site' },
+  { value: 'WFA', label: 'WFA' },
+  { value: 'FIELD', label: 'Kerja Lapangan' },
+]
+const STATUS_OPTIONS = Object.entries(STATUS_LABEL)
+const EMPTY_EDIT_FORM = { status: 'PRESENT', workMode: 'ON_SITE', checkInAt: '', checkOutAt: '', note: '', editReason: '' }
 
 function getLocation() {
   return new Promise((resolve, reject) => {
@@ -39,7 +58,8 @@ const CHECKIN_MODES = [
 export default function Attendance() {
   const { hasPermission, user } = useAuth()
   const qc = useQueryClient()
-  const canViewAll = hasPermission('hris.attendance.edit') || hasPermission('hris.reports.view') || user?.role === 'SUPER_ADMIN' || user?.role === 'COMPANY_ADMIN'
+  const canEdit = hasPermission('hris.attendance.edit') || user?.role === 'SUPER_ADMIN' || user?.role === 'COMPANY_ADMIN'
+  const canViewAll = canEdit || hasPermission('hris.reports.view')
   const [locating, setLocating] = useState(false)
   const [showModePicker, setShowModePicker] = useState(false)
   const [showCheckoutChoice, setShowCheckoutChoice] = useState(false)
@@ -50,10 +70,20 @@ export default function Attendance() {
   const pendingModeRef = useRef('ON_SITE')
   const checkoutOverrideRef = useRef(false) // true saat checkout ganti mode ON_SITE -> FIELD
 
+  const [editingRow, setEditingRow] = useState(null) // attendance row lagi diedit, atau null
+  const [editForm, setEditForm] = useState(EMPTY_EDIT_FORM)
+  const [showCreate, setShowCreate] = useState(false)
+  const [createForm, setCreateForm] = useState({ ...EMPTY_EDIT_FORM, userId: '', date: '' })
+
   const { data: today } = useQuery({ queryKey: ['hris-today'], queryFn: hrisApi.today })
   const { data: history, isLoading } = useQuery({
     queryKey: ['hris-attendance-list'],
     queryFn: () => hrisApi.attendanceList({ limit: 30 }),
+  })
+  const { data: companyUsers } = useQuery({
+    queryKey: ['hris-attendance-users'],
+    queryFn: hrisApi.attendanceUsers,
+    enabled: canEdit,
   })
 
   const invalidate = () => { qc.invalidateQueries({ queryKey: ['hris-today'] }); qc.invalidateQueries({ queryKey: ['hris-attendance-list'] }) }
@@ -68,6 +98,60 @@ export default function Attendance() {
     onSuccess: () => { toast.success('Check-out berhasil'); invalidate() },
     onError: (e) => toast.error(e.response?.data?.message ?? 'Gagal check-out'),
   })
+  const editAttendance = useMutation({
+    mutationFn: ({ id, data }) => hrisApi.updateAttendance(id, data),
+    onSuccess: () => { toast.success('Presensi diperbarui'); setEditingRow(null); invalidate() },
+    onError: (e) => toast.error(e.response?.data?.message ?? 'Gagal memperbarui presensi'),
+  })
+  const createAttendance = useMutation({
+    mutationFn: hrisApi.createAttendanceManual,
+    onSuccess: () => { toast.success('Presensi manual ditambahkan'); setShowCreate(false); setCreateForm({ ...EMPTY_EDIT_FORM, userId: '', date: '' }); invalidate() },
+    onError: (e) => toast.error(e.response?.data?.message ?? 'Gagal menambahkan presensi'),
+  })
+
+  function openEdit(row) {
+    setEditingRow(row)
+    setEditForm({
+      status: row.status,
+      workMode: row.workMode,
+      checkInAt: toDatetimeLocal(row.checkInAt),
+      checkOutAt: toDatetimeLocal(row.checkOutAt),
+      note: row.note || '',
+      editReason: '',
+    })
+  }
+
+  function submitEdit(e) {
+    e.preventDefault()
+    if (!editForm.editReason.trim()) return toast.error('Alasan koreksi wajib diisi')
+    editAttendance.mutate({
+      id: editingRow.id,
+      data: {
+        status: editForm.status,
+        workMode: editForm.workMode,
+        checkInAt: fromDatetimeLocal(editForm.checkInAt),
+        checkOutAt: fromDatetimeLocal(editForm.checkOutAt),
+        note: editForm.note || null,
+        editReason: editForm.editReason.trim(),
+      },
+    })
+  }
+
+  function submitCreate(e) {
+    e.preventDefault()
+    if (!createForm.userId || !createForm.date) return toast.error('Pengguna dan tanggal wajib diisi')
+    if (!createForm.editReason.trim()) return toast.error('Alasan wajib diisi')
+    createAttendance.mutate({
+      userId: createForm.userId,
+      date: createForm.date,
+      status: createForm.status,
+      workMode: createForm.workMode,
+      checkInAt: fromDatetimeLocal(createForm.checkInAt),
+      checkOutAt: fromDatetimeLocal(createForm.checkOutAt),
+      note: createForm.note || null,
+      editReason: createForm.editReason.trim(),
+    })
+  }
 
   function startCheckIn() {
     setShowModePicker(true)
@@ -139,9 +223,16 @@ export default function Attendance() {
 
   return (
     <div className="px-6 py-6 max-w-5xl">
-      <div className="mb-5">
-        <h1 className="text-lg font-bold text-slate-800">Presensi</h1>
-        <p className="text-xs text-slate-400 mt-0.5">Check-in dan check-out memerlukan izin lokasi (GPS) dan foto selfie untuk validasi</p>
+      <div className="mb-5 flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h1 className="text-lg font-bold text-slate-800">Presensi</h1>
+          <p className="text-xs text-slate-400 mt-0.5">Check-in dan check-out memerlukan izin lokasi (GPS) dan foto selfie untuk validasi</p>
+        </div>
+        {canEdit && (
+          <button onClick={() => setShowCreate(true)} className="btn-secondary text-sm flex items-center gap-1.5">
+            <Plus size={14} /> Tambah Presensi Manual
+          </button>
+        )}
       </div>
 
       <div className="card p-5 mb-6 flex items-center justify-between flex-wrap gap-4">
@@ -263,6 +354,107 @@ export default function Attendance() {
         <CameraCapture onCapture={handlePhotoCaptured} onClose={() => setShowCamera(false)} />
       )}
 
+      {editingRow && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4" onClick={() => setEditingRow(null)}>
+          <form onSubmit={submitEdit} className="card w-full max-w-md p-5" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <p className="text-sm font-semibold text-slate-800">Edit Presensi</p>
+                <p className="text-xs text-slate-400">{editingRow.user?.name ?? 'Saya'} · {fmtDate(editingRow.date)}</p>
+              </div>
+              <button type="button" onClick={() => setEditingRow(null)} className="text-slate-400 hover:text-slate-600"><X size={16} /></button>
+            </div>
+            <div className="grid grid-cols-2 gap-3 mb-3">
+              <div>
+                <label className="label">Check-in</label>
+                <input type="datetime-local" className="input" value={editForm.checkInAt} onChange={e => setEditForm(f => ({ ...f, checkInAt: e.target.value }))} />
+              </div>
+              <div>
+                <label className="label">Check-out</label>
+                <input type="datetime-local" className="input" value={editForm.checkOutAt} onChange={e => setEditForm(f => ({ ...f, checkOutAt: e.target.value }))} />
+              </div>
+              <div>
+                <label className="label">Status</label>
+                <select className="input" value={editForm.status} onChange={e => setEditForm(f => ({ ...f, status: e.target.value }))}>
+                  {STATUS_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="label">Mode</label>
+                <select className="input" value={editForm.workMode} onChange={e => setEditForm(f => ({ ...f, workMode: e.target.value }))}>
+                  {EDIT_MODES.map(({ value, label }) => <option key={value} value={value}>{label}</option>)}
+                </select>
+              </div>
+            </div>
+            <label className="label">Catatan</label>
+            <textarea className="input mb-3" rows={2} value={editForm.note} onChange={e => setEditForm(f => ({ ...f, note: e.target.value }))} />
+            <label className="label">Alasan Koreksi (wajib)</label>
+            <textarea required autoFocus={false} className="input mb-4" rows={2} placeholder="mis. Lupa check-out, dikoreksi sesuai laporan atasan" value={editForm.editReason} onChange={e => setEditForm(f => ({ ...f, editReason: e.target.value }))} />
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={() => setEditingRow(null)} className="btn-secondary text-sm">Batal</button>
+              <button type="submit" disabled={editAttendance.isPending} className="btn-primary text-sm">
+                {editAttendance.isPending ? 'Menyimpan…' : 'Simpan'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {showCreate && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4" onClick={() => setShowCreate(false)}>
+          <form onSubmit={submitCreate} className="card w-full max-w-md p-5" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <p className="text-sm font-semibold text-slate-800">Tambah Presensi Manual</p>
+              <button type="button" onClick={() => setShowCreate(false)} className="text-slate-400 hover:text-slate-600"><X size={16} /></button>
+            </div>
+            <p className="text-xs text-slate-400 mb-3">Untuk kasus lupa absen — belum ada data presensi sama sekali di tanggal ini.</p>
+            <div className="grid grid-cols-2 gap-3 mb-3">
+              <div className="col-span-2">
+                <label className="label">Pengguna</label>
+                <select required className="input" value={createForm.userId} onChange={e => setCreateForm(f => ({ ...f, userId: e.target.value }))}>
+                  <option value="">Pilih pengguna…</option>
+                  {(companyUsers ?? []).map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                </select>
+              </div>
+              <div className="col-span-2">
+                <label className="label">Tanggal</label>
+                <input type="date" required className="input" value={createForm.date} onChange={e => setCreateForm(f => ({ ...f, date: e.target.value }))} />
+              </div>
+              <div>
+                <label className="label">Check-in</label>
+                <input type="datetime-local" className="input" value={createForm.checkInAt} onChange={e => setCreateForm(f => ({ ...f, checkInAt: e.target.value }))} />
+              </div>
+              <div>
+                <label className="label">Check-out</label>
+                <input type="datetime-local" className="input" value={createForm.checkOutAt} onChange={e => setCreateForm(f => ({ ...f, checkOutAt: e.target.value }))} />
+              </div>
+              <div>
+                <label className="label">Status</label>
+                <select className="input" value={createForm.status} onChange={e => setCreateForm(f => ({ ...f, status: e.target.value }))}>
+                  {STATUS_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="label">Mode</label>
+                <select className="input" value={createForm.workMode} onChange={e => setCreateForm(f => ({ ...f, workMode: e.target.value }))}>
+                  {EDIT_MODES.map(({ value, label }) => <option key={value} value={value}>{label}</option>)}
+                </select>
+              </div>
+            </div>
+            <label className="label">Catatan</label>
+            <textarea className="input mb-3" rows={2} value={createForm.note} onChange={e => setCreateForm(f => ({ ...f, note: e.target.value }))} />
+            <label className="label">Alasan (wajib)</label>
+            <textarea required className="input mb-4" rows={2} placeholder="mis. Lupa absen, dikonfirmasi lewat WA ke atasan" value={createForm.editReason} onChange={e => setCreateForm(f => ({ ...f, editReason: e.target.value }))} />
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={() => setShowCreate(false)} className="btn-secondary text-sm">Batal</button>
+              <button type="submit" disabled={createAttendance.isPending} className="btn-primary text-sm">
+                {createAttendance.isPending ? 'Menyimpan…' : 'Simpan'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
       <div className="card overflow-hidden">
         <div className="px-4 py-3 border-b border-slate-100">
           <p className="text-sm font-semibold text-slate-700">Riwayat Presensi</p>
@@ -278,13 +470,14 @@ export default function Attendance() {
                 <th className="th">Mode</th>
                 <th className="th">Shift</th>
                 <th className="th text-center">Status</th>
+                {canEdit && <th className="th text-center">Aksi</th>}
               </tr>
             </thead>
             <tbody>
               {isLoading ? (
-                <tr><td colSpan={7} className="td py-8 text-center text-slate-400">Memuat…</td></tr>
+                <tr><td colSpan={8} className="td py-8 text-center text-slate-400">Memuat…</td></tr>
               ) : rows.length === 0 ? (
-                <tr><td colSpan={7} className="td py-8 text-center text-slate-400">Belum ada data presensi</td></tr>
+                <tr><td colSpan={8} className="td py-8 text-center text-slate-400">Belum ada data presensi</td></tr>
               ) : rows.map(r => (
                 <tr key={r.id} className="tr">
                   <td className="td">{fmtDate(r.date)}</td>
@@ -323,6 +516,13 @@ export default function Attendance() {
                   </td>
                   <td className="td">{r.shift?.name ?? '—'}</td>
                   <td className="td text-center"><span className={STATUS_COLOR[r.status]}>{STATUS_LABEL[r.status]}</span></td>
+                  {canEdit && (
+                    <td className="td text-center">
+                      <button title="Edit presensi" onClick={() => openEdit(r)} className="w-7 h-7 rounded flex items-center justify-center text-slate-500 hover:bg-slate-100 mx-auto">
+                        <Pencil size={14} />
+                      </button>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>

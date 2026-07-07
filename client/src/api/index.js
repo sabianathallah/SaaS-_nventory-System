@@ -278,6 +278,8 @@ export const hrisApi = {
     return api.post('/hris/attendance/check-out', fd).then(r => r.data)
   },
   updateAttendance: (id, data) => api.patch(`/hris/attendance/${id}`, data).then(r => r.data),
+  createAttendanceManual: (data) => api.post('/hris/attendance', data).then(r => r.data),
+  attendanceUsers:  ()         => api.get('/hris/attendance/users').then(r => r.data),
   pendingReviewAttendance: (params) => api.get('/hris/attendance/pending-review', { params }).then(r => r.data),
   reviewAttendance:        (id, data) => api.patch(`/hris/attendance/${id}/review`, data).then(r => r.data),
 

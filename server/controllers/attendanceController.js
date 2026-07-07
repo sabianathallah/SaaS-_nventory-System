@@ -286,16 +286,92 @@ class AttendanceController {
             const attendance = await Attendance.findOne({ where: { id: req.params.id, ...companyFilter(req) } });
             if (!attendance) throw { name: 'NotFound', message: 'Data absensi tidak ditemukan' };
 
-            const { status, note, checkInAt, checkOutAt } = req.body;
+            const { status, note, checkInAt, checkOutAt, workMode, editReason } = req.body;
+            if (!editReason || !editReason.trim()) {
+                throw { name: 'BadRequest', message: 'Alasan koreksi wajib diisi' };
+            }
+            if (workMode && !WORK_MODES.includes(workMode)) {
+                throw { name: 'BadRequest', message: 'workMode tidak valid' };
+            }
+
+            const nextWorkMode = workMode ?? attendance.workMode;
+            // Admin yang mengedit dianggap sudah memvalidasi sendiri — kalau
+            // hasilnya FIELD, langsung disetujui, tidak perlu masuk antrean
+            // review lagi.
+            const reviewPatch = nextWorkMode === 'FIELD'
+                ? { reviewStatus: 'APPROVED', reviewedBy: req.user.id, reviewedAt: new Date() }
+                : {};
+
             await attendance.update({
                 status:     status     ?? attendance.status,
                 note:       note       ?? attendance.note,
                 checkInAt:  checkInAt  ?? attendance.checkInAt,
                 checkOutAt: checkOutAt ?? attendance.checkOutAt,
-                editedBy: req.user.id,
+                workMode:   nextWorkMode,
+                ...reviewPatch,
+                editedBy:   req.user.id,
+                editedAt:   new Date(),
+                editReason: editReason.trim(),
             });
 
             res.json(attendance);
+        } catch (err) { next(err); }
+    }
+
+    static async adminCreate(req, res, next) {
+        try {
+            const { userId, date, checkInAt, checkOutAt, status, workMode, note, editReason } = req.body;
+            if (!userId || !date) {
+                throw { name: 'BadRequest', message: 'userId dan date wajib diisi' };
+            }
+            if (!editReason || !editReason.trim()) {
+                throw { name: 'BadRequest', message: 'Alasan wajib diisi' };
+            }
+            if (workMode && !WORK_MODES.includes(workMode)) {
+                throw { name: 'BadRequest', message: 'workMode tidak valid' };
+            }
+
+            const user = await User.findOne({ where: { id: userId, ...companyFilter(req) } });
+            if (!user) throw { name: 'NotFound', message: 'Pengguna tidak ditemukan' };
+
+            const existing = await Attendance.findOne({ where: { userId, date } });
+            if (existing) {
+                throw { name: 'BadRequest', message: 'Data presensi untuk tanggal ini sudah ada, gunakan edit' };
+            }
+
+            const mode = workMode ?? 'ON_SITE';
+            const reviewStatus = mode === 'FIELD' ? 'APPROVED' : 'NONE';
+
+            const attendance = await Attendance.create({
+                userId,
+                date,
+                shiftId: user.shiftId || null,
+                checkInAt: checkInAt || null,
+                checkOutAt: checkOutAt || null,
+                status: status || 'PRESENT',
+                workMode: mode,
+                note: note || null,
+                reviewStatus,
+                reviewedBy: mode === 'FIELD' ? req.user.id : null,
+                reviewedAt: mode === 'FIELD' ? new Date() : null,
+                editedBy: req.user.id,
+                editedAt: new Date(),
+                editReason: editReason.trim(),
+                companyId: companyId(req) ?? req.user.companyId,
+            });
+
+            res.status(201).json(attendance);
+        } catch (err) { next(err); }
+    }
+
+    static async companyUsers(req, res, next) {
+        try {
+            const users = await User.findAll({
+                where: { ...companyFilter(req), isActive: true },
+                attributes: USER_ATTRS,
+                order: [['name', 'ASC']],
+            });
+            res.json(users);
         } catch (err) { next(err); }
     }
 }

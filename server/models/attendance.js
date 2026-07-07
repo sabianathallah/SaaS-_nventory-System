@@ -85,6 +85,8 @@ module.exports = (sequelize, DataTypes) => {
     reviewNote: { type: DataTypes.TEXT, allowNull: true },
     note:      { type: DataTypes.TEXT, allowNull: true },
     editedBy:  { type: DataTypes.INTEGER, allowNull: true },
+    editedAt:  { type: DataTypes.DATE, allowNull: true },
+    editReason: { type: DataTypes.TEXT, allowNull: true },
     companyId: { type: DataTypes.INTEGER, allowNull: true },
   }, {
     sequelize,
