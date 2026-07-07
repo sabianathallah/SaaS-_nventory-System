@@ -13,6 +13,8 @@ const STATUS_COLOR = {
 }
 const MODE_LABEL = { ON_SITE: 'On-site', WFA: 'WFA', FIELD: 'Lapangan' }
 const MODE_COLOR = { ON_SITE: 'badge-muted', WFA: 'badge-indigo', FIELD: 'badge-teal' }
+const REVIEW_LABEL = { PENDING_REVIEW: 'Menunggu Persetujuan', APPROVED: 'Disetujui', REJECTED: 'Tidak Disetujui' }
+const REVIEW_COLOR = { PENDING_REVIEW: 'badge-amber', APPROVED: 'badge-green', REJECTED: 'badge-red' }
 
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'
 const fmtTime = (d) => d ? new Date(d).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '—'
@@ -40,11 +42,13 @@ export default function Attendance() {
   const canViewAll = hasPermission('hris.attendance.edit') || hasPermission('hris.reports.view') || user?.role === 'SUPER_ADMIN' || user?.role === 'COMPANY_ADMIN'
   const [locating, setLocating] = useState(false)
   const [showModePicker, setShowModePicker] = useState(false)
+  const [showCheckoutChoice, setShowCheckoutChoice] = useState(false)
   const [showFieldNote, setShowFieldNote] = useState(false)
   const [showCamera, setShowCamera] = useState(false)
   const [fieldNote, setFieldNote] = useState('')
   const pendingActionRef = useRef(null) // 'in' | 'out'
   const pendingModeRef = useRef('ON_SITE')
+  const checkoutOverrideRef = useRef(false) // true saat checkout ganti mode ON_SITE -> FIELD
 
   const { data: today } = useQuery({ queryKey: ['hris-today'], queryFn: hrisApi.today })
   const { data: history, isLoading } = useQuery({
@@ -70,7 +74,14 @@ export default function Attendance() {
   }
   function startCheckOut() {
     pendingActionRef.current = 'out'
-    setShowCamera(true)
+    checkoutOverrideRef.current = false
+    // Cuma tawarkan pindah ke Kerja Lapangan kalau check-in-nya On-site —
+    // kombinasi lain (WFA/FIELD) tetap ikut mode yang sama seperti sekarang.
+    if (today?.workMode === 'ON_SITE') {
+      setShowCheckoutChoice(true)
+    } else {
+      setShowCamera(true)
+    }
   }
 
   function pickMode(mode) {
@@ -78,6 +89,16 @@ export default function Attendance() {
     pendingActionRef.current = 'in'
     setShowModePicker(false)
     if (mode === 'FIELD') {
+      setShowFieldNote(true)
+    } else {
+      setShowCamera(true)
+    }
+  }
+
+  function pickCheckoutMode(mode) {
+    setShowCheckoutChoice(false)
+    if (mode === 'FIELD') {
+      checkoutOverrideRef.current = true
       setShowFieldNote(true)
     } else {
       setShowCamera(true)
@@ -99,6 +120,10 @@ export default function Attendance() {
       if (action === 'in') {
         checkIn.mutate({ lat, lng, photo, workMode: pendingModeRef.current, note: pendingModeRef.current === 'FIELD' ? fieldNote.trim() : undefined })
         setFieldNote('')
+      } else if (checkoutOverrideRef.current) {
+        checkOut.mutate({ lat, lng, photo, workMode: 'FIELD', note: fieldNote.trim() })
+        setFieldNote('')
+        checkoutOverrideRef.current = false
       } else {
         checkOut.mutate({ lat, lng, photo })
       }
@@ -131,6 +156,9 @@ export default function Attendance() {
               {today?.checkOutAt && ` · Check-out ${fmtTime(today.checkOutAt)}`}
               {today?.workMode && today.workMode !== 'ON_SITE' && (
                 <span className={`ml-2 ${MODE_COLOR[today.workMode]}`}>{MODE_LABEL[today.workMode]}</span>
+              )}
+              {today?.reviewStatus && today.reviewStatus !== 'NONE' && (
+                <span className={`ml-2 ${REVIEW_COLOR[today.reviewStatus]}`}>{REVIEW_LABEL[today.reviewStatus]}</span>
               )}
             </p>
           </div>
@@ -175,6 +203,43 @@ export default function Attendance() {
                   </div>
                 </button>
               ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showCheckoutChoice && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4" onClick={() => setShowCheckoutChoice(false)}>
+          <div className="card w-full max-w-sm p-5" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <p className="text-sm font-semibold text-slate-800">Check-out dari Mana?</p>
+              <button onClick={() => setShowCheckoutChoice(false)} className="text-slate-400 hover:text-slate-600"><X size={16} /></button>
+            </div>
+            <div className="space-y-2">
+              <button
+                onClick={() => pickCheckoutMode('ON_SITE')}
+                className="w-full flex items-center gap-3 p-3 rounded-lg border border-slate-200 hover:border-brand hover:bg-brand-50 transition-colors text-left"
+              >
+                <div className="w-9 h-9 rounded-lg bg-slate-100 flex items-center justify-center text-slate-600 flex-shrink-0">
+                  <Building2 size={16} />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-slate-800">Masih di Kantor</p>
+                  <p className="text-xs text-slate-400">Check-out normal, validasi lokasi kantor</p>
+                </div>
+              </button>
+              <button
+                onClick={() => pickCheckoutMode('FIELD')}
+                className="w-full flex items-center gap-3 p-3 rounded-lg border border-slate-200 hover:border-brand hover:bg-brand-50 transition-colors text-left"
+              >
+                <div className="w-9 h-9 rounded-lg bg-slate-100 flex items-center justify-center text-slate-600 flex-shrink-0">
+                  <Briefcase size={16} />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-slate-800">Kerja Lapangan</p>
+                  <p className="text-xs text-slate-400">Sudah tidak di kantor (mis. kunjungan vendor). Butuh persetujuan admin.</p>
+                </div>
+              </button>
             </div>
           </div>
         </div>
@@ -245,8 +310,16 @@ export default function Attendance() {
                     </div>
                   </td>
                   <td className="td">
-                    <span className={MODE_COLOR[r.workMode] ?? 'badge-muted'}>{MODE_LABEL[r.workMode] ?? '—'}</span>
-                    {r.workMode === 'FIELD' && r.note && <div className="text-[10px] text-slate-400 mt-0.5 max-w-[140px] truncate">{r.note}</div>}
+                    <div className="flex items-center gap-1 flex-wrap">
+                      <span className={MODE_COLOR[r.workMode] ?? 'badge-muted'}>{MODE_LABEL[r.workMode] ?? '—'}</span>
+                      {r.checkOutWorkMode === 'FIELD' && <span className={MODE_COLOR.FIELD}>Checkout Lapangan</span>}
+                      {r.reviewStatus && r.reviewStatus !== 'NONE' && (
+                        <span className={REVIEW_COLOR[r.reviewStatus]}>{REVIEW_LABEL[r.reviewStatus]}</span>
+                      )}
+                    </div>
+                    {(r.workMode === 'FIELD' || r.checkOutWorkMode === 'FIELD') && r.note && (
+                      <div className="text-[10px] text-slate-400 mt-0.5 max-w-[140px] truncate">{r.note}</div>
+                    )}
                   </td>
                   <td className="td">{r.shift?.name ?? '—'}</td>
                   <td className="td text-center"><span className={STATUS_COLOR[r.status]}>{STATUS_LABEL[r.status]}</span></td>

@@ -269,14 +269,17 @@ export const hrisApi = {
     fd.append('photo', photo)
     return api.post('/hris/attendance/check-in', fd).then(r => r.data)
   },
-  checkOut:       ({ lat, lng, note, photo }) => {
+  checkOut:       ({ lat, lng, note, photo, workMode }) => {
     const fd = new FormData()
     fd.append('lat', lat); fd.append('lng', lng)
     if (note) fd.append('note', note)
+    if (workMode) fd.append('workMode', workMode)
     fd.append('photo', photo)
     return api.post('/hris/attendance/check-out', fd).then(r => r.data)
   },
   updateAttendance: (id, data) => api.patch(`/hris/attendance/${id}`, data).then(r => r.data),
+  pendingReviewAttendance: (params) => api.get('/hris/attendance/pending-review', { params }).then(r => r.data),
+  reviewAttendance:        (id, data) => api.patch(`/hris/attendance/${id}/review`, data).then(r => r.data),
 
   leaveTypes:       ()         => api.get('/hris/leave-types').then(r => r.data),
   createLeaveType:  (data)     => api.post('/hris/leave-types', data).then(r => r.data),

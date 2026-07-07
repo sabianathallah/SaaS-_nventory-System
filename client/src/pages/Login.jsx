@@ -27,7 +27,7 @@ export default function Login() {
     setLoading(true)
     try {
       await signIn(form.email, form.password)
-      navigate('/dashboard')
+      navigate('/')
     } catch (err) {
       toast.error(err.response?.data?.message || 'Invalid email or password')
     } finally {

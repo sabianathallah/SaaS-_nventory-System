@@ -17,9 +17,11 @@ router.use(requirePermission('hris.view'));
 // ── Attendance ───────────────────────────────────────────────────────────────
 router.get('/attendance/today',   AttendanceController.today);
 router.get('/attendance/summary', AttendanceController.summary);
+router.get('/attendance/pending-review', requirePermission('hris.attendance.review'), AttendanceController.pendingReview);
 router.get('/attendance',         AttendanceController.list);
 router.post('/attendance/check-in',  uploadSingle('photo', 'saas-inventory/attendance'), AttendanceController.checkIn);
 router.post('/attendance/check-out', uploadSingle('photo', 'saas-inventory/attendance'), AttendanceController.checkOut);
+router.patch('/attendance/:id/review', requirePermission('hris.attendance.review'), AttendanceController.review);
 router.patch('/attendance/:id', requirePermission('hris.attendance.edit'), AttendanceController.update);
 
 // ── Leave ────────────────────────────────────────────────────────────────────

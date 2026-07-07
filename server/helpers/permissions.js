@@ -94,6 +94,7 @@ const ALL_PERMISSIONS = [
   { key: 'hris.manage',               label: 'Akses Penuh HRIS',                           group: 'HRIS',                    isParent: true,  desc: 'Aktifkan semua fitur HRIS sekaligus' },
   { key: 'hris.view',                 label: 'Gunakan HRIS (Self-Service)',                group: 'HRIS',                    parent: 'hris.manage',            desc: 'Check-in/out presensi, ajukan cuti & lembur, lihat riwayat sendiri' },
   { key: 'hris.attendance.edit',      label: 'Edit Data Absensi',                          group: 'HRIS',                    parent: 'hris.manage',            desc: 'Koreksi data check-in/out milik siapa pun' },
+  { key: 'hris.attendance.review',    label: 'Review Presensi Kerja Lapangan',             group: 'HRIS',                    parent: 'hris.manage',            desc: 'Approve atau reject klaim kerja lapangan (FIELD) pada presensi' },
   { key: 'hris.leave.review',         label: 'Review Pengajuan Cuti',                      group: 'HRIS',                    parent: 'hris.manage',            desc: 'Approve atau reject pengajuan cuti karyawan' },
   { key: 'hris.overtime.review',      label: 'Review Pengajuan Lembur',                    group: 'HRIS',                    parent: 'hris.manage',            desc: 'Approve atau reject pengajuan lembur karyawan' },
   { key: 'hris.shift.manage',         label: 'Kelola Shift',                               group: 'HRIS',                    parent: 'hris.manage',            desc: 'Tambah, edit, hapus shift & assign shift ke user' },
@@ -140,7 +141,7 @@ const DEFAULT_PERMISSIONS = {
 
   HR: [
     'admin.manage', 'admin.users', 'reports.manage', 'db_link.view',
-    'hris.manage', 'hris.view', 'hris.attendance.edit', 'hris.leave.review',
+    'hris.manage', 'hris.view', 'hris.attendance.edit', 'hris.attendance.review', 'hris.leave.review',
     'hris.overtime.review', 'hris.shift.manage', 'hris.location.manage', 'hris.reports.view',
   ],
 

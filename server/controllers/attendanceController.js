@@ -95,6 +95,10 @@ class AttendanceController {
 
             const { mode, locationId } = await resolveWorkContext(req, { lat, lng, note, workMode, date, requireFieldNote: true });
 
+            // Kerja Lapangan self-declared tanpa approval sebelumnya — record
+            // masuk antrean review, tapi timestamp & foto tetap terkunci sekarang.
+            const reviewStatus = mode === 'FIELD' ? 'PENDING_REVIEW' : 'NONE';
+
             const user = await User.findByPk(req.user.id, { include: [{ model: Shift, as: 'shift' }] });
             let status = 'PRESENT';
             const now = new Date();
@@ -119,6 +123,7 @@ class AttendanceController {
                 status,
                 workMode: mode,
                 note: note || null,
+                reviewStatus,
                 companyId: companyId(req) ?? req.user.companyId,
             };
 
@@ -134,7 +139,7 @@ class AttendanceController {
 
     static async checkOut(req, res, next) {
         try {
-            const { lat, lng, note } = req.body;
+            const { lat, lng, note, workMode } = req.body;
             if (lat === undefined || lng === undefined) {
                 throw { name: 'BadRequest', message: 'Lokasi (lat, lng) wajib diisi' };
             }
@@ -151,8 +156,20 @@ class AttendanceController {
                 throw { name: 'BadRequest', message: 'Anda sudah check-out hari ini' };
             }
 
-            // Mode kerja mengikuti yang dipakai saat check-in, bukan input baru.
-            const { locationId } = await resolveWorkContext(req, { lat, lng, note, workMode: attendance.workMode, date });
+            // Mode kerja mengikuti yang dipakai saat check-in, kecuali user
+            // menyatakan pindah ke Kerja Lapangan (mis. check-in di kantor tapi
+            // siangnya ada tugas ke vendor). Satu-satunya transisi yang
+            // diperbolehkan: ON_SITE -> FIELD. Transisi lain tetap ditolak.
+            const isSwitchingToField = workMode === 'FIELD' && attendance.workMode !== 'FIELD';
+            if (isSwitchingToField && attendance.workMode !== 'ON_SITE') {
+                throw { name: 'BadRequest', message: 'Perubahan mode saat check-out tidak diperbolehkan untuk mode ini' };
+            }
+            const effectiveMode = isSwitchingToField ? 'FIELD' : attendance.workMode;
+
+            const { locationId } = await resolveWorkContext(req, {
+                lat, lng, note, workMode: effectiveMode, date,
+                requireFieldNote: isSwitchingToField,
+            });
 
             await attendance.update({
                 checkOutAt: new Date(),
@@ -160,7 +177,11 @@ class AttendanceController {
                 checkOutLng: lng,
                 checkOutLocationId: locationId,
                 checkOutPhoto: req.file.path,
+                checkOutWorkMode: isSwitchingToField ? 'FIELD' : attendance.checkOutWorkMode,
                 note: note || attendance.note,
+                reviewStatus: (isSwitchingToField || attendance.workMode === 'FIELD')
+                    ? 'PENDING_REVIEW'
+                    : attendance.reviewStatus,
             });
 
             res.status(200).json(attendance);
@@ -213,6 +234,50 @@ class AttendanceController {
             const summary = { PRESENT: 0, LATE: 0, ABSENT: 0, LEAVE: 0, HALF_DAY: 0, total: rows.length };
             rows.forEach(r => { summary[r.status] = (summary[r.status] || 0) + 1; });
             res.json(summary);
+        } catch (err) { next(err); }
+    }
+
+    static async pendingReview(req, res, next) {
+        try {
+            const { page, limit, offset } = paginate(req.query);
+
+            const { rows, count } = await Attendance.findAndCountAll({
+                where: { ...companyFilter(req), reviewStatus: 'PENDING_REVIEW' },
+                include: [
+                    { model: User, as: 'user', attributes: USER_ATTRS },
+                    { model: Shift, as: 'shift' },
+                ],
+                order: [['date', 'DESC']],
+                limit, offset,
+                distinct: true,
+            });
+            res.json(paginatedResponse(rows, count, page, limit));
+        } catch (err) { next(err); }
+    }
+
+    static async review(req, res, next) {
+        try {
+            const { status, reviewNote } = req.body;
+            if (!['APPROVED', 'REJECTED'].includes(status)) {
+                throw { name: 'BadRequest', message: 'Status review harus APPROVED atau REJECTED' };
+            }
+
+            const attendance = await Attendance.findOne({ where: { id: req.params.id, ...companyFilter(req) } });
+            if (!attendance) throw { name: 'NotFound', message: 'Data absensi tidak ditemukan' };
+            if (attendance.reviewStatus !== 'PENDING_REVIEW') {
+                throw { name: 'BadRequest', message: 'Data absensi ini tidak sedang menunggu review' };
+            }
+
+            // Reject tidak mengubah jam kerja yang sudah tercatat — cuma jadi
+            // catatan HR untuk ditindaklanjuti manual, bukan otomatis ABSENT.
+            await attendance.update({
+                reviewStatus: status,
+                reviewedBy: req.user.id,
+                reviewedAt: new Date(),
+                reviewNote: reviewNote || null,
+            });
+
+            res.json(attendance);
         } catch (err) { next(err); }
     }
 

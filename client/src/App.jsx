@@ -15,6 +15,7 @@ import HrisLeave from './pages/hris/Leave'
 import HrisOvertime from './pages/hris/Overtime'
 import HrisReports from './pages/hris/Reports'
 import HrisShifts from './pages/hris/admin/Shifts'
+import HrisAttendanceReview from './pages/hris/admin/AttendanceReview'
 import HrisLocations from './pages/hris/admin/Locations'
 import HrisLeaveQuota from './pages/hris/admin/LeaveQuota'
 import HrisWfa from './pages/hris/Wfa'
@@ -52,9 +53,36 @@ import ManualShipments from './pages/ManualShipments'
 import ManualShipmentForm from './pages/ManualShipmentForm'
 import ManualShipmentDetail from './pages/ManualShipmentDetail'
 import Landing from './pages/Landing'
+import Home from './pages/Home'
 import Pengajuan from './pages/Pengajuan'
 import PengajuanBaru from './pages/PengajuanBaru'
 import PengajuanDetail from './pages/PengajuanDetail'
+
+// Permission yang menandakan user benar-benar memakai fitur Inventory (bukan
+// cuma akses default seperti Dashboard/SOP/Pengajuan yang terbuka untuk semua
+// user login). Dipakai untuk menentukan landing page setelah login.
+const INVENTORY_PERMISSIONS = [
+  'inventory.view', 'inventory.manage', 'inventory.product.create', 'inventory.product.edit',
+  'stock.in.view', 'stock.out.view', 'stock.view', 'stock.opname.view', 'stock.transfer.view',
+  'shipping.manual.view', 'shipping.manual.create', 'shipping.manual.edit',
+  'packing.manage', 'packing.incoming', 'packing.jobs', 'packing.view',
+  'handover.view', 'db_link.view', 'reports.manage',
+]
+
+// Module "utama" yang dihitung untuk landing decision. Handbook sengaja tidak
+// dihitung karena selalu terbuka untuk semua user — kalau ikut dihitung, semua
+// orang jadi punya >1 module dan selalu diarahkan ke Home, padahal tujuannya
+// user dengan 1 module kerja tetap langsung ke module itu.
+function getPrimaryModules({ isAdmin, hasPermission }) {
+  const modules = []
+  if (isAdmin || INVENTORY_PERMISSIONS.some((p) => hasPermission(p))) {
+    modules.push({ key: 'inventory', to: '/dashboard' })
+  }
+  if (isAdmin || hasPermission('hris.view')) {
+    modules.push({ key: 'hris', to: '/hris' })
+  }
+  return modules
+}
 
 function PrivateRoute({ children }) {
   const { user } = useAuth()
@@ -63,12 +91,16 @@ function PrivateRoute({ children }) {
 
 function PublicRoute({ children }) {
   const { user } = useAuth()
-  return !user ? children : <Navigate to="/dashboard" replace />
+  return !user ? children : <Navigate to="/" replace />
 }
 
 function RootRoute() {
-  const { user } = useAuth()
-  return user ? <Navigate to="/dashboard" replace /> : <Landing />
+  const { user, isAdmin, hasPermission } = useAuth()
+  if (!user) return <Landing />
+
+  const modules = getPrimaryModules({ isAdmin, hasPermission })
+  if (modules.length > 1) return <Navigate to="/home" replace />
+  return <Navigate to={modules[0]?.to ?? '/dashboard'} replace />
 }
 
 // Shows NoPermission UI instead of redirecting — user can see they lack access
@@ -100,6 +132,7 @@ function AppRoutes() {
             <Layout>
               <ErrorBoundary>
               <Routes>
+                <Route path="/home"      element={<Home />} />
                 <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="/sop"       element={<SOP />} />
                 <Route path="/handbook/*" element={<Handbook />} />
@@ -109,6 +142,7 @@ function AppRoutes() {
                 <Route path="/hris/overtime"       element={<PageVisibleRoute pageKey="hris"><PermissionRoute permission="hris.view" page="Lembur"><HrisOvertime /></PermissionRoute></PageVisibleRoute>} />
                 <Route path="/hris/reports"        element={<PageVisibleRoute pageKey="hris"><PermissionRoute permission="hris.reports.view" page="Laporan HRIS"><HrisReports /></PermissionRoute></PageVisibleRoute>} />
                 <Route path="/hris/admin/shifts"   element={<PageVisibleRoute pageKey="hris"><PermissionRoute permission="hris.shift.manage" page="Kelola Shift"><HrisShifts /></PermissionRoute></PageVisibleRoute>} />
+                <Route path="/hris/admin/attendance-review" element={<PageVisibleRoute pageKey="hris"><PermissionRoute permission="hris.attendance.review" page="Persetujuan Presensi Lapangan"><HrisAttendanceReview /></PermissionRoute></PageVisibleRoute>} />
                 <Route path="/hris/admin/locations" element={<PageVisibleRoute pageKey="hris"><PermissionRoute permission="hris.location.manage" page="Lokasi Kantor"><HrisLocations /></PermissionRoute></PageVisibleRoute>} />
                 <Route path="/hris/admin/leave-quota" element={<PageVisibleRoute pageKey="hris"><PermissionRoute permission="hris.manage" page="Kuota Cuti"><HrisLeaveQuota /></PermissionRoute></PageVisibleRoute>} />
                 <Route path="/hris/wfa"             element={<PageVisibleRoute pageKey="hris"><PermissionRoute permission="hris.view" page="WFA"><HrisWfa /></PermissionRoute></PageVisibleRoute>} />

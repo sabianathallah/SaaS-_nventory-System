@@ -33,6 +33,12 @@ module.exports = (sequelize, DataTypes) => {
         onDelete: 'SET NULL',
         onUpdate: 'CASCADE',
       });
+      Attendance.belongsTo(models.User, {
+        foreignKey: { name: 'reviewedBy', allowNull: true },
+        as: 'reviewer',
+        onDelete: 'SET NULL',
+        onUpdate: 'CASCADE',
+      });
       Attendance.hasMany(models.OvertimeRequest, {
         foreignKey: { name: 'attendanceId', allowNull: true },
         as: 'overtimeRequests',
@@ -65,6 +71,18 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: false,
       defaultValue: 'ON_SITE',
     },
+    checkOutWorkMode: {
+      type: DataTypes.ENUM('ON_SITE', 'FIELD'),
+      allowNull: true,
+    },
+    reviewStatus: {
+      type: DataTypes.ENUM('NONE', 'PENDING_REVIEW', 'APPROVED', 'REJECTED'),
+      allowNull: false,
+      defaultValue: 'NONE',
+    },
+    reviewedBy: { type: DataTypes.INTEGER, allowNull: true },
+    reviewedAt: { type: DataTypes.DATE, allowNull: true },
+    reviewNote: { type: DataTypes.TEXT, allowNull: true },
     note:      { type: DataTypes.TEXT, allowNull: true },
     editedBy:  { type: DataTypes.INTEGER, allowNull: true },
     companyId: { type: DataTypes.INTEGER, allowNull: true },

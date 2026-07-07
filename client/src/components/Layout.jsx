@@ -12,7 +12,7 @@ import {
   PackageOpen, Layers, ClipboardCheck, Menu, X, Eye, EyeOff,
   PackageCheck, Link2, BarChart2, BookMarked, ChevronDown,
   SendHorizonal, FileText, PanelLeftClose, PanelLeftOpen, UserCog,
-  Laptop, Wallet, CalendarClock,
+  Laptop, Wallet, CalendarClock, ShieldCheck,
 } from 'lucide-react'
 import logoPreface from '../assets/logo-preface.jpeg'
 
@@ -74,13 +74,6 @@ const NAV_GROUPS = [
       { to: '/database-links', icon: Link2, label: 'Database Links', pageKey: 'database-links' },
     ],
   },
-  {
-    label: 'Administrasi',
-    items: [
-      { to: '/companies',       icon: Building2, label: 'Perusahaan',          pageKey: 'companies', superOnly: true },
-      { to: '/page-visibility', icon: Eye,       label: 'Visibilitas Halaman',                       superOnly: true },
-    ],
-  },
 ]
 
 // Handbook module — sidebar kiri di-swap total ke sini saat pathname mulai
@@ -113,8 +106,8 @@ const HRIS_NAV_GROUPS = [
   {
     label: 'Pengaturan HR',
     items: [
-      { to: '/users',                   icon: Users,         label: 'Pengguna',      pageKey: 'users' },
       { to: '/hris/admin/shifts',       icon: CalendarClock, label: 'Shift',         requirePermission: 'hris.shift.manage' },
+      { to: '/hris/admin/attendance-review', icon: ClipboardCheck, label: 'Persetujuan Lapangan', requirePermission: 'hris.attendance.review' },
       { to: '/hris/admin/locations',    icon: Warehouse,     label: 'Lokasi Kantor', requirePermission: 'hris.location.manage' },
       { to: '/hris/admin/leave-quota',  icon: FileText,      label: 'Kuota Cuti',    requirePermission: 'hris.manage' },
       { to: '/hris/admin/wfa-quota',    icon: Laptop,        label: 'Kuota WFA',     requirePermission: 'hris.manage' },
@@ -124,16 +117,29 @@ const HRIS_NAV_GROUPS = [
   },
 ]
 
+// Admin module — administrasi platform (pengguna, roles, perusahaan,
+// visibilitas halaman). Cross-cutting, jadi dipisah dari Inventory & HRIS.
+const ADMIN_NAV_GROUPS = [
+  {
+    label: 'Administrasi',
+    items: [
+      { to: '/users',           icon: Users,     label: 'Pengguna & Roles',    pageKey: 'users' },
+      { to: '/companies',       icon: Building2, label: 'Perusahaan',          pageKey: 'companies', superOnly: true },
+      { to: '/page-visibility', icon: Eye,       label: 'Visibilitas Halaman',                       superOnly: true },
+    ],
+  },
+]
+
 const PAGE_TITLES = {
-  '/dashboard': 'Dashboard', '/sop': 'SOP Operasional', '/products': 'Produk', '/catalog': 'Kategori dan Koleksi',
+  '/home': 'Home', '/dashboard': 'Dashboard', '/sop': 'SOP Operasional', '/products': 'Produk', '/catalog': 'Kategori dan Koleksi',
   '/handbook': 'Company Handbook', '/handbook/kebijakan': 'Kebijakan Perusahaan', '/handbook/struktur': 'Struktur Organisasi',
   '/hris': 'HRIS', '/hris/attendance': 'Presensi', '/hris/leave': 'Cuti', '/hris/wfa': 'WFA', '/hris/overtime': 'Lembur',
-  '/hris/admin/shifts': 'Kelola Shift', '/hris/admin/locations': 'Kelola Lokasi Kantor', '/hris/reports': 'Laporan HRIS',
+  '/hris/admin/shifts': 'Kelola Shift', '/hris/admin/attendance-review': 'Persetujuan Presensi Lapangan', '/hris/admin/locations': 'Kelola Lokasi Kantor', '/hris/reports': 'Laporan HRIS',
   '/hris/admin/leave-quota': 'Kuota Cuti', '/hris/admin/wfa-quota': 'Kuota WFA', '/hris/payment-adjustments': 'Penyesuaian Payment',
   '/warehouses': 'Gudang', '/suppliers': 'Vendor',
   '/stock-in': 'Penerimaan Stok', '/stock-in/new': 'Penerimaan Stok Baru', '/stock-out': 'Pengeluaran Stok', '/movements': 'Pergerakan',
   '/opname': 'Stock Opname', '/transfers': 'Transfer Stok', '/handover': 'Handover Pengiriman',
-  '/shipping-manual': 'Shipping Manual', '/database-links': 'Database Links', '/users': 'Pengguna', '/companies': 'Perusahaan',
+  '/shipping-manual': 'Shipping Manual', '/database-links': 'Database Links', '/users': 'Pengguna & Roles', '/companies': 'Perusahaan',
   '/vendors': 'Vendor', '/incoming-goods': 'Barang Masuk',
   '/packing-jobs': 'Pekerjaan Packing', '/form-anak-packing': 'Form Anak Packing',
   '/page-visibility': 'Visibilitas Halaman',
@@ -170,12 +176,15 @@ function NavTooltip({ label, children }) {
 // Module switcher — toggle antara Inventory System, Company Handbook, dan HRIS.
 function ModuleSwitcher({ collapsed, activeModule }) {
   const navigate = useNavigate()
-  const { hasPermission, isSuperAdmin } = useAuth()
+  const { hasPermission, isSuperAdmin, isAdmin } = useAuth()
   const items = [
     { key: 'inventory', label: 'Inventory', icon: Package,  to: '/dashboard', active: activeModule === 'inventory' },
     { key: 'handbook',  label: 'Handbook',   icon: BookOpen, to: '/handbook',  active: activeModule === 'handbook' },
     ...(isSuperAdmin || hasPermission('hris.view')
       ? [{ key: 'hris', label: 'HRIS', icon: UserCog, to: '/hris', active: activeModule === 'hris' }]
+      : []),
+    ...(isAdmin || hasPermission('admin.users')
+      ? [{ key: 'admin', label: 'Admin', icon: ShieldCheck, to: '/users', active: activeModule === 'admin' }]
       : []),
   ]
 
@@ -239,8 +248,11 @@ export default function Layout({ children }) {
   // Handbook module — sidebar kiri di-swap total, lihat HANDBOOK_NAV_GROUPS di atas
   const isHandbook  = location.pathname.startsWith('/handbook')
   const isHRIS      = location.pathname.startsWith('/hris')
-  const activeModule = isHandbook ? 'handbook' : isHRIS ? 'hris' : 'inventory'
-  const activeGroups = isHandbook ? HANDBOOK_NAV_GROUPS : isHRIS ? HRIS_NAV_GROUPS : NAV_GROUPS
+  const isAdminModule = ['/users', '/companies', '/page-visibility'].some(
+    (p) => location.pathname === p || location.pathname.startsWith(p + '/')
+  )
+  const activeModule = isHandbook ? 'handbook' : isHRIS ? 'hris' : isAdminModule ? 'admin' : 'inventory'
+  const activeGroups = isHandbook ? HANDBOOK_NAV_GROUPS : isHRIS ? HRIS_NAV_GROUPS : isAdminModule ? ADMIN_NAV_GROUPS : NAV_GROUPS
   // Path yang punya "anak" (mis. /hris punya /hris/attendance, dst) butuh `end`
   // di NavLink, kalau tidak dia akan tetap ke-highlight walau lagi di sub-route.
   const allNavPaths = activeGroups.flatMap(g => g.items.map(i => i.to))
@@ -258,7 +270,7 @@ export default function Layout({ children }) {
 
   // Accordion groups (hanya relevan saat expanded) — default: buka semua group
   const [openGroups, setOpenGroups] = useState(() =>
-    new Set([...NAV_GROUPS, ...HANDBOOK_NAV_GROUPS, ...HRIS_NAV_GROUPS].map(g => g.label))
+    new Set([...NAV_GROUPS, ...HANDBOOK_NAV_GROUPS, ...HRIS_NAV_GROUPS, ...ADMIN_NAV_GROUPS].map(g => g.label))
   )
 
   // Auto-open group saat navigasi
@@ -344,7 +356,7 @@ export default function Layout({ children }) {
           >
             <p className="font-bold text-sm text-slate-800 leading-tight whitespace-nowrap">Preface</p>
             <p className="text-[10px] text-slate-400 leading-tight whitespace-nowrap">
-              {isHandbook ? 'Company Handbook' : isHRIS ? 'HRIS' : 'Inventory System'}
+              {isHandbook ? 'Company Handbook' : isHRIS ? 'HRIS' : isAdminModule ? 'Administrasi' : 'Inventory System'}
             </p>
           </div>
         </div>
