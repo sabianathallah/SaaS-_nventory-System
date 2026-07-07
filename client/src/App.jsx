@@ -18,6 +18,7 @@ import HrisAttendanceReview from './pages/hris/admin/AttendanceReview'
 import HrisLocations from './pages/hris/admin/Locations'
 import HrisLeaveQuota from './pages/hris/admin/LeaveQuota'
 import HrisWfa from './pages/hris/Wfa'
+import HrisLateExcuse from './pages/hris/LateExcuse'
 import HrisWfaQuota from './pages/hris/admin/WfaQuota'
 import HrisPaymentAdjustments from './pages/hris/PaymentAdjustments'
 import Products from './pages/Products'
@@ -144,6 +145,7 @@ function AppRoutes() {
                 <Route path="/hris/admin/locations" element={<PageVisibleRoute pageKey="hris"><PermissionRoute permission="hris.location.manage" page="Lokasi Kantor"><HrisLocations /></PermissionRoute></PageVisibleRoute>} />
                 <Route path="/hris/admin/leave-quota" element={<PageVisibleRoute pageKey="hris"><PermissionRoute permission="hris.manage" page="Kuota Cuti"><HrisLeaveQuota /></PermissionRoute></PageVisibleRoute>} />
                 <Route path="/hris/wfa"             element={<PageVisibleRoute pageKey="hris"><PermissionRoute permission="hris.view" page="WFA"><HrisWfa /></PermissionRoute></PageVisibleRoute>} />
+                <Route path="/hris/late-excuse"     element={<PageVisibleRoute pageKey="hris"><PermissionRoute permission="hris.view" page="Izin Telat"><HrisLateExcuse /></PermissionRoute></PageVisibleRoute>} />
                 <Route path="/hris/admin/wfa-quota" element={<PageVisibleRoute pageKey="hris"><PermissionRoute permission="hris.manage" page="Kuota WFA"><HrisWfaQuota /></PermissionRoute></PageVisibleRoute>} />
                 <Route path="/hris/payment-adjustments" element={<PageVisibleRoute pageKey="hris"><PermissionRoute permission="hris.reports.view" page="Penyesuaian Payment"><HrisPaymentAdjustments /></PermissionRoute></PageVisibleRoute>} />
 

@@ -11,6 +11,7 @@ const ShiftController = require('../controllers/shiftController');
 const OfficeLocationController = require('../controllers/officeLocationController');
 const HrisReportController = require('../controllers/hrisReportController');
 const WfaController = require('../controllers/wfaController');
+const LateExcuseController = require('../controllers/lateExcuseController');
 
 router.use(requirePermission('hris.view'));
 
@@ -24,7 +25,15 @@ router.post('/attendance/check-in',  uploadSingle('photo', 'saas-inventory/atten
 router.post('/attendance/check-out', uploadSingle('photo', 'saas-inventory/attendance'), AttendanceController.checkOut);
 router.post('/attendance',        requirePermission('hris.attendance.edit'), AttendanceController.adminCreate);
 router.patch('/attendance/:id/review', requirePermission('hris.attendance.review'), AttendanceController.review);
+router.patch('/attendance/:id/review-late', requirePermission('hris.attendance.review'), AttendanceController.reviewLate);
+router.patch('/attendance/:id/late-reason', AttendanceController.submitLateReason);
 router.patch('/attendance/:id', requirePermission('hris.attendance.edit'), AttendanceController.update);
+
+// ── Izin Telat (pengajuan di muka, sebelum check-in) ──────────────────────────
+router.get('/late-excuse',       LateExcuseController.list);
+router.post('/late-excuse',      LateExcuseController.create);
+router.patch('/late-excuse/:id/review', requirePermission('hris.attendance.review'), LateExcuseController.review);
+router.patch('/late-excuse/:id/cancel', LateExcuseController.cancel);
 
 // ── Leave ────────────────────────────────────────────────────────────────────
 router.get('/leave-types',    LeaveController.listTypes);

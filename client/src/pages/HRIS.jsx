@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { hrisApi } from '../api'
 import { useAuth } from '../context/AuthContext'
-import { ClipboardCheck, FileText, ArrowRight, LogIn, LogOut, CheckCircle2 } from 'lucide-react'
+import { ClipboardCheck, FileText, AlarmClock, ArrowRight, LogIn, LogOut, CheckCircle2 } from 'lucide-react'
 
 const fmtTime = (d) => d ? new Date(d).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '—'
 
@@ -18,6 +18,7 @@ export default function HRIS() {
   const cards = [
     { to: '/hris/attendance', icon: ClipboardCheck, label: 'Presensi', desc: 'Check-in / check-out & riwayat kehadiran' },
     { to: '/hris/leave',      icon: FileText,       label: 'Cuti',      desc: 'Ajukan & pantau status cuti' },
+    { to: '/hris/late-excuse', icon: AlarmClock,    label: 'Izin Telat', desc: 'Ajukan izin duluan kalau tau bakal telat' },
   ]
 
   return (
@@ -72,7 +73,7 @@ export default function HRIS() {
       )}
 
       {/* Menu cepat */}
-      <div className="grid sm:grid-cols-2 gap-4">
+      <div className="grid sm:grid-cols-3 gap-4">
         {cards.map(({ to, icon: Icon, label, desc }) => (
           <Link key={to} to={to} className="card p-5 hover:border-brand-light transition-colors group">
             <div className="w-10 h-10 rounded-xl bg-brand-50 flex items-center justify-center text-brand mb-3">

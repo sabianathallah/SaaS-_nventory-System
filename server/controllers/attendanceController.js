@@ -1,6 +1,6 @@
 'use strict';
 const { Op } = require('sequelize');
-const { Attendance, Shift, OfficeLocation, User, WfaRequest } = require('../models');
+const { Attendance, Shift, OfficeLocation, User, WfaRequest, LateExcuseRequest } = require('../models');
 const { companyFilter, companyId } = require('../helpers/tenancy');
 const { paginate, buildFilter, paginatedResponse } = require('../helpers/queryHelper');
 const { distanceInMeters } = require('../helpers/geo');
@@ -79,7 +79,7 @@ class AttendanceController {
 
     static async checkIn(req, res, next) {
         try {
-            const { lat, lng, note, workMode } = req.body;
+            const { lat, lng, note, workMode, lateReason } = req.body;
             if (lat === undefined || lng === undefined) {
                 throw { name: 'BadRequest', message: 'Lokasi (lat, lng) wajib diisi' };
             }
@@ -111,6 +111,29 @@ class AttendanceController {
                 if (nowMinutes > shiftStartMinutes + graceMinutes) status = 'LATE';
             }
 
+            // Izin Telat — kalau sebelumnya sudah ada pengajuan yang di-approve
+            // untuk tanggal ini, telat otomatis dianggap PRESENT (tidak perlu
+            // direview lagi). Kalau belum ada & user langsung isi alasan saat
+            // check-in, masuk antrean review dulu.
+            let lateExcusePatch = { lateExcuseStatus: 'NONE', lateExcuseReason: null, lateExcuseRequestId: null };
+            if (status === 'LATE') {
+                const approvedRequest = await LateExcuseRequest.findOne({
+                    where: { userId: req.user.id, date, status: 'APPROVED' },
+                });
+                if (approvedRequest) {
+                    status = 'PRESENT';
+                    lateExcusePatch = {
+                        lateExcuseStatus: 'APPROVED',
+                        lateExcuseReason: approvedRequest.reason,
+                        lateExcuseRequestId: approvedRequest.id,
+                        lateExcuseReviewedBy: approvedRequest.reviewedBy,
+                        lateExcuseReviewedAt: approvedRequest.reviewedAt,
+                    };
+                } else if (lateReason && lateReason.trim()) {
+                    lateExcusePatch = { lateExcuseStatus: 'PENDING_REVIEW', lateExcuseReason: lateReason.trim() };
+                }
+            }
+
             const payload = {
                 userId: req.user.id,
                 date,
@@ -124,6 +147,7 @@ class AttendanceController {
                 workMode: mode,
                 note: note || null,
                 reviewStatus,
+                ...lateExcusePatch,
                 companyId: companyId(req) ?? req.user.companyId,
             };
 
@@ -242,7 +266,10 @@ class AttendanceController {
             const { page, limit, offset } = paginate(req.query);
 
             const { rows, count } = await Attendance.findAndCountAll({
-                where: { ...companyFilter(req), reviewStatus: 'PENDING_REVIEW' },
+                where: {
+                    ...companyFilter(req),
+                    [Op.or]: [{ reviewStatus: 'PENDING_REVIEW' }, { lateExcuseStatus: 'PENDING_REVIEW' }],
+                },
                 include: [
                     { model: User, as: 'user', attributes: USER_ATTRS },
                     { model: Shift, as: 'shift' },
@@ -275,6 +302,51 @@ class AttendanceController {
                 reviewedBy: req.user.id,
                 reviewedAt: new Date(),
                 reviewNote: reviewNote || null,
+            });
+
+            res.json(attendance);
+        } catch (err) { next(err); }
+    }
+
+    // Self-service — karyawan nempelin alasan telat ke record presensinya
+    // sendiri (kasus dadakan, gak sempat izin duluan). Cuma bisa sekali,
+    // sebelum direview.
+    static async submitLateReason(req, res, next) {
+        try {
+            const { reason } = req.body;
+            if (!reason || !reason.trim()) throw { name: 'BadRequest', message: 'Alasan wajib diisi' };
+
+            const attendance = await Attendance.findOne({ where: { id: req.params.id, userId: req.user.id, ...companyFilter(req) } });
+            if (!attendance) throw { name: 'NotFound', message: 'Data absensi tidak ditemukan' };
+            if (attendance.status !== 'LATE') throw { name: 'BadRequest', message: 'Hanya berlaku untuk presensi yang berstatus Terlambat' };
+            if (attendance.lateExcuseStatus !== 'NONE') throw { name: 'BadRequest', message: 'Alasan keterlambatan sudah pernah diisi' };
+
+            await attendance.update({ lateExcuseStatus: 'PENDING_REVIEW', lateExcuseReason: reason.trim() });
+            res.json(attendance);
+        } catch (err) { next(err); }
+    }
+
+    // Admin/superadmin review klaim telat dadakan. Approve -> dianggap tidak
+    // telat sama sekali (status jadi PRESENT). Reject -> tetap LATE.
+    static async reviewLate(req, res, next) {
+        try {
+            const { status, reviewNote } = req.body;
+            if (!['APPROVED', 'REJECTED'].includes(status)) {
+                throw { name: 'BadRequest', message: 'Status review harus APPROVED atau REJECTED' };
+            }
+
+            const attendance = await Attendance.findOne({ where: { id: req.params.id, ...companyFilter(req) } });
+            if (!attendance) throw { name: 'NotFound', message: 'Data absensi tidak ditemukan' };
+            if (attendance.lateExcuseStatus !== 'PENDING_REVIEW') {
+                throw { name: 'BadRequest', message: 'Data ini tidak sedang menunggu review keterlambatan' };
+            }
+
+            await attendance.update({
+                status: status === 'APPROVED' ? 'PRESENT' : attendance.status,
+                lateExcuseStatus: status,
+                lateExcuseReviewedBy: req.user.id,
+                lateExcuseReviewedAt: new Date(),
+                lateExcuseReviewNote: reviewNote || null,
             });
 
             res.json(attendance);

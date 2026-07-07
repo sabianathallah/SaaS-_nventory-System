@@ -261,11 +261,12 @@ export const hrisApi = {
   today:          ()         => api.get('/hris/attendance/today').then(r => r.data),
   summary:        (params)   => api.get('/hris/attendance/summary', { params }).then(r => r.data),
   attendanceList: (params)   => api.get('/hris/attendance', { params }).then(r => r.data),
-  checkIn:        ({ lat, lng, note, photo, workMode }) => {
+  checkIn:        ({ lat, lng, note, photo, workMode, lateReason }) => {
     const fd = new FormData()
     fd.append('lat', lat); fd.append('lng', lng)
     if (note) fd.append('note', note)
     if (workMode) fd.append('workMode', workMode)
+    if (lateReason) fd.append('lateReason', lateReason)
     fd.append('photo', photo)
     return api.post('/hris/attendance/check-in', fd).then(r => r.data)
   },
@@ -282,6 +283,13 @@ export const hrisApi = {
   attendanceUsers:  ()         => api.get('/hris/attendance/users').then(r => r.data),
   pendingReviewAttendance: (params) => api.get('/hris/attendance/pending-review', { params }).then(r => r.data),
   reviewAttendance:        (id, data) => api.patch(`/hris/attendance/${id}/review`, data).then(r => r.data),
+  reviewLateAttendance:    (id, data) => api.patch(`/hris/attendance/${id}/review-late`, data).then(r => r.data),
+  submitLateReason:        (id, data) => api.patch(`/hris/attendance/${id}/late-reason`, data).then(r => r.data),
+
+  lateExcuseList:   (params)   => api.get('/hris/late-excuse', { params }).then(r => r.data),
+  createLateExcuse: (data)     => api.post('/hris/late-excuse', data).then(r => r.data),
+  reviewLateExcuse: (id, data) => api.patch(`/hris/late-excuse/${id}/review`, data).then(r => r.data),
+  cancelLateExcuse: (id)       => api.patch(`/hris/late-excuse/${id}/cancel`).then(r => r.data),
 
   leaveTypes:       (params)   => api.get('/hris/leave-types', { params }).then(r => r.data),
   createLeaveType:  (data)     => api.post('/hris/leave-types', data).then(r => r.data),

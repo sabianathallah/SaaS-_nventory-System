@@ -74,6 +74,8 @@ export default function Attendance() {
   const [editForm, setEditForm] = useState(EMPTY_EDIT_FORM)
   const [showCreate, setShowCreate] = useState(false)
   const [createForm, setCreateForm] = useState({ ...EMPTY_EDIT_FORM, userId: '', date: '' })
+  const [latePrompt, setLatePrompt] = useState(null) // { id, checkInAt } atau null
+  const [lateReasonInput, setLateReasonInput] = useState('')
 
   const { data: today } = useQuery({ queryKey: ['hris-today'], queryFn: hrisApi.today })
   const { data: history, isLoading } = useQuery({
@@ -90,8 +92,19 @@ export default function Attendance() {
 
   const checkIn = useMutation({
     mutationFn: hrisApi.checkIn,
-    onSuccess: () => { toast.success('Check-in berhasil'); invalidate() },
+    onSuccess: (data) => {
+      toast.success('Check-in berhasil')
+      invalidate()
+      if (data.status === 'LATE' && data.lateExcuseStatus === 'NONE') {
+        setLatePrompt({ id: data.id, checkInAt: data.checkInAt })
+      }
+    },
     onError: (e) => toast.error(e.response?.data?.message ?? 'Gagal check-in'),
+  })
+  const submitLateReason = useMutation({
+    mutationFn: ({ id, reason }) => hrisApi.submitLateReason(id, { reason }),
+    onSuccess: () => { toast.success('Alasan terkirim, menunggu review'); setLatePrompt(null); setLateReasonInput(''); invalidate() },
+    onError: (e) => toast.error(e.response?.data?.message ?? 'Gagal mengirim alasan'),
   })
   const checkOut = useMutation({
     mutationFn: hrisApi.checkOut,
@@ -251,6 +264,9 @@ export default function Attendance() {
               {today?.reviewStatus && today.reviewStatus !== 'NONE' && (
                 <span className={`ml-2 ${REVIEW_COLOR[today.reviewStatus]}`}>{REVIEW_LABEL[today.reviewStatus]}</span>
               )}
+              {today?.lateExcuseStatus && today.lateExcuseStatus !== 'NONE' && (
+                <span className={`ml-2 ${REVIEW_COLOR[today.lateExcuseStatus]}`}>Telat: {REVIEW_LABEL[today.lateExcuseStatus]}</span>
+              )}
             </p>
           </div>
         </div>
@@ -352,6 +368,28 @@ export default function Attendance() {
 
       {showCamera && (
         <CameraCapture onCapture={handlePhotoCaptured} onClose={() => setShowCamera(false)} />
+      )}
+
+      {latePrompt && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4" onClick={() => setLatePrompt(null)}>
+          <div className="card w-full max-w-sm p-5" onClick={e => e.stopPropagation()}>
+            <p className="text-sm font-semibold text-slate-800 mb-1">Anda Tercatat Terlambat</p>
+            <p className="text-xs text-slate-400 mb-3">
+              Check-in pukul {fmtTime(latePrompt.checkInAt)}. Kalau ada alasan (mis. ada urusan), isi di sini biar bisa direview admin — kalau disetujui, gak dianggap terlambat.
+            </p>
+            <textarea autoFocus className="input mb-3" rows={3} placeholder="mis. Ada urusan keluarga pagi ini" value={lateReasonInput} onChange={e => setLateReasonInput(e.target.value)} />
+            <div className="flex justify-end gap-2">
+              <button onClick={() => { setLatePrompt(null); setLateReasonInput('') }} className="btn-secondary text-sm">Lewati</button>
+              <button
+                onClick={() => { if (!lateReasonInput.trim()) return toast.error('Isi alasannya dulu'); submitLateReason.mutate({ id: latePrompt.id, reason: lateReasonInput.trim() }) }}
+                disabled={submitLateReason.isPending}
+                className="btn-primary text-sm"
+              >
+                {submitLateReason.isPending ? 'Mengirim…' : 'Kirim Alasan'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {editingRow && (
@@ -515,7 +553,12 @@ export default function Attendance() {
                     )}
                   </td>
                   <td className="td">{r.shift?.name ?? '—'}</td>
-                  <td className="td text-center"><span className={STATUS_COLOR[r.status]}>{STATUS_LABEL[r.status]}</span></td>
+                  <td className="td text-center">
+                    <span className={STATUS_COLOR[r.status]}>{STATUS_LABEL[r.status]}</span>
+                    {r.lateExcuseStatus && r.lateExcuseStatus !== 'NONE' && (
+                      <div className={`mt-1 ${REVIEW_COLOR[r.lateExcuseStatus]}`}>Telat: {REVIEW_LABEL[r.lateExcuseStatus]}</div>
+                    )}
+                  </td>
                   {canEdit && (
                     <td className="td text-center">
                       <button title="Edit presensi" onClick={() => openEdit(r)} className="w-7 h-7 rounded flex items-center justify-center text-slate-500 hover:bg-slate-100 mx-auto">

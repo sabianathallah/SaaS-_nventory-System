@@ -12,7 +12,7 @@ import {
   PackageOpen, Layers, ClipboardCheck, Menu, X, Eye, EyeOff,
   PackageCheck, Link2, BarChart2, BookMarked, ChevronDown,
   SendHorizonal, FileText, PanelLeftClose, PanelLeftOpen, UserCog,
-  Laptop, Wallet, CalendarClock, ShieldCheck,
+  Laptop, Wallet, CalendarClock, ShieldCheck, AlarmClock,
 } from 'lucide-react'
 import logoPreface from '../assets/logo-preface.jpeg'
 
@@ -99,6 +99,7 @@ const HRIS_NAV_GROUPS = [
       { to: '/hris/attendance', icon: ClipboardCheck, label: 'Presensi', requirePermission: 'hris.view' },
       { to: '/hris/leave',      icon: FileText,      label: 'Cuti',      requirePermission: 'hris.view' },
       { to: '/hris/wfa',        icon: Laptop,        label: 'WFA',       requirePermission: 'hris.view' },
+      { to: '/hris/late-excuse', icon: AlarmClock,   label: 'Izin Telat', requirePermission: 'hris.view' },
       // Lembur disembunyikan sementara dari nav — route tetap ada di App.jsx
       // { to: '/hris/overtime', icon: ClipboardList, label: 'Lembur',    requirePermission: 'hris.view' },
     ],
@@ -107,7 +108,7 @@ const HRIS_NAV_GROUPS = [
     label: 'Pengaturan HR',
     items: [
       { to: '/hris/admin/shifts',       icon: CalendarClock, label: 'Shift',         requirePermission: 'hris.shift.manage' },
-      { to: '/hris/admin/attendance-review', icon: ClipboardCheck, label: 'Persetujuan Lapangan', requirePermission: 'hris.attendance.review' },
+      { to: '/hris/admin/attendance-review', icon: ClipboardCheck, label: 'Persetujuan Presensi', requirePermission: 'hris.attendance.review' },
       { to: '/hris/admin/locations',    icon: Warehouse,     label: 'Lokasi Kantor', requirePermission: 'hris.location.manage' },
       { to: '/hris/admin/leave-quota',  icon: FileText,      label: 'Kuota Cuti',    requirePermission: 'hris.manage' },
       { to: '/hris/admin/wfa-quota',    icon: Laptop,        label: 'Kuota WFA',     requirePermission: 'hris.manage' },
@@ -133,8 +134,8 @@ const ADMIN_NAV_GROUPS = [
 const PAGE_TITLES = {
   '/home': 'Home', '/dashboard': 'Dashboard', '/sop': 'SOP Operasional', '/products': 'Produk', '/catalog': 'Kategori dan Koleksi',
   '/handbook': 'Company Handbook', '/handbook/kebijakan': 'Kebijakan Perusahaan', '/handbook/struktur': 'Struktur Organisasi',
-  '/hris': 'HRIS', '/hris/attendance': 'Presensi', '/hris/leave': 'Cuti', '/hris/wfa': 'WFA', '/hris/overtime': 'Lembur',
-  '/hris/admin/shifts': 'Kelola Shift', '/hris/admin/attendance-review': 'Persetujuan Presensi Lapangan', '/hris/admin/locations': 'Kelola Lokasi Kantor', '/hris/reports': 'Laporan HRIS',
+  '/hris': 'HRIS', '/hris/attendance': 'Presensi', '/hris/leave': 'Cuti', '/hris/wfa': 'WFA', '/hris/late-excuse': 'Izin Telat',
+  '/hris/admin/shifts': 'Kelola Shift', '/hris/admin/attendance-review': 'Persetujuan Presensi', '/hris/admin/locations': 'Kelola Lokasi Kantor', '/hris/reports': 'Laporan HRIS',
   '/hris/admin/leave-quota': 'Kuota Cuti', '/hris/admin/wfa-quota': 'Kuota WFA', '/hris/payment-adjustments': 'Penyesuaian Payment',
   '/warehouses': 'Gudang', '/suppliers': 'Vendor',
   '/stock-in': 'Penerimaan Stok', '/stock-in/new': 'Penerimaan Stok Baru', '/stock-out': 'Pengeluaran Stok', '/movements': 'Pergerakan',
