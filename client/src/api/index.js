@@ -283,7 +283,7 @@ export const hrisApi = {
   pendingReviewAttendance: (params) => api.get('/hris/attendance/pending-review', { params }).then(r => r.data),
   reviewAttendance:        (id, data) => api.patch(`/hris/attendance/${id}/review`, data).then(r => r.data),
 
-  leaveTypes:       ()         => api.get('/hris/leave-types').then(r => r.data),
+  leaveTypes:       (params)   => api.get('/hris/leave-types', { params }).then(r => r.data),
   createLeaveType:  (data)     => api.post('/hris/leave-types', data).then(r => r.data),
   updateLeaveType:  (id, data) => api.put(`/hris/leave-types/${id}`, data).then(r => r.data),
   deleteLeaveType:  (id)       => api.delete(`/hris/leave-types/${id}`).then(r => r.data),

@@ -16,7 +16,9 @@ function countDays(startDate, endDate) {
 class LeaveController {
     static async listTypes(req, res, next) {
         try {
-            const types = await LeaveType.findAll({ where: { ...companyFilter(req) }, order: [['name', 'ASC']] });
+            const where = { ...companyFilter(req) };
+            if (req.query.includeInactive !== 'true') where.isActive = true;
+            const types = await LeaveType.findAll({ where, order: [['name', 'ASC']] });
             res.json(types);
         } catch (err) { next(err); }
     }
@@ -27,6 +29,7 @@ class LeaveController {
             const type = await LeaveType.create({
                 name,
                 maxDaysPerYear: maxDaysPerYear || 12,
+                isActive: true,
                 companyId: companyId(req),
             });
             res.status(201).json(type);
@@ -37,15 +40,19 @@ class LeaveController {
         try {
             const type = await LeaveType.findOne({ where: { id: req.params.id, ...companyFilter(req) } });
             if (!type) throw { name: 'NotFound', message: 'Jenis cuti tidak ditemukan' };
-            const { name, maxDaysPerYear } = req.body;
+            const { name, maxDaysPerYear, isActive } = req.body;
             await type.update({
                 name: name ?? type.name,
                 maxDaysPerYear: maxDaysPerYear ?? type.maxDaysPerYear,
+                isActive: isActive ?? type.isActive,
             });
             res.json(type);
         } catch (err) { next(err); }
     }
 
+    // Hard delete sengaja tidak dipakai dari UI — LeaveType.destroy() cascade
+    // menghapus LeaveBalance & LeaveRequest historis (lihat asosiasi model).
+    // "Hapus" jenis cuti dari UI cukup lewat updateType({ isActive: false }).
     static async deleteType(req, res, next) {
         try {
             const type = await LeaveType.findOne({ where: { id: req.params.id, ...companyFilter(req) } });

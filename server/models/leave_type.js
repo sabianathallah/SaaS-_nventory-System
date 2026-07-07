@@ -24,6 +24,7 @@ module.exports = (sequelize, DataTypes) => {
       validate: { notNull: { msg: 'Name is required' }, notEmpty: { msg: 'Name is required' } },
     },
     maxDaysPerYear: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 12 },
+    isActive:       { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
     companyId:      { type: DataTypes.INTEGER, allowNull: true },
   }, {
     sequelize,
