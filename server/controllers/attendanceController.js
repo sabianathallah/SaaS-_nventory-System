@@ -230,6 +230,8 @@ class AttendanceController {
                 include: [
                     { model: User, as: 'user', attributes: USER_ATTRS },
                     { model: Shift, as: 'shift' },
+                    { model: OfficeLocation, as: 'checkInLocation' },
+                    { model: OfficeLocation, as: 'checkOutLocation' },
                 ],
                 order: [['date', 'DESC']],
                 limit, offset,

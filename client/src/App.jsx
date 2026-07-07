@@ -19,6 +19,7 @@ import HrisLocations from './pages/hris/admin/Locations'
 import HrisLeaveQuota from './pages/hris/admin/LeaveQuota'
 import HrisWfa from './pages/hris/Wfa'
 import HrisLateExcuse from './pages/hris/LateExcuse'
+import HrisRequests from './pages/hris/Requests'
 import HrisWfaQuota from './pages/hris/admin/WfaQuota'
 import HrisPaymentAdjustments from './pages/hris/PaymentAdjustments'
 import Products from './pages/Products'
@@ -146,6 +147,8 @@ function AppRoutes() {
                 <Route path="/hris/admin/leave-quota" element={<PageVisibleRoute pageKey="hris"><PermissionRoute permission="hris.manage" page="Kuota Cuti"><HrisLeaveQuota /></PermissionRoute></PageVisibleRoute>} />
                 <Route path="/hris/wfa"             element={<PageVisibleRoute pageKey="hris"><PermissionRoute permission="hris.view" page="WFA"><HrisWfa /></PermissionRoute></PageVisibleRoute>} />
                 <Route path="/hris/late-excuse"     element={<PageVisibleRoute pageKey="hris"><PermissionRoute permission="hris.view" page="Izin Telat"><HrisLateExcuse /></PermissionRoute></PageVisibleRoute>} />
+                {/* Hub gabungan Cuti+WFA+Izin Telat — eksperimen UX, route lama di atas sengaja dibiarkan supaya gampang revert */}
+                <Route path="/hris/pengajuan"       element={<PageVisibleRoute pageKey="hris"><PermissionRoute permission="hris.view" page="Pengajuan"><HrisRequests /></PermissionRoute></PageVisibleRoute>} />
                 <Route path="/hris/admin/wfa-quota" element={<PageVisibleRoute pageKey="hris"><PermissionRoute permission="hris.manage" page="Kuota WFA"><HrisWfaQuota /></PermissionRoute></PageVisibleRoute>} />
                 <Route path="/hris/payment-adjustments" element={<PageVisibleRoute pageKey="hris"><PermissionRoute permission="hris.reports.view" page="Penyesuaian Payment"><HrisPaymentAdjustments /></PermissionRoute></PageVisibleRoute>} />
 

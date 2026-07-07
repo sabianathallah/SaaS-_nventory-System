@@ -18,6 +18,37 @@ const REVIEW_COLOR = { PENDING_REVIEW: 'badge-amber', APPROVED: 'badge-green', R
 
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'
 const fmtTime = (d) => d ? new Date(d).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '—'
+const mapsLink = (lat, lng) => `https://www.google.com/maps?q=${lat},${lng}`
+
+// Nama lokasi kantor kalau ON_SITE, atau link ke Google Maps pakai koordinat
+// GPS asli untuk WFA/Kerja Lapangan (gak ada lokasi kantor yang cocok).
+function LocationTag({ location, lat, lng }) {
+  if (location) {
+    return (
+      <a
+        href={mapsLink(location.latitude, location.longitude)}
+        target="_blank" rel="noreferrer"
+        className="inline-flex items-center gap-1 text-[10px] text-slate-400 hover:text-brand mt-0.5"
+        title="Lihat di Google Maps"
+      >
+        <MapPin size={10} /> {location.name}
+      </a>
+    )
+  }
+  if (lat && lng) {
+    return (
+      <a
+        href={mapsLink(lat, lng)}
+        target="_blank" rel="noreferrer"
+        className="inline-flex items-center gap-1 text-[10px] text-slate-400 hover:text-brand mt-0.5"
+        title="Lihat di Google Maps"
+      >
+        <MapPin size={10} /> Lihat lokasi
+      </a>
+    )
+  }
+  return null
+}
 
 function toDatetimeLocal(iso) {
   if (!iso) return ''
@@ -268,6 +299,10 @@ export default function Attendance() {
                 <span className={`ml-2 ${REVIEW_COLOR[today.lateExcuseStatus]}`}>Telat: {REVIEW_LABEL[today.lateExcuseStatus]}</span>
               )}
             </p>
+            <div className="flex items-center gap-3 mt-0.5">
+              {today?.checkInAt && <LocationTag location={today.checkInLocation} lat={today.checkInLat} lng={today.checkInLng} />}
+              {today?.checkOutAt && <LocationTag location={today.checkOutLocation} lat={today.checkOutLat} lng={today.checkOutLng} />}
+            </div>
           </div>
         </div>
         <div className="flex gap-2">
@@ -527,7 +562,10 @@ export default function Attendance() {
                           <img src={r.checkInPhoto} alt="Foto check-in" className="w-7 h-7 rounded-full object-cover border border-slate-200" />
                         </a>
                       )}
-                      {fmtTime(r.checkInAt)}
+                      <div>
+                        {fmtTime(r.checkInAt)}
+                        <LocationTag location={r.checkInLocation} lat={r.checkInLat} lng={r.checkInLng} />
+                      </div>
                     </div>
                   </td>
                   <td className="td">
@@ -537,7 +575,10 @@ export default function Attendance() {
                           <img src={r.checkOutPhoto} alt="Foto check-out" className="w-7 h-7 rounded-full object-cover border border-slate-200" />
                         </a>
                       )}
-                      {fmtTime(r.checkOutAt)}
+                      <div>
+                        {fmtTime(r.checkOutAt)}
+                        <LocationTag location={r.checkOutLocation} lat={r.checkOutLat} lng={r.checkOutLng} />
+                      </div>
                     </div>
                   </td>
                   <td className="td">

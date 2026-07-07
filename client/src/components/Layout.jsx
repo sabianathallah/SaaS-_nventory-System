@@ -97,9 +97,13 @@ const HRIS_NAV_GROUPS = [
     items: [
       { to: '/hris',           icon: UserCog,       label: 'Beranda',   requirePermission: 'hris.view' },
       { to: '/hris/attendance', icon: ClipboardCheck, label: 'Presensi', requirePermission: 'hris.view' },
-      { to: '/hris/leave',      icon: FileText,      label: 'Cuti',      requirePermission: 'hris.view' },
-      { to: '/hris/wfa',        icon: Laptop,        label: 'WFA',       requirePermission: 'hris.view' },
-      { to: '/hris/late-excuse', icon: AlarmClock,   label: 'Izin Telat', requirePermission: 'hris.view' },
+      // Eksperimen UX: Cuti+WFA+Izin Telat digabung jadi 1 nav "Pengajuan"
+      // (mirip pola Mekari Talenta / Gusto). Kalau mau revert ke nav
+      // terpisah, un-comment 3 baris di bawah & hapus baris /hris/pengajuan.
+      { to: '/hris/pengajuan', icon: FileText,       label: 'Pengajuan', requirePermission: 'hris.view' },
+      // { to: '/hris/leave',      icon: FileText,      label: 'Cuti',      requirePermission: 'hris.view' },
+      // { to: '/hris/wfa',        icon: Laptop,        label: 'WFA',       requirePermission: 'hris.view' },
+      // { to: '/hris/late-excuse', icon: AlarmClock,   label: 'Izin Telat', requirePermission: 'hris.view' },
       // Lembur disembunyikan sementara dari nav — route tetap ada di App.jsx
       // { to: '/hris/overtime', icon: ClipboardList, label: 'Lembur',    requirePermission: 'hris.view' },
     ],
@@ -134,7 +138,7 @@ const ADMIN_NAV_GROUPS = [
 const PAGE_TITLES = {
   '/home': 'Home', '/dashboard': 'Dashboard', '/sop': 'SOP Operasional', '/products': 'Produk', '/catalog': 'Kategori dan Koleksi',
   '/handbook': 'Company Handbook', '/handbook/kebijakan': 'Kebijakan Perusahaan', '/handbook/struktur': 'Struktur Organisasi',
-  '/hris': 'HRIS', '/hris/attendance': 'Presensi', '/hris/leave': 'Cuti', '/hris/wfa': 'WFA', '/hris/late-excuse': 'Izin Telat',
+  '/hris': 'HRIS', '/hris/attendance': 'Presensi', '/hris/leave': 'Cuti', '/hris/wfa': 'WFA', '/hris/late-excuse': 'Izin Telat', '/hris/pengajuan': 'Pengajuan',
   '/hris/admin/shifts': 'Kelola Shift', '/hris/admin/attendance-review': 'Persetujuan Presensi', '/hris/admin/locations': 'Kelola Lokasi Kantor', '/hris/reports': 'Laporan HRIS',
   '/hris/admin/leave-quota': 'Kuota Cuti', '/hris/admin/wfa-quota': 'Kuota WFA', '/hris/payment-adjustments': 'Penyesuaian Payment',
   '/warehouses': 'Gudang', '/suppliers': 'Vendor',
