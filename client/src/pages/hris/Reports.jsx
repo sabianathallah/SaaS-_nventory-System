@@ -35,7 +35,7 @@ export default function Reports() {
       <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
         <div>
           <h1 className="text-lg font-bold text-slate-800">Laporan HRIS</h1>
-          <p className="text-xs text-slate-400 mt-0.5">Rekap absensi, cuti, dan lembur</p>
+          <p className="text-xs text-slate-400 mt-0.5">Rekap absensi dan cuti</p>
         </div>
         <button onClick={handleExport} disabled={!data?.attendances?.length} className="btn-secondary text-sm flex items-center gap-1.5">
           <FileDown size={14} /> Export
@@ -54,7 +54,7 @@ export default function Reports() {
       </div>
 
       {summary && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+        <div className="grid grid-cols-3 gap-3 mb-6">
           <div className="card p-3 text-center">
             <p className="text-xl font-bold text-brand">{summary.totalAttendance}</p>
             <p className="text-[11px] text-slate-400 mt-0.5">Total Presensi</p>
@@ -66,10 +66,6 @@ export default function Reports() {
           <div className="card p-3 text-center">
             <p className="text-xl font-bold text-purple-600">{summary.totalLeaveApproved}</p>
             <p className="text-[11px] text-slate-400 mt-0.5">Cuti Disetujui</p>
-          </div>
-          <div className="card p-3 text-center">
-            <p className="text-xl font-bold text-blue-600">{summary.totalOvertimeApproved}</p>
-            <p className="text-[11px] text-slate-400 mt-0.5">Lembur Disetujui</p>
           </div>
         </div>
       )}

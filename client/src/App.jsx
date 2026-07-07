@@ -12,7 +12,6 @@ import Handbook from './pages/Handbook'
 import HRIS from './pages/HRIS'
 import HrisAttendance from './pages/hris/Attendance'
 import HrisLeave from './pages/hris/Leave'
-import HrisOvertime from './pages/hris/Overtime'
 import HrisReports from './pages/hris/Reports'
 import HrisShifts from './pages/hris/admin/Shifts'
 import HrisAttendanceReview from './pages/hris/admin/AttendanceReview'
@@ -139,7 +138,6 @@ function AppRoutes() {
                 <Route path="/hris"               element={<PageVisibleRoute pageKey="hris"><PermissionRoute permission="hris.view" page="HRIS"><HRIS /></PermissionRoute></PageVisibleRoute>} />
                 <Route path="/hris/attendance"     element={<PageVisibleRoute pageKey="hris"><PermissionRoute permission="hris.view" page="Presensi"><HrisAttendance /></PermissionRoute></PageVisibleRoute>} />
                 <Route path="/hris/leave"          element={<PageVisibleRoute pageKey="hris"><PermissionRoute permission="hris.view" page="Cuti"><HrisLeave /></PermissionRoute></PageVisibleRoute>} />
-                <Route path="/hris/overtime"       element={<PageVisibleRoute pageKey="hris"><PermissionRoute permission="hris.view" page="Lembur"><HrisOvertime /></PermissionRoute></PageVisibleRoute>} />
                 <Route path="/hris/reports"        element={<PageVisibleRoute pageKey="hris"><PermissionRoute permission="hris.reports.view" page="Laporan HRIS"><HrisReports /></PermissionRoute></PageVisibleRoute>} />
                 <Route path="/hris/admin/shifts"   element={<PageVisibleRoute pageKey="hris"><PermissionRoute permission="hris.shift.manage" page="Kelola Shift"><HrisShifts /></PermissionRoute></PageVisibleRoute>} />
                 <Route path="/hris/admin/attendance-review" element={<PageVisibleRoute pageKey="hris"><PermissionRoute permission="hris.attendance.review" page="Persetujuan Presensi Lapangan"><HrisAttendanceReview /></PermissionRoute></PageVisibleRoute>} />
