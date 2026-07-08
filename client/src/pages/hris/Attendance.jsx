@@ -4,6 +4,8 @@ import toast from 'react-hot-toast'
 import { hrisApi } from '../../api'
 import { useAuth } from '../../context/AuthContext'
 import CameraCapture from '../../components/CameraCapture'
+import { useCompanyGuard } from '../../hooks/useCompanyGuard'
+import CompanyRequiredBanner from '../../components/CompanyRequiredBanner'
 import { LogOut, MapPin, Loader2, Camera, Building2, Laptop, Briefcase, X, Pencil, Plus } from 'lucide-react'
 
 const STATUS_LABEL = { PRESENT: 'Hadir', LATE: 'Terlambat', ABSENT: 'Absen', LEAVE: 'Cuti', HALF_DAY: 'Setengah Hari' }
@@ -91,6 +93,7 @@ export default function Attendance() {
   const qc = useQueryClient()
   const canEdit = hasPermission('hris.attendance.edit') || user?.role === 'SUPER_ADMIN' || user?.role === 'COMPANY_ADMIN'
   const canViewAll = canEdit || hasPermission('hris.reports.view')
+  const { needsCompany } = useCompanyGuard()
   const [locating, setLocating] = useState(false)
   const [showModePicker, setShowModePicker] = useState(false)
   const [showCheckoutChoice, setShowCheckoutChoice] = useState(false)
@@ -267,6 +270,7 @@ export default function Attendance() {
 
   return (
     <div className="px-6 py-6 max-w-5xl">
+      {needsCompany && <div className="mb-4"><CompanyRequiredBanner action="melakukan presensi" /></div>}
       <div className="mb-5 flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-lg font-bold text-slate-800">Presensi</h1>
