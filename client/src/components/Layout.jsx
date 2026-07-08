@@ -12,7 +12,7 @@ import {
   PackageOpen, Layers, ClipboardCheck, Menu, X, Eye, EyeOff,
   PackageCheck, Link2, BarChart2, BookMarked, ChevronDown,
   SendHorizonal, FileText, PanelLeftClose, PanelLeftOpen, UserCog,
-  Laptop, Wallet, CalendarClock, ShieldCheck, AlarmClock,
+  Laptop, Wallet, CalendarClock, ShieldCheck, AlarmClock, Megaphone,
 } from 'lucide-react'
 import logoPreface from '../assets/logo-preface.jpeg'
 
@@ -34,6 +34,7 @@ const NAV_GROUPS = [
       { to: '/catalog',    icon: BookOpen,  label: 'Kategori & Koleksi',  pageKey: 'catalog' },
       { to: '/warehouses', icon: Warehouse, label: 'Gudang',              pageKey: 'warehouses' },
       { to: '/suppliers',  icon: Truck,     label: 'Vendor',              pageKey: 'suppliers' },
+      { to: '/channels',   icon: Megaphone, label: 'Channel Jualan',      pageKey: 'channels', requirePermission: 'channel.manage' },
     ],
   },
   {
@@ -142,7 +143,7 @@ const PAGE_TITLES = {
   '/hris': 'HRIS', '/hris/attendance': 'Presensi', '/hris/leave': 'Cuti', '/hris/wfa': 'WFA', '/hris/late-excuse': 'Izin Telat', '/hris/pengajuan': 'Pengajuan',
   '/hris/admin/shifts': 'Kelola Shift', '/hris/admin/attendance-review': 'Persetujuan Presensi', '/hris/admin/locations': 'Kelola Lokasi Kantor', '/hris/reports': 'Laporan HRIS',
   '/hris/admin/leave-quota': 'Kuota Cuti', '/hris/admin/wfa-quota': 'Kuota WFA', '/hris/payment-adjustments': 'Penyesuaian Payment',
-  '/warehouses': 'Gudang', '/suppliers': 'Vendor',
+  '/warehouses': 'Gudang', '/suppliers': 'Vendor', '/channels': 'Channel Jualan',
   '/stock-in': 'Penerimaan Stok', '/stock-in/new': 'Penerimaan Stok Baru', '/stock-out': 'Pengeluaran Stok', '/movements': 'Pergerakan',
   '/opname': 'Stock Opname', '/transfers': 'Transfer Stok', '/handover': 'Handover Pengiriman',
   '/shipping-manual': 'Shipping Manual', '/database-links': 'Database Links', '/users': 'Pengguna', '/roles': 'Roles & Permission', '/companies': 'Perusahaan',

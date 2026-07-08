@@ -27,6 +27,7 @@ import ProductDetail from './pages/ProductDetail'
 import ProductEdit from './pages/ProductEdit'
 import Warehouses from './pages/Warehouses'
 import WarehouseProducts from './pages/WarehouseProducts'
+import Channels from './pages/Channels'
 import Suppliers from './pages/Suppliers'
 import StockIn from './pages/StockIn'
 import StockInDetail from './pages/StockInDetail'
@@ -163,6 +164,7 @@ function AppRoutes() {
                 <Route path="/catalog"                    element={<PageVisibleRoute pageKey="catalog"><PermissionRoute permission="inventory.manage" page="Kategori & Koleksi"><Catalog /></PermissionRoute></PageVisibleRoute>} />
                 <Route path="/warehouses"                 element={<PageVisibleRoute pageKey="warehouses"><PermissionRoute permission="inventory.view" page="Gudang"><Warehouses /></PermissionRoute></PageVisibleRoute>} />
                 <Route path="/warehouses/:id/products"   element={<PageVisibleRoute pageKey="warehouses"><PermissionRoute permission="inventory.view" page="Gudang"><WarehouseProducts /></PermissionRoute></PageVisibleRoute>} />
+                <Route path="/channels"                   element={<PageVisibleRoute pageKey="channels"><PermissionRoute permission="channel.manage" page="Channel Jualan"><Channels /></PermissionRoute></PageVisibleRoute>} />
                 <Route path="/suppliers"                  element={<PageVisibleRoute pageKey="suppliers"><PermissionRoute permission="inventory.manage" page="Vendor"><Suppliers /></PermissionRoute></PageVisibleRoute>} />
 
                 {/* ── Transaksi Stok ── */}

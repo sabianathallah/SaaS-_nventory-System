@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { requestApi, requestTypeApi } from '../api'
-import { productsApi, productSkusApi, warehousesApi, skuWarehouseStocksApi, articlesApi } from '../api'
+import { productsApi, productSkusApi, warehousesApi, skuWarehouseStocksApi, articlesApi, skuChannelStocksApi } from '../api'
 import { useAuth } from '../context/AuthContext'
 import { Plus, Trash2, ChevronDown, ArrowLeft, ShoppingBag, Package, Warehouse } from 'lucide-react'
 
@@ -94,6 +94,17 @@ function SkuPicker({ onAdd }) {
     return Number((readyStocks ?? []).find(s => String(s.ProductSKUId) === String(selSku.id))?.qty ?? 0)
   }, [readyStocks, selSku])
 
+  // Info konteks (bukan pemblokir): kasih tau kalau SKU ini sedang listing di
+  // channel manapun (Shopee/Website/dll), biar pengaju sadar sebelum ambil.
+  const { data: channelStocks } = useQuery({
+    queryKey: ['sku-channel-stocks', selSku?.id],
+    queryFn: () => skuChannelStocksApi.list({ ProductSKUId: selSku.id }),
+    enabled: !!selSku,
+  })
+  const listedChannelNames = useMemo(() =>
+    (channelStocks ?? []).filter(s => s.isListed).map(s => s.Channel?.name).filter(Boolean),
+  [channelStocks])
+
   const filtered = useMemo(() => {
     const list = products?.data ?? []
     if (!search.trim()) return list
@@ -165,6 +176,11 @@ function SkuPicker({ onAdd }) {
             <p className={`text-[11px] mt-1 ${readyStock === 0 ? 'text-amber-600' : 'text-slate-400'}`}>
               Stok di {readyWarehouse.name}: <span className="font-semibold">{readyStock ?? '…'}</span>
               {readyStock === 0 && ' — tetap bisa diajukan, mungkin ada di gudang lain'}
+            </p>
+          )}
+          {selSku && listedChannelNames.length > 0 && (
+            <p className="text-[11px] mt-0.5 text-amber-600">
+              ⚠ Sedang listing di {listedChannelNames.join(', ')} — cek dulu sebelum ambil.
             </p>
           )}
         </div>

@@ -80,6 +80,9 @@ const ALL_PERMISSIONS = [
   { key: 'db_link.view',              label: 'Lihat Database Links',                       group: 'Database Links',          parent: 'db_link.manage',         desc: 'Lihat folder & link database (read-only)' },
   { key: 'db_link.add_link',          label: 'Tambah Link ke Folder',                      group: 'Database Links',          parent: 'db_link.manage',         desc: 'Tambah atau edit link dalam folder database' },
 
+  // ── Channel Jualan ───────────────────────────────────────────────────────────
+  { key: 'channel.manage', label: 'Akses Penuh Channel Jualan', group: 'Channel Jualan', isParent: true, desc: 'Kelola daftar channel & tandai SKU yang sedang listing' },
+
   // ── Pengajuan ────────────────────────────────────────────────────────────────
   { key: 'request.manage',  label: 'Akses Penuh Pengajuan',       group: 'Pengajuan', isParent: true, desc: 'Kelola semua pengajuan stok (endorse, photoshoot, dll)' },
   { key: 'request.view',    label: 'Lihat Semua Pengajuan',        group: 'Pengajuan', parent: 'request.manage', desc: 'Lihat pengajuan dari semua user (bukan hanya milik sendiri)' },
@@ -111,6 +114,7 @@ const DEFAULT_PERMISSIONS = {
   OPERASIONAL: [
     'dashboard.manage',
     'inventory.manage', 'inventory.view_value',
+    'channel.manage',
     'stock.manage',
     'stock.in.view', 'stock.in.create', 'stock.in.scan', 'stock.in.manual_input', 'stock.in.delete', 'stock.in.delete_item',
     'stock.out.view', 'stock.out.create', 'stock.out.scan', 'stock.out.manual_input', 'stock.out.delete', 'stock.out.delete_item',
@@ -159,8 +163,8 @@ const DEFAULT_PERMISSIONS = {
 
   STAFF: ['inventory.view', 'db_link.view', 'request.create', 'hris.view'],
 
-  MARKETING:         ['inventory.view', 'db_link.view', 'request.create', 'request.view', 'hris.view'],
-  PRODUKSI:          ['inventory.view', 'db_link.view', 'request.create', 'hris.view'],
+  MARKETING:         ['inventory.view', 'channel.manage', 'db_link.view', 'request.create', 'request.view', 'hris.view'],
+  PRODUKSI:          ['inventory.view', 'channel.manage', 'db_link.view', 'request.create', 'hris.view'],
   PRODUK_DEVELOPMENT:['inventory.view', 'db_link.view', 'request.create', 'hris.view'],
 };
 

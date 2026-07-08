@@ -1,17 +1,18 @@
 import { useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { productsApi, categoriesApi, articlesApi, warehousesApi, productSkusApi, skuWarehouseStocksApi } from '../api'
+import { productsApi, categoriesApi, articlesApi, warehousesApi, productSkusApi, skuWarehouseStocksApi, channelsApi, skuChannelStocksApi } from '../api'
 import SearchBar from '../components/SearchBar'
 import SearchableSelect from '../components/SearchableSelect'
 import { Pagination } from '../components/Table'
 import QrModal from '../components/QrModal'
+import Modal from '../components/Modal'
 import toast from 'react-hot-toast'
 import { exportExcel } from '../utils/exportExcel'
 import {
   Plus, Trash2, ImageIcon, Filter, ChevronRight, ChevronDown,
   Package, ArrowUpDown, ArrowUp, ArrowDown, QrCode, Pencil,
-  Loader2, Tag, FileSpreadsheet, Building2,
+  Loader2, Tag, FileSpreadsheet, Building2, Megaphone,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useSelectedCompany } from '../context/SelectedCompanyContext'
@@ -78,10 +79,93 @@ function EmptyState({ filtered, onAdd }) {
   )
 }
 
+// ── Channel publish modal ─────────────────────────────────────────────────────
+
+function ChannelStockModal({ sku, productName, variantLabel: label, onClose }) {
+  const qc = useQueryClient()
+
+  const { data: channels } = useQuery({
+    queryKey: ['channels', { limit: 200 }],
+    queryFn:  () => channelsApi.list({ limit: 200 }),
+  })
+  const activeChannels = (channels?.data ?? []).filter(c => c.isActive)
+
+  const { data: stocks } = useQuery({
+    queryKey: ['sku-channel-stocks', sku.id],
+    queryFn:  () => skuChannelStocksApi.list({ ProductSKUId: sku.id }),
+  })
+
+  const [listedMap, setListedMap] = useState(null)
+
+  // Prefill listedMap once channels + stocks are both loaded
+  if (listedMap === null && channels && stocks) {
+    const initial = {}
+    activeChannels.forEach(c => {
+      initial[c.id] = stocks.find(s => s.ChannelId === c.id)?.isListed ?? false
+    })
+    setListedMap(initial)
+  }
+
+  const save = useMutation({
+    mutationFn: async () => {
+      const entries = Object.entries(listedMap ?? {})
+      await Promise.all(entries.map(([ChannelId, isListed]) =>
+        skuChannelStocksApi.upsert({ ProductSKUId: sku.id, ChannelId: Number(ChannelId), isListed })
+      ))
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['sku-channel-stocks'] })
+      toast.success('Penanda listing disimpan')
+      onClose()
+    },
+    onError: e => toast.error(e.response?.data?.message || 'Gagal menyimpan'),
+  })
+
+  return (
+    <Modal open onClose={onClose} title="Sedang Listing di Mana?" size="sm">
+      <p className="text-xs text-slate-400 mb-4">
+        {productName}{label ? ` — ${label}` : ''} <span className="font-mono">{sku.sku_code}</span>
+      </p>
+      {!channels || !stocks || listedMap === null ? (
+        <div className="py-6 text-center text-sm text-slate-400">Memuat…</div>
+      ) : activeChannels.length === 0 ? (
+        <p className="text-sm text-slate-500">
+          Belum ada channel aktif. Tambahkan dulu di halaman <span className="font-semibold">Channel Jualan</span>.
+        </p>
+      ) : (
+        <div className="space-y-1">
+          {activeChannels.map(c => (
+            <label key={c.id} className="flex items-center justify-between gap-3 py-1.5 cursor-pointer select-none">
+              <span className="text-sm text-slate-700">{c.name}</span>
+              <input
+                type="checkbox"
+                className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                checked={!!listedMap[c.id]}
+                onChange={e => setListedMap(m => ({ ...m, [c.id]: e.target.checked }))}
+              />
+            </label>
+          ))}
+        </div>
+      )}
+      <div className="flex gap-2 pt-5">
+        <button onClick={onClose} className="btn-secondary flex-1 justify-center">Batal</button>
+        <button
+          onClick={() => save.mutate()}
+          disabled={save.isPending || !activeChannels.length}
+          className="btn-primary flex-1 justify-center"
+        >
+          {save.isPending ? 'Menyimpan…' : 'Simpan'}
+        </button>
+      </div>
+    </Modal>
+  )
+}
+
 // ── SKU sub-rows (lazy) ───────────────────────────────────────────────────────
 
-function SkuRows({ product, onOpenQr, warehouseId }) {
+function SkuRows({ product, onOpenQr, warehouseId, canManageChannel }) {
   const skuCount = product.ProductSKUs?.length ?? 0
+  const [channelModalSku, setChannelModalSku] = useState(null)
 
   const { data: skus, isLoading } = useQuery({
     queryKey: ['product-skus', product.id],
@@ -95,6 +179,14 @@ function SkuRows({ product, onOpenQr, warehouseId }) {
     queryKey: ['sku-warehouse-stocks', warehouseId],
     queryFn:  () => skuWarehouseStocksApi.list({ WarehouseId: warehouseId }),
     enabled:  !!warehouseId,
+    staleTime: 30_000,
+  })
+
+  // Penanda listing per channel — company-wide, tidak tergantung filter gudang.
+  const { data: channelStocks } = useQuery({
+    queryKey: ['sku-channel-stocks', 'product', product.id, (skus ?? []).map(s => s.id).join(',')],
+    queryFn:  () => skuChannelStocksApi.list({ ProductSKUId: skus.map(s => s.id).join(',') }),
+    enabled:  !!skus?.length,
     staleTime: 30_000,
   })
 
@@ -127,10 +219,11 @@ function SkuRows({ product, onOpenQr, warehouseId }) {
         <td colSpan={8} className="pt-0 pb-0">
           <div className="ml-14 mr-4 mt-2">
             <div className="grid text-[10px] font-bold uppercase tracking-widest text-slate-400 border-b border-slate-200 pb-1.5"
-              style={{ gridTemplateColumns: '1fr 160px 90px 140px 36px' }}>
+              style={{ gridTemplateColumns: '1fr 160px 90px 150px 140px 60px' }}>
               <span className="pl-1">SKU / Variant</span>
               <span>Kode SKU</span>
               <span className="text-right">{warehouseId ? 'Stok di Gudang Ini' : 'Stok'}</span>
+              <span>Listing</span>
               <span className="text-right">Harga</span>
               <span />
             </div>
@@ -145,12 +238,13 @@ function SkuRows({ product, onOpenQr, warehouseId }) {
         const stock  = warehouseId
           ? Number((warehouseStocks ?? []).find(s => String(s.ProductSKUId) === String(sku.id))?.qty ?? 0)
           : Number(sku.qty ?? 0)
+        const listedChannels = (channelStocks ?? []).filter(s => s.ProductSKUId === sku.id && s.isListed)
         return (
           <tr key={sku.id} className="bg-slate-50/60 hover:bg-slate-100/60 transition-colors">
             <td colSpan={8} className={`py-0 ${isLast ? 'pb-2 border-b border-slate-200' : ''}`}>
               <div
                 className="ml-14 mr-4 grid items-center py-2 border-b border-slate-100 last:border-0"
-                style={{ gridTemplateColumns: '1fr 160px 90px 140px 36px' }}
+                style={{ gridTemplateColumns: '1fr 160px 90px 150px 140px 60px' }}
               >
                 {/* Name + variant */}
                 <div className="pl-1 min-w-0">
@@ -181,6 +275,17 @@ function SkuRows({ product, onOpenQr, warehouseId }) {
                   <span className="text-[10px] text-slate-400 ml-0.5">{product.unit || 'unit'}</span>
                 </div>
 
+                {/* Listing */}
+                <div className="flex items-center gap-1 flex-wrap">
+                  {listedChannels.length
+                    ? listedChannels.map(s => (
+                        <span key={s.ChannelId} className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100">
+                          {s.Channel?.name ?? '—'}
+                        </span>
+                      ))
+                    : <span className="text-[11px] text-slate-300">—</span>}
+                </div>
+
                 {/* Price */}
                 <div className="text-right">
                   {sku.price
@@ -188,8 +293,17 @@ function SkuRows({ product, onOpenQr, warehouseId }) {
                     : <span className="text-xs text-slate-300">—</span>}
                 </div>
 
-                {/* QR */}
-                <div className="flex justify-end">
+                {/* Actions */}
+                <div className="flex justify-end gap-1">
+                  {canManageChannel && (
+                    <button
+                      onClick={() => setChannelModalSku(sku)}
+                      className="p-1 rounded text-slate-400 hover:text-indigo-600 hover:bg-white transition-colors"
+                      title="Kelola publikasi channel"
+                    >
+                      <Megaphone size={13} />
+                    </button>
+                  )}
                   <button
                     onClick={() => onOpenQr({ sku: sku, productName: product.name, variantLabel: label })}
                     className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-white transition-colors"
@@ -203,18 +317,40 @@ function SkuRows({ product, onOpenQr, warehouseId }) {
           </tr>
         )
       })}
+
+      {channelModalSku && (
+        <ChannelStockModal
+          sku={channelModalSku}
+          productName={product.name}
+          variantLabel={variantLabel(channelModalSku)}
+          onClose={() => setChannelModalSku(null)}
+        />
+      )}
     </>
   )
 }
 
 // ── Product Row ───────────────────────────────────────────────────────────────
 
-function ProductRow({ product, expanded, onToggle, onDelete, onNavigate, onOpenQr, canEdit, canDelete, canViewValue, warehouseId }) {
+function ProductRow({ product, expanded, onToggle, onDelete, onNavigate, onOpenQr, canEdit, canDelete, canViewValue, warehouseId, canManageChannel }) {
   const skus   = product.ProductSKUs ?? []
   const range  = priceRange(skus)
   const stock  = Number(product.totalStock ?? 0)
   const value  = Number(product.totalValue  ?? 0)
   const skuCnt = skus.length
+
+  // Rollup: channel mana aja yang punya minimal 1 size lagi listing — biar
+  // kelihatan tanpa perlu expand baris ini.
+  const skuIds = skus.map(s => s.id)
+  const { data: channelStocks } = useQuery({
+    queryKey: ['sku-channel-stocks', 'product', product.id, skuIds.join(',')],
+    queryFn:  () => skuChannelStocksApi.list({ ProductSKUId: skuIds.join(',') }),
+    enabled:  skuIds.length > 0,
+    staleTime: 30_000,
+  })
+  const listedChannelNames = [...new Set(
+    (channelStocks ?? []).filter(s => s.isListed).map(s => s.Channel?.name).filter(Boolean)
+  )]
 
   const handleRowClick = () => onToggle()
   const handleQrClick = (e) => {
@@ -250,7 +386,14 @@ function ProductRow({ product, expanded, onToggle, onDelete, onNavigate, onOpenQ
             </div>
             <div className="min-w-0">
               <p className="font-semibold text-slate-800 truncate leading-tight text-sm">{product.name}</p>
-              <p className="text-[11px] text-slate-400 mt-0.5">{product.unit}</p>
+              <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                <p className="text-[11px] text-slate-400">{product.unit}</p>
+                {listedChannelNames.map(name => (
+                  <span key={name} className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100">
+                    {name}
+                  </span>
+                ))}
+              </div>
             </div>
           </div>
         </td>
@@ -350,7 +493,7 @@ function ProductRow({ product, expanded, onToggle, onDelete, onNavigate, onOpenQ
       {/* Expanded rows */}
       {expanded && (
         skuCnt > 0
-          ? <SkuRows product={product} onOpenQr={onOpenQr} warehouseId={warehouseId} />
+          ? <SkuRows product={product} onOpenQr={onOpenQr} warehouseId={warehouseId} canManageChannel={canManageChannel} />
           : <tr>
               <td colSpan={canViewValue ? 9 : 8} className="border-b border-slate-100 bg-slate-50/60">
                 <div className="ml-14 mr-4 py-4 flex items-center gap-4">
@@ -388,6 +531,7 @@ export default function Products() {
   const canEdit      = hasPermission('inventory.product.edit')   || hasPermission('inventory.manage')
   const canDelete    = hasPermission('inventory.product.delete') || hasPermission('inventory.manage')
   const canViewValue = hasPermission('inventory.view_value')     || hasPermission('inventory.manage')
+  const canManageChannel = hasPermission('channel.manage')
 
   const [searchParams, setSearchParams] = useSearchParams()
   const page      = Number(searchParams.get('page')  || '1')
@@ -472,15 +616,30 @@ export default function Products() {
         WarehouseId: whFilter || undefined,
         sortBy: sort.col, sortOrder: sort.dir,
       })
-      const headers = ['No', 'Nama Produk', 'Unit', 'Tipe', 'Koleksi', 'Total SKU', 'Total Stok', 'Harga Min (Rp)', 'Harga Max (Rp)']
+      const allSkuIds = result.data.flatMap(p => (p.ProductSKUs ?? []).map(s => s.id))
+      const channelStocks = allSkuIds.length
+        ? await skuChannelStocksApi.list({ ProductSKUId: allSkuIds.join(',') })
+        : []
+      const listingByProduct = new Map()
+      channelStocks.filter(s => s.isListed).forEach(s => {
+        const productId = s.ProductSKU?.ProductId
+        if (!productId) return
+        const set = listingByProduct.get(productId) ?? new Set()
+        set.add(s.Channel?.name ?? '—')
+        listingByProduct.set(productId, set)
+      })
+
+      const headers = ['No', 'Nama Produk', 'Unit', 'Tipe', 'Koleksi', 'Total SKU', 'Total Stok', 'Harga Min (Rp)', 'Harga Max (Rp)', 'Listing di Channel']
       const rows = result.data.map((p, i) => {
         const skus   = p.ProductSKUs ?? []
         const prices = skus.map(s => Number(s.price || 0)).filter(Boolean)
+        const listing = [...(listingByProduct.get(p.id) ?? [])].join(', ')
         return [
           i + 1, p.name, p.unit ?? '', p.Category?.name ?? '', p.Article?.name ?? '',
           skus.length, Number(p.totalStock ?? 0),
           prices.length ? Math.min(...prices) : '',
           prices.length ? Math.max(...prices) : '',
+          listing || '—',
         ]
       })
       exportExcel(`produk-${new Date().toISOString().slice(0, 10)}`, { headers, rows, sheetName: 'Produk' })
@@ -602,6 +761,7 @@ export default function Products() {
                       canEdit={!blocked && canEdit}
                       canDelete={!blocked && canDelete}
                       canViewValue={canViewValue}
+                      canManageChannel={!blocked && canManageChannel}
                       warehouseId={whFilter || undefined}
                       onOpenQr={setQrTarget}
                     />

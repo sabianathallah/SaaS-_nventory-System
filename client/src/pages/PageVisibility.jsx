@@ -7,7 +7,7 @@ import {
   Package, BookOpen, Warehouse, Truck,
   ArrowDownToLine, ArrowUpFromLine, ArrowLeftRight,
   ClipboardList, PackageOpen, Layers,
-  ClipboardCheck, Users, Building2, Eye, EyeOff, Save, PackageCheck, Link2, BarChart2, UserCog,
+  ClipboardCheck, Users, Building2, Eye, EyeOff, Save, PackageCheck, Link2, BarChart2, UserCog, Megaphone,
 } from 'lucide-react'
 
 const PAGE_GROUPS = [
@@ -24,6 +24,7 @@ const PAGE_GROUPS = [
       { key: 'catalog',    label: 'Katalog',    icon: BookOpen },
       { key: 'warehouses', label: 'Warehouses', icon: Warehouse },
       { key: 'suppliers',  label: 'Vendor',  icon: Truck },
+      { key: 'channels',   label: 'Channel Jualan', icon: Megaphone },
     ],
   },
   {

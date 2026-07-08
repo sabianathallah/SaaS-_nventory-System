@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate, useParams, Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { productsApi, productSkusApi } from '../api'
+import { productsApi, productSkusApi, skuChannelStocksApi } from '../api'
 import { useAuth } from '../context/AuthContext'
 import toast from 'react-hot-toast'
 import QrModal from '../components/QrModal'
@@ -21,6 +21,12 @@ function SkuTableView({ productId, productName }) {
   const { data: skus = [], isLoading } = useQuery({
     queryKey: ['product-skus', productId],
     queryFn:  () => productSkusApi.list(productId),
+  })
+
+  const { data: channelStocks } = useQuery({
+    queryKey: ['sku-channel-stocks', 'product', productId, skus.map(s => s.id).join(',')],
+    queryFn:  () => skuChannelStocksApi.list({ ProductSKUId: skus.map(s => s.id).join(',') }),
+    enabled:  !!skus.length,
   })
 
   if (isLoading) return (
@@ -48,8 +54,9 @@ function SkuTableView({ productId, productName }) {
     </div>
   )
 
-  const totalQty   = skus.reduce((s, k) => s + Number(k.qty || 0), 0)
-  const totalNilai = skus.reduce((s, k) => s + Number(k.qty || 0) * Number(k.price || 0), 0)
+  const totalQty      = skus.reduce((s, k) => s + Number(k.qty || 0), 0)
+  const totalNilai    = skus.reduce((s, k) => s + Number(k.qty || 0) * Number(k.price || 0), 0)
+  const listedSkuIds  = new Set((channelStocks ?? []).filter(c => c.isListed).map(c => c.ProductSKUId))
 
   const variantLabel = (sku) => {
     const opts = sku.ProductVariantOptions || []
@@ -77,6 +84,7 @@ function SkuTableView({ productId, productName }) {
               <th className="th">SKU Code</th>
               <th className="th text-right">Harga</th>
               <th className="th text-right">Stok</th>
+              <th className="th">Listing</th>
               <th className="th text-right">Nilai Stok</th>
               <th className="th w-10" />
             </tr>
@@ -84,6 +92,7 @@ function SkuTableView({ productId, productName }) {
           <tbody className="divide-y divide-slate-100">
             {skus.map(sku => {
               const nilai = Number(sku.qty || 0) * Number(sku.price || 0)
+              const listedChannels = (channelStocks ?? []).filter(s => s.ProductSKUId === sku.id && s.isListed)
               return (
                 <tr key={sku.id} className="group hover:bg-slate-50/60 transition-colors">
                   <td className="td">{variantLabel(sku)}</td>
@@ -99,6 +108,17 @@ function SkuTableView({ productId, productName }) {
                     <span className={`text-sm font-bold tabular-nums ${Number(sku.qty) === 0 ? 'text-red-500' : Number(sku.qty) < 5 ? 'text-amber-500' : 'text-slate-800'}`}>
                       {Number(sku.qty || 0).toLocaleString('id-ID')}
                     </span>
+                  </td>
+                  <td className="td">
+                    <div className="flex items-center gap-1 flex-wrap">
+                      {listedChannels.length
+                        ? listedChannels.map(s => (
+                            <span key={s.ChannelId} className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100">
+                              {s.Channel?.name ?? '—'}
+                            </span>
+                          ))
+                        : <span className="text-xs text-slate-300">—</span>}
+                    </div>
                   </td>
                   <td className="td text-right">
                     <span className="text-sm tabular-nums text-emerald-700 font-semibold">
@@ -124,6 +144,7 @@ function SkuTableView({ productId, productName }) {
               <td colSpan={2} className="px-4 py-2.5 text-xs font-semibold text-slate-500">{skus.length} SKU</td>
               <td className="px-4 py-2.5 text-xs text-slate-400 text-right">—</td>
               <td className="px-4 py-2.5 text-xs font-bold text-slate-700 text-right tabular-nums">{totalQty.toLocaleString('id-ID')}</td>
+              <td className="px-4 py-2.5 text-xs font-semibold text-indigo-600">{listedSkuIds.size} dari {skus.length} SKU listing</td>
               <td className="px-4 py-2.5 text-xs font-bold text-emerald-700 text-right tabular-nums">Rp {totalNilai.toLocaleString('id-ID')}</td>
               <td />
             </tr>
