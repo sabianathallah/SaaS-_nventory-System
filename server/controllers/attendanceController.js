@@ -151,10 +151,17 @@ class AttendanceController {
                 companyId: companyId(req) ?? req.user.companyId,
             };
 
-            if (attendance) {
-                await attendance.update(payload);
-            } else {
-                attendance = await Attendance.create(payload);
+            try {
+                if (attendance) {
+                    await attendance.update(payload);
+                } else {
+                    attendance = await Attendance.create(payload);
+                }
+            } catch (err) {
+                if (err.name === 'SequelizeUniqueConstraintError') {
+                    throw { name: 'BadRequest', message: 'Anda sudah check-in hari ini' };
+                }
+                throw err;
             }
 
             res.status(200).json(attendance);
@@ -243,15 +250,20 @@ class AttendanceController {
 
     static async summary(req, res, next) {
         try {
-            const month = parseInt(req.query.month) || (new Date().getMonth() + 1);
-            const year  = parseInt(req.query.year)  || new Date().getFullYear();
+            const { year: jakartaYear, month: jakartaMonth } = nowPartsInJakarta();
+            const month = parseInt(req.query.month) || jakartaMonth;
+            const year  = parseInt(req.query.year)  || jakartaYear;
             const start = `${year}-${String(month).padStart(2, '0')}-01`;
             const endDate = new Date(year, month, 0).getDate();
             const end   = `${year}-${String(month).padStart(2, '0')}-${String(endDate).padStart(2, '0')}`;
 
+            const canViewAll = await userHasPermission(req, 'hris.attendance.edit')
+                || await userHasPermission(req, 'hris.reports.view');
+            const userId = canViewAll && req.query.userId ? req.query.userId : req.user.id;
+
             const rows = await Attendance.findAll({
                 where: {
-                    userId: req.query.userId || req.user.id,
+                    userId,
                     date: { [Op.between]: [start, end] },
                     ...companyFilter(req),
                 },
@@ -297,9 +309,14 @@ class AttendanceController {
                 throw { name: 'BadRequest', message: 'Data absensi ini tidak sedang menunggu review' };
             }
 
-            // Reject tidak mengubah jam kerja yang sudah tercatat — cuma jadi
-            // catatan HR untuk ditindaklanjuti manual, bukan otomatis ABSENT.
+            // Reject klaim kerja lapangan berarti kehadiran hari itu nggak
+            // tervalidasi — jangan biarkan tetap terhitung PRESENT di laporan.
+            const statusPatch = (status === 'REJECTED' && attendance.status === 'PRESENT')
+                ? { status: 'ABSENT' }
+                : {};
+
             await attendance.update({
+                ...statusPatch,
                 reviewStatus: status,
                 reviewedBy: req.user.id,
                 reviewedAt: new Date(),

@@ -80,7 +80,7 @@ router.get('/wfa/quota/admin',    requirePermission('hris.manage'), WfaControlle
 router.put('/wfa/quota/adjust',   requirePermission('hris.manage'), WfaController.adjustQuota);
 router.get('/wfa/requests',       WfaController.list);
 router.post('/wfa/requests',      requireCompany, WfaController.create);
-router.patch('/wfa/requests/:id/review', requirePermission('hris.leave.review'), WfaController.review);
+router.patch('/wfa/requests/:id/review', requirePermission('hris.wfa.review'), WfaController.review);
 router.patch('/wfa/requests/:id/cancel', WfaController.cancel);
 router.get('/wfa/payment-adjustments', requirePermission('hris.reports.view'), WfaController.listPaymentAdjustments);
 

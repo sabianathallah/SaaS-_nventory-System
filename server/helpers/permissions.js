@@ -99,6 +99,7 @@ const ALL_PERMISSIONS = [
   { key: 'hris.attendance.edit',      label: 'Edit Data Absensi',                          group: 'HRIS',                    parent: 'hris.manage',            desc: 'Koreksi data check-in/out milik siapa pun' },
   { key: 'hris.attendance.review',    label: 'Review Presensi Kerja Lapangan',             group: 'HRIS',                    parent: 'hris.manage',            desc: 'Approve atau reject klaim kerja lapangan (FIELD) pada presensi' },
   { key: 'hris.leave.review',         label: 'Review Pengajuan Cuti',                      group: 'HRIS',                    parent: 'hris.manage',            desc: 'Approve atau reject pengajuan cuti karyawan' },
+  { key: 'hris.wfa.review',           label: 'Review Pengajuan WFA',                       group: 'HRIS',                    parent: 'hris.manage',            desc: 'Approve atau reject pengajuan Work From Anywhere karyawan' },
   { key: 'hris.overtime.review',      label: 'Review Pengajuan Lembur',                    group: 'HRIS',                    parent: 'hris.manage',            desc: 'Approve atau reject pengajuan lembur karyawan' },
   { key: 'hris.shift.manage',         label: 'Kelola Shift',                               group: 'HRIS',                    parent: 'hris.manage',            desc: 'Tambah, edit, hapus shift & assign shift ke user' },
   { key: 'hris.location.manage',      label: 'Kelola Lokasi Kantor',                       group: 'HRIS',                    parent: 'hris.manage',            desc: 'Tambah, edit, hapus lokasi kantor untuk validasi presensi' },
@@ -146,7 +147,7 @@ const DEFAULT_PERMISSIONS = {
   HR: [
     'admin.manage', 'admin.users', 'reports.manage', 'db_link.view',
     'hris.manage', 'hris.view', 'hris.attendance.edit', 'hris.attendance.review', 'hris.leave.review',
-    'hris.overtime.review', 'hris.shift.manage', 'hris.location.manage', 'hris.reports.view',
+    'hris.wfa.review', 'hris.overtime.review', 'hris.shift.manage', 'hris.location.manage', 'hris.reports.view',
   ],
 
   CEO: [

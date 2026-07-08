@@ -40,6 +40,11 @@ class OvertimeController {
                 throw { name: 'BadRequest', message: 'endTime harus setelah startTime' };
             }
 
+            if (attendanceId) {
+                const attendance = await Attendance.findOne({ where: { id: attendanceId, userId: req.user.id } });
+                if (!attendance) throw { name: 'BadRequest', message: 'Data presensi tidak ditemukan atau bukan milik Anda' };
+            }
+
             const request = await OvertimeRequest.create({
                 userId: req.user.id,
                 attendanceId: attendanceId || null,

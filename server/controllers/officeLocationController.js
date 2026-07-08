@@ -1,5 +1,6 @@
 'use strict';
-const { OfficeLocation } = require('../models');
+const { Op } = require('sequelize');
+const { OfficeLocation, Attendance } = require('../models');
 const { companyFilter, companyId } = require('../helpers/tenancy');
 
 class OfficeLocationController {
@@ -45,6 +46,12 @@ class OfficeLocationController {
         try {
             const location = await OfficeLocation.findOne({ where: { id: req.params.id, ...companyFilter(req) } });
             if (!location) throw { name: 'NotFound', message: 'Lokasi tidak ditemukan' };
+            const usageCount = await Attendance.count({
+                where: { [Op.or]: [{ checkInLocationId: location.id }, { checkOutLocationId: location.id }] },
+            });
+            if (usageCount > 0) {
+                throw { name: 'BadRequest', message: `Lokasi ini sudah dipakai di ${usageCount} data presensi — hapus akan menghilangkan jejak lokasi dari histori tersebut. Ganti nama/radius saja kalau lokasinya sudah tidak relevan, tidak perlu dihapus` };
+            }
             await location.destroy();
             res.json({ message: 'Lokasi dihapus' });
         } catch (err) { next(err); }

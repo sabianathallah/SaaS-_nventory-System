@@ -3,22 +3,29 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { hrisApi } from '../../api'
 import { useAuth } from '../../context/AuthContext'
+import { useCompanyGuard } from '../../hooks/useCompanyGuard'
+import CompanyRequiredBanner from '../../components/CompanyRequiredBanner'
 import { Plus, X, Check, Ban, AlertTriangle } from 'lucide-react'
 
 const STATUS_LABEL = { PENDING: 'Menunggu', APPROVED: 'Disetujui', REJECTED: 'Ditolak', CANCELLED: 'Dibatalkan' }
 const STATUS_COLOR = { PENDING: 'badge-amber', APPROVED: 'badge-green', REJECTED: 'badge-red', CANCELLED: 'badge-muted' }
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'
 
+// Tanggal "hari ini" di zona waktu Jakarta — konsisten sama validasi backend
+function todayJakarta() {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jakarta', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
+}
+
 export default function Wfa() {
   const { hasPermission, user } = useAuth()
-  const canReview = hasPermission('hris.leave.review') || user?.role === 'SUPER_ADMIN' || user?.role === 'COMPANY_ADMIN'
+  const canReview = hasPermission('hris.wfa.review') || user?.role === 'SUPER_ADMIN' || user?.role === 'COMPANY_ADMIN'
+  const { needsCompany } = useCompanyGuard()
   const qc = useQueryClient()
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState({ date: '', reason: '' })
   const [reviewing, setReviewing] = useState(null) // { id, amount, note }
 
-  const now = new Date()
-  const { data: quota } = useQuery({ queryKey: ['hris-wfa-quota'], queryFn: () => hrisApi.wfaQuota({}) })
+  const { data: quota, isLoading: quotaLoading, isError: quotaError } = useQuery({ queryKey: ['hris-wfa-quota'], queryFn: () => hrisApi.wfaQuota({}) })
   const { data: list, isLoading } = useQuery({ queryKey: ['hris-wfa-requests'], queryFn: () => hrisApi.wfaRequests({ limit: 30 }) })
 
   const invalidate = () => {
@@ -56,12 +63,23 @@ export default function Wfa() {
           <h1 className="text-lg font-bold text-slate-800">WFA (Work From Anywhere)</h1>
           <p className="text-xs text-slate-400 mt-0.5">Ajukan WFA per hari dan pantau statusnya</p>
         </div>
-        <button onClick={() => setShowForm(v => !v)} className="btn-primary text-sm flex items-center gap-1.5">
+        <button
+          onClick={() => { if (!showForm && needsCompany) return toast.error('Pilih perusahaan terlebih dahulu'); setShowForm(v => !v) }}
+          className="btn-primary text-sm flex items-center gap-1.5"
+        >
           {showForm ? <X size={14} /> : <Plus size={14} />} {showForm ? 'Batal' : 'Ajukan WFA'}
         </button>
       </div>
 
-      {quota && (
+      {needsCompany && <div className="mb-6"><CompanyRequiredBanner action="mengajukan WFA" /></div>}
+
+      {quotaLoading ? (
+        <div className="card p-4 mb-6 h-16 animate-pulse bg-slate-50" />
+      ) : quotaError ? (
+        <div className="card p-4 mb-6 text-xs text-red-600 bg-red-50 border border-red-200">
+          Gagal memuat kuota WFA. Coba muat ulang halaman.
+        </div>
+      ) : quota && (
         <div className="card p-4 mb-6 flex items-center justify-between flex-wrap gap-3">
           <div>
             <p className="text-xs font-semibold text-slate-600">Kuota WFA Bulan Ini</p>
@@ -82,7 +100,7 @@ export default function Wfa() {
         >
           <div>
             <label className="label">Tanggal</label>
-            <input type="date" required min={now.toISOString().slice(0, 10)} className="input" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />
+            <input type="date" required min={todayJakarta()} className="input" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />
           </div>
           <div />
           <div className="sm:col-span-2">

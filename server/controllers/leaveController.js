@@ -65,7 +65,8 @@ class LeaveController {
     static async getBalances(req, res, next) {
         try {
             const year = parseInt(req.query.year) || new Date().getFullYear();
-            const userId = req.query.userId || req.user.id;
+            const canViewAll = await userHasPermission(req, 'hris.leave.review') || await userHasPermission(req, 'hris.reports.view');
+            const userId = canViewAll && req.query.userId ? req.query.userId : req.user.id;
 
             const types = await LeaveType.findAll({ where: { ...companyFilter(req) } });
             const balances = await LeaveBalance.findAll({
@@ -183,8 +184,18 @@ class LeaveController {
             const balance = await LeaveBalance.findOne({ where: { userId: req.user.id, leaveTypeId, year } });
             const allocated = balance?.allocated ?? leaveType.maxDaysPerYear;
             const used = balance?.used ?? 0;
-            if (used + days > allocated) {
-                throw { name: 'BadRequest', message: `Sisa saldo cuti tidak cukup (sisa ${allocated - used} hari)` };
+
+            // Hitung juga pengajuan PENDING lain yang belum diapprove, biar saldo
+            // nggak bisa over-allocate kalau semuanya di-approve belakangan.
+            const pendingRequests = await LeaveRequest.findAll({
+                where: { userId: req.user.id, leaveTypeId, status: 'PENDING' },
+            });
+            const pendingDays = pendingRequests
+                .filter(r => new Date(r.startDate).getFullYear() === year)
+                .reduce((sum, r) => sum + r.days, 0);
+
+            if (used + pendingDays + days > allocated) {
+                throw { name: 'BadRequest', message: `Sisa saldo cuti tidak cukup (sisa ${allocated - used - pendingDays} hari, termasuk pengajuan lain yang masih menunggu)` };
             }
 
             const request = await LeaveRequest.create({
@@ -209,10 +220,29 @@ class LeaveController {
                 throw { name: 'BadRequest', message: 'Status harus APPROVED atau REJECTED' };
             }
 
-            const request = await LeaveRequest.findOne({ where: { id: req.params.id, ...companyFilter(req) }, transaction: t });
+            const request = await LeaveRequest.findOne({
+                where: { id: req.params.id, ...companyFilter(req) },
+                transaction: t,
+                lock: t.LOCK.UPDATE,
+            });
             if (!request) throw { name: 'NotFound', message: 'Pengajuan cuti tidak ditemukan' };
             if (request.status !== 'PENDING') {
                 throw { name: 'BadRequest', message: 'Pengajuan sudah direview' };
+            }
+
+            if (status === 'APPROVED') {
+                const year = new Date(request.startDate).getFullYear();
+                const leaveType = await LeaveType.findByPk(request.leaveTypeId, { transaction: t });
+                const [balance] = await LeaveBalance.findOrCreate({
+                    where: { userId: request.userId, leaveTypeId: request.leaveTypeId, year },
+                    defaults: { allocated: leaveType.maxDaysPerYear, used: 0, companyId: request.companyId },
+                    transaction: t,
+                    lock: t.LOCK.UPDATE,
+                });
+                if (balance.used + request.days > balance.allocated) {
+                    throw { name: 'BadRequest', message: `Saldo cuti tidak cukup untuk approve (sisa ${balance.allocated - balance.used} hari)` };
+                }
+                await balance.increment('used', { by: request.days, transaction: t });
             }
 
             await request.update({
@@ -222,31 +252,48 @@ class LeaveController {
                 reviewNote: reviewNote || null,
             }, { transaction: t });
 
-            if (status === 'APPROVED') {
-                const year = new Date(request.startDate).getFullYear();
-                const [balance] = await LeaveBalance.findOrCreate({
-                    where: { userId: request.userId, leaveTypeId: request.leaveTypeId, year },
-                    defaults: { allocated: (await LeaveType.findByPk(request.leaveTypeId)).maxDaysPerYear, used: 0, companyId: request.companyId },
-                    transaction: t,
-                });
-                await balance.increment('used', { by: request.days, transaction: t });
-            }
-
             await t.commit();
             res.json(request);
         } catch (err) { await t.rollback(); next(err); }
     }
 
     static async cancel(req, res, next) {
+        const t = await sequelize.transaction();
         try {
-            const request = await LeaveRequest.findOne({ where: { id: req.params.id, userId: req.user.id, ...companyFilter(req) } });
+            const canReview = await userHasPermission(req, 'hris.leave.review');
+            const ownFilter = canReview ? {} : { userId: req.user.id };
+
+            const request = await LeaveRequest.findOne({
+                where: { id: req.params.id, ...ownFilter, ...companyFilter(req) },
+                transaction: t,
+                lock: t.LOCK.UPDATE,
+            });
             if (!request) throw { name: 'NotFound', message: 'Pengajuan cuti tidak ditemukan' };
-            if (request.status !== 'PENDING') {
+            if (!['PENDING', 'APPROVED'].includes(request.status)) {
+                throw { name: 'BadRequest', message: 'Hanya pengajuan PENDING atau APPROVED yang bisa dibatalkan' };
+            }
+            // Karyawan biasa cuma boleh batalkan pengajuannya sendiri yang masih
+            // PENDING — reversal atas cuti yang sudah APPROVED cuma untuk reviewer.
+            if (!canReview && request.status !== 'PENDING') {
                 throw { name: 'BadRequest', message: 'Hanya pengajuan PENDING yang bisa dibatalkan' };
             }
-            await request.update({ status: 'CANCELLED' });
+
+            // Kalau yang dibatalkan sudah APPROVED (mis. salah approve, atau
+            // rencana berubah), kembalikan saldo yang sudah terpotong.
+            if (request.status === 'APPROVED') {
+                const year = new Date(request.startDate).getFullYear();
+                const balance = await LeaveBalance.findOne({
+                    where: { userId: request.userId, leaveTypeId: request.leaveTypeId, year },
+                    transaction: t,
+                    lock: t.LOCK.UPDATE,
+                });
+                if (balance) await balance.decrement('used', { by: request.days, transaction: t });
+            }
+
+            await request.update({ status: 'CANCELLED' }, { transaction: t });
+            await t.commit();
             res.json(request);
-        } catch (err) { next(err); }
+        } catch (err) { await t.rollback(); next(err); }
     }
 }
 

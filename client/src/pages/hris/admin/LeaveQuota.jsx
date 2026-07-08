@@ -32,7 +32,15 @@ export default function LeaveQuota() {
 
   const adjust = useMutation({
     mutationFn: hrisApi.adjustLeaveBalance,
-    onSuccess: () => { toast.success('Kuota diperbarui'); qc.invalidateQueries({ queryKey: ['hris-leave-balances-admin'] }) },
+    onSuccess: (_result, variables) => {
+      toast.success('Kuota diperbarui')
+      setDrafts(d => {
+        const next = { ...d }
+        delete next[keyOf(variables.userId, variables.leaveTypeId)]
+        return next
+      })
+      qc.invalidateQueries({ queryKey: ['hris-leave-balances-admin'] })
+    },
     onError: (e) => toast.error(e.response?.data?.message ?? 'Gagal update kuota'),
   })
 
@@ -68,6 +76,7 @@ export default function LeaveQuota() {
     else createType.mutate(payload)
   }
   function toggleActive(t) {
+    if (t.isActive && !confirm(`Nonaktifkan jenis cuti "${t.name}"? Karyawan tidak akan bisa mengajukan jenis cuti ini lagi.`)) return
     updateType.mutate({ id: t.id, data: { isActive: !t.isActive } })
   }
 

@@ -124,7 +124,7 @@ export default function Locations() {
                   <td className="td text-xs font-mono">{Number(l.latitude).toFixed(5)}, {Number(l.longitude).toFixed(5)}</td>
                   <td className="td">{l.radiusMeters}m</td>
                   <td className="td text-center">
-                    <button disabled={needsCompany} title="Hapus" onClick={() => destroy.mutate(l.id)} className="w-7 h-7 rounded flex items-center justify-center text-red-500 hover:bg-red-50 disabled:opacity-40 disabled:cursor-not-allowed">
+                    <button disabled={needsCompany} title="Hapus" onClick={() => { if (confirm(`Hapus lokasi "${l.name}"?`)) destroy.mutate(l.id) }} className="w-7 h-7 rounded flex items-center justify-center text-red-500 hover:bg-red-50 disabled:opacity-40 disabled:cursor-not-allowed">
                       <Trash2 size={14} />
                     </button>
                   </td>

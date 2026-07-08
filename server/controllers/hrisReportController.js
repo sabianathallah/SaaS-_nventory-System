@@ -24,13 +24,25 @@ class HrisReportController {
                 order: [['date', 'DESC']],
             });
 
+            const { dateFrom, dateTo, userId } = req.query;
+
+            // Cuti dianggap masuk rentang laporan kalau periodenya overlap sama
+            // dateFrom/dateTo (bukan cuma yang persis dimulai di rentang itu).
+            const leaveWhere = { ...companyFilter(req), status: 'APPROVED', ...(userId ? { userId } : {}) };
+            if (dateFrom) leaveWhere.endDate   = { ...(leaveWhere.endDate   || {}), [Op.gte]: dateFrom };
+            if (dateTo)   leaveWhere.startDate = { ...(leaveWhere.startDate || {}), [Op.lte]: dateTo };
+
+            const overtimeWhere = { ...companyFilter(req), status: 'APPROVED', ...(userId ? { userId } : {}) };
+            if (dateFrom) overtimeWhere.date = { ...(overtimeWhere.date || {}), [Op.gte]: dateFrom };
+            if (dateTo)   overtimeWhere.date = { ...(overtimeWhere.date || {}), [Op.lte]: dateTo };
+
             const leaves = await LeaveRequest.findAll({
-                where: { ...companyFilter(req), status: 'APPROVED', ...(filter.userId ? { userId: filter.userId } : {}) },
+                where: leaveWhere,
                 include: [{ model: User, as: 'user', attributes: USER_ATTRS }, { model: LeaveType, as: 'leaveType' }],
             });
 
             const overtimes = await OvertimeRequest.findAll({
-                where: { ...companyFilter(req), status: 'APPROVED', ...(filter.userId ? { userId: filter.userId } : {}) },
+                where: overtimeWhere,
                 include: [{ model: User, as: 'user', attributes: USER_ATTRS }],
             });
 

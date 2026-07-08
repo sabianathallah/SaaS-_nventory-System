@@ -48,7 +48,8 @@ class WfaController {
         try {
             const month = parseInt(req.query.month) || (new Date().getMonth() + 1);
             const year = parseInt(req.query.year) || new Date().getFullYear();
-            const userId = req.query.userId || req.user.id;
+            const canViewAll = await userHasPermission(req, 'hris.wfa.review') || await userHasPermission(req, 'hris.reports.view');
+            const userId = canViewAll && req.query.userId ? req.query.userId : req.user.id;
             const { allocated, used } = await getQuotaForUser(req, userId, month, year);
             res.json({ month, year, allocated, used, remaining: allocated - used });
         } catch (err) { next(err); }
@@ -105,7 +106,7 @@ class WfaController {
             const { page, limit, offset } = paginate(req.query);
             const filter = buildFilter(req.query, { status: 'exact' });
 
-            const canViewAll = await userHasPermission(req, 'hris.leave.review') || await userHasPermission(req, 'hris.reports.view');
+            const canViewAll = await userHasPermission(req, 'hris.wfa.review') || await userHasPermission(req, 'hris.reports.view');
             const selfFilter = canViewAll && req.query.userId ? { userId: req.query.userId } : (canViewAll ? {} : { userId: req.user.id });
 
             const { rows, count } = await WfaRequest.findAndCountAll({
@@ -146,7 +147,12 @@ class WfaController {
                 companyId: companyId(req) ?? req.user.companyId,
             });
             res.status(201).json(request);
-        } catch (err) { next(err); }
+        } catch (err) {
+            if (err.name === 'SequelizeUniqueConstraintError') {
+                return res.status(400).json({ message: 'Sudah ada pengajuan WFA untuk tanggal ini' });
+            }
+            next(err);
+        }
     }
 
     static async review(req, res, next) {
@@ -157,7 +163,11 @@ class WfaController {
                 throw { name: 'BadRequest', message: 'Status harus APPROVED atau REJECTED' };
             }
 
-            const request = await WfaRequest.findOne({ where: { id: req.params.id, ...companyFilter(req) }, transaction: t });
+            const request = await WfaRequest.findOne({
+                where: { id: req.params.id, ...companyFilter(req) },
+                transaction: t,
+                lock: t.LOCK.UPDATE,
+            });
             if (!request) throw { name: 'NotFound', message: 'Pengajuan WFA tidak ditemukan' };
             if (request.status !== 'PENDING') throw { name: 'BadRequest', message: 'Pengajuan sudah direview' };
 
@@ -175,6 +185,7 @@ class WfaController {
                     where: { userId: request.userId, month, year },
                     defaults: { allocated: defaultQuota, used: 0, companyId: request.companyId },
                     transaction: t,
+                    lock: t.LOCK.UPDATE,
                 });
 
                 // Re-cek over-kuota berdasarkan pemakaian riil saat approval (bisa

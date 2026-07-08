@@ -16,6 +16,9 @@ class ShiftController {
             if (!name || !startTime || !endTime) {
                 throw { name: 'BadRequest', message: 'name, startTime, dan endTime wajib diisi' };
             }
+            if (startTime >= endTime) {
+                throw { name: 'BadRequest', message: 'Jam mulai harus lebih awal dari jam selesai' };
+            }
             const shift = await Shift.create({ name, startTime, endTime, companyId: companyId(req) });
             res.status(201).json(shift);
         } catch (err) { next(err); }
@@ -26,10 +29,15 @@ class ShiftController {
             const shift = await Shift.findOne({ where: { id: req.params.id, ...companyFilter(req) } });
             if (!shift) throw { name: 'NotFound', message: 'Shift tidak ditemukan' };
             const { name, startTime, endTime } = req.body;
+            const nextStart = startTime ?? shift.startTime;
+            const nextEnd   = endTime ?? shift.endTime;
+            if (nextStart >= nextEnd) {
+                throw { name: 'BadRequest', message: 'Jam mulai harus lebih awal dari jam selesai' };
+            }
             await shift.update({
                 name: name ?? shift.name,
-                startTime: startTime ?? shift.startTime,
-                endTime: endTime ?? shift.endTime,
+                startTime: nextStart,
+                endTime: nextEnd,
             });
             res.json(shift);
         } catch (err) { next(err); }
@@ -39,6 +47,10 @@ class ShiftController {
         try {
             const shift = await Shift.findOne({ where: { id: req.params.id, ...companyFilter(req) } });
             if (!shift) throw { name: 'NotFound', message: 'Shift tidak ditemukan' };
+            const usersCount = await User.count({ where: { shiftId: shift.id } });
+            if (usersCount > 0) {
+                throw { name: 'BadRequest', message: `Shift masih dipakai oleh ${usersCount} karyawan — pindahkan mereka ke shift lain dulu sebelum menghapus` };
+            }
             await shift.destroy();
             res.json({ message: 'Shift dihapus' });
         } catch (err) { next(err); }
