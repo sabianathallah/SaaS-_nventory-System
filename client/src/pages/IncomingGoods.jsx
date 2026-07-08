@@ -7,6 +7,8 @@ import { useAuth } from '../context/AuthContext'
 import PageHeader from '../components/PageHeader'
 import SearchableSelect from '../components/SearchableSelect'
 import { Table, Pagination } from '../components/Table'
+import { useCompanyGuard } from '../hooks/useCompanyGuard'
+import CompanyRequiredBanner from '../components/CompanyRequiredBanner'
 import { Plus, Eye, Video, AlertCircle, TriangleAlert, BarChart2, List, Package, Truck } from 'lucide-react'
 
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'
@@ -241,6 +243,7 @@ export default function IncomingGoods() {
   const navigate = useNavigate()
   const { hasPermission } = useAuth()
   const canManage = hasPermission('packing.manage') || hasPermission('packing.incoming')
+  const { needsCompany } = useCompanyGuard()
 
   const [searchParams, setSearchParams] = useSearchParams()
   const view          = searchParams.get('view')    || 'list'
@@ -367,6 +370,7 @@ export default function IncomingGoods() {
 
   return (
     <div className="px-6 py-6">
+      {needsCompany && <div className="mb-4"><CompanyRequiredBanner action="mencatat barang masuk" /></div>}
       <PageHeader
         title="Barang Masuk"
         subtitle={view === 'list' ? `${data?.pagination?.total ?? 0} transaksi` : 'Analitik'}

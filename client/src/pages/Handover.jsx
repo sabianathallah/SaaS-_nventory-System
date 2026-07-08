@@ -3,6 +3,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { handoverApi } from '../api'
 import PageHeader from '../components/PageHeader'
 import { Table, Pagination } from '../components/Table'
+import { useCompanyGuard } from '../hooks/useCompanyGuard'
+import CompanyRequiredBanner from '../components/CompanyRequiredBanner'
 import toast from 'react-hot-toast'
 import { PackageCheck, Eye, Printer, Lock, ScanLine, CheckCircle, Trash2 } from 'lucide-react'
 
@@ -16,6 +18,7 @@ const STATUS_BADGE = {
 export default function Handover() {
   const navigate = useNavigate()
   const qc = useQueryClient()
+  const { needsCompany } = useCompanyGuard()
   const [searchParams, setSearchParams] = useSearchParams()
   const page  = Number(searchParams.get('page')  || '1')
   const limit = Number(searchParams.get('limit') || '20')
@@ -134,6 +137,7 @@ export default function Handover() {
 
   return (
     <div className="px-6 py-6 space-y-5">
+      {needsCompany && <CompanyRequiredBanner action="membuat handover" />}
       <PageHeader
         title="Handover Pengiriman"
         subtitle="Dokumen serah terima paket kepada kurir"

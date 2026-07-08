@@ -5,6 +5,8 @@ import { vendorsApi } from '../api'
 import PageHeader from '../components/PageHeader'
 import { Table, Pagination } from '../components/Table'
 import Modal from '../components/Modal'
+import { useCompanyGuard } from '../hooks/useCompanyGuard'
+import CompanyRequiredBanner from '../components/CompanyRequiredBanner'
 import toast from 'react-hot-toast'
 import { Plus, Pencil, Trash2, Building2 } from 'lucide-react'
 
@@ -18,6 +20,7 @@ export default function Vendors() {
   const setPage = (p) => setSearchParams(prev => { prev.set('page', String(p)); return prev }, { replace: true })
   const [modal, setModal] = useState(null)
   const [form, setForm]   = useState(EMPTY)
+  const { needsCompany } = useCompanyGuard()
 
   const { data, isLoading } = useQuery({
     queryKey: ['vendors', { page, limit }],
@@ -82,6 +85,7 @@ export default function Vendors() {
 
   return (
     <div className="px-6 py-6">
+      {needsCompany && <div className="mb-4"><CompanyRequiredBanner action="menambah vendor" /></div>}
       <PageHeader
         title="Vendors"
         subtitle={`${data?.pagination?.total ?? 0} vendor terdaftar`}

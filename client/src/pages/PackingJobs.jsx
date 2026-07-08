@@ -8,6 +8,8 @@ import SearchableSelect from '../components/SearchableSelect'
 import { Table, Pagination } from '../components/Table'
 import Modal from '../components/Modal'
 import QRScanner from '../components/QRScanner'
+import { useCompanyGuard } from '../hooks/useCompanyGuard'
+import CompanyRequiredBanner from '../components/CompanyRequiredBanner'
 import toast from 'react-hot-toast'
 import {
   Plus, Eye, Play, ClipboardCheck, CheckSquare,
@@ -104,6 +106,7 @@ function JobCard({ job, isTimPacking, isHeadPacking, onDetail, onStart, onSubmit
 export default function PackingJobs() {
   const qc = useQueryClient()
   const { isHeadPacking, isTimPacking } = useAuth()
+  const { needsCompany } = useCompanyGuard()
 
   const [searchParams, setSearchParams] = useSearchParams()
   const page  = Number(searchParams.get('page')  || '1')
@@ -288,6 +291,7 @@ export default function PackingJobs() {
 
   return (
     <div className="px-4 md:px-6 py-5 md:py-6">
+      {needsCompany && <div className="mb-4"><CompanyRequiredBanner action="membuat packing job" /></div>}
       <PageHeader
         title="Packing Jobs"
         subtitle={`${data?.pagination?.total ?? 0} job`}

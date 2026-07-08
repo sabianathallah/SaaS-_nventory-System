@@ -4,6 +4,8 @@ import { useQuery } from '@tanstack/react-query'
 import { requestApi, requestTypeApi } from '../api'
 import { useAuth } from '../context/AuthContext'
 import { exportExcel } from '../utils/exportExcel'
+import { useCompanyGuard } from '../hooks/useCompanyGuard'
+import CompanyRequiredBanner from '../components/CompanyRequiredBanner'
 import { Plus, FileDown, Search, SlidersHorizontal, X } from 'lucide-react'
 
 const STATUS_LABEL = {
@@ -37,6 +39,7 @@ export default function Pengajuan() {
   const { hasPermission, user } = useAuth()
   const canProcess = hasPermission('request.process') || hasPermission('request.manage') ||
                      user?.role === 'SUPER_ADMIN' || user?.role === 'COMPANY_ADMIN'
+  const { needsCompany } = useCompanyGuard()
 
   const [searchParams, setSearchParams] = useSearchParams()
   const sp = (updates) => setSearchParams(prev => { const n = new URLSearchParams(prev); Object.entries(updates).forEach(([k,v]) => v ? n.set(k,v) : n.delete(k)); return n })
@@ -123,6 +126,7 @@ export default function Pengajuan() {
 
   return (
     <div className="px-6 py-6 max-w-6xl">
+      {needsCompany && <div className="mb-4"><CompanyRequiredBanner action="membuat pengajuan" /></div>}
       {/* Header */}
       <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
         <div>

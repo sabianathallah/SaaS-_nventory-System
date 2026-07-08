@@ -5,6 +5,8 @@ import { stockOutApi, stockOutDraftApi, warehousesApi } from '../api'
 import { useAuth } from '../context/AuthContext'
 import PageHeader from '../components/PageHeader'
 import { Table, Pagination } from '../components/Table'
+import { useCompanyGuard } from '../hooks/useCompanyGuard'
+import CompanyRequiredBanner from '../components/CompanyRequiredBanner'
 import toast from 'react-hot-toast'
 import { PackageMinus, Eye, PencilLine, X } from 'lucide-react'
 
@@ -24,6 +26,7 @@ export default function StockOut() {
 
   const canCreate    = hasPermission('stock.out.create') || hasPermission('stock.manage')
   const canViewValue = hasPermission('inventory.view_value') || hasPermission('inventory.manage')
+  const { needsCompany } = useCompanyGuard()
 
   const [warehouseFilter, setWarehouseFilter] = useState(() => localStorage.getItem(WH_KEY) || '')
   const handleWarehouseChange = (val) => {
@@ -156,6 +159,7 @@ export default function StockOut() {
 
   return (
     <div className="px-6 py-6">
+      {needsCompany && <div className="mb-4"><CompanyRequiredBanner action="membuat sesi pengeluaran stok" /></div>}
       <PageHeader
         title="Pengeluaran Stok"
         subtitle={`${data?.pagination?.total ?? 0} transaksi`}
