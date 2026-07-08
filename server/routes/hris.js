@@ -3,6 +3,7 @@ const express = require('express');
 const router = express.Router();
 
 const requirePermission = require('../middlewares/requirePermission');
+const requireCompany = require('../middlewares/requireCompany');
 const { uploadSingle } = require('../helpers/cloudinary');
 const AttendanceController = require('../controllers/attendanceController');
 const LeaveController = require('../controllers/leaveController');
@@ -31,32 +32,32 @@ router.patch('/attendance/:id', requirePermission('hris.attendance.edit'), Atten
 
 // ── Izin Telat (pengajuan di muka, sebelum check-in) ──────────────────────────
 router.get('/late-excuse',       LateExcuseController.list);
-router.post('/late-excuse',      LateExcuseController.create);
+router.post('/late-excuse',      requireCompany, LateExcuseController.create);
 router.patch('/late-excuse/:id/review', requirePermission('hris.attendance.review'), LateExcuseController.review);
 router.patch('/late-excuse/:id/cancel', LateExcuseController.cancel);
 
 // ── Leave ────────────────────────────────────────────────────────────────────
 router.get('/leave-types',    LeaveController.listTypes);
-router.post('/leave-types',   requirePermission('hris.manage'), LeaveController.createType);
+router.post('/leave-types',   requirePermission('hris.manage'), requireCompany, LeaveController.createType);
 router.put('/leave-types/:id', requirePermission('hris.manage'), LeaveController.updateType);
 router.delete('/leave-types/:id', requirePermission('hris.manage'), LeaveController.deleteType);
 router.get('/leave-balances', LeaveController.getBalances);
 router.get('/leave-balances/admin', requirePermission('hris.manage'), LeaveController.listBalancesForAdmin);
 router.put('/leave-balances/adjust', requirePermission('hris.manage'), LeaveController.adjustBalance);
 router.get('/leave-requests', LeaveController.list);
-router.post('/leave-requests', LeaveController.create);
+router.post('/leave-requests', requireCompany, LeaveController.create);
 router.patch('/leave-requests/:id/review', requirePermission('hris.leave.review'), LeaveController.review);
 router.patch('/leave-requests/:id/cancel', LeaveController.cancel);
 
 // ── Overtime ─────────────────────────────────────────────────────────────────
 router.get('/overtime',            OvertimeController.list);
-router.post('/overtime',           OvertimeController.create);
+router.post('/overtime',           requireCompany, OvertimeController.create);
 router.patch('/overtime/:id/review', requirePermission('hris.overtime.review'), OvertimeController.review);
 router.patch('/overtime/:id/cancel', OvertimeController.cancel);
 
 // ── Shifts ───────────────────────────────────────────────────────────────────
 router.get('/shifts',        ShiftController.list);
-router.post('/shifts',       requirePermission('hris.shift.manage'), ShiftController.create);
+router.post('/shifts',       requirePermission('hris.shift.manage'), requireCompany, ShiftController.create);
 router.put('/shifts/:id',    requirePermission('hris.shift.manage'), ShiftController.update);
 router.delete('/shifts/:id', requirePermission('hris.shift.manage'), ShiftController.destroy);
 router.post('/shifts/assign', requirePermission('hris.shift.manage'), ShiftController.assign);
@@ -64,7 +65,7 @@ router.get('/shifts/users',   requirePermission('hris.shift.manage'), ShiftContr
 
 // ── Office Locations ─────────────────────────────────────────────────────────
 router.get('/office-locations',        OfficeLocationController.list);
-router.post('/office-locations',       requirePermission('hris.location.manage'), OfficeLocationController.create);
+router.post('/office-locations',       requirePermission('hris.location.manage'), requireCompany, OfficeLocationController.create);
 router.put('/office-locations/:id',    requirePermission('hris.location.manage'), OfficeLocationController.update);
 router.delete('/office-locations/:id', requirePermission('hris.location.manage'), OfficeLocationController.destroy);
 
@@ -78,7 +79,7 @@ router.get('/wfa/quota',          WfaController.getMyQuota);
 router.get('/wfa/quota/admin',    requirePermission('hris.manage'), WfaController.listQuotasForAdmin);
 router.put('/wfa/quota/adjust',   requirePermission('hris.manage'), WfaController.adjustQuota);
 router.get('/wfa/requests',       WfaController.list);
-router.post('/wfa/requests',      WfaController.create);
+router.post('/wfa/requests',      requireCompany, WfaController.create);
 router.patch('/wfa/requests/:id/review', requirePermission('hris.leave.review'), WfaController.review);
 router.patch('/wfa/requests/:id/cancel', WfaController.cancel);
 router.get('/wfa/payment-adjustments', requirePermission('hris.reports.view'), WfaController.listPaymentAdjustments);

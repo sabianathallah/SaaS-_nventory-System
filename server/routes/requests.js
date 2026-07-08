@@ -3,6 +3,7 @@ const express = require('express');
 const router  = express.Router();
 const ctrl    = require('../controllers/requestController');
 const { requireAnyPermission: rpAny } = require('../middlewares/requirePermission');
+const requireCompany = require('../middlewares/requireCompany');
 
 const canView    = rpAny('request.manage', 'request.view', 'request.create', 'request.process');
 const canCreate  = rpAny('request.manage', 'request.create');
@@ -14,7 +15,7 @@ router.get('/export',        canView,    ctrl.exportData);
 router.get('/status-counts', canView,    ctrl.statusCounts);
 
 router.get('/',      canView,   ctrl.list);
-router.post('/',     canCreate, ctrl.create);
+router.post('/',     canCreate, requireCompany, ctrl.create);
 router.get('/:id',   canView,   ctrl.getById);
 router.put('/:id',   canCreate, ctrl.update);
 router.delete('/:id',canManage, ctrl.destroy);

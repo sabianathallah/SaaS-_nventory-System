@@ -7,7 +7,7 @@ import { useAuth } from './AuthContext'
 const SelectedCompanyContext = createContext(null)
 
 function readSession() {
-  try { return JSON.parse(sessionStorage.getItem('selectedCompany')) ?? null }
+  try { return JSON.parse(localStorage.getItem('selectedCompany')) ?? null }
   catch { return null }
 }
 
@@ -19,12 +19,12 @@ export function SelectedCompanyProvider({ children }) {
     return company
   })
 
-  // Keep in sync if sessionStorage changes externally (e.g. other tabs)
+  // Keep in sync if localStorage changes externally (e.g. other tabs)
   useEffect(() => {
     setAxiosCompanyScope(selectedCompany?.id ?? null)
   }, [selectedCompany])
 
-  // Guard against a stale/invalid company lingering in sessionStorage (e.g. a
+  // Guard against a stale/invalid company lingering in localStorage (e.g. a
   // company that was deleted or recreated with a different id) — a stale id
   // silently scopes every request to a company that doesn't exist, making
   // CRUD lists look empty without any error. Drop it back to "all companies".
@@ -44,8 +44,8 @@ export function SelectedCompanyProvider({ children }) {
   const setSelectedCompany = (company) => {
     setSelectedCompanyState(company)
     setAxiosCompanyScope(company?.id ?? null)
-    if (company) sessionStorage.setItem('selectedCompany', JSON.stringify(company))
-    else sessionStorage.removeItem('selectedCompany')
+    if (company) localStorage.setItem('selectedCompany', JSON.stringify(company))
+    else localStorage.removeItem('selectedCompany')
   }
 
   return (

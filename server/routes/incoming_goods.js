@@ -3,10 +3,11 @@ const express = require('express');
 const router  = express.Router();
 const IGController      = require('../controllers/incomingGoodsController');
 const requirePermission = require('../middlewares/requirePermission');
+const requireCompany = require('../middlewares/requireCompany');
 
 router.get('/',    requirePermission('packing.view'),     IGController.getAll);
 router.get('/:id', requirePermission('packing.view'),     IGController.getById);
-router.post('/',   requirePermission('packing.incoming'), IGController.create);
+router.post('/',   requirePermission('packing.incoming'), requireCompany, IGController.create);
 router.put('/:id', requirePermission('packing.incoming'), IGController.update);
 router.delete('/:id', requirePermission('packing.incoming'), IGController.delete);
 

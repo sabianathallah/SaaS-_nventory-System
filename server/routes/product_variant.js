@@ -3,12 +3,13 @@ const express = require('express');
 const router = express.Router({ mergeParams: true });
 const ProductVariantController = require('../controllers/productVariantController');
 const { requireAnyPermission: rpAny } = require('../middlewares/requirePermission');
+const requireCompany = require('../middlewares/requireCompany');
 
 const canEdit = rpAny('inventory.manage', 'inventory.product.edit');
 
 // Variant Types
 router.get('/',           ProductVariantController.getVariantTypes);
-router.post('/',          canEdit, ProductVariantController.createVariantType);
+router.post('/',          canEdit, requireCompany, ProductVariantController.createVariantType);
 router.patch('/reorder',  canEdit, ProductVariantController.reorderTypes);
 router.put('/:typeId',    canEdit, ProductVariantController.updateVariantType);
 router.delete('/:typeId', canEdit, ProductVariantController.deleteVariantType);

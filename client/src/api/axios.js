@@ -13,7 +13,7 @@ export function setAxiosCompanyScope(id) { _scopedCompanyId = id }
 function getCompanyId() {
   if (_scopedCompanyId) return _scopedCompanyId
   try {
-    const c = JSON.parse(sessionStorage.getItem('selectedCompany'))
+    const c = JSON.parse(localStorage.getItem('selectedCompany'))
     return c?.id ?? null
   } catch { return null }
 }

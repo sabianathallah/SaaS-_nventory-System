@@ -4,12 +4,13 @@ const router  = express.Router();
 const ctrl    = require('../controllers/handoverController');
 const rp      = require('../middlewares/requirePermission');
 const { requireAnyPermission: rpAny } = require('../middlewares/requirePermission');
+const requireCompany = require('../middlewares/requireCompany');
 
 const canView   = rpAny('handover.manage', 'handover.view', 'handover.create');
 const canCreate = rpAny('handover.manage', 'handover.create');
 
 router.get('/',                        canView,   ctrl.list);
-router.post('/',                       canCreate, ctrl.create);
+router.post('/',                       canCreate, requireCompany, ctrl.create);
 router.get('/:id',                     canView,   ctrl.get);
 router.put('/:id',                     canCreate, ctrl.update);
 router.delete('/:id',                  rp('handover.manage'), ctrl.destroy);
