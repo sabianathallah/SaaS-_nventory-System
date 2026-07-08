@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { hrisApi } from '../api'
 import { useAuth } from '../context/AuthContext'
-import { ClipboardCheck, FileText, ArrowRight, LogIn, LogOut, CheckCircle2 } from 'lucide-react'
+import { ClipboardCheck, FileText, ArrowRight, LogIn, LogOut, CheckCircle2, CalendarDays, Laptop } from 'lucide-react'
 
 const fmtTime = (d) => d ? new Date(d).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '—'
 
@@ -14,6 +14,8 @@ export default function HRIS() {
 
   const { data: today } = useQuery({ queryKey: ['hris-today'], queryFn: hrisApi.today })
   const { data: summary } = useQuery({ queryKey: ['hris-summary', month, year], queryFn: () => hrisApi.summary({ month, year }) })
+  const { data: balances, isLoading: balancesLoading, isError: balancesError } = useQuery({ queryKey: ['hris-leave-balances'], queryFn: () => hrisApi.leaveBalances({}) })
+  const { data: wfaQuota, isLoading: wfaLoading, isError: wfaError } = useQuery({ queryKey: ['hris-wfa-quota'], queryFn: () => hrisApi.wfaQuota({}) })
 
   const cards = [
     { to: '/hris/attendance', icon: ClipboardCheck, label: 'Presensi', desc: 'Check-in / check-out & riwayat kehadiran' },
@@ -50,6 +52,53 @@ export default function HRIS() {
           <Link to="/hris/attendance" className="btn-primary text-sm">
             {today?.checkInAt ? (today?.checkOutAt ? 'Lihat Riwayat' : 'Check-out') : 'Check-in Sekarang'}
           </Link>
+        </div>
+      </div>
+
+      {/* Jatah Cuti & WFA */}
+      <div className="grid sm:grid-cols-2 gap-4 mb-6">
+        <div className="card p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <CalendarDays size={15} className="text-purple-500" />
+            <p className="text-sm font-semibold text-slate-800">Jatah Cuti</p>
+          </div>
+          {balancesLoading ? (
+            <div className="h-12 animate-pulse bg-slate-50 rounded-lg" />
+          ) : balancesError ? (
+            <p className="text-xs text-red-600">Gagal memuat jatah cuti.</p>
+          ) : !balances || balances.length === 0 ? (
+            <p className="text-xs text-slate-400">Belum ada jenis cuti terdaftar</p>
+          ) : (
+            <div className="space-y-2">
+              {balances.map(b => (
+                <div key={b.leaveTypeId} className="flex items-center justify-between">
+                  <p className="text-xs text-slate-600">{b.leaveTypeName}</p>
+                  <p className="text-sm font-bold text-purple-600">
+                    {b.remaining} <span className="text-[11px] font-normal text-slate-400">/ {b.allocated} hari</span>
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="card p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <Laptop size={15} className="text-blue-500" />
+            <p className="text-sm font-semibold text-slate-800">Jatah WFA Bulan Ini</p>
+          </div>
+          {wfaLoading ? (
+            <div className="h-12 animate-pulse bg-slate-50 rounded-lg" />
+          ) : wfaError ? (
+            <p className="text-xs text-red-600">Gagal memuat jatah WFA.</p>
+          ) : wfaQuota && (
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-slate-600">Sisa hari WFA</p>
+              <p className="text-sm font-bold text-blue-600">
+                {wfaQuota.remaining} <span className="text-[11px] font-normal text-slate-400">/ {wfaQuota.allocated} hari</span>
+              </p>
+            </div>
+          )}
         </div>
       </div>
 
