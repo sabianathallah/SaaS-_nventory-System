@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { requestApi, requestTypeApi } from '../api'
-import { productsApi, productSkusApi, warehousesApi, skuWarehouseStocksApi } from '../api'
+import { productsApi, productSkusApi, warehousesApi, skuWarehouseStocksApi, articlesApi } from '../api'
 import { useAuth } from '../context/AuthContext'
 import { Plus, Trash2, ChevronDown, ArrowLeft, ShoppingBag, Package, Warehouse } from 'lucide-react'
 
@@ -43,18 +43,29 @@ const COLOR_MAP = {
 
 // ── SKU Picker ────────────────────────────────────────────────────────────────
 function SkuPicker({ onAdd }) {
-  const [search,     setSearch]     = useState('')
-  const [open,       setOpen]       = useState(false)
-  const [selProduct, setSelProduct] = useState(null)
-  const [selSku,     setSelSku]     = useState(null)
-  const [qty,        setQty]        = useState(1)
-  const [note,       setNote]       = useState('')
+  const [search,      setSearch]      = useState('')
+  const [open,        setOpen]        = useState(false)
+  const [selArticleId, setSelArticleId] = useState('')
+  const [selProduct,  setSelProduct]  = useState(null)
+  const [selSku,      setSelSku]      = useState(null)
+  const [qty,         setQty]         = useState(1)
+  const [note,        setNote]        = useState('')
   const inputRef = useRef(null)
 
-  const { data: products } = useQuery({
-    queryKey: ['products', { limit: 500 }],
-    queryFn: () => productsApi.list({ limit: 500 }),
+  const { data: articles } = useQuery({
+    queryKey: ['articles', { limit: 200 }],
+    queryFn: () => articlesApi.list({ limit: 200 }),
   })
+
+  const { data: products } = useQuery({
+    queryKey: ['products', { limit: 500, ArticleId: selArticleId || undefined }],
+    queryFn: () => productsApi.list({ limit: 500, ...(selArticleId && { ArticleId: selArticleId }) }),
+  })
+
+  const handleArticleChange = (val) => {
+    setSelArticleId(val)
+    setSearch(''); setSelProduct(null); setSelSku(null)
+  }
 
   const { data: skus } = useQuery({
     queryKey: ['product-skus', selProduct?.id],
@@ -108,6 +119,14 @@ function SkuPicker({ onAdd }) {
 
   return (
     <div className="border border-dashed border-slate-200 rounded-lg p-3 space-y-3 bg-slate-50">
+      <div>
+        <label className="label mb-1 text-xs">Koleksi (opsional, mempersempit pencarian produk)</label>
+        <select value={selArticleId} onChange={e => handleArticleChange(e.target.value)} className="input text-sm bg-white w-full">
+          <option value="">— Semua koleksi —</option>
+          {(articles?.data ?? []).map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+        </select>
+      </div>
+
       <div className="grid grid-cols-2 gap-2">
         <div className="relative">
           <label className="label mb-1 text-xs">Produk</label>
