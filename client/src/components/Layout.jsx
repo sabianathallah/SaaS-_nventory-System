@@ -12,7 +12,7 @@ import {
   PackageOpen, Layers, ClipboardCheck, Menu, X, Eye, EyeOff,
   PackageCheck, Link2, BarChart2, BookMarked, ChevronDown,
   SendHorizonal, FileText, PanelLeftClose, PanelLeftOpen, UserCog,
-  Laptop, Wallet, CalendarClock, ShieldCheck, AlarmClock, Megaphone,
+  Laptop, Wallet, CalendarClock, ShieldCheck, AlarmClock,
 } from 'lucide-react'
 import logoPreface from '../assets/logo-preface.jpeg'
 
@@ -31,10 +31,9 @@ const NAV_GROUPS = [
     label: 'Inventori',
     items: [
       { to: '/products',   icon: Package,   label: 'Produk',              pageKey: 'products', staffVisible: true },
-      { to: '/catalog',    icon: BookOpen,  label: 'Kategori & Koleksi',  pageKey: 'catalog' },
+      { to: '/catalog',    icon: BookOpen,  label: 'Data Master',         pageKey: 'catalog', requirePermission: ['inventory.manage', 'channel.manage'] },
       { to: '/warehouses', icon: Warehouse, label: 'Gudang',              pageKey: 'warehouses' },
       { to: '/suppliers',  icon: Truck,     label: 'Vendor',              pageKey: 'suppliers' },
-      { to: '/channels',   icon: Megaphone, label: 'Channel Jualan',      pageKey: 'channels', requirePermission: 'channel.manage' },
     ],
   },
   {
@@ -138,12 +137,12 @@ const ADMIN_NAV_GROUPS = [
 ]
 
 const PAGE_TITLES = {
-  '/home': 'Home', '/dashboard': 'Dashboard', '/sop': 'SOP Operasional', '/products': 'Produk', '/catalog': 'Kategori dan Koleksi',
+  '/home': 'Home', '/dashboard': 'Dashboard', '/sop': 'SOP Operasional', '/products': 'Produk', '/catalog': 'Data Master',
   '/handbook': 'Company Handbook', '/handbook/kebijakan': 'Kebijakan Perusahaan', '/handbook/struktur': 'Struktur Organisasi',
   '/hris': 'HRIS', '/hris/attendance': 'Presensi', '/hris/leave': 'Cuti', '/hris/wfa': 'WFA', '/hris/late-excuse': 'Izin Telat', '/hris/pengajuan': 'Pengajuan',
   '/hris/admin/shifts': 'Kelola Shift', '/hris/admin/attendance-review': 'Persetujuan Presensi', '/hris/admin/locations': 'Kelola Lokasi Kantor', '/hris/reports': 'Laporan HRIS',
   '/hris/admin/leave-quota': 'Kuota Cuti', '/hris/admin/wfa-quota': 'Kuota WFA', '/hris/payment-adjustments': 'Penyesuaian Payment',
-  '/warehouses': 'Gudang', '/suppliers': 'Vendor', '/channels': 'Channel Jualan',
+  '/warehouses': 'Gudang', '/suppliers': 'Vendor',
   '/stock-in': 'Penerimaan Stok', '/stock-in/new': 'Penerimaan Stok Baru', '/stock-out': 'Pengeluaran Stok', '/movements': 'Pergerakan',
   '/opname': 'Stock Opname', '/transfers': 'Transfer Stok', '/handover': 'Handover Pengiriman',
   '/shipping-manual': 'Shipping Manual', '/database-links': 'Database Links', '/users': 'Pengguna', '/roles': 'Roles & Permission', '/companies': 'Perusahaan',
@@ -375,7 +374,10 @@ export default function Layout({ children }) {
           {activeGroups.map((group) => {
             const navItems = group.items.reduce((acc, item) => {
               if (item.superOnly && !isSuperAdmin) return acc
-              if (item.requirePermission && !isSuperAdmin && !hasPermission(item.requirePermission)) return acc
+              if (item.requirePermission && !isSuperAdmin) {
+                const perms = Array.isArray(item.requirePermission) ? item.requirePermission : [item.requirePermission]
+                if (!perms.some(hasPermission)) return acc
+              }
               const hidden = !!(item.pageKey && !isPageVisible(item.pageKey))
               if (hidden && !isSuperAdmin) return acc
               acc.push({ ...item, hidden })

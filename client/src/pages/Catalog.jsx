@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { categoriesApi, articlesApi, requestTypeApi } from '../api'
+import { categoriesApi, articlesApi, requestTypeApi, channelsApi } from '../api'
 import { Pagination } from '../components/Table'
 import SearchBar from '../components/SearchBar'
 import toast from 'react-hot-toast'
-import { Plus, Pencil, Trash2, Check, X, Loader2, Tag, BookOpen, Building2, Truck, FileText } from 'lucide-react'
+import { Plus, Pencil, Trash2, Check, X, Loader2, Tag, BookOpen, Building2, Truck, FileText, Megaphone } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useSelectedCompany } from '../context/SelectedCompanyContext'
 
@@ -227,9 +227,11 @@ function CatalogTable({ title, icon: Icon, data, pagination, isLoading, onAdd, o
 
 export default function Catalog() {
   const qc = useQueryClient()
-  const { isSuperAdmin } = useAuth()
+  const { isSuperAdmin, hasPermission } = useAuth()
   const { selectedCompany } = useSelectedCompany()
   const blocked = isSuperAdmin && !selectedCompany
+  const canManageCatalog = hasPermission('inventory.manage')
+  const canManageChannel = hasPermission('channel.manage')
 
   const [catPage, setCatPage] = useState(1)
   const [catSearch, setCatSearch] = useState('')
@@ -325,6 +327,34 @@ export default function Catalog() {
     onError: e => toast.error(e.response?.data?.message || 'Gagal menghapus'),
   })
 
+  // ── Channel Jualan ─────────────────────────────────────────────────────────
+  const { data: channels, isLoading: channelsLoading } = useQuery({
+    queryKey: ['channels', { limit: 200 }],
+    queryFn:  () => channelsApi.list({ limit: 200 }),
+    enabled:  canManageChannel,
+  })
+  const [newChannelName, setNewChannelName] = useState('')
+
+  const addChannel = useMutation({
+    mutationFn: () => channelsApi.create({ name: newChannelName.trim() }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['channels'] })
+      setNewChannelName('')
+      toast.success('Channel ditambahkan')
+    },
+    onError: e => toast.error(e.response?.data?.message || 'Gagal menambah'),
+  })
+  const toggleChannelActive = useMutation({
+    mutationFn: ([id, val]) => channelsApi.update(id, { isActive: val }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['channels'] }),
+    onError: e => toast.error(e.response?.data?.message || 'Gagal update'),
+  })
+  const delChannel = useMutation({
+    mutationFn: id => channelsApi.remove(id),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['channels'] }); toast.success('Channel dihapus') },
+    onError: e => toast.error(e.response?.data?.message || 'Gagal menghapus'),
+  })
+
   const confirmDelete = (mutate) => (id, name) => {
     if (confirm(`Hapus "${name}"? Produk yang menggunakan ini akan kehilangan referensinya.`)) {
       mutate(id)
@@ -334,19 +364,20 @@ export default function Catalog() {
   return (
     <div className="px-6 py-6 max-w-3xl mx-auto space-y-6">
       <div>
-        <h2 className="text-xl font-bold text-slate-800">Kategori dan Koleksi</h2>
-        <p className="text-sm text-slate-400 mt-0.5">Kelola kategori, koleksi, dan jenis pengajuan</p>
+        <h2 className="text-xl font-bold text-slate-800">Data Master</h2>
+        <p className="text-sm text-slate-400 mt-0.5">Kelola kategori, koleksi, jenis pengajuan, dan channel jualan</p>
       </div>
 
-      {blocked && (
+      {blocked && (canManageCatalog || canManageChannel) && (
         <div className="flex items-center gap-3 px-4 py-3.5 rounded-xl border border-amber-200 bg-amber-50 text-amber-800">
           <Building2 size={16} className="text-amber-500 flex-shrink-0" />
           <p className="text-sm font-medium">
-            Pilih perusahaan di bagian atas terlebih dahulu untuk bisa menambah atau mengubah data artikel dan koleksi.
+            Pilih perusahaan di bagian atas terlebih dahulu untuk bisa menambah atau mengubah data.
           </p>
         </div>
       )}
 
+      {canManageCatalog && (
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <CatalogTable
           title="Kategori"
@@ -380,8 +411,10 @@ export default function Catalog() {
           disabled={blocked}
         />
       </div>
+      )}
 
       {/* Request Types */}
+      {canManageCatalog && (
       <div className="card overflow-hidden">
         <div className="flex items-center gap-3 px-5 py-4 border-b border-slate-100">
           <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500 flex-shrink-0">
@@ -484,6 +517,85 @@ export default function Catalog() {
           </tbody>
         </table>
       </div>
+      )}
+
+      {/* Channel Jualan */}
+      {canManageChannel && (
+      <div className="card overflow-hidden">
+        <div className="flex items-center gap-3 px-5 py-4 border-b border-slate-100">
+          <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500 flex-shrink-0">
+            <Megaphone size={15} />
+          </div>
+          <div>
+            <h3 className="text-sm font-bold text-slate-800">Channel Jualan</h3>
+            <p className="text-xs text-slate-400">{(channels?.data ?? []).length} channel · Dipakai untuk penanda listing produk</p>
+          </div>
+        </div>
+
+        <table className="w-full">
+          <thead>
+            <tr className="border-b border-slate-100 bg-slate-50/50">
+              <th className="px-4 py-2.5 text-left text-xs font-semibold text-slate-400 uppercase tracking-wide">Nama</th>
+              <th className="px-4 py-2.5 text-center text-xs font-semibold text-slate-400 uppercase tracking-wide w-32">Status</th>
+              <th className="px-4 py-2.5 w-16" />
+            </tr>
+          </thead>
+          <tbody>
+            {channelsLoading ? (
+              <tr><td colSpan={3} className="px-4 py-6 text-center text-sm text-slate-400">Memuat…</td></tr>
+            ) : (channels?.data ?? []).length === 0 ? (
+              <tr><td colSpan={3} className="px-4 py-8 text-center text-sm text-slate-300">Belum ada channel</td></tr>
+            ) : (channels?.data ?? []).map(c => (
+              <tr key={c.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/60">
+                <td className="px-4 py-3 text-sm font-medium text-slate-700">{c.name}</td>
+                <td className="px-4 py-3 text-center">
+                  <button
+                    onClick={() => toggleChannelActive.mutate([c.id, !c.isActive])}
+                    className={`inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full font-medium transition-colors ${
+                      c.isActive
+                        ? 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200'
+                        : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                    }`}
+                  >
+                    {c.isActive ? 'Aktif' : 'Nonaktif'}
+                  </button>
+                </td>
+                <td className="px-4 py-3 text-right">
+                  <button
+                    onClick={() => { if (confirm(`Hapus channel "${c.name}"? Penanda listing SKU di channel ini juga akan terhapus.`)) delChannel.mutate(c.id) }}
+                    className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                </td>
+              </tr>
+            ))}
+            {/* Add row */}
+            <tr className="border-t border-slate-100 bg-slate-50/30">
+              <td className="px-4 py-2.5" colSpan={2}>
+                <input
+                  value={newChannelName}
+                  onChange={e => setNewChannelName(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && newChannelName.trim() && !blocked && addChannel.mutate()}
+                  placeholder="Nama channel baru… (mis. Shopee, Website)"
+                  className="input py-1 text-sm w-full max-w-xs"
+                  disabled={blocked}
+                />
+              </td>
+              <td className="px-4 py-2.5 text-right">
+                <button
+                  onClick={() => newChannelName.trim() && addChannel.mutate()}
+                  disabled={!newChannelName.trim() || addChannel.isPending || blocked}
+                  className="p-1.5 rounded bg-brand text-white hover:bg-brand/90 disabled:opacity-40"
+                >
+                  {addChannel.isPending ? <Loader2 size={13} className="animate-spin" /> : <Plus size={13} />}
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      )}
     </div>
   )
 }
