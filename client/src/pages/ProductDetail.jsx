@@ -279,6 +279,12 @@ export default function ProductDetail() {
                     : <span className="text-slate-300 text-xs">—</span>}
                 </div>
                 <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Sub Kategori</p>
+                  {product.SubCategory
+                    ? <span className="badge-muted">{product.SubCategory.name}</span>
+                    : <span className="text-slate-300 text-xs">—</span>}
+                </div>
+                <div>
                   <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Koleksi</p>
                   {product.Article
                     ? <span className="badge-muted">{product.Article.name}</span>

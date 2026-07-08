@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { categoriesApi, articlesApi, requestTypeApi, channelsApi } from '../api'
+import { categoriesApi, articlesApi, subCategoriesApi, requestTypeApi, channelsApi } from '../api'
 import { Pagination } from '../components/Table'
 import SearchBar from '../components/SearchBar'
 import toast from 'react-hot-toast'
-import { Plus, Pencil, Trash2, Check, X, Loader2, Tag, BookOpen, Building2, Truck, FileText, Megaphone } from 'lucide-react'
+import { Plus, Pencil, Trash2, Check, X, Loader2, Tag, BookOpen, Building2, Truck, FileText, Megaphone, Layers } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useSelectedCompany } from '../context/SelectedCompanyContext'
 
@@ -237,6 +237,8 @@ export default function Catalog() {
   const [catSearch, setCatSearch] = useState('')
   const [artPage, setArtPage] = useState(1)
   const [artSearch, setArtSearch] = useState('')
+  const [subCatPage, setSubCatPage] = useState(1)
+  const [subCatSearch, setSubCatSearch] = useState('')
 
   // ── Categories ─────────────────────────────────────────────────────────────
   const { data: catData, isLoading: catLoading } = useQuery({
@@ -279,6 +281,28 @@ export default function Catalog() {
   const delArt = useMutation({
     mutationFn: id => articlesApi.remove(id),
     onSuccess:  () => { qc.invalidateQueries({ queryKey: ['articles'] }); toast.success('Koleksi dihapus') },
+    onError:    e  => toast.error(e.response?.data?.message || 'Gagal menghapus — mungkin masih dipakai produk'),
+  })
+
+  // ── Sub Categories ─────────────────────────────────────────────────────────
+  const { data: subCatData, isLoading: subCatLoading } = useQuery({
+    queryKey: ['sub-categories', { page: subCatPage, name: subCatSearch, companyId: selectedCompany?.id }],
+    queryFn:  () => subCategoriesApi.list({ page: subCatPage, limit: 8, name: subCatSearch || undefined }),
+  })
+
+  const addSubCat = useMutation({
+    mutationFn: name => subCategoriesApi.create({ name }),
+    onSuccess:  () => { qc.invalidateQueries({ queryKey: ['sub-categories'] }); toast.success('Sub kategori ditambahkan') },
+    onError:    e  => toast.error(e.response?.data?.message || 'Gagal menambah sub kategori'),
+  })
+  const saveSubCat = useMutation({
+    mutationFn: ([id, name]) => subCategoriesApi.update(id, { name }),
+    onSuccess:  () => { qc.invalidateQueries({ queryKey: ['sub-categories'] }); toast.success('Sub kategori diperbarui') },
+    onError:    e  => toast.error(e.response?.data?.message || 'Gagal memperbarui'),
+  })
+  const delSubCat = useMutation({
+    mutationFn: id => subCategoriesApi.remove(id),
+    onSuccess:  () => { qc.invalidateQueries({ queryKey: ['sub-categories'] }); toast.success('Sub kategori dihapus') },
     onError:    e  => toast.error(e.response?.data?.message || 'Gagal menghapus — mungkin masih dipakai produk'),
   })
 
@@ -362,7 +386,7 @@ export default function Catalog() {
   }
 
   return (
-    <div className="px-6 py-6 max-w-3xl mx-auto space-y-6">
+    <div className="px-6 py-6 max-w-5xl mx-auto space-y-6">
       <div>
         <h2 className="text-xl font-bold text-slate-800">Data Master</h2>
         <p className="text-sm text-slate-400 mt-0.5">Kelola kategori, koleksi, jenis pengajuan, dan channel jualan</p>
@@ -378,7 +402,7 @@ export default function Catalog() {
       )}
 
       {canManageCatalog && (
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         <CatalogTable
           title="Kategori"
           icon={Tag}
@@ -408,6 +432,22 @@ export default function Catalog() {
           onAdd={name => addArt.mutateAsync(name)}
           onSave={(id, name) => saveArt.mutateAsync([id, name])}
           onDelete={confirmDelete(delArt.mutate)}
+          disabled={blocked}
+        />
+
+        <CatalogTable
+          title="Sub Kategori"
+          icon={Layers}
+          data={subCatData?.data}
+          pagination={subCatData?.pagination}
+          isLoading={subCatLoading}
+          placeholder="Nama sub kategori baru…"
+          search={subCatSearch}
+          onSearch={v => { setSubCatSearch(v); setSubCatPage(1) }}
+          onPageChange={setSubCatPage}
+          onAdd={name => addSubCat.mutateAsync(name)}
+          onSave={(id, name) => saveSubCat.mutateAsync([id, name])}
+          onDelete={confirmDelete(delSubCat.mutate)}
           disabled={blocked}
         />
       </div>

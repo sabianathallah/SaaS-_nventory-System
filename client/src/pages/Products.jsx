@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { productsApi, categoriesApi, articlesApi, warehousesApi, productSkusApi, skuWarehouseStocksApi, channelsApi, skuChannelStocksApi } from '../api'
+import { productsApi, categoriesApi, articlesApi, subCategoriesApi, warehousesApi, productSkusApi, skuWarehouseStocksApi, channelsApi, skuChannelStocksApi } from '../api'
 import SearchBar from '../components/SearchBar'
 import SearchableSelect from '../components/SearchableSelect'
 import { Pagination } from '../components/Table'
@@ -193,7 +193,7 @@ function SkuRows({ product, onOpenQr, warehouseId, canManageChannel }) {
   if (isLoading) {
     return (
       <tr>
-        <td colSpan={8} className="px-4 py-3 bg-slate-50/60 border-b border-slate-100">
+        <td colSpan={9} className="px-4 py-3 bg-slate-50/60 border-b border-slate-100">
           <div className="flex items-center gap-2 pl-12 text-xs text-slate-400">
             <Loader2 size={12} className="animate-spin" /> Memuat SKU…
           </div>
@@ -205,7 +205,7 @@ function SkuRows({ product, onOpenQr, warehouseId, canManageChannel }) {
   if (!skus?.length) {
     return (
       <tr>
-        <td colSpan={8} className="px-4 py-3 bg-slate-50/60 border-b border-slate-100">
+        <td colSpan={9} className="px-4 py-3 bg-slate-50/60 border-b border-slate-100">
           <p className="pl-12 text-xs text-slate-400 italic">Belum ada SKU.</p>
         </td>
       </tr>
@@ -216,7 +216,7 @@ function SkuRows({ product, onOpenQr, warehouseId, canManageChannel }) {
     <>
       {/* SKU header */}
       <tr className="bg-slate-50/80">
-        <td colSpan={8} className="pt-0 pb-0">
+        <td colSpan={9} className="pt-0 pb-0">
           <div className="ml-14 mr-4 mt-2">
             <div className="grid text-[10px] font-bold uppercase tracking-widest text-slate-400 border-b border-slate-200 pb-1.5"
               style={{ gridTemplateColumns: '1fr 160px 90px 150px 140px 60px' }}>
@@ -241,7 +241,7 @@ function SkuRows({ product, onOpenQr, warehouseId, canManageChannel }) {
         const listedChannels = (channelStocks ?? []).filter(s => s.ProductSKUId === sku.id && s.isListed)
         return (
           <tr key={sku.id} className="bg-slate-50/60 hover:bg-slate-100/60 transition-colors">
-            <td colSpan={8} className={`py-0 ${isLast ? 'pb-2 border-b border-slate-200' : ''}`}>
+            <td colSpan={9} className={`py-0 ${isLast ? 'pb-2 border-b border-slate-200' : ''}`}>
               <div
                 className="ml-14 mr-4 grid items-center py-2 border-b border-slate-100 last:border-0"
                 style={{ gridTemplateColumns: '1fr 160px 90px 150px 140px 60px' }}
@@ -405,6 +405,13 @@ function ProductRow({ product, expanded, onToggle, onDelete, onNavigate, onOpenQ
             : <span className="text-slate-300 text-xs">—</span>}
         </td>
 
+        {/* Sub Kategori */}
+        <td className="td w-28">
+          {product.SubCategory
+            ? <span className="badge-muted">{product.SubCategory.name}</span>
+            : <span className="text-slate-300 text-xs">—</span>}
+        </td>
+
         {/* Koleksi */}
         <td className="td w-32">
           {product.Article
@@ -495,7 +502,7 @@ function ProductRow({ product, expanded, onToggle, onDelete, onNavigate, onOpenQ
         skuCnt > 0
           ? <SkuRows product={product} onOpenQr={onOpenQr} warehouseId={warehouseId} canManageChannel={canManageChannel} />
           : <tr>
-              <td colSpan={canViewValue ? 9 : 8} className="border-b border-slate-100 bg-slate-50/60">
+              <td colSpan={canViewValue ? 10 : 9} className="border-b border-slate-100 bg-slate-50/60">
                 <div className="ml-14 mr-4 py-4 flex items-center gap-4">
                   <div className="flex-1">
                     <p className="text-xs font-semibold text-slate-500">Belum ada SKU</p>
@@ -537,9 +544,11 @@ export default function Products() {
   const page      = Number(searchParams.get('page')  || '1')
   const limit     = Number(searchParams.get('limit') || '15')
   const search    = searchParams.get('q')    || ''
-  const catFilter = searchParams.get('cat')  || ''
-  const artFilter = searchParams.get('art')  || ''
-  const whFilter  = searchParams.get('wh')   || ''
+  const catFilter    = searchParams.get('cat')    || ''
+  const artFilter    = searchParams.get('art')    || ''
+  const subCatFilter = searchParams.get('subcat') || ''
+  const chFilter     = searchParams.get('ch')     || ''
+  const whFilter     = searchParams.get('wh')     || ''
   const sort      = { col: searchParams.get('sortBy') || 'name', dir: searchParams.get('sortDir') || 'asc' }
 
   const sp = (updates) => setSearchParams(prev => {
@@ -551,6 +560,8 @@ export default function Products() {
   const setSearch = (v) => sp({ q: v, page: '1' })
   const setCat    = (v) => sp({ cat: v, page: '1' })
   const setArt    = (v) => sp({ art: v, page: '1' })
+  const setSubCat = (v) => sp({ subcat: v, page: '1' })
+  const setCh     = (v) => sp({ ch: v, page: '1' })
   const setWh     = (v) => sp({ wh: v, page: '1' })
   const setSort   = (fn) => {
     const next = fn(sort)
@@ -575,24 +586,30 @@ export default function Products() {
   }
 
   const { data, isLoading } = useQuery({
-    queryKey: ['products', { page, limit, name: search, CategoryId: catFilter, ArticleId: artFilter, WarehouseId: whFilter, sortBy: sort.col, sortOrder: sort.dir }],
+    queryKey: ['products', { page, limit, name: search, CategoryId: catFilter, ArticleId: artFilter, SubCategoryId: subCatFilter, ChannelId: chFilter, WarehouseId: whFilter, sortBy: sort.col, sortOrder: sort.dir }],
     queryFn:  () => productsApi.list({
       page, limit, name: search,
-      CategoryId:  catFilter  || undefined,
-      ArticleId:   artFilter  || undefined,
-      WarehouseId: whFilter   || undefined,
+      CategoryId:    catFilter    || undefined,
+      ArticleId:     artFilter    || undefined,
+      SubCategoryId: subCatFilter || undefined,
+      ChannelId:     chFilter     || undefined,
+      WarehouseId:   whFilter     || undefined,
       sortBy:      sort.col,
       sortOrder:   sort.dir,
     }),
   })
 
-  const { data: cats } = useQuery({ queryKey: ['categories', { limit: 200 }], queryFn: () => categoriesApi.list({ limit: 200 }) })
-  const { data: arts } = useQuery({ queryKey: ['articles',   { limit: 200 }], queryFn: () => articlesApi.list({ limit: 200 }) })
-  const { data: whs  } = useQuery({ queryKey: ['warehouses', { limit: 200 }], queryFn: () => warehousesApi.list({ limit: 200 }) })
+  const { data: cats }     = useQuery({ queryKey: ['categories', { limit: 200 }], queryFn: () => categoriesApi.list({ limit: 200 }) })
+  const { data: arts }     = useQuery({ queryKey: ['articles',   { limit: 200 }], queryFn: () => articlesApi.list({ limit: 200 }) })
+  const { data: subCats }  = useQuery({ queryKey: ['sub-categories', { limit: 200 }], queryFn: () => subCategoriesApi.list({ limit: 200 }) })
+  const { data: chs }      = useQuery({ queryKey: ['channels', { limit: 200 }], queryFn: () => channelsApi.list({ limit: 200 }) })
+  const { data: whs  }     = useQuery({ queryKey: ['warehouses', { limit: 200 }], queryFn: () => warehousesApi.list({ limit: 200 }) })
 
-  const catOptions = cats?.data ?? []
-  const artOptions = arts?.data ?? []
-  const whOptions  = whs?.data  ?? []
+  const catOptions    = cats?.data ?? []
+  const artOptions    = arts?.data ?? []
+  const chOptions     = chs?.data ?? []
+  const subCatOptions = subCats?.data ?? []
+  const whOptions     = whs?.data  ?? []
 
   const del = useMutation({
     mutationFn: id => productsApi.remove(id),
@@ -602,8 +619,8 @@ export default function Products() {
 
   const rows         = data?.data ?? []
   const pagination   = data?.pagination
-  const activeFilters = [catFilter, artFilter, whFilter].filter(Boolean).length
-  const isFiltered   = !!(search || catFilter || artFilter || whFilter)
+  const activeFilters = [catFilter, artFilter, subCatFilter, chFilter, whFilter].filter(Boolean).length
+  const isFiltered   = !!(search || catFilter || artFilter || subCatFilter || chFilter || whFilter)
 
   const [exporting, setExporting] = useState(false)
   const handleExportExcel = async () => {
@@ -613,6 +630,8 @@ export default function Products() {
         limit: 9999, name: search,
         CategoryId: catFilter || undefined,
         ArticleId:  artFilter || undefined,
+        SubCategoryId: subCatFilter || undefined,
+        ChannelId: chFilter || undefined,
         WarehouseId: whFilter || undefined,
         sortBy: sort.col, sortOrder: sort.dir,
       })
@@ -629,13 +648,13 @@ export default function Products() {
         listingByProduct.set(productId, set)
       })
 
-      const headers = ['No', 'Nama Produk', 'Unit', 'Tipe', 'Koleksi', 'Total SKU', 'Total Stok', 'Harga Min (Rp)', 'Harga Max (Rp)', 'Listing di Channel']
+      const headers = ['No', 'Nama Produk', 'Unit', 'Tipe', 'Sub Kategori', 'Koleksi', 'Total SKU', 'Total Stok', 'Harga Min (Rp)', 'Harga Max (Rp)', 'Listing di Channel']
       const rows = result.data.map((p, i) => {
         const skus   = p.ProductSKUs ?? []
         const prices = skus.map(s => Number(s.price || 0)).filter(Boolean)
         const listing = [...(listingByProduct.get(p.id) ?? [])].join(', ')
         return [
-          i + 1, p.name, p.unit ?? '', p.Category?.name ?? '', p.Article?.name ?? '',
+          i + 1, p.name, p.unit ?? '', p.Category?.name ?? '', p.SubCategory?.name ?? '', p.Article?.name ?? '',
           skus.length, Number(p.totalStock ?? 0),
           prices.length ? Math.min(...prices) : '',
           prices.length ? Math.max(...prices) : '',
@@ -707,6 +726,20 @@ export default function Products() {
             className="w-40"
           />
           <SearchableSelect
+            value={subCatFilter}
+            onChange={v => { setSubCat(v); setPage(1) }}
+            options={[{ value: '', label: 'Semua sub kategori' }, ...subCatOptions.map(s => ({ value: s.id, label: s.name }))]}
+            placeholder="Semua sub kategori"
+            className="w-44"
+          />
+          <SearchableSelect
+            value={chFilter}
+            onChange={v => { setCh(v); setPage(1) }}
+            options={[{ value: '', label: 'Semua channel' }, ...chOptions.map(c => ({ value: c.id, label: c.name }))]}
+            placeholder="Semua channel"
+            className="w-40"
+          />
+          <SearchableSelect
             value={whFilter}
             onChange={v => { setWh(v); setPage(1) }}
             options={[{ value: '', label: 'Semua gudang' }, ...whOptions.map(w => ({ value: w.id, label: w.name }))]}
@@ -715,7 +748,7 @@ export default function Products() {
           />
           {activeFilters > 0 && (
             <button
-              onClick={() => setSearchParams(prev => { ['cat','art','wh'].forEach(k => prev.delete(k)); prev.set('page','1'); return prev }, { replace: true })}
+              onClick={() => setSearchParams(prev => { ['cat','art','subcat','ch','wh'].forEach(k => prev.delete(k)); prev.set('page','1'); return prev }, { replace: true })}
               className="text-xs text-slate-400 hover:text-slate-700 underline whitespace-nowrap"
             >
               Reset filter
@@ -741,6 +774,7 @@ export default function Products() {
                     <th className="th w-10 pr-0" />
                     <SortTh label="Produk"  col="name"       sort={sort} onSort={handleSort} />
                     <th className="th w-32">Tipe</th>
+                    <th className="th w-28">Sub Kategori</th>
                     <th className="th w-32">Koleksi</th>
                     <th className="th w-24">SKU</th>
                     <th className="th w-44">Harga</th>

@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
-  productsApi, categoriesApi, articlesApi,
+  productsApi, categoriesApi, articlesApi, subCategoriesApi,
   productVariantsApi, productSkusApi,
 } from '../api'
 import CreatableSelect from '../components/CreatableSelect'
@@ -25,7 +25,7 @@ import { CSS } from '@dnd-kit/utilities'
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 const MAX_IMAGE   = 5 * 1024 * 1024
-const EMPTY_FORM  = { name: '', unit: '', CategoryId: '', ArticleId: '', image: null, imageUrl: '' }
+const EMPTY_FORM  = { name: '', unit: '', CategoryId: '', ArticleId: '', SubCategoryId: '', image: null, imageUrl: '' }
 const DEFAULT_UNITS = ['pcs', 'unit'].map(u => ({ id: u, name: u }))
 
 function cartesian(types) {
@@ -466,14 +466,16 @@ export default function ProductEdit() {
   useEffect(() => {
     if (!product || isNew) return
     const unit = product.unit || ''
-    setForm({ name: product.name || '', unit, CategoryId: product.CategoryId ?? '', ArticleId: product.ArticleId ?? '', image: null, imageUrl: product.imageUrl || '' })
+    setForm({ name: product.name || '', unit, CategoryId: product.CategoryId ?? '', ArticleId: product.ArticleId ?? '', SubCategoryId: product.SubCategoryId ?? '', image: null, imageUrl: product.imageUrl || '' })
     if (unit && !DEFAULT_UNITS.some(u => u.id === unit)) setUnitOptions(prev => prev.some(u => u.id === unit) ? prev : [...prev, { id: unit, name: unit }])
   }, [product?.id])
 
   const { data: cats } = useQuery({ queryKey: ['categories', { limit: 200 }], queryFn: () => categoriesApi.list({ limit: 200 }) })
   const { data: arts } = useQuery({ queryKey: ['articles',   { limit: 200 }], queryFn: () => articlesApi.list({ limit: 200 }) })
-  const catOptions = cats?.data ?? []
-  const artOptions = arts?.data ?? []
+  const { data: subCats } = useQuery({ queryKey: ['sub-categories', { limit: 200 }], queryFn: () => subCategoriesApi.list({ limit: 200 }) })
+  const catOptions    = cats?.data ?? []
+  const artOptions    = arts?.data ?? []
+  const subCatOptions = subCats?.data ?? []
 
   const save = useMutation({
     mutationFn: (data) => isNew ? productsApi.create(data) : productsApi.update(id, data),
@@ -507,6 +509,11 @@ export default function ProductEdit() {
     onSuccess: (a) => { qc.invalidateQueries({ queryKey: ['articles'] }); toast.success(`Koleksi "${a.name}" ditambahkan`); return a },
     onError: e => { toast.error(e.response?.data?.message || 'Gagal'); throw e },
   })
+  const createSubCategory = useMutation({
+    mutationFn: name => subCategoriesApi.create({ name }),
+    onSuccess: (s) => { qc.invalidateQueries({ queryKey: ['sub-categories'] }); toast.success(`Sub kategori "${s.name}" ditambahkan`); return s },
+    onError: e => { toast.error(e.response?.data?.message || 'Gagal'); throw e },
+  })
 
   const handleSubmit = (e) => {
     e.preventDefault()
@@ -516,6 +523,7 @@ export default function ProductEdit() {
     setCatError(false)
     const payload = { ...form }
     if (!payload.ArticleId) payload.ArticleId = null
+    if (!payload.SubCategoryId) payload.SubCategoryId = null
     if (!isNew && !payload.image && payload.imageUrl === (product?.imageUrl || '')) delete payload.imageUrl
     save.mutate(payload)
   }
@@ -625,6 +633,7 @@ export default function ProductEdit() {
                     <CreatableSelect label="Unit / Satuan" required error={unitError} value={form.unit} onChange={val => { setForm(f => ({ ...f, unit: val })); setUnitError(false) }} options={unitOptions} placeholder="Pilih atau buat satuan…" createLabel="Satuan Baru" onCreateNew={async name => { const o = { id: name, name }; setUnitOptions(p => [...p, o]); return o }} />
                     <CreatableSelect label="Kategori" required error={catError} value={form.CategoryId} onChange={val => { setForm(f => ({ ...f, CategoryId: val })); setCatError(false) }} options={catOptions} placeholder="Pilih atau buat kategori…" createLabel="Tambah Kategori" onCreateNew={name => createCategory.mutateAsync(name)} />
                     <CreatableSelect label="Koleksi (opsional)" value={form.ArticleId} onChange={artId => setForm(f => ({ ...f, ArticleId: artId }))} options={artOptions} placeholder="Pilih atau buat koleksi…" createLabel="Add New Koleksi" onCreateNew={name => createArticle.mutateAsync(name)} />
+                    <CreatableSelect label="Sub Kategori (opsional)" value={form.SubCategoryId} onChange={val => setForm(f => ({ ...f, SubCategoryId: val }))} options={subCatOptions} placeholder="Pilih atau buat sub kategori…" createLabel="Tambah Sub Kategori" onCreateNew={name => createSubCategory.mutateAsync(name)} />
                   </div>
                 </div>
               </form>

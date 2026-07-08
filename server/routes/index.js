@@ -9,6 +9,7 @@ const LoginController = require('../controllers/loginController');
 const dashboardRouter          = require('./dashboard');
 const companyRouter            = require('./company');
 const categoryRouter           = require('./category');
+const subCategoryRouter        = require('./sub_category');
 const articleRouter            = require('./article');
 const productRouter            = require('./product');
 const productVariantRouter     = require('./product_variant');
@@ -72,6 +73,7 @@ router.get('/me/permissions', async (req, res, next) => {
 
 router.use('/dashboard',  dashboardRouter);
 router.use('/categories', categoryRouter);
+router.use('/sub-categories', subCategoryRouter);
 router.use('/articles',   articleRouter);
 router.use('/products',   productRouter);
 router.use('/products/:productId/variant-types', productVariantRouter);

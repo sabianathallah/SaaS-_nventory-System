@@ -29,8 +29,9 @@ const toPayload = (data) => {
 
 // ── Resources ─────────────────────────────────────────────────────────────────
 export const dashboardApi  = { getStats: (params) => api.get('/dashboard/stats', { params }).then(r => r.data) }
-export const categoriesApi = crud('/categories')
-export const articlesApi   = crud('/articles')
+export const categoriesApi    = crud('/categories')
+export const articlesApi      = crud('/articles')
+export const subCategoriesApi = crud('/sub-categories')
 
 export const productsApi = {
   ...crud('/products'),

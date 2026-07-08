@@ -1,6 +1,6 @@
 'use strict';
 const { Op } = require('sequelize');
-const { sequelize, Product, Category, Article, ProductVariantType, ProductVariantOption, ProductSKU, Stock } = require('../models');
+const { sequelize, Product, Category, Article, SubCategory, ProductVariantType, ProductVariantOption, ProductSKU, Stock } = require('../models');
 const { companyFilter, companyId } = require('../helpers/tenancy');
 const { paginate, buildFilter, paginatedResponse } = require('../helpers/queryHelper');
 const { destroyByUrl } = require('../helpers/cloudinary');
@@ -12,10 +12,21 @@ class ProductController {
         try {
             const { page, limit, offset } = paginate(req.query);
             const filter = buildFilter(req.query, {
-                sku:        'like',
-                CategoryId: 'exact',
-                ArticleId:  'exact',
+                sku:           'like',
+                CategoryId:    'exact',
+                ArticleId:     'exact',
+                SubCategoryId: 'exact',
             });
+
+            if (req.query.ChannelId) {
+                const chId = parseInt(req.query.ChannelId);
+                if (Number.isFinite(chId)) {
+                    filter[Op.and] = [
+                        ...(filter[Op.and] || []),
+                        sequelize.literal(`EXISTS (SELECT 1 FROM "SkuChannelStocks" scs JOIN "ProductSKUs" sk ON sk.id = scs."ProductSKUId" WHERE sk."ProductId" = "Product"."id" AND scs."ChannelId" = ${chId} AND scs."isListed" = true)`),
+                    ];
+                }
+            }
 
             if (req.query.name || req.query.search) {
                 const term = req.query.name || req.query.search;
@@ -61,8 +72,9 @@ class ProductController {
                     ],
                 },
                 include: [
-                    { model: Category,   attributes: ['id', 'name'] },
-                    { model: Article,    attributes: ['id', 'name'] },
+                    { model: Category,    attributes: ['id', 'name'] },
+                    { model: Article,     attributes: ['id', 'name'] },
+                    { model: SubCategory, attributes: ['id', 'name'] },
                     { model: ProductSKU, attributes: ['id', 'sku_code', 'price', 'qty'] },
                     { model: ProductVariantType, attributes: ['id', 'name'],
                       include: [{ model: ProductVariantOption, attributes: ['id', 'value'] }] },
@@ -84,8 +96,9 @@ class ProductController {
                     ]],
                 },
                 include: [
-                    { model: Category, attributes: ['id', 'name'] },
-                    { model: Article,  attributes: ['id', 'name'] },
+                    { model: Category,    attributes: ['id', 'name'] },
+                    { model: Article,     attributes: ['id', 'name'] },
+                    { model: SubCategory, attributes: ['id', 'name'] },
                     {
                         model: ProductVariantType,
                         include: [{ model: ProductVariantOption, attributes: ['id', 'value'] }],
