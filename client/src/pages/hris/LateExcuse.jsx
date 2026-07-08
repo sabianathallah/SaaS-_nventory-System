@@ -9,6 +9,13 @@ const STATUS_LABEL = { PENDING: 'Menunggu', APPROVED: 'Disetujui', REJECTED: 'Di
 const STATUS_COLOR = { PENDING: 'badge-amber', APPROVED: 'badge-green', REJECTED: 'badge-red', CANCELLED: 'badge-muted' }
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'
 
+// Tanggal "hari ini" di zona waktu Jakarta — backend juga pakai Asia/Jakarta
+// (bukan toISOString() yang UTC), biar batas minimal tanggal nggak geser
+// dekat tengah malam.
+function todayJakarta() {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jakarta', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
+}
+
 export default function LateExcuse() {
   const { hasPermission, user } = useAuth()
   const canReview = hasPermission('hris.attendance.review') || user?.role === 'SUPER_ADMIN' || user?.role === 'COMPANY_ADMIN'
@@ -16,7 +23,6 @@ export default function LateExcuse() {
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState({ date: '', expectedTime: '', reason: '' })
 
-  const now = new Date()
   const { data: list, isLoading } = useQuery({ queryKey: ['hris-late-excuse'], queryFn: () => hrisApi.lateExcuseList({ limit: 30 }) })
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ['hris-late-excuse'] })
@@ -58,7 +64,7 @@ export default function LateExcuse() {
         >
           <div>
             <label className="label">Tanggal</label>
-            <input type="date" required min={now.toISOString().slice(0, 10)} className="input" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />
+            <input type="date" required min={todayJakarta()} className="input" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />
           </div>
           <div>
             <label className="label">Perkiraan Jam Datang</label>

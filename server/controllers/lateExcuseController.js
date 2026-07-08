@@ -1,5 +1,5 @@
 'use strict';
-const { LateExcuseRequest, User } = require('../models');
+const { LateExcuseRequest, User, Attendance, sequelize } = require('../models');
 const { companyFilter, companyId } = require('../helpers/tenancy');
 const { paginate, buildFilter, paginatedResponse } = require('../helpers/queryHelper');
 const { userHasPermission } = require('../helpers/permCheck');
@@ -40,21 +40,30 @@ class LateExcuseController {
             if (date < todayDateOnly()) throw { name: 'BadRequest', message: 'Tidak bisa mengajukan izin telat untuk tanggal yang sudah lewat' };
             if (!reason || !reason.trim()) throw { name: 'BadRequest', message: 'Alasan wajib diisi' };
 
-            const existing = await LateExcuseRequest.findOne({
-                where: { userId: req.user.id, date, status: ['PENDING', 'APPROVED'] },
-            });
-            if (existing) throw { name: 'BadRequest', message: 'Sudah ada pengajuan izin telat untuk tanggal ini' };
+            const request = await sequelize.transaction(async (t) => {
+                const existing = await LateExcuseRequest.findOne({
+                    where: { userId: req.user.id, date, status: ['PENDING', 'APPROVED'] },
+                    transaction: t,
+                    lock: t.LOCK.UPDATE,
+                });
+                if (existing) throw { name: 'BadRequest', message: 'Sudah ada pengajuan izin telat untuk tanggal ini' };
 
-            const request = await LateExcuseRequest.create({
-                userId: req.user.id,
-                date,
-                expectedTime: expectedTime || null,
-                reason: reason.trim(),
-                status: 'PENDING',
-                companyId: companyId(req) ?? req.user.companyId,
+                return LateExcuseRequest.create({
+                    userId: req.user.id,
+                    date,
+                    expectedTime: expectedTime || null,
+                    reason: reason.trim(),
+                    status: 'PENDING',
+                    companyId: companyId(req) ?? req.user.companyId,
+                }, { transaction: t });
             });
             res.status(201).json(request);
-        } catch (err) { next(err); }
+        } catch (err) {
+            if (err.name === 'SequelizeUniqueConstraintError') {
+                return res.status(400).json({ message: 'Sudah ada pengajuan izin telat untuk tanggal ini' });
+            }
+            next(err);
+        }
     }
 
     static async review(req, res, next) {
@@ -74,6 +83,26 @@ class LateExcuseController {
                 reviewedAt: new Date(),
                 reviewNote: reviewNote || null,
             });
+
+            // Kalau karyawan sudah keburu check-in (tercatat LATE) sebelum izin ini
+            // di-review, reconcile record Attendance-nya sekarang — jangan biarkan
+            // nyangkut LATE padahal izinnya sudah disetujui.
+            if (status === 'APPROVED') {
+                const attendance = await Attendance.findOne({
+                    where: { userId: request.userId, date: request.date, status: 'LATE' },
+                });
+                if (attendance) {
+                    await attendance.update({
+                        status: 'PRESENT',
+                        lateExcuseStatus: 'APPROVED',
+                        lateExcuseReason: request.reason,
+                        lateExcuseRequestId: request.id,
+                        lateExcuseReviewedBy: request.reviewedBy,
+                        lateExcuseReviewedAt: request.reviewedAt,
+                    });
+                }
+            }
+
             res.json(request);
         } catch (err) { next(err); }
     }
