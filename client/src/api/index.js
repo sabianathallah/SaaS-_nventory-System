@@ -63,8 +63,9 @@ export const skuWarehouseStocksApi  = {
 }
 export const channelsApi = crud('/channels')
 export const skuChannelStocksApi = {
-  list:   (params) => api.get('/sku-channel-stocks', { params }).then(r => r.data),
-  upsert: (data)    => api.put('/sku-channel-stocks', data).then(r => r.data),
+  list:        (params) => api.get('/sku-channel-stocks', { params }).then(r => r.data),
+  upsert:      (data)    => api.put('/sku-channel-stocks', data).then(r => r.data),
+  bulkPublish: (data)    => api.put('/sku-channel-stocks/bulk-publish', data).then(r => r.data),
 }
 export const stockInApi = {
   ...crud('/stock-in-headers'),

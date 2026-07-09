@@ -161,11 +161,80 @@ function ChannelStockModal({ sku, productName, variantLabel: label, onClose }) {
   )
 }
 
+// ── Bulk publish modal (semua SKU 1 produk sekaligus) ────────────────────────
+
+function BulkPublishModal({ productId, productName, skuCount, onClose }) {
+  const qc = useQueryClient()
+
+  const { data: channels } = useQuery({
+    queryKey: ['channels', { limit: 200 }],
+    queryFn:  () => channelsApi.list({ limit: 200 }),
+  })
+  const activeChannels = (channels?.data ?? []).filter(c => c.isActive)
+
+  const [checked, setChecked] = useState({})
+
+  const publish = useMutation({
+    mutationFn: () => {
+      const channelIds = Object.entries(checked).filter(([, v]) => v).map(([id]) => Number(id))
+      return skuChannelStocksApi.bulkPublish({ ProductId: productId, channelIds })
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['sku-channel-stocks'] })
+      toast.success('Semua SKU produk ini sudah dipublish')
+      onClose()
+    },
+    onError: e => toast.error(e.response?.data?.message || 'Gagal publish'),
+  })
+
+  const anyChecked = Object.values(checked).some(Boolean)
+
+  return (
+    <Modal open onClose={onClose} title="Publish Semua SKU" size="sm">
+      <p className="text-xs text-slate-400 mb-4">
+        {productName} <span className="font-semibold text-slate-500">({skuCount} SKU)</span> akan langsung di-listing ke channel yang dicentang di bawah ini.
+      </p>
+      {!channels ? (
+        <div className="py-6 text-center text-sm text-slate-400">Memuat…</div>
+      ) : activeChannels.length === 0 ? (
+        <p className="text-sm text-slate-500">
+          Belum ada channel aktif. Tambahkan dulu di halaman <span className="font-semibold">Channel Jualan</span>.
+        </p>
+      ) : (
+        <div className="space-y-1">
+          {activeChannels.map(c => (
+            <label key={c.id} className="flex items-center justify-between gap-3 py-1.5 cursor-pointer select-none">
+              <span className="text-sm text-slate-700">{c.name}</span>
+              <input
+                type="checkbox"
+                className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                checked={!!checked[c.id]}
+                onChange={e => setChecked(m => ({ ...m, [c.id]: e.target.checked }))}
+              />
+            </label>
+          ))}
+        </div>
+      )}
+      <div className="flex gap-2 pt-5">
+        <button onClick={onClose} className="btn-secondary flex-1 justify-center">Batal</button>
+        <button
+          onClick={() => publish.mutate()}
+          disabled={publish.isPending || !anyChecked}
+          className="btn-primary flex-1 justify-center"
+        >
+          {publish.isPending ? 'Mempublish…' : 'Publish'}
+        </button>
+      </div>
+    </Modal>
+  )
+}
+
 // ── SKU sub-rows (lazy) ───────────────────────────────────────────────────────
 
 function SkuRows({ product, onOpenQr, warehouseId, canManageChannel }) {
   const skuCount = product.ProductSKUs?.length ?? 0
   const [channelModalSku, setChannelModalSku] = useState(null)
+  const [showBulkPublish, setShowBulkPublish] = useState(false)
 
   const { data: skus, isLoading } = useQuery({
     queryKey: ['product-skus', product.id],
@@ -218,6 +287,17 @@ function SkuRows({ product, onOpenQr, warehouseId, canManageChannel }) {
       <tr className="bg-slate-50/80">
         <td colSpan={9} className="pt-0 pb-0">
           <div className="ml-14 mr-4 mt-2">
+            {canManageChannel && (
+              <div className="flex justify-end pb-1.5">
+                <button
+                  onClick={() => setShowBulkPublish(true)}
+                  className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 rounded px-2 py-1 transition-colors"
+                  title="Publish semua SKU produk ini sekaligus"
+                >
+                  <Megaphone size={12} /> Publish Semua SKU
+                </button>
+              </div>
+            )}
             <div className="grid text-[10px] font-bold uppercase tracking-widest text-slate-400 border-b border-slate-200 pb-1.5"
               style={{ gridTemplateColumns: '1fr 160px 90px 150px 140px 60px' }}>
               <span className="pl-1">SKU / Variant</span>
@@ -324,6 +404,14 @@ function SkuRows({ product, onOpenQr, warehouseId, canManageChannel }) {
           productName={product.name}
           variantLabel={variantLabel(channelModalSku)}
           onClose={() => setChannelModalSku(null)}
+        />
+      )}
+      {showBulkPublish && (
+        <BulkPublishModal
+          productId={product.id}
+          productName={product.name}
+          skuCount={skus.length}
+          onClose={() => setShowBulkPublish(false)}
         />
       )}
     </>

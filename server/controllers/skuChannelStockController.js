@@ -49,3 +49,29 @@ exports.upsert = async (req, res, next) => {
     res.status(200).json(row);
   } catch (err) { next(err); }
 };
+
+// Publish semua SKU di satu produk ke channel yang dipilih sekaligus — cuma
+// menyalakan (isListed: true) channel yang dicentang, gak nyentuh/mematikan
+// listing channel lain yang mungkin udah beda-beda per SKU.
+exports.bulkPublish = async (req, res, next) => {
+  try {
+    const { ProductId, channelIds } = req.body;
+    if (!ProductId || !Array.isArray(channelIds) || !channelIds.length) {
+      throw { name: 'BadRequest', message: 'ProductId dan channelIds wajib diisi' };
+    }
+
+    const skus = await ProductSKU.findAll({ where: { ProductId, ...companyFilter(req) }, attributes: ['id', 'companyId'] });
+    if (!skus.length) throw { name: 'NotFound', message: 'Produk tidak ditemukan atau belum punya SKU' };
+
+    const rows = [];
+    skus.forEach(sku => {
+      channelIds.forEach(ChannelId => {
+        rows.push({ ProductSKUId: sku.id, ChannelId, isListed: true, companyId: sku.companyId ?? companyId(req) });
+      });
+    });
+
+    await SkuChannelStock.bulkCreate(rows, { updateOnDuplicate: ['isListed'] });
+
+    res.json({ skuCount: skus.length, channelCount: channelIds.length });
+  } catch (err) { next(err); }
+};
