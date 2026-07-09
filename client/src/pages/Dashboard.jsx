@@ -1,11 +1,11 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { dashboardApi, movementsApi, warehousesApi } from '../api'
+import { dashboardApi, movementsApi, warehousesApi, channelsApi, skuChannelStocksApi } from '../api'
 import { useAuth } from '../context/AuthContext'
 import {
   Package, BoxesIcon, Wallet, Warehouse,
   ChevronDown, ChevronRight, Tag, TrendingUp,
-  ArrowUpRight, ArrowDownRight, LayoutGrid, ChevronLeft,
+  ArrowUpRight, ArrowDownRight, LayoutGrid, ChevronLeft, Megaphone,
 } from 'lucide-react'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip,
@@ -246,6 +246,30 @@ export default function Dashboard() {
     enabled:  canViewMovements,
   })
 
+  const { data: channels } = useQuery({
+    queryKey: ['channels', { limit: 200 }],
+    queryFn:  () => channelsApi.list({ limit: 200 }),
+    enabled:  canViewAnalytics,
+  })
+  const { data: allChannelStocks, isLoading: channelStocksLoading } = useQuery({
+    queryKey: ['sku-channel-stocks', 'all'],
+    queryFn:  () => skuChannelStocksApi.list({}),
+    enabled:  canViewAnalytics,
+  })
+
+  // Berapa artikel (produk unik) & SKU yang publish per channel — tanpa qty,
+  // cuma hitungan, dihitung dari SkuChannelStock yang isListed=true.
+  const publishByChannel = useMemo(() => {
+    const activeChannels = (channels?.data ?? []).filter(c => c.isActive)
+    const listedRows = (allChannelStocks ?? []).filter(s => s.isListed)
+    return activeChannels.map(c => {
+      const rows = listedRows.filter(s => s.ChannelId === c.id)
+      const skuIds     = new Set(rows.map(r => r.ProductSKUId))
+      const articleIds = new Set(rows.map(r => r.ProductSKU?.ProductId).filter(Boolean))
+      return { id: c.id, name: c.name, articleCount: articleIds.size, skuCount: skuIds.size }
+    })
+  }, [channels, allChannelStocks])
+
   const {
     totalProducts = 0,
     totalStock    = 0,
@@ -467,6 +491,39 @@ export default function Dashboard() {
           )}
         </div>
       </div>}
+
+      {/* ── Publikasi per Channel ─────────────────────────────── */}
+      {canViewAnalytics && (
+        <div className="card p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <Megaphone size={14} className="text-slate-500" />
+            <h3 className="text-sm font-bold text-slate-800">Publikasi per Channel</h3>
+          </div>
+
+          {channelStocksLoading ? (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {[1, 2, 3].map(i => <div key={i} className="h-16 bg-slate-100 rounded-lg animate-pulse" />)}
+            </div>
+          ) : publishByChannel.length === 0 ? (
+            <p className="text-sm text-slate-300 text-center py-8">Belum ada channel aktif</p>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {publishByChannel.map((c, i) => (
+                <div key={c.id} className="flex items-center gap-3 p-3 rounded-lg border border-slate-100 bg-slate-50/50">
+                  <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: PALETTE[i % PALETTE.length] }} />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-slate-700 truncate mb-1">{c.name}</p>
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs text-slate-500"><span className="font-bold text-slate-800 tabular-nums">{fmtNum(c.articleCount)}</span> Artikel</span>
+                      <span className="text-xs text-slate-500"><span className="font-bold text-slate-800 tabular-nums">{fmtNum(c.skuCount)}</span> SKU</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ── Bottom: Warehouse × Article + Movements ─────────── */}
       {(canViewAnalytics || canViewMovements) && <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
