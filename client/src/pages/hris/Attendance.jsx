@@ -332,7 +332,7 @@ export default function Attendance() {
         </div>
       </div>
 
-      {leaderboard && (leaderboard.mostOnTime?.length > 0 || leaderboard.mostLate?.length > 0 || leaderboard.mostAbsent?.length > 0 || leaderboard.mostSick?.length > 0) && (
+      {leaderboard && (
         <div className="mb-6">
           <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Leaderboard Kehadiran Bulan Ini</p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

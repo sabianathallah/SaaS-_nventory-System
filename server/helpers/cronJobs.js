@@ -2,13 +2,20 @@
 const cron = require('node-cron');
 const { Op } = require('sequelize');
 const { Attendance, Shift } = require('../models');
-const { todayDateOnly, addDaysStr } = require('./timezone');
+const { todayDateOnly, addDaysStr, weekdayOf } = require('./timezone');
+const { backfillAbsentForDates } = require('./absentBackfill');
 
 function setupCronJobs() {
     // Jam 00:00 WIB: siapa yang check-in kemarin tapi lupa check-out,
     // otomatis di-check-out-kan sesuai jam akhir shift-nya (bukan jam
     // sekarang), biar jam kerja yang tercatat tetap wajar.
     cron.schedule('0 0 * * *', autoCheckOutJob, { timezone: 'Asia/Jakarta' });
+
+    // Jam 00:10 WIB (setelah auto check-out): siapa yang gak check-in sama
+    // sekali kemarin, otomatis ditandai Absen — gak perlu admin klik tombol
+    // manual lagi. Sabtu/Minggu di-skip, dan lintas semua company (system job,
+    // bukan request-scoped) sekaligus.
+    cron.schedule('10 0 * * *', autoMarkAbsentJob, { timezone: 'Asia/Jakarta' });
 }
 
 async function autoCheckOutJob() {
@@ -30,6 +37,19 @@ async function autoCheckOutJob() {
         if (rows.length) console.log(`[cron] auto check-out: ${rows.length} record disesuaikan untuk ${yesterday}`);
     } catch (err) {
         console.error('[cron] auto check-out gagal:', err.message);
+    }
+}
+
+async function autoMarkAbsentJob() {
+    try {
+        const yesterday = addDaysStr(todayDateOnly(), -1);
+        const wd = weekdayOf(yesterday);
+        if (wd === 0 || wd === 6) return; // Sabtu/Minggu, gak dicek
+
+        const result = await backfillAbsentForDates([yesterday], {}, null);
+        if (result.created) console.log(`[cron] auto absen: ${result.created} record dibuat untuk ${yesterday}`);
+    } catch (err) {
+        console.error('[cron] auto absen gagal:', err.message);
     }
 }
 

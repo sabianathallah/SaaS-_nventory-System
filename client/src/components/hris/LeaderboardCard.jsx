@@ -5,8 +5,7 @@ const initials = (name = '') => name.split(' ').map(w => w[0]).join('').slice(0,
 // (lightbox dikelola di komponen pemanggil lewat onAvatarClick), dengan bar
 // tipis di bawah nama buat kasih rasa "seberapa jauh" dibanding yang lain.
 export default function LeaderboardCard({ icon: Icon, title, entries, unit, badgeClass, barClass, ringClass, fallbackClass, onAvatarClick, extra }) {
-  if (!entries?.length) return null
-  const max = Math.max(...entries.map(e => e.value))
+  const max = entries?.length ? Math.max(...entries.map(e => e.value)) : 0
 
   return (
     <div className="card p-4">
@@ -14,6 +13,9 @@ export default function LeaderboardCard({ icon: Icon, title, entries, unit, badg
         <Icon size={16} />
         <p className="text-sm font-semibold text-slate-800">{title}</p>
       </div>
+      {!entries?.length ? (
+        <p className="text-xs text-slate-400 py-2">Belum ada data bulan ini</p>
+      ) : (
       <div className="space-y-3">
         {entries.map((e, i) => (
           <div key={e.userId} className="flex items-center gap-2.5">
@@ -43,6 +45,7 @@ export default function LeaderboardCard({ icon: Icon, title, entries, unit, badg
           </div>
         ))}
       </div>
+      )}
     </div>
   )
 }

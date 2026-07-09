@@ -1,12 +1,13 @@
 'use strict';
 const { Op } = require('sequelize');
-const { Attendance, Shift, OfficeLocation, User, WfaRequest, LateExcuseRequest, SickLeaveRequest, LeaveRequest } = require('../models');
+const { Attendance, Shift, OfficeLocation, User, WfaRequest, LateExcuseRequest, SickLeaveRequest } = require('../models');
 const { companyFilter, companyId } = require('../helpers/tenancy');
 const { paginate, buildFilter, paginatedResponse } = require('../helpers/queryHelper');
 const { distanceInMeters } = require('../helpers/geo');
 const { userHasPermission } = require('../helpers/permCheck');
 const { todayDateOnly, nowPartsInJakarta, addDaysStr, weekdayOf } = require('../helpers/timezone');
 const { lateSeverity } = require('../helpers/lateSeverity');
+const { backfillAbsentForDates } = require('../helpers/absentBackfill');
 
 const USER_ATTRS = ['id', 'name', 'email', 'divisi'];
 
@@ -366,56 +367,8 @@ class AttendanceController {
                 return res.json({ created: 0, dates: [], message: 'Tidak ada hari kerja (Senin-Jumat) yang perlu dicek minggu ini' });
             }
 
-            const users = await User.findAll({
-                where: { shiftId: { [Op.ne]: null }, isActive: true, ...companyFilter(req) },
-                attributes: ['id', 'companyId', 'shiftId'],
-            });
-            if (!users.length) return res.json({ created: 0, dates, message: 'Tidak ada karyawan dengan shift' });
-            const userIds = users.map(u => u.id);
-
-            const range = { [Op.between]: [dates[0], dates[dates.length - 1]] };
-
-            const [existingAttendance, approvedLeaves, approvedWfa, approvedSick] = await Promise.all([
-                Attendance.findAll({ where: { userId: userIds, date: range }, attributes: ['userId', 'date'] }),
-                LeaveRequest.findAll({ where: { userId: userIds, status: 'APPROVED', startDate: { [Op.lte]: dates[dates.length - 1] }, endDate: { [Op.gte]: dates[0] } }, attributes: ['userId', 'startDate', 'endDate'] }),
-                WfaRequest.findAll({ where: { userId: userIds, status: 'APPROVED', date: range }, attributes: ['userId', 'date'] }),
-                SickLeaveRequest.findAll({ where: { userId: userIds, status: 'APPROVED', date: range }, attributes: ['userId', 'date'] }),
-            ]);
-
-            const attendanceSet = new Set(existingAttendance.map(a => `${a.userId}_${a.date}`));
-            const wfaSet = new Set(approvedWfa.map(w => `${w.userId}_${w.date}`));
-            const sickSet = new Set(approvedSick.map(s => `${s.userId}_${s.date}`));
-            const leaveByUser = new Map();
-            approvedLeaves.forEach(l => {
-                if (!leaveByUser.has(l.userId)) leaveByUser.set(l.userId, []);
-                leaveByUser.get(l.userId).push([l.startDate, l.endDate]);
-            });
-            const onApprovedLeave = (userId, date) => (leaveByUser.get(userId) || []).some(([s, e]) => date >= s && date <= e);
-
-            const toCreate = [];
-            for (const user of users) {
-                for (const date of dates) {
-                    const key = `${user.id}_${date}`;
-                    if (attendanceSet.has(key) || wfaSet.has(key) || sickSet.has(key)) continue;
-                    if (onApprovedLeave(user.id, date)) continue;
-                    toCreate.push({
-                        userId: user.id,
-                        date,
-                        shiftId: user.shiftId,
-                        status: 'ABSENT',
-                        workMode: 'ON_SITE',
-                        note: 'Dibuat otomatis oleh sistem — tidak ada presensi tercatat',
-                        editedBy: req.user.id,
-                        editedAt: new Date(),
-                        editReason: 'Backfill otomatis: tidak check-in dan tidak ada cuti/WFA/izin sakit disetujui',
-                        companyId: user.companyId,
-                    });
-                }
-            }
-
-            if (toCreate.length) await Attendance.bulkCreate(toCreate);
-
-            res.json({ created: toCreate.length, dates, checkedUsers: users.length });
+            const result = await backfillAbsentForDates(dates, companyFilter(req), req.user.id);
+            res.json({ dates, ...result });
         } catch (err) { next(err); }
     }
 

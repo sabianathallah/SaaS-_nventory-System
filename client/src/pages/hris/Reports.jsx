@@ -49,6 +49,12 @@ export default function Reports() {
     mutationFn: hrisApi.backfillAbsent,
     onSuccess: (res) => {
       toast.success(res.created > 0 ? `${res.created} record Absen dibuat` : (res.message || 'Tidak ada yang perlu ditandai absen'))
+      if (res.usersWithoutShift?.length > 0) {
+        toast(
+          `${res.usersWithoutShift.length} karyawan belum punya shift (jadi ikut ke-skip): ${res.usersWithoutShift.map(u => u.name).join(', ')}`,
+          { icon: '⚠️', duration: 8000 }
+        )
+      }
       qc.invalidateQueries({ queryKey: ['hris-report'] })
     },
     onError: (e) => toast.error(e.response?.data?.message ?? 'Gagal menjalankan backfill absen'),
