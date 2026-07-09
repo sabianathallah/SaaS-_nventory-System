@@ -44,7 +44,6 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: false,
       defaultValue: 'DRAFT',
     },
-    pdfUrl:      { type: DataTypes.STRING, allowNull: true },
     publishedBy: { type: DataTypes.INTEGER, allowNull: true },
     publishedAt: { type: DataTypes.DATE, allowNull: true },
     createdBy:   { type: DataTypes.INTEGER, allowNull: true },
