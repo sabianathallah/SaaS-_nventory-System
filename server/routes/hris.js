@@ -23,6 +23,7 @@ router.get('/attendance/summary', AttendanceController.summary);
 router.get('/attendance/leaderboard', AttendanceController.lateLeaderboard);
 router.get('/attendance/pending-review', requirePermission('hris.attendance.review'), AttendanceController.pendingReview);
 router.get('/attendance/users',   requirePermission('hris.attendance.edit'), AttendanceController.companyUsers);
+router.post('/attendance/backfill-absent', requirePermission('hris.attendance.edit'), AttendanceController.backfillAbsent);
 router.get('/attendance',         AttendanceController.list);
 router.post('/attendance/check-in',  requireCompany, uploadSingle('photo', 'saas-inventory/attendance'), AttendanceController.checkIn);
 router.post('/attendance/check-out', requireCompany, uploadSingle('photo', 'saas-inventory/attendance'), AttendanceController.checkOut);

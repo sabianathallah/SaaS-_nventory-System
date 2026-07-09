@@ -26,4 +26,18 @@ function nowPartsInJakarta() {
     return partsInJakarta(new Date());
 }
 
-module.exports = { TZ, todayDateOnly, nowPartsInJakarta, partsInJakarta };
+/** Tambah/kurangi hari dari string YYYY-MM-DD, aman dari pergeseran timezone lokal server. */
+function addDaysStr(dateStr, delta) {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    const dt = new Date(Date.UTC(y, m - 1, d));
+    dt.setUTCDate(dt.getUTCDate() + delta);
+    return dt.toISOString().slice(0, 10);
+}
+
+/** Hari dalam minggu (0=Minggu..6=Sabtu) dari string YYYY-MM-DD. */
+function weekdayOf(dateStr) {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    return new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+}
+
+module.exports = { TZ, todayDateOnly, nowPartsInJakarta, partsInJakarta, addDaysStr, weekdayOf };

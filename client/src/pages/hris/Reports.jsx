@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import toast from 'react-hot-toast'
 import { hrisApi } from '../../api'
 import { exportExcel } from '../../utils/exportExcel'
-import { FileDown } from 'lucide-react'
+import { FileDown, UserX } from 'lucide-react'
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   PieChart, Pie, Cell,
@@ -33,6 +34,7 @@ function ChartTooltip({ active, payload, label }) {
 }
 
 export default function Reports() {
+  const qc = useQueryClient()
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [statusFilter, setStatusFilter] = useState('ALL')
@@ -41,6 +43,15 @@ export default function Reports() {
   const { data, isLoading } = useQuery({
     queryKey: ['hris-report', dateFrom, dateTo],
     queryFn: () => hrisApi.attendanceReport({ ...(dateFrom && { dateFrom }), ...(dateTo && { dateTo }) }),
+  })
+
+  const backfillAbsent = useMutation({
+    mutationFn: hrisApi.backfillAbsent,
+    onSuccess: (res) => {
+      toast.success(res.created > 0 ? `${res.created} record Absen dibuat` : (res.message || 'Tidak ada yang perlu ditandai absen'))
+      qc.invalidateQueries({ queryKey: ['hris-report'] })
+    },
+    onError: (e) => toast.error(e.response?.data?.message ?? 'Gagal menjalankan backfill absen'),
   })
 
   const employeeOptions = useMemo(() => {
@@ -123,9 +134,19 @@ export default function Reports() {
           <h1 className="text-lg font-bold text-slate-800">Laporan HRIS</h1>
           <p className="text-xs text-slate-400 mt-0.5">Rekap absensi dan cuti</p>
         </div>
-        <button onClick={handleExport} disabled={!filteredAttendances.length} className="btn-secondary text-sm flex items-center gap-1.5">
-          <FileDown size={14} /> Export
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => backfillAbsent.mutate()}
+            disabled={backfillAbsent.isPending}
+            title="Tandai karyawan bershift yang tidak check-in (Senin-Jumat minggu ini) sebagai Absen"
+            className="btn-secondary text-sm flex items-center gap-1.5"
+          >
+            <UserX size={14} /> {backfillAbsent.isPending ? 'Memproses…' : 'Tandai Absen Minggu Ini'}
+          </button>
+          <button onClick={handleExport} disabled={!filteredAttendances.length} className="btn-secondary text-sm flex items-center gap-1.5">
+            <FileDown size={14} /> Export
+          </button>
+        </div>
       </div>
 
       <div className="flex gap-3 mb-6 flex-wrap items-end">
