@@ -711,22 +711,30 @@ export default function Products() {
   const isFiltered   = !!(search || catFilter || artFilter || subCatFilter || chFilter || whFilter)
 
   const [exporting, setExporting] = useState(false)
-  const handleExportExcel = async () => {
+  const [showExportModal, setShowExportModal] = useState(false)
+
+  async function fetchExportData() {
+    const result = await productsApi.list({
+      limit: 9999, name: search,
+      CategoryId: catFilter || undefined,
+      ArticleId:  artFilter || undefined,
+      SubCategoryId: subCatFilter || undefined,
+      ChannelId: chFilter || undefined,
+      WarehouseId: whFilter || undefined,
+      sortBy: sort.col, sortOrder: sort.dir,
+    })
+    const allSkuIds = result.data.flatMap(p => (p.ProductSKUs ?? []).map(s => s.id))
+    const [channelStocks, warehouseStocks] = await Promise.all([
+      allSkuIds.length ? skuChannelStocksApi.list({ ProductSKUId: allSkuIds.join(',') }) : Promise.resolve([]),
+      whFilter ? skuWarehouseStocksApi.list({ WarehouseId: whFilter }) : Promise.resolve([]),
+    ])
+    return { products: result.data, channelStocks, warehouseStocks }
+  }
+
+  const handleExportProdukExcel = async () => {
     setExporting(true)
     try {
-      const result = await productsApi.list({
-        limit: 9999, name: search,
-        CategoryId: catFilter || undefined,
-        ArticleId:  artFilter || undefined,
-        SubCategoryId: subCatFilter || undefined,
-        ChannelId: chFilter || undefined,
-        WarehouseId: whFilter || undefined,
-        sortBy: sort.col, sortOrder: sort.dir,
-      })
-      const allSkuIds = result.data.flatMap(p => (p.ProductSKUs ?? []).map(s => s.id))
-      const channelStocks = allSkuIds.length
-        ? await skuChannelStocksApi.list({ ProductSKUId: allSkuIds.join(',') })
-        : []
+      const { products, channelStocks } = await fetchExportData()
       const listingByProduct = new Map()
       channelStocks.filter(s => s.isListed).forEach(s => {
         const productId = s.ProductSKU?.ProductId
@@ -737,7 +745,7 @@ export default function Products() {
       })
 
       const headers = ['No', 'Nama Produk', 'Unit', 'Tipe', 'Sub Kategori', 'Koleksi', 'Total SKU', 'Total Stok', 'Harga Min (Rp)', 'Harga Max (Rp)', 'Listing di Channel']
-      const rows = result.data.map((p, i) => {
+      const rows = products.map((p, i) => {
         const skus   = p.ProductSKUs ?? []
         const prices = skus.map(s => Number(s.price || 0)).filter(Boolean)
         const listing = [...(listingByProduct.get(p.id) ?? [])].join(', ')
@@ -757,6 +765,41 @@ export default function Products() {
     }
   }
 
+  const handleExportSkuExcel = async () => {
+    setExporting(true)
+    try {
+      const { products, channelStocks, warehouseStocks } = await fetchExportData()
+      const listingBySku = new Map()
+      channelStocks.filter(s => s.isListed).forEach(s => {
+        const set = listingBySku.get(s.ProductSKUId) ?? new Set()
+        set.add(s.Channel?.name ?? '—')
+        listingBySku.set(s.ProductSKUId, set)
+      })
+      const warehouseQtyBySku = new Map(warehouseStocks.map(w => [String(w.ProductSKUId), Number(w.qty ?? 0)]))
+
+      const headers = ['No', 'Nama Produk', 'Variant', 'Kode SKU', 'Unit', 'Tipe', 'Sub Kategori', 'Koleksi', 'Stok', 'Harga (Rp)', 'Listing di Channel']
+      const rows = []
+      let no = 1
+      products.forEach(p => {
+        ;(p.ProductSKUs ?? []).forEach(sku => {
+          const label = variantLabel(sku) ?? '—'
+          const stock = whFilter ? (warehouseQtyBySku.get(String(sku.id)) ?? 0) : Number(sku.qty ?? 0)
+          const listing = [...(listingBySku.get(sku.id) ?? [])].join(', ')
+          rows.push([
+            no++, p.name, label, sku.sku_code, p.unit ?? '', p.Category?.name ?? '', p.SubCategory?.name ?? '', p.Article?.name ?? '',
+            stock, Number(sku.price || 0),
+            listing || '—',
+          ])
+        })
+      })
+      exportExcel(`produk-per-sku-${new Date().toISOString().slice(0, 10)}`, { headers, rows, sheetName: 'SKU' })
+    } catch {
+      toast.error('Gagal export Excel')
+    } finally {
+      setExporting(false)
+    }
+  }
+
   return (
     <div className="px-6 py-6 max-w-screen-xl mx-auto">
       {needsCompany && <div className="mb-4"><CompanyRequiredBanner action="menambah produk" /></div>}
@@ -768,7 +811,7 @@ export default function Products() {
           <p className="text-sm text-slate-400 mt-0.5">{pagination?.total ?? 0} produk terdaftar</p>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={handleExportExcel} disabled={exporting} className="btn-secondary text-sm flex items-center gap-1.5">
+          <button onClick={() => setShowExportModal(true)} disabled={exporting} className="btn-secondary text-sm flex items-center gap-1.5">
             {exporting ? <Loader2 size={14} className="animate-spin" /> : <FileSpreadsheet size={14} />}
             Export Excel
           </button>
@@ -925,6 +968,28 @@ export default function Products() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Export format chooser */}
+      {showExportModal && (
+        <Modal open onClose={() => setShowExportModal(false)} title="Pilih Format Export" size="sm">
+          <div className="space-y-2">
+            <button
+              onClick={() => { setShowExportModal(false); handleExportProdukExcel() }}
+              className="w-full text-left p-3 rounded-lg border border-slate-200 hover:border-brand hover:bg-brand-50 transition-colors"
+            >
+              <p className="text-sm font-semibold text-slate-800">Per Produk</p>
+              <p className="text-xs text-slate-400 mt-0.5">Ringkasan 1 baris per produk — total SKU, total stok, rentang harga</p>
+            </button>
+            <button
+              onClick={() => { setShowExportModal(false); handleExportSkuExcel() }}
+              className="w-full text-left p-3 rounded-lg border border-slate-200 hover:border-brand hover:bg-brand-50 transition-colors"
+            >
+              <p className="text-sm font-semibold text-slate-800">Per SKU / Variant</p>
+              <p className="text-xs text-slate-400 mt-0.5">Detail 1 baris per SKU — kode SKU, variant, stok, dan harga masing-masing</p>
+            </button>
+          </div>
+        </Modal>
       )}
     </div>
   )
