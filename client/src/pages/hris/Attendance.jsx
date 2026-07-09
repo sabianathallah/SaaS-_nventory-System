@@ -121,6 +121,7 @@ export default function Attendance() {
     queryFn: hrisApi.attendanceUsers,
     enabled: canEdit,
   })
+  const { data: leaderboard } = useQuery({ queryKey: ['hris-attendance-leaderboard'], queryFn: () => hrisApi.leaderboard({}) })
 
   const invalidate = () => { qc.invalidateQueries({ queryKey: ['hris-today'] }); qc.invalidateQueries({ queryKey: ['hris-attendance-list'] }) }
 
@@ -325,6 +326,43 @@ export default function Attendance() {
           )}
         </div>
       </div>
+
+      {(leaderboard?.mostOnTime?.length > 0 || leaderboard?.mostLate?.length > 0) && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+          {leaderboard?.mostOnTime?.length > 0 && (
+            <div className="card p-4">
+              <p className="text-sm font-semibold text-slate-800 mb-3">🏆 Paling Tepat Waktu Bulan Ini</p>
+              <div className="space-y-2">
+                {leaderboard.mostOnTime.map((u, i) => (
+                  <div key={u.userId} className="flex items-center gap-3">
+                    <span className="w-5 text-xs font-semibold text-slate-400 text-center">{i + 1}</span>
+                    <span className="flex-1 text-sm text-slate-700">{u.name}</span>
+                    <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-2 py-0.5">
+                      {u.presentCount}x hadir
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {leaderboard?.mostLate?.length > 0 && (
+            <div className="card p-4">
+              <p className="text-sm font-semibold text-slate-800 mb-3">⏰ Paling Sering Terlambat Bulan Ini</p>
+              <div className="space-y-2">
+                {leaderboard.mostLate.map((u, i) => (
+                  <div key={u.userId} className="flex items-center gap-3">
+                    <span className="w-5 text-xs font-semibold text-slate-400 text-center">{i + 1}</span>
+                    <span className="flex-1 text-sm text-slate-700">{u.name}</span>
+                    <span className="text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5">
+                      {u.lateCount}x terlambat
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {showModePicker && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4" onClick={() => setShowModePicker(false)}>

@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { hrisApi } from '../api'
 import { useAuth } from '../context/AuthContext'
-import { ClipboardCheck, FileText, ArrowRight, LogIn, LogOut, CheckCircle2, CalendarDays, Laptop } from 'lucide-react'
+import { ClipboardCheck, FileText, ArrowRight, LogIn, LogOut, CheckCircle2, CalendarDays, Laptop, AlertTriangle } from 'lucide-react'
 
 const fmtTime = (d) => d ? new Date(d).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '—'
 
@@ -54,6 +54,23 @@ export default function HRIS() {
           </Link>
         </div>
       </div>
+
+      {/* Reminder keterlambatan bulan ini */}
+      {summary?.LATE > 0 && (
+        <div className="card p-4 mb-6 border-amber-200 bg-amber-50 flex items-start gap-3">
+          <div className="w-8 h-8 shrink-0 rounded-lg bg-amber-100 flex items-center justify-center text-amber-600">
+            <AlertTriangle size={16} />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-amber-800">
+              Kamu sudah terlambat {summary.LATE}x bulan ini
+            </p>
+            <p className="text-xs text-amber-700 mt-0.5">
+              Yuk usahakan datang tepat waktu supaya kehadiranmu tetap terjaga.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Jatah Cuti & WFA */}
       <div className="grid sm:grid-cols-2 gap-4 mb-6">

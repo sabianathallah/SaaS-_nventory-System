@@ -266,6 +266,7 @@ export const reportApi = {
 export const hrisApi = {
   today:          ()         => api.get('/hris/attendance/today').then(r => r.data),
   summary:        (params)   => api.get('/hris/attendance/summary', { params }).then(r => r.data),
+  leaderboard:    (params)   => api.get('/hris/attendance/leaderboard', { params }).then(r => r.data),
   attendanceList: (params)   => api.get('/hris/attendance', { params }).then(r => r.data),
   checkIn:        ({ lat, lng, note, photo, workMode, lateReason }) => {
     const fd = new FormData()

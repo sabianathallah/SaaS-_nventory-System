@@ -19,6 +19,7 @@ router.use(requirePermission('hris.view'));
 // ── Attendance ───────────────────────────────────────────────────────────────
 router.get('/attendance/today',   AttendanceController.today);
 router.get('/attendance/summary', AttendanceController.summary);
+router.get('/attendance/leaderboard', AttendanceController.lateLeaderboard);
 router.get('/attendance/pending-review', requirePermission('hris.attendance.review'), AttendanceController.pendingReview);
 router.get('/attendance/users',   requirePermission('hris.attendance.edit'), AttendanceController.companyUsers);
 router.get('/attendance',         AttendanceController.list);

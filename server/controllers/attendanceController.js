@@ -275,6 +275,41 @@ class AttendanceController {
         } catch (err) { next(err); }
     }
 
+    // Leaderboard kehadiran perusahaan bulan berjalan — cuma nama + jumlah
+    // telat/hadir, tanpa jam check-in/out atau data sensitif lain, karena
+    // ditampilkan ke semua karyawan (bukan cuma admin) sebagai reminder.
+    static async lateLeaderboard(req, res, next) {
+        try {
+            const { year: jakartaYear, month: jakartaMonth } = nowPartsInJakarta();
+            const month = parseInt(req.query.month) || jakartaMonth;
+            const year  = parseInt(req.query.year)  || jakartaYear;
+            const start = `${year}-${String(month).padStart(2, '0')}-01`;
+            const endDate = new Date(year, month, 0).getDate();
+            const end   = `${year}-${String(month).padStart(2, '0')}-${String(endDate).padStart(2, '0')}`;
+
+            const rows = await Attendance.findAll({
+                where: { date: { [Op.between]: [start, end] }, ...companyFilter(req) },
+                include: [{ model: User, as: 'user', attributes: ['id', 'name'] }],
+            });
+
+            const byUser = new Map();
+            rows.forEach(r => {
+                if (!r.userId) return;
+                const cur = byUser.get(r.userId) || { userId: r.userId, name: r.user?.name ?? '—', lateCount: 0, presentCount: 0 };
+                if (r.status === 'LATE') cur.lateCount += 1;
+                if (r.status === 'PRESENT') cur.presentCount += 1;
+                byUser.set(r.userId, cur);
+            });
+
+            const all = Array.from(byUser.values());
+            const mostLate = all.filter(u => u.lateCount > 0).sort((a, b) => b.lateCount - a.lateCount).slice(0, 5);
+            const mostOnTime = all.filter(u => u.lateCount === 0 && u.presentCount > 0)
+                .sort((a, b) => b.presentCount - a.presentCount).slice(0, 5);
+
+            res.json({ mostLate, mostOnTime });
+        } catch (err) { next(err); }
+    }
+
     static async pendingReview(req, res, next) {
         try {
             const { page, limit, offset } = paginate(req.query);
