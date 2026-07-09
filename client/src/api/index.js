@@ -338,6 +338,17 @@ export const hrisApi = {
   cancelWfa:         (id)       => api.patch(`/hris/wfa/requests/${id}/cancel`).then(r => r.data),
   paymentAdjustments: (params)  => api.get('/hris/wfa/payment-adjustments', { params }).then(r => r.data),
 
+  salaryProfiles:      (params) => api.get('/hris/salary-profiles', { params }).then(r => r.data),
+  upsertSalaryProfile: (data)   => api.put('/hris/salary-profiles', data).then(r => r.data),
+
+  payslips:         (params)   => api.get('/hris/payslips', { params }).then(r => r.data),
+  createPayslip:    (data)     => api.post('/hris/payslips', data).then(r => r.data),
+  updatePayslip:    (id, data) => api.put(`/hris/payslips/${id}`, data).then(r => r.data),
+  publishPayslip:   (id)       => api.patch(`/hris/payslips/${id}/publish`).then(r => r.data),
+  unpublishPayslip: (id)       => api.patch(`/hris/payslips/${id}/unpublish`).then(r => r.data),
+  deletePayslip:    (id)       => api.delete(`/hris/payslips/${id}`).then(r => r.data),
+  downloadPayslip:  (id)       => api.get(`/hris/payslips/${id}/download`, { responseType: 'blob' }).then(r => r.data),
+
   overtimeList:    (params)   => api.get('/hris/overtime', { params }).then(r => r.data),
   createOvertime:  (data)     => api.post('/hris/overtime', data).then(r => r.data),
   reviewOvertime:  (id, data) => api.patch(`/hris/overtime/${id}/review`, data).then(r => r.data),

@@ -104,6 +104,7 @@ const ALL_PERMISSIONS = [
   { key: 'hris.shift.manage',         label: 'Kelola Shift',                               group: 'HRIS',                    parent: 'hris.manage',            desc: 'Tambah, edit, hapus shift & assign shift ke user' },
   { key: 'hris.location.manage',      label: 'Kelola Lokasi Kantor',                       group: 'HRIS',                    parent: 'hris.manage',            desc: 'Tambah, edit, hapus lokasi kantor untuk validasi presensi' },
   { key: 'hris.reports.view',         label: 'Lihat Laporan HRIS',                         group: 'HRIS',                    parent: 'hris.manage',            desc: 'Lihat laporan rekap absensi, cuti, dan lembur' },
+  { key: 'hris.payslip.manage',       label: 'Kelola Slip Gaji',                           group: 'HRIS',                    parent: 'hris.manage',            desc: 'Kelola profil gaji karyawan, generate & publish slip gaji' },
 ];
 
 const ALL_KEYS = ALL_PERMISSIONS.map(p => p.key);
@@ -148,6 +149,7 @@ const DEFAULT_PERMISSIONS = {
     'admin.manage', 'admin.users', 'reports.manage', 'db_link.view',
     'hris.manage', 'hris.view', 'hris.attendance.edit', 'hris.attendance.review', 'hris.leave.review',
     'hris.wfa.review', 'hris.overtime.review', 'hris.shift.manage', 'hris.location.manage', 'hris.reports.view',
+    'hris.payslip.manage',
   ],
 
   CEO: [

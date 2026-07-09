@@ -14,6 +14,8 @@ const HrisReportController = require('../controllers/hrisReportController');
 const WfaController = require('../controllers/wfaController');
 const LateExcuseController = require('../controllers/lateExcuseController');
 const SickLeaveController = require('../controllers/sickLeaveController');
+const SalaryProfileController = require('../controllers/salaryProfileController');
+const PayslipController = require('../controllers/payslipController');
 
 router.use(requirePermission('hris.view'));
 
@@ -93,5 +95,18 @@ router.post('/wfa/requests',      requireCompany, WfaController.create);
 router.patch('/wfa/requests/:id/review', requirePermission('hris.wfa.review'), WfaController.review);
 router.patch('/wfa/requests/:id/cancel', WfaController.cancel);
 router.get('/wfa/payment-adjustments', requirePermission('hris.reports.view'), WfaController.listPaymentAdjustments);
+
+// ── Profil Gaji (data dasar buat generate slip gaji) ──────────────────────────
+router.get('/salary-profiles',  requirePermission('hris.payslip.manage'), SalaryProfileController.list);
+router.put('/salary-profiles',  requirePermission('hris.payslip.manage'), SalaryProfileController.upsert);
+
+// ── Slip Gaji ──────────────────────────────────────────────────────────────────
+router.get('/payslips',              PayslipController.list);
+router.post('/payslips',             requirePermission('hris.payslip.manage'), PayslipController.create);
+router.put('/payslips/:id',          requirePermission('hris.payslip.manage'), PayslipController.update);
+router.patch('/payslips/:id/publish',   requirePermission('hris.payslip.manage'), PayslipController.publish);
+router.patch('/payslips/:id/unpublish', requirePermission('hris.payslip.manage'), PayslipController.unpublish);
+router.delete('/payslips/:id',       requirePermission('hris.payslip.manage'), PayslipController.destroy);
+router.get('/payslips/:id/download', PayslipController.download);
 
 module.exports = router;

@@ -146,4 +146,25 @@ async function destroyHandoverAttachment(url) {
   }
 }
 
-module.exports = { cloudinary, upload, uploadSingle, uploadArray, destroyByUrl, isConfigured, uploadHandoverAttachment, destroyHandoverAttachment };
+// Upload an in-memory Buffer directly (no multipart request involved) — used
+// for server-generated files like payslip PDFs. Falls back to local disk
+// the same way the multer-based uploaders do when Cloudinary isn't configured.
+function uploadBuffer(buffer, folder, publicId) {
+  if (isConfigured) {
+    return new Promise((resolve, reject) => {
+      const stream = cloudinary.uploader.upload_stream(
+        { folder, public_id: publicId, resource_type: 'raw', format: 'pdf' },
+        (err, result) => (err ? reject(err) : resolve(result.secure_url))
+      );
+      stream.end(buffer);
+    });
+  }
+
+  const diskDir = path.join(__dirname, '..', 'uploads', folder.replace(/\//g, '-'));
+  fs.mkdirSync(diskDir, { recursive: true });
+  const filename = `${publicId}.pdf`;
+  fs.writeFileSync(path.join(diskDir, filename), buffer);
+  return Promise.resolve(`/uploads/${folder.replace(/\//g, '-')}/${filename}`);
+}
+
+module.exports = { cloudinary, upload, uploadSingle, uploadArray, uploadBuffer, destroyByUrl, isConfigured, uploadHandoverAttachment, destroyHandoverAttachment };

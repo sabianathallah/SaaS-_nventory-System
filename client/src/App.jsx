@@ -22,6 +22,9 @@ import HrisLateExcuse from './pages/hris/LateExcuse'
 import HrisRequests from './pages/hris/Requests'
 import HrisWfaQuota from './pages/hris/admin/WfaQuota'
 import HrisPaymentAdjustments from './pages/hris/PaymentAdjustments'
+import HrisSalaryProfiles from './pages/hris/admin/SalaryProfiles'
+import HrisPayslipsAdmin from './pages/hris/admin/Payslips'
+import HrisPayslip from './pages/hris/Payslip'
 import Products from './pages/Products'
 import ProductDetail from './pages/ProductDetail'
 import ProductEdit from './pages/ProductEdit'
@@ -153,6 +156,9 @@ function AppRoutes() {
                 <Route path="/hris/pengajuan"       element={<PageVisibleRoute pageKey="hris"><PermissionRoute permission="hris.view" page="Pengajuan"><HrisRequests /></PermissionRoute></PageVisibleRoute>} />
                 <Route path="/hris/admin/wfa-quota" element={<PageVisibleRoute pageKey="hris"><PermissionRoute permission="hris.manage" page="Kuota WFA"><HrisWfaQuota /></PermissionRoute></PageVisibleRoute>} />
                 <Route path="/hris/payment-adjustments" element={<PageVisibleRoute pageKey="hris"><PermissionRoute permission="hris.reports.view" page="Penyesuaian Payment"><HrisPaymentAdjustments /></PermissionRoute></PageVisibleRoute>} />
+                <Route path="/hris/admin/salary-profiles" element={<PageVisibleRoute pageKey="hris"><PermissionRoute permission="hris.payslip.manage" page="Profil Gaji"><HrisSalaryProfiles /></PermissionRoute></PageVisibleRoute>} />
+                <Route path="/hris/admin/payslips" element={<PageVisibleRoute pageKey="hris"><PermissionRoute permission="hris.payslip.manage" page="Slip Gaji"><HrisPayslipsAdmin /></PermissionRoute></PageVisibleRoute>} />
+                <Route path="/hris/payslip" element={<PageVisibleRoute pageKey="hris"><PermissionRoute permission="hris.view" page="Slip Gaji Saya"><HrisPayslip /></PermissionRoute></PageVisibleRoute>} />
 
                 {/* ── Produk ── */}
                 <Route path="/products"          element={<PageVisibleRoute pageKey="products"><PermissionRoute permission="inventory.view" page="Produk"><Products /></PermissionRoute></PageVisibleRoute>} />

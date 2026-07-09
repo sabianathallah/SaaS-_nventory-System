@@ -76,6 +76,7 @@ class UserController {
             if (role      !== undefined) allowed.role   = role;
             if (avatar    !== undefined) allowed.avatar = avatar;
             if (req.body.divisi !== undefined) allowed.divisi = req.body.divisi?.trim() || null;
+            if (req.body.nik    !== undefined) allowed.nik    = req.body.nik?.trim() || null;
             await user.update(allowed);
             const { password, ...userWithoutPassword } = user.toJSON();
             res.status(200).json(userWithoutPassword);

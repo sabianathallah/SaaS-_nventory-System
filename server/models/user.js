@@ -91,6 +91,18 @@ module.exports = (sequelize, DataTypes) => {
         onDelete: 'CASCADE',
         onUpdate: 'CASCADE'
       });
+      User.hasOne(models.SalaryProfile, {
+        foreignKey: { name: 'userId', allowNull: false },
+        as: 'salaryProfile',
+        onDelete: 'CASCADE',
+        onUpdate: 'CASCADE'
+      });
+      User.hasMany(models.Payslip, {
+        foreignKey: { name: 'userId', allowNull: false },
+        as: 'payslips',
+        onDelete: 'CASCADE',
+        onUpdate: 'CASCADE'
+      });
     }
   }
   User.init({
@@ -147,6 +159,10 @@ module.exports = (sequelize, DataTypes) => {
     },
     shiftId: {
       type: DataTypes.INTEGER,
+      allowNull: true
+    },
+    nik: {
+      type: DataTypes.STRING,
       allowNull: true
     }
   }, {

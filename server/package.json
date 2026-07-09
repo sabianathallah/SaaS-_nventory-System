@@ -24,9 +24,11 @@
     "multer": "^2.1.1",
     "multer-storage-cloudinary": "^4.0.0",
     "node-cron": "^3.0.3",
+    "pdfkit": "^0.19.1",
     "pg": "^8.20.0",
     "sequelize": "^6.37.8",
-    "sequelize-cli": "^6.6.5"
+    "sequelize-cli": "^6.6.5",
+    "tslib": "^2.8.1"
   },
   "devDependencies": {
     "jest": "^30.2.0",

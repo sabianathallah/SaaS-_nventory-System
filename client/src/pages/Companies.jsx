@@ -11,7 +11,7 @@ import toast from 'react-hot-toast'
 import { Plus, Pencil, Trash2, Building2, Upload, ImageIcon } from 'lucide-react'
 
 const MAX_LOGO_SIZE = 5 * 1024 * 1024
-const EMPTY = { name: '', slug: '', logo: null, logoPreview: '', status: 'active', subscriptionExpiresAt: '' }
+const EMPTY = { name: '', slug: '', logo: null, logoPreview: '', status: 'active', subscriptionExpiresAt: '', legalName: '', address: '', contactPhone: '', contactEmail: '' }
 
 const STATUS_BADGE = {
   active:    <span className="badge-green">Active</span>,
@@ -54,7 +54,8 @@ export default function Companies() {
 
   const openEdit = (r) => {
     setForm({ name: r.name, slug: r.slug, logo: null, logoPreview: r.logo ?? '', status: r.status,
-      subscriptionExpiresAt: r.subscriptionExpiresAt ? r.subscriptionExpiresAt.slice(0, 10) : '' })
+      subscriptionExpiresAt: r.subscriptionExpiresAt ? r.subscriptionExpiresAt.slice(0, 10) : '',
+      legalName: r.legalName ?? '', address: r.address ?? '', contactPhone: r.contactPhone ?? '', contactEmail: r.contactEmail ?? '' })
     setModal({ mode: 'edit', data: r })
   }
 
@@ -172,6 +173,25 @@ export default function Companies() {
             <div className="col-span-2">
               <label className="label">Subscription Expires At</label>
               <input className="input" type="date" value={form.subscriptionExpiresAt} onChange={e => setForm(f => ({ ...f, subscriptionExpiresAt: e.target.value }))} />
+            </div>
+            <div className="col-span-2 pt-2 border-t border-slate-100">
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Data Badan Hukum (buat header Slip Gaji, dll)</p>
+            </div>
+            <div className="col-span-2">
+              <label className="label">Nama Badan Hukum</label>
+              <input className="input" value={form.legalName} onChange={e => setForm(f => ({ ...f, legalName: e.target.value }))} placeholder="CV Cipta Loka Indonesia" />
+            </div>
+            <div className="col-span-2">
+              <label className="label">Alamat</label>
+              <textarea className="input" rows={2} value={form.address} onChange={e => setForm(f => ({ ...f, address: e.target.value }))} placeholder="Jl. Sarikaso III No.5, Sarijadi, Kec. Sukasari, Kota Bandung, Jawa Barat 40151" />
+            </div>
+            <div>
+              <label className="label">Telepon</label>
+              <input className="input" value={form.contactPhone} onChange={e => setForm(f => ({ ...f, contactPhone: e.target.value }))} placeholder="085887799935" />
+            </div>
+            <div>
+              <label className="label">Email Kontak</label>
+              <input className="input" type="email" value={form.contactEmail} onChange={e => setForm(f => ({ ...f, contactEmail: e.target.value }))} placeholder="contact@prefacewearhouse.com" />
             </div>
           </div>
           <div className="flex gap-2 pt-2 border-t border-slate-100">

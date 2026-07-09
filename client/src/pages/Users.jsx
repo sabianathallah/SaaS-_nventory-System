@@ -44,7 +44,7 @@ export default function Users() {
   })
 
   const defaultRole = roles.find(r => r.name !== 'SUPER_ADMIN')?.name ?? ''
-  const [form, setForm] = useState({ name: '', email: '', password: '', role: defaultRole, companyId: '', divisi: '' })
+  const [form, setForm] = useState({ name: '', email: '', password: '', role: defaultRole, companyId: '', divisi: '', nik: '' })
 
   const { data, isLoading } = useQuery({
     queryKey: ['users', { page, limit, name: search }],
@@ -75,7 +75,7 @@ export default function Users() {
     onError: e => toast.error(e.response?.data?.message || 'Error'),
   })
 
-  const openEdit   = (r) => { setForm({ name: r.name, email: r.email, password: '', role: r.role, companyId: r.companyId ?? '', divisi: r.divisi ?? '' }); setModal({ mode: 'edit', data: r }) }
+  const openEdit   = (r) => { setForm({ name: r.name, email: r.email, password: '', role: r.role, companyId: r.companyId ?? '', divisi: r.divisi ?? '', nik: r.nik ?? '' }); setModal({ mode: 'edit', data: r }) }
   const openCreate = ()  => { setForm({ name: '', email: '', password: '', role: defaultRole, companyId: '' }); setModal({ mode: 'create' }) }
   const set = f => e => setForm(v => ({ ...v, [f]: e.target.value }))
   const initials = (name = '') => name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
@@ -187,6 +187,10 @@ export default function Users() {
             <div>
               <label className="label">Divisi</label>
               <input className="input" value={form.divisi} onChange={set('divisi')} placeholder="MARKETING, PRODUKSI, dll (opsional)" />
+            </div>
+            <div>
+              <label className="label">NIK</label>
+              <input className="input" value={form.nik} onChange={set('nik')} placeholder="Nomor Induk Kependudukan (opsional)" />
             </div>
             {isSuperAdmin && (
               <div className="col-span-2">
