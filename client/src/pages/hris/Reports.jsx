@@ -15,6 +15,7 @@ const STATUS_ORDER = ['PRESENT', 'LATE', 'HALF_DAY', 'LEAVE', 'ABSENT']
 const STATUS_COLOR = { PRESENT: '#16A34A', LATE: '#D97706', ABSENT: '#DC2626', LEAVE: '#2563EB', HALF_DAY: '#DB2777' }
 const WORKMODE_LABEL = { ON_SITE: 'Di Kantor', WFA: 'WFA', FIELD: 'Lapangan' }
 const WORKMODE_COLOR = { ON_SITE: '#C8102E', WFA: '#2563EB', FIELD: '#0D9488' }
+const SEVERITY_COLOR = { RINGAN: 'text-amber-600 bg-amber-50', SEDANG: 'text-orange-600 bg-orange-50', BERAT: 'text-red-600 bg-red-50' }
 
 function ChartTooltip({ active, payload, label }) {
   if (!active || !payload?.length) return null
@@ -258,7 +259,14 @@ export default function Reports() {
                   <td className="td">{a.shift?.name ?? '—'}</td>
                   <td className="td">{a.checkInAt ? new Date(a.checkInAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '—'}</td>
                   <td className="td">{a.checkOutAt ? new Date(a.checkOutAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '—'}</td>
-                  <td className="td text-center">{STATUS_LABEL[a.status] ?? a.status}</td>
+                  <td className="td text-center">
+                    {STATUS_LABEL[a.status] ?? a.status}
+                    {a.status === 'LATE' && a.lateSeverity && (
+                      <span className={`ml-1.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${SEVERITY_COLOR[a.lateSeverity.key]}`}>
+                        {a.lateSeverity.label}
+                      </span>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>

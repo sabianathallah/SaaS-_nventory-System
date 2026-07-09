@@ -298,6 +298,21 @@ export const hrisApi = {
   reviewLateExcuse: (id, data) => api.patch(`/hris/late-excuse/${id}/review`, data).then(r => r.data),
   cancelLateExcuse: (id)       => api.patch(`/hris/late-excuse/${id}/cancel`).then(r => r.data),
 
+  sickLeaveList:   (params)      => api.get('/hris/sick-leave', { params }).then(r => r.data),
+  createSickLeave: ({ reason, proof }) => {
+    const fd = new FormData()
+    fd.append('reason', reason)
+    if (proof) fd.append('proof', proof)
+    return api.post('/hris/sick-leave', fd).then(r => r.data)
+  },
+  attachSickLeaveProof: (id, proof) => {
+    const fd = new FormData()
+    fd.append('proof', proof)
+    return api.patch(`/hris/sick-leave/${id}/attachment`, fd).then(r => r.data)
+  },
+  reviewSickLeave: (id, data) => api.patch(`/hris/sick-leave/${id}/review`, data).then(r => r.data),
+  cancelSickLeave: (id)       => api.patch(`/hris/sick-leave/${id}/cancel`).then(r => r.data),
+
   leaveTypes:       (params)   => api.get('/hris/leave-types', { params }).then(r => r.data),
   createLeaveType:  (data)     => api.post('/hris/leave-types', data).then(r => r.data),
   updateLeaveType:  (id, data) => api.put(`/hris/leave-types/${id}`, data).then(r => r.data),

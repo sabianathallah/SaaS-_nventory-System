@@ -1,8 +1,9 @@
 import { useSearchParams } from 'react-router-dom'
-import { FileText, Laptop, AlarmClock } from 'lucide-react'
+import { FileText, Laptop, AlarmClock, Thermometer } from 'lucide-react'
 import Leave from './Leave'
 import Wfa from './Wfa'
 import LateExcuse from './LateExcuse'
+import SickLeave from './SickLeave'
 
 // Hub "Pengajuan" — gabungan Cuti, WFA, dan Izin Telat jadi satu halaman
 // dengan tab, mengikuti pola yang sama seperti "Pengajuan Stok" di module
@@ -15,6 +16,7 @@ const TABS = [
   { value: 'cuti', label: 'Cuti', icon: FileText, Component: Leave },
   { value: 'wfa',  label: 'WFA',  icon: Laptop,   Component: Wfa },
   { value: 'izin-telat', label: 'Izin Telat', icon: AlarmClock, Component: LateExcuse },
+  { value: 'izin-sakit', label: 'Izin Sakit', icon: Thermometer, Component: SickLeave },
 ]
 
 export default function Requests() {

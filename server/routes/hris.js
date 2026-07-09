@@ -13,6 +13,7 @@ const OfficeLocationController = require('../controllers/officeLocationControlle
 const HrisReportController = require('../controllers/hrisReportController');
 const WfaController = require('../controllers/wfaController');
 const LateExcuseController = require('../controllers/lateExcuseController');
+const SickLeaveController = require('../controllers/sickLeaveController');
 
 router.use(requirePermission('hris.view'));
 
@@ -36,6 +37,13 @@ router.get('/late-excuse',       LateExcuseController.list);
 router.post('/late-excuse',      requireCompany, LateExcuseController.create);
 router.patch('/late-excuse/:id/review', requirePermission('hris.attendance.review'), LateExcuseController.review);
 router.patch('/late-excuse/:id/cancel', LateExcuseController.cancel);
+
+// ── Izin Sakit (laporan sakit hari itu juga, surat sakit opsional/menyusul) ───
+router.get('/sick-leave',       SickLeaveController.list);
+router.post('/sick-leave',      requireCompany, uploadSingle('proof', 'saas-inventory/sick-leave'), SickLeaveController.create);
+router.patch('/sick-leave/:id/attachment', uploadSingle('proof', 'saas-inventory/sick-leave'), SickLeaveController.attachProof);
+router.patch('/sick-leave/:id/review', requirePermission('hris.attendance.review'), SickLeaveController.review);
+router.patch('/sick-leave/:id/cancel', SickLeaveController.cancel);
 
 // ── Leave ────────────────────────────────────────────────────────────────────
 router.get('/leave-types',    LeaveController.listTypes);

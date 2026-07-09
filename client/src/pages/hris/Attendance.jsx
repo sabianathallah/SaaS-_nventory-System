@@ -6,7 +6,11 @@ import { useAuth } from '../../context/AuthContext'
 import CameraCapture from '../../components/CameraCapture'
 import { useCompanyGuard } from '../../hooks/useCompanyGuard'
 import CompanyRequiredBanner from '../../components/CompanyRequiredBanner'
-import { LogOut, MapPin, Loader2, Camera, Building2, Laptop, Briefcase, X, Pencil, Plus } from 'lucide-react'
+import { LogOut, MapPin, Loader2, Camera, Building2, Laptop, Briefcase, X, Pencil, Plus, Trophy, AlarmClock as AlarmClockIcon, UserX, Thermometer } from 'lucide-react'
+import LeaderboardCard from '../../components/hris/LeaderboardCard'
+
+const avatarInitials = (name = '') => name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
+const SEVERITY_LABEL = { RINGAN: 'Ringan', SEDANG: 'Sedang', BERAT: 'Berat' }
 
 const STATUS_LABEL = { PRESENT: 'Hadir', LATE: 'Terlambat', ABSENT: 'Absen', LEAVE: 'Cuti', HALF_DAY: 'Setengah Hari' }
 const STATUS_COLOR = {
@@ -110,6 +114,7 @@ export default function Attendance() {
   const [createForm, setCreateForm] = useState({ ...EMPTY_EDIT_FORM, userId: '', date: '' })
   const [latePrompt, setLatePrompt] = useState(null) // { id, checkInAt } atau null
   const [lateReasonInput, setLateReasonInput] = useState('')
+  const [lightboxUser, setLightboxUser] = useState(null) // { name, avatar } atau null
 
   const { data: today } = useQuery({ queryKey: ['hris-today'], queryFn: hrisApi.today })
   const { data: history, isLoading } = useQuery({
@@ -327,40 +332,69 @@ export default function Attendance() {
         </div>
       </div>
 
-      {(leaderboard?.mostOnTime?.length > 0 || leaderboard?.mostLate?.length > 0) && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-          {leaderboard?.mostOnTime?.length > 0 && (
-            <div className="card p-4">
-              <p className="text-sm font-semibold text-slate-800 mb-3">🏆 Paling Tepat Waktu Bulan Ini</p>
-              <div className="space-y-2">
-                {leaderboard.mostOnTime.map((u, i) => (
-                  <div key={u.userId} className="flex items-center gap-3">
-                    <span className="w-5 text-xs font-semibold text-slate-400 text-center">{i + 1}</span>
-                    <span className="flex-1 text-sm text-slate-700">{u.name}</span>
-                    <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-2 py-0.5">
-                      {u.presentCount}x hadir
-                    </span>
-                  </div>
-                ))}
+      {leaderboard && (leaderboard.mostOnTime?.length > 0 || leaderboard.mostLate?.length > 0 || leaderboard.mostAbsent?.length > 0 || leaderboard.mostSick?.length > 0) && (
+        <div className="mb-6">
+          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Leaderboard Kehadiran Bulan Ini</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <LeaderboardCard
+              icon={Trophy} title="🏆 Paling Tepat Waktu"
+              entries={(leaderboard.mostOnTime ?? []).map(u => ({ ...u, value: u.presentCount }))}
+              unit="x hadir"
+              badgeClass="text-emerald-700 bg-emerald-50 border border-emerald-200"
+              barClass="bg-emerald-500" ringClass="border-emerald-200" fallbackClass="bg-emerald-50 text-emerald-700"
+              onAvatarClick={setLightboxUser}
+            />
+            <LeaderboardCard
+              icon={AlarmClockIcon} title="⏰ Paling Sering Terlambat"
+              entries={(leaderboard.mostLate ?? []).map(u => ({ ...u, value: u.lateCount }))}
+              unit="x terlambat"
+              badgeClass="text-amber-700 bg-amber-50 border border-amber-200"
+              barClass="bg-amber-500" ringClass="border-amber-200" fallbackClass="bg-amber-50 text-amber-700"
+              onAvatarClick={setLightboxUser}
+              extra={(e) => {
+                const dominant = Object.entries(e.severity ?? {}).sort((a, b) => b[1] - a[1])[0]
+                if (!dominant || dominant[1] === 0) return null
+                return <p className="text-[10px] text-slate-400 mt-0.5">Mayoritas: {SEVERITY_LABEL[dominant[0]]}</p>
+              }}
+            />
+            <LeaderboardCard
+              icon={UserX} title="🚫 Paling Sering Absen"
+              entries={(leaderboard.mostAbsent ?? []).map(u => ({ ...u, value: u.absentCount }))}
+              unit="x absen"
+              badgeClass="text-red-700 bg-red-50 border border-red-200"
+              barClass="bg-red-500" ringClass="border-red-200" fallbackClass="bg-red-50 text-red-700"
+              onAvatarClick={setLightboxUser}
+            />
+            <LeaderboardCard
+              icon={Thermometer} title="🤒 Paling Sering Sakit"
+              entries={(leaderboard.mostSick ?? []).map(u => ({ ...u, value: u.sickCount }))}
+              unit="x sakit"
+              badgeClass="text-blue-700 bg-blue-50 border border-blue-200"
+              barClass="bg-blue-500" ringClass="border-blue-200" fallbackClass="bg-blue-50 text-blue-700"
+              onAvatarClick={setLightboxUser}
+            />
+          </div>
+        </div>
+      )}
+
+      {lightboxUser && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 px-4 animate-fade-in"
+          onClick={() => setLightboxUser(null)}
+        >
+          <div className="flex flex-col items-center gap-3" onClick={e => e.stopPropagation()}>
+            {lightboxUser.avatar ? (
+              <img src={lightboxUser.avatar} alt={lightboxUser.name} className="w-64 h-64 max-w-[70vw] max-h-[50vh] rounded-2xl object-cover shadow-modal" />
+            ) : (
+              <div className="w-64 h-64 max-w-[70vw] max-h-[50vh] rounded-2xl bg-red-50 border border-red-200 text-red-700 flex items-center justify-center text-5xl font-bold shadow-modal">
+                {avatarInitials(lightboxUser.name)}
               </div>
-            </div>
-          )}
-          {leaderboard?.mostLate?.length > 0 && (
-            <div className="card p-4">
-              <p className="text-sm font-semibold text-slate-800 mb-3">⏰ Paling Sering Terlambat Bulan Ini</p>
-              <div className="space-y-2">
-                {leaderboard.mostLate.map((u, i) => (
-                  <div key={u.userId} className="flex items-center gap-3">
-                    <span className="w-5 text-xs font-semibold text-slate-400 text-center">{i + 1}</span>
-                    <span className="flex-1 text-sm text-slate-700">{u.name}</span>
-                    <span className="text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5">
-                      {u.lateCount}x terlambat
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+            )}
+            <p className="text-white text-sm font-semibold">{lightboxUser.name}</p>
+            <button onClick={() => setLightboxUser(null)} className="text-white/70 hover:text-white text-xs flex items-center gap-1">
+              <X size={12} /> Tutup
+            </button>
+          </div>
         </div>
       )}
 

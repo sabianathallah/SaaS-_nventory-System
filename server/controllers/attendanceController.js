@@ -1,11 +1,12 @@
 'use strict';
 const { Op } = require('sequelize');
-const { Attendance, Shift, OfficeLocation, User, WfaRequest, LateExcuseRequest } = require('../models');
+const { Attendance, Shift, OfficeLocation, User, WfaRequest, LateExcuseRequest, SickLeaveRequest } = require('../models');
 const { companyFilter, companyId } = require('../helpers/tenancy');
 const { paginate, buildFilter, paginatedResponse } = require('../helpers/queryHelper');
 const { distanceInMeters } = require('../helpers/geo');
 const { userHasPermission } = require('../helpers/permCheck');
 const { todayDateOnly, nowPartsInJakarta } = require('../helpers/timezone');
+const { lateSeverity } = require('../helpers/lateSeverity');
 
 const USER_ATTRS = ['id', 'name', 'email', 'divisi'];
 
@@ -275,8 +276,8 @@ class AttendanceController {
         } catch (err) { next(err); }
     }
 
-    // Leaderboard kehadiran perusahaan bulan berjalan — cuma nama + jumlah
-    // telat/hadir, tanpa jam check-in/out atau data sensitif lain, karena
+    // Leaderboard kehadiran perusahaan bulan berjalan — cuma nama + avatar +
+    // angka ringkasan, tanpa jam check-in/out atau data sensitif lain, karena
     // ditampilkan ke semua karyawan (bukan cuma admin) sebagai reminder.
     static async lateLeaderboard(req, res, next) {
         try {
@@ -286,27 +287,56 @@ class AttendanceController {
             const start = `${year}-${String(month).padStart(2, '0')}-01`;
             const endDate = new Date(year, month, 0).getDate();
             const end   = `${year}-${String(month).padStart(2, '0')}-${String(endDate).padStart(2, '0')}`;
+            const dateRange = { [Op.between]: [start, end] };
 
-            const rows = await Attendance.findAll({
-                where: { date: { [Op.between]: [start, end] }, ...companyFilter(req) },
-                include: [{ model: User, as: 'user', attributes: ['id', 'name'] }],
-            });
+            const [rows, sickRows] = await Promise.all([
+                Attendance.findAll({
+                    where: { date: dateRange, ...companyFilter(req) },
+                    include: [
+                        { model: User, as: 'user', attributes: ['id', 'name', 'avatar'] },
+                        { model: Shift, as: 'shift', attributes: ['startTime'] },
+                    ],
+                }),
+                SickLeaveRequest.findAll({
+                    where: { date: dateRange, status: 'APPROVED', ...companyFilter(req) },
+                    include: [{ model: User, as: 'user', attributes: ['id', 'name', 'avatar'] }],
+                }),
+            ]);
 
             const byUser = new Map();
+            const getUser = (id, u) => {
+                let cur = byUser.get(id);
+                if (!cur) {
+                    cur = { userId: id, name: u?.name ?? '—', avatar: u?.avatar ?? null, lateCount: 0, presentCount: 0, absentCount: 0, sickCount: 0, severity: { RINGAN: 0, SEDANG: 0, BERAT: 0 } };
+                    byUser.set(id, cur);
+                }
+                return cur;
+            };
+
             rows.forEach(r => {
                 if (!r.userId) return;
-                const cur = byUser.get(r.userId) || { userId: r.userId, name: r.user?.name ?? '—', lateCount: 0, presentCount: 0 };
-                if (r.status === 'LATE') cur.lateCount += 1;
+                const cur = getUser(r.userId, r.user);
+                if (r.status === 'LATE') {
+                    cur.lateCount += 1;
+                    const severity = lateSeverity(r.checkInAt, r.shift?.startTime);
+                    if (severity) cur.severity[severity.key] += 1;
+                }
                 if (r.status === 'PRESENT') cur.presentCount += 1;
-                byUser.set(r.userId, cur);
+                if (r.status === 'ABSENT') cur.absentCount += 1;
+            });
+            sickRows.forEach(r => {
+                if (!r.userId) return;
+                getUser(r.userId, r.user).sickCount += 1;
             });
 
             const all = Array.from(byUser.values());
             const mostLate = all.filter(u => u.lateCount > 0).sort((a, b) => b.lateCount - a.lateCount).slice(0, 5);
             const mostOnTime = all.filter(u => u.lateCount === 0 && u.presentCount > 0)
                 .sort((a, b) => b.presentCount - a.presentCount).slice(0, 5);
+            const mostAbsent = all.filter(u => u.absentCount > 0).sort((a, b) => b.absentCount - a.absentCount).slice(0, 5);
+            const mostSick = all.filter(u => u.sickCount > 0).sort((a, b) => b.sickCount - a.sickCount).slice(0, 5);
 
-            res.json({ mostLate, mostOnTime });
+            res.json({ mostLate, mostOnTime, mostAbsent, mostSick });
         } catch (err) { next(err); }
     }
 
