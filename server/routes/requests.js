@@ -23,6 +23,7 @@ router.delete('/:id',canManage, ctrl.destroy);
 router.post('/:id/approve',          canProcess, ctrl.approve);
 router.post('/:id/reject',           canProcess, ctrl.reject);
 router.post('/:id/process-shipment', canProcess, ctrl.processShipment);
+router.post('/:id/direct-shipment',  canProcess, ctrl.directShipment);
 router.patch('/:id/sent',            canProcess, ctrl.markSent);
 router.patch('/:id/returned',        canProcess, ctrl.markReturned);
 router.patch('/:id/ship-remaining',  canProcess, ctrl.shipRemaining);

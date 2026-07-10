@@ -40,6 +40,7 @@ module.exports = (sequelize, DataTypes) => {
     invoicePrintedAt:       { type: DataTypes.DATE,        allowNull: true },
     sourceRequestId:        { type: DataTypes.INTEGER,     allowNull: true },
     itemsModifiedFromSource:{ type: DataTypes.BOOLEAN,     allowNull: false, defaultValue: false },
+    skippedStockOut:        { type: DataTypes.BOOLEAN,     allowNull: false, defaultValue: false },
     createdBy:              { type: DataTypes.INTEGER,     allowNull: true },
     updatedBy:              { type: DataTypes.INTEGER,     allowNull: true },
     submittedBy:            { type: DataTypes.INTEGER,     allowNull: true },

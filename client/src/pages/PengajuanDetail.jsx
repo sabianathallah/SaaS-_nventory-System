@@ -315,8 +315,8 @@ function StatusStepper({ status, needsReturn, returnedAt, shipmentType }) {
 // ── Guided Next Action Card ───────────────────────────────────────────────────
 function NextActionCard({
   req, canProcess, resolvedShipmentType,
-  onApprove, onReject, onSent, onReturn, onShipRemaining, onDone, onProcessShipment, navigate,
-  loadingApprove, loadingSent, loadingReturn, loadingShipRemaining, loadingDone, loadingProcessShipment,
+  onApprove, onReject, onSent, onReturn, onShipRemaining, onDone, onProcessShipment, onDirectShipment, navigate,
+  loadingApprove, loadingSent, loadingReturn, loadingShipRemaining, loadingDone, loadingProcessShipment, loadingDirectShipment,
 }) {
   if (!canProcess) return null
   const { status, needsReturn, returnedAt, items = [] } = req
@@ -327,6 +327,15 @@ function NextActionCard({
   if (status === 'DONE' || status === 'REJECTED') return null
 
   const isAutoShipping = shipmentType === 'sales' || shipmentType === 'non_sales' || shipmentType === 'stock_out'
+  // Escape hatch: barang harus dikirim sekarang tapi belum di-stock-in, jadi
+  // Stock Out pasti gagal cek stok. Hanya untuk tipe yang berujung shipping.
+  const canSkipStockOut = (shipmentType === 'sales' || shipmentType === 'non_sales') && !req.manualShipmentId
+  const skipStockOutBtn = canSkipStockOut ? (
+    <button onClick={onDirectShipment} disabled={loadingDirectShipment}
+      className="btn-secondary text-sm flex items-center gap-2 justify-center w-full text-amber-600 border-amber-200 hover:bg-amber-50">
+      <Truck size={14} /> {loadingDirectShipment ? 'Membuat…' : 'Langsung Shipping (Skip Stock Out)'}
+    </button>
+  ) : null
 
   const configs = {
     PENDING: {
@@ -370,15 +379,21 @@ function NextActionCard({
           <Truck size={14} /> Lihat Draft Shipping
         </button>
       ) : isAutoShipping && req.stockOutDraftId ? (
-        <button onClick={() => navigate(`/stock-out/new?draftId=${req.stockOutDraftId}`)}
-          className="btn-primary text-sm flex items-center gap-2 justify-center w-full bg-amber-600 border-amber-600 hover:bg-amber-700">
-          <PackageCheck size={14} /> Proses Stock Out
-        </button>
+        <div className="flex flex-col gap-2">
+          <button onClick={() => navigate(`/stock-out/new?draftId=${req.stockOutDraftId}`)}
+            className="btn-primary text-sm flex items-center gap-2 justify-center w-full bg-amber-600 border-amber-600 hover:bg-amber-700">
+            <PackageCheck size={14} /> Proses Stock Out
+          </button>
+          {skipStockOutBtn}
+        </div>
       ) : isAutoShipping ? (
-        <button onClick={onProcessShipment} disabled={loadingProcessShipment}
-          className="btn-secondary text-sm flex items-center gap-2 justify-center w-full">
-          <PackageCheck size={14} /> {loadingProcessShipment ? 'Membuat…' : 'Buat Ulang Stock Out'}
-        </button>
+        <div className="flex flex-col gap-2">
+          <button onClick={onProcessShipment} disabled={loadingProcessShipment}
+            className="btn-secondary text-sm flex items-center gap-2 justify-center w-full">
+            <PackageCheck size={14} /> {loadingProcessShipment ? 'Membuat…' : 'Buat Ulang Stock Out'}
+          </button>
+          {skipStockOutBtn}
+        </div>
       ) : (
         <div className="flex flex-col gap-2">
           <button onClick={onSent} disabled={loadingSent}
@@ -529,6 +544,15 @@ export default function PengajuanDetail() {
     mutationFn: () => requestApi.processShipment(id),
     onSuccess: (data) => { invalidate(); toast.success('Draft Stock Out berhasil dibuat!'); navigate(`/stock-out/new?draftId=${data.stockOutDraftId}`) },
     onError: e => toast.error(e.response?.data?.message ?? 'Gagal membuat Stock Out'),
+  })
+  const directShipment = useMutation({
+    mutationFn: () => requestApi.directShipment(id),
+    onSuccess: (data) => {
+      invalidate()
+      toast.success('Draft shipping dibuat — Stock Out dilewati')
+      if (data?.manualShipmentId) navigate(`/shipping-manual/${data.manualShipmentId}`)
+    },
+    onError: e => toast.error(e.response?.data?.message ?? 'Gagal membuat shipping'),
   })
   const markSent      = useMutation({ mutationFn: (d) => requestApi.markSent(id, d),          onSuccess: invalidate, onError: e => toast.error(e.response?.data?.message ?? 'Gagal') })
   const markReturned  = useMutation({ mutationFn: (d) => requestApi.markReturned(id, d),      onSuccess: invalidate, onError: e => toast.error(e.response?.data?.message ?? 'Gagal') })
@@ -879,12 +903,16 @@ export default function PengajuanDetail() {
             onShipRemaining={() => { if (confirm('Tandai semua sisa item sebagai sudah dikirim?')) shipRemaining.mutate() }}
             onDone={() => { if (confirm('Tandai pengajuan ini selesai?')) markDone.mutate() }}
             onProcessShipment={() => processShipment.mutate()}
+            onDirectShipment={() => {
+              if (confirm('Buat shipping TANPA Stock Out?\n\nStok tidak akan terpotong di sistem — pakai ini hanya kalau barang belum sempat di-stock-in tapi harus dikirim sekarang.')) directShipment.mutate()
+            }}
             loadingApprove={approve.isPending}
             loadingSent={markSent.isPending}
             loadingReturn={markReturned.isPending}
             loadingShipRemaining={shipRemaining.isPending}
             loadingDone={markDone.isPending}
             loadingProcessShipment={processShipment.isPending}
+            loadingDirectShipment={directShipment.isPending}
           />
 
           {/* Info card — always show */}

@@ -471,6 +471,11 @@ export default function ManualShipmentDetail() {
               <AlertCircle size={11} /> Item/harga di sini sudah diedit, mungkin sudah berbeda dari pengajuan asal.
             </p>
           )}
+          {s.skippedStockOut && (
+            <p className="text-xs text-amber-600 flex items-center gap-1 mt-1">
+              <AlertCircle size={11} /> Dibuat tanpa Stock Out — pergerakan stok barang ini tidak tercatat di sistem.
+            </p>
+          )}
         </div>
       </div>
 

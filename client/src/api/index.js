@@ -249,6 +249,7 @@ export const requestApi = {
   approve:         (id, data)   => api.post(`/requests/${id}/approve`, data ?? {}).then(r => r.data),
   reject:          (id, reason) => api.post(`/requests/${id}/reject`, { reason }).then(r => r.data),
   processShipment: (id)         => api.post(`/requests/${id}/process-shipment`).then(r => r.data),
+  directShipment:  (id)         => api.post(`/requests/${id}/direct-shipment`).then(r => r.data),
   markSent:        (id, data)   => api.patch(`/requests/${id}/sent`, data).then(r => r.data),
   markReturned:    (id, data)   => api.patch(`/requests/${id}/returned`, data).then(r => r.data),
   shipRemaining:   (id)         => api.patch(`/requests/${id}/ship-remaining`).then(r => r.data),

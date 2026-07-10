@@ -3,60 +3,14 @@ const {
     sequelize, Stock_Out_Draft, Stock_Out_Draft_Item,
     Stock_Out_Header, Stock_Movement, Stock, SkuWarehouseStock,
     ProductSKU, Product, ProductVariantOption, Warehouse, User,
-    Request, RequestItem, RequestType, ManualShipment, ManualShipmentItem,
+    Request, RequestItem, RequestType,
 } = require('../models');
 const { upsertSkuWarehouseStock } = require('../helpers/skuStock');
 const { companyFilter, companyId } = require('../helpers/tenancy');
-const manualShipmentCtrl = require('./manualShipmentController');
-
 // If this draft was auto-staged from an approved Sales/Non-Sales pengajuan,
 // finishing the Stock Out is the trigger to create the Shipping Manual draft —
-// mirrors the item-snapshot logic that used to live in requestController.approve().
-async function createShipmentFromRequest(request, cid, userId, t) {
-    const shipmentType = request.requestType?.shipmentType === 'sales' ? 'sales' : 'non_sales';
-    const invoiceNumber = await manualShipmentCtrl.generateInvoiceNumber(cid, t);
-
-    let subtotal = 0;
-    const itemsPayload = [];
-    for (const item of request.items) {
-        const skuPrice  = shipmentType === 'sales' ? Number(item.sku?.price ?? 0) : 0;
-        const lineTotal = skuPrice * item.qty;
-        subtotal += lineTotal;
-        itemsPayload.push({
-            productId:       item.sku?.ProductId ?? null,
-            productSkuId:    item.ProductSKUId   ?? null,
-            productName:     item.sku?.Product?.name ?? item.productName,
-            variantName:     item.variantLabel    ?? null,
-            sku:             item.sku?.sku_code   ?? null,
-            productImageUrl: item.sku?.Product?.imageUrl ?? null,
-            quantity:        item.qty,
-            unitPrice:       skuPrice,
-            subtotal:        lineTotal,
-        });
-    }
-
-    const shipment = await ManualShipment.create({
-        companyId:       cid,
-        invoiceNumber,
-        type:            shipmentType,
-        status:          'draft',
-        recipientName:    request.recipientName    || null,
-        recipientPhone:   request.recipientPhone   || null,
-        recipientAddress: request.recipientAddress || null,
-        shippingCost:    0,
-        subtotal,
-        total:           subtotal,
-        notes:           request.note || null,
-        sourceRequestId: request.id,
-        createdBy:       userId,
-    }, { transaction: t });
-
-    for (const item of itemsPayload) {
-        await ManualShipmentItem.create({ shipmentId: shipment.id, ...item }, { transaction: t });
-    }
-
-    return shipment;
-}
+// see helpers/shipmentFromRequest.js (also used by the direct-shipment bypass).
+const { createShipmentFromRequest } = require('../helpers/shipmentFromRequest');
 
 const DRAFT_ITEM_INCLUDE = [
     {

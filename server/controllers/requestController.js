@@ -473,6 +473,59 @@ class RequestController {
     } catch (err) { next(err); }
   }
 
+  // POST /requests/:id/direct-shipment — buat draft ManualShipment LANGSUNG dari
+  // Pengajuan, tanpa lewat Stock Out. Untuk kondisi lapangan di mana barang harus
+  // dikirim sekarang tapi belum sempat di-stock-in (stok sistem 0, Stock Out pasti
+  // gagal). Stok TIDAK dipotong sama sekali — shipment ditandai skippedStockOut
+  // supaya kelihatan di detail shipping bahwa pergerakan stoknya tidak tercatat.
+  static async directShipment(req, res, next) {
+    try {
+      await attachPermissions(req);
+      if (!canProcess(req)) return res.status(403).json({ message: 'Forbidden: butuh request.process' });
+
+      const request = await Request.findOne({
+        where: { id: req.params.id, ...companyFilter(req) },
+        include: [{ model: RequestType, as: 'requestType' }, ITEM_INCLUDE],
+      });
+      if (!request)                      return res.status(404).json({ message: 'Pengajuan tidak ditemukan' });
+      if (request.status !== 'APPROVED') return res.status(400).json({ message: 'Pengajuan harus berstatus APPROVED' });
+      if (request.manualShipmentId)      return res.status(400).json({ message: 'Shipping sudah dibuat untuk pengajuan ini' });
+
+      const shipType = request.requestType?.shipmentType
+        ?? (request.requestType?.requiresShipping ? 'non_sales' : null);
+      if (shipType !== 'sales' && shipType !== 'non_sales') {
+        return res.status(400).json({ message: 'Jenis pengajuan ini tidak memerlukan shipping' });
+      }
+
+      const cid = companyId(req);
+      const t   = await sequelize.transaction();
+      try {
+        // Buang draft Stock Out yang nyangkut dari approve() — jalur ini memang
+        // sengaja melewatinya, jangan sisakan draft yatim di halaman Stock Out.
+        if (request.stockOutDraftId) {
+          await Stock_Out_Draft_Item.destroy({ where: { DraftId: request.stockOutDraftId }, transaction: t });
+          await Stock_Out_Draft.destroy({ where: { id: request.stockOutDraftId }, transaction: t });
+        }
+
+        const { createShipmentFromRequest } = require('../helpers/shipmentFromRequest');
+        const shipment = await createShipmentFromRequest(request, cid, req.user.id, t, { skippedStockOut: true });
+        await request.update({
+          manualShipmentId: shipment.id,
+          stockOutDraftId:  null,
+          processedBy:      req.user.id,
+          updatedBy:        req.user.id,
+        }, { transaction: t });
+        await t.commit();
+
+        const full = await Request.findByPk(request.id, { include: [...BASE_INCLUDE, ITEM_INCLUDE] });
+        res.status(201).json(full);
+      } catch (err) {
+        await t.rollback();
+        throw err;
+      }
+    } catch (err) { next(err); }
+  }
+
   // PATCH /requests/:id/done
   static async markDone(req, res, next) {
     try {
