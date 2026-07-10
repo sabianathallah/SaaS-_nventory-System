@@ -4,7 +4,7 @@ import toast from 'react-hot-toast'
 import { hrisApi } from '../../../api'
 import Modal from '../../../components/Modal'
 import SearchableSelect from '../../../components/SearchableSelect'
-import { Plus, Download, Check, RotateCcw, Trash2, Loader2 } from 'lucide-react'
+import { Plus, Download, Check, RotateCcw, Trash2, Loader2, Pencil } from 'lucide-react'
 import { useCompanyGuard } from '../../../hooks/useCompanyGuard'
 import CompanyRequiredBanner from '../../../components/CompanyRequiredBanner'
 
@@ -99,10 +99,88 @@ function GeneratePayslipModal({ users, onClose }) {
   )
 }
 
+// Edit slip DRAFT — semua komponen bisa diubah (gaji pokok, tunjangan,
+// lembur, bonus, potongan, tanggal). Slip PUBLISHED harus ditarik ke Draft
+// dulu. Total dihitung ulang backend, preview di sini cuma estimasi live.
+function EditPayslipModal({ payslip, onClose }) {
+  const qc = useQueryClient()
+  const [form, setForm] = useState({
+    periodStart: payslip.periodStart,
+    periodEnd: payslip.periodEnd,
+    paymentDate: payslip.paymentDate,
+    fixedSalary: Number(payslip.fixedSalary),
+    allowanceTransport: Number(payslip.allowanceTransport),
+    allowanceMeal: Number(payslip.allowanceMeal),
+    overtime: Number(payslip.overtime),
+    bonus: Number(payslip.bonus),
+    otherDeductions: Number(payslip.otherDeductions),
+  })
+
+  const totalEarnings = Number(form.fixedSalary || 0) + Number(form.allowanceTransport || 0) + Number(form.allowanceMeal || 0) + Number(form.overtime || 0) + Number(form.bonus || 0)
+  const totalDeductions = Number(form.otherDeductions || 0)
+  const netPay = totalEarnings - totalDeductions
+
+  const update = useMutation({
+    mutationFn: (data) => hrisApi.updatePayslip(payslip.id, data),
+    onSuccess: () => { toast.success('Slip gaji diperbarui'); qc.invalidateQueries({ queryKey: ['hris-payslips'] }); onClose() },
+    onError: (e) => toast.error(e.response?.data?.message ?? 'Gagal memperbarui slip gaji'),
+  })
+
+  const NUM_FIELDS = [
+    ['fixedSalary', 'Gaji Pokok (Rp)'],
+    ['allowanceTransport', 'Tunjangan Transportasi (Rp)'],
+    ['allowanceMeal', 'Tunjangan Makan (Rp)'],
+    ['overtime', 'Overtime (Rp)'],
+    ['bonus', 'Bonus (Rp)'],
+    ['otherDeductions', 'Potongan Lainnya (Rp)'],
+  ]
+
+  return (
+    <Modal open onClose={onClose} title={`Edit Slip Gaji — ${payslip.user?.name ?? ''}`} size="md">
+      <form onSubmit={e => { e.preventDefault(); update.mutate(form) }} className="space-y-4">
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="label">Periode Dari</label>
+            <input type="date" required className="input" value={form.periodStart} onChange={e => setForm(f => ({ ...f, periodStart: e.target.value }))} />
+          </div>
+          <div>
+            <label className="label">Periode Sampai</label>
+            <input type="date" required className="input" value={form.periodEnd} onChange={e => setForm(f => ({ ...f, periodEnd: e.target.value }))} />
+          </div>
+          <div className="col-span-2">
+            <label className="label">Tanggal Pembayaran</label>
+            <input type="date" required className="input" value={form.paymentDate} onChange={e => setForm(f => ({ ...f, paymentDate: e.target.value }))} />
+          </div>
+          {NUM_FIELDS.map(([key, label]) => (
+            <div key={key}>
+              <label className="label">{label}</label>
+              <input type="number" min="0" className="input" value={form[key]} onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))} />
+            </div>
+          ))}
+        </div>
+
+        <div className="card p-3 bg-slate-50/50 space-y-1 text-xs">
+          <div className="flex justify-between"><span className="text-slate-600 font-semibold">Total Earnings</span><span className="font-bold text-emerald-600">{fmtRp(totalEarnings)}</span></div>
+          <div className="flex justify-between"><span className="text-slate-600 font-semibold">Total Deductions</span><span className="font-bold text-red-600">{fmtRp(totalDeductions)}</span></div>
+          <div className="flex justify-between pt-1 border-t border-slate-200"><span className="text-slate-800 font-bold">Net Pay</span><span className="font-bold text-slate-800">{fmtRp(netPay)}</span></div>
+        </div>
+
+        <div className="flex gap-2 pt-2 border-t border-slate-100">
+          <button type="button" onClick={onClose} className="btn-secondary flex-1 justify-center">Batal</button>
+          <button type="submit" disabled={update.isPending} className="btn-primary flex-1 justify-center">
+            {update.isPending ? 'Menyimpan…' : 'Simpan Perubahan'}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  )
+}
+
 export default function Payslips() {
   const qc = useQueryClient()
   const { needsCompany } = useCompanyGuard()
   const [showGenerate, setShowGenerate] = useState(false)
+  const [editingRow, setEditingRow] = useState(null)
 
   const { data: users } = useQuery({ queryKey: ['hris-salary-profiles'], queryFn: () => hrisApi.salaryProfiles({}) })
   const { data: list, isLoading } = useQuery({ queryKey: ['hris-payslips', 'admin'], queryFn: () => hrisApi.payslips({ limit: 100 }) })
@@ -181,6 +259,9 @@ export default function Payslips() {
                       </button>
                       {r.status === 'DRAFT' && (
                         <>
+                          <button title="Edit" onClick={() => setEditingRow(r)} className="w-7 h-7 rounded flex items-center justify-center text-slate-500 hover:bg-slate-100">
+                            <Pencil size={14} />
+                          </button>
                           <button title="Publish" onClick={() => publish.mutate(r.id)} className="w-7 h-7 rounded flex items-center justify-center text-emerald-600 hover:bg-emerald-50">
                             <Check size={14} />
                           </button>
@@ -204,6 +285,7 @@ export default function Payslips() {
       </div>
 
       {showGenerate && <GeneratePayslipModal users={users ?? []} onClose={() => setShowGenerate(false)} />}
+      {editingRow && <EditPayslipModal payslip={editingRow} onClose={() => setEditingRow(null)} />}
     </div>
   )
 }
