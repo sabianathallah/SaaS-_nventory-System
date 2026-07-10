@@ -2,13 +2,22 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { hrisApi } from '../../api'
+import { useAuth } from '../../context/AuthContext'
 import { Download, Loader2, Wallet } from 'lucide-react'
 
 const fmtRp = (n) => `Rp ${Number(n ?? 0).toLocaleString('id-ID')}`
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'
 
 export default function Payslip() {
-  const { data: list, isLoading } = useQuery({ queryKey: ['hris-payslips', 'self'], queryFn: () => hrisApi.payslips({ limit: 50 }) })
+  const { user } = useAuth()
+  // Halaman ini khusus slip MILIK SENDIRI. userId wajib dikirim eksplisit:
+  // untuk admin (yang boleh lihat semua) tanpa ini backend mengembalikan slip
+  // seluruh karyawan; untuk staff biasa parameter ini diabaikan backend.
+  const { data: list, isLoading } = useQuery({
+    queryKey: ['hris-payslips', 'self', user?.id],
+    queryFn: () => hrisApi.payslips({ limit: 50, userId: user?.id, status: 'PUBLISHED' }),
+    enabled: !!user?.id,
+  })
   const [downloadingId, setDownloadingId] = useState(null)
 
   async function handleDownload(row) {
