@@ -40,9 +40,15 @@ export default function AttendanceReview() {
     onSuccess: () => { toast.success('Pengajuan izin telat direview'); invalidate() },
     onError: (e) => toast.error(e.response?.data?.message ?? 'Gagal review'),
   })
+  const reviewEarlyLeave = useMutation({
+    mutationFn: ({ id, status, reviewNote }) => hrisApi.reviewEarlyLeave(id, { status, reviewNote }),
+    onSuccess: () => { toast.success('Pulang cepat direview'); setRejecting(null); invalidate() },
+    onError: (e) => toast.error(e.response?.data?.message ?? 'Gagal review'),
+  })
 
   function submitReject() {
     if (rejecting.kind === 'field') reviewField.mutate({ id: rejecting.id, status: 'REJECTED', reviewNote: rejecting.note || undefined })
+    else if (rejecting.kind === 'early') reviewEarlyLeave.mutate({ id: rejecting.id, status: 'REJECTED', reviewNote: rejecting.note || undefined })
     else reviewLateAttendance.mutate({ id: rejecting.id, status: 'REJECTED', reviewNote: rejecting.note || undefined })
   }
 
@@ -54,7 +60,7 @@ export default function AttendanceReview() {
       <div className="mb-5">
         <h1 className="text-lg font-bold text-slate-800">Persetujuan Presensi</h1>
         <p className="text-xs text-slate-400 mt-0.5">
-          Review klaim Kerja Lapangan, keterlambatan dadakan, dan pengajuan izin telat di muka. Approve/reject tidak mengubah jam yang sudah tercatat, kecuali izin telat yang disetujui (jadi Hadir).
+          Review klaim Kerja Lapangan, keterlambatan dadakan, pulang cepat, dan pengajuan izin telat di muka. Approve/reject tidak mengubah jam yang sudah tercatat, kecuali izin telat yang disetujui (jadi Hadir).
         </p>
       </div>
 
@@ -62,7 +68,7 @@ export default function AttendanceReview() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4" onClick={() => setRejecting(null)}>
           <div className="card w-full max-w-sm p-5" onClick={e => e.stopPropagation()}>
             <p className="text-sm font-semibold text-slate-800 mb-1">
-              {rejecting.kind === 'field' ? 'Tolak Klaim Kerja Lapangan' : 'Tolak Alasan Keterlambatan'}
+              {rejecting.kind === 'field' ? 'Tolak Klaim Kerja Lapangan' : rejecting.kind === 'early' ? 'Tolak Alasan Pulang Cepat' : 'Tolak Alasan Keterlambatan'}
             </p>
             <p className="text-xs text-slate-400 mb-3">Jam kerja/status tetap seperti tercatat, ini cuma jadi catatan HR.</p>
             <label className="label">Catatan (opsional)</label>
@@ -117,7 +123,7 @@ export default function AttendanceReview() {
       </div>
 
       <div className="card overflow-hidden">
-        <div className="px-4 py-3 border-b border-slate-100"><p className="text-sm font-semibold text-slate-700">Kerja Lapangan & Keterlambatan Dadakan</p></div>
+        <div className="px-4 py-3 border-b border-slate-100"><p className="text-sm font-semibold text-slate-700">Kerja Lapangan, Keterlambatan Dadakan & Pulang Cepat</p></div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -146,8 +152,14 @@ export default function AttendanceReview() {
                   <td className="td">
                     {fmtTime(r.checkOutAt)}
                     {r.checkOutWorkMode === 'FIELD' && <span className="badge-teal ml-1.5">Checkout Lapangan</span>}
+                    {r.earlyLeaveStatus === 'PENDING_REVIEW' && <span className="badge-amber ml-1.5">Pulang Cepat</span>}
                   </td>
-                  <td className="td max-w-[220px] truncate">{r.lateExcuseStatus === 'PENDING_REVIEW' ? (r.lateExcuseReason || '—') : (r.note || '—')}</td>
+                  <td className="td max-w-[220px]">
+                    <div className="truncate">{r.lateExcuseStatus === 'PENDING_REVIEW' ? (r.lateExcuseReason || '—') : (r.note || '—')}</div>
+                    {r.earlyLeaveStatus === 'PENDING_REVIEW' && r.earlyLeaveReason && (
+                      <div className="truncate text-[11px] text-amber-700">Pulang cepat: {r.earlyLeaveReason}</div>
+                    )}
+                  </td>
                   <td className="td text-center">
                     <div className="flex flex-col gap-1.5 items-center">
                       {r.reviewStatus === 'PENDING_REVIEW' && (
@@ -168,6 +180,17 @@ export default function AttendanceReview() {
                             <Check size={13} />
                           </button>
                           <button title="Tolak" onClick={() => setRejecting({ id: r.id, note: '', kind: 'late' })} className="w-6 h-6 rounded flex items-center justify-center text-red-600 hover:bg-red-50">
+                            <X size={13} />
+                          </button>
+                        </div>
+                      )}
+                      {r.earlyLeaveStatus === 'PENDING_REVIEW' && (
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[10px] text-slate-400">Pulang Cepat:</span>
+                          <button title="Maklumi" onClick={() => reviewEarlyLeave.mutate({ id: r.id, status: 'APPROVED' })} className="w-6 h-6 rounded flex items-center justify-center text-emerald-600 hover:bg-emerald-50">
+                            <Check size={13} />
+                          </button>
+                          <button title="Tolak" onClick={() => setRejecting({ id: r.id, note: '', kind: 'early' })} className="w-6 h-6 rounded flex items-center justify-center text-red-600 hover:bg-red-50">
                             <X size={13} />
                           </button>
                         </div>

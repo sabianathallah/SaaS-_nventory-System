@@ -7,6 +7,7 @@ const { distanceInMeters } = require('../helpers/geo');
 const { userHasPermission } = require('../helpers/permCheck');
 const { todayDateOnly, nowPartsInJakarta, addDaysStr, weekdayOf } = require('../helpers/timezone');
 const { lateSeverity } = require('../helpers/lateSeverity');
+const { getHrisSettings, fmtMinutes } = require('../helpers/hrisSettings');
 const { backfillAbsentForDates } = require('../helpers/absentBackfill');
 
 const USER_ATTRS = ['id', 'name', 'email', 'divisi'];
@@ -109,8 +110,8 @@ class AttendanceController {
                 const nowMinutes = hour * 60 + minute;
                 const [h, m] = user.shift.startTime.split(':').map(Number);
                 const shiftStartMinutes = h * 60 + m;
-                const graceMinutes = 15;
-                if (nowMinutes > shiftStartMinutes + graceMinutes) status = 'LATE';
+                const { lateGraceMinutes } = await getHrisSettings(req);
+                if (nowMinutes > shiftStartMinutes + lateGraceMinutes) status = 'LATE';
             }
 
             // Izin Telat — kalau sebelumnya sudah ada pengajuan yang di-approve
@@ -204,7 +205,25 @@ class AttendanceController {
                 requireFieldNote: isSwitchingToField,
             });
 
+            // Kebijakan durasi kerja minimal (default 8 jam, bisa diatur admin).
+            // Kurang dari itu tetap boleh check-out, tapi wajib isi alasan pulang
+            // cepat — masuk antrean review admin, murni catatan (gak ubah status).
+            const { minWorkMinutes } = await getHrisSettings(req);
+            const workedMinutes = Math.floor((Date.now() - new Date(attendance.checkInAt).getTime()) / 60000);
+            let earlyLeavePatch = {};
+            if (workedMinutes < minWorkMinutes) {
+                const earlyLeaveReason = (req.body.earlyLeaveReason || '').trim();
+                if (!earlyLeaveReason) {
+                    throw {
+                        name: 'BadRequest',
+                        message: `Durasi kerja baru ${fmtMinutes(workedMinutes)}, kurang ${fmtMinutes(minWorkMinutes - workedMinutes)} dari minimal ${fmtMinutes(minWorkMinutes)}. Isi alasan pulang cepat untuk melanjutkan check-out.`,
+                    };
+                }
+                earlyLeavePatch = { earlyLeaveStatus: 'PENDING_REVIEW', earlyLeaveReason };
+            }
+
             await attendance.update({
+                ...earlyLeavePatch,
                 checkOutAt: new Date(),
                 checkOutLat: lat,
                 checkOutLng: lng,
@@ -379,7 +398,11 @@ class AttendanceController {
             const { rows, count } = await Attendance.findAndCountAll({
                 where: {
                     ...companyFilter(req),
-                    [Op.or]: [{ reviewStatus: 'PENDING_REVIEW' }, { lateExcuseStatus: 'PENDING_REVIEW' }],
+                    [Op.or]: [
+                        { reviewStatus: 'PENDING_REVIEW' },
+                        { lateExcuseStatus: 'PENDING_REVIEW' },
+                        { earlyLeaveStatus: 'PENDING_REVIEW' },
+                    ],
                 },
                 include: [
                     { model: User, as: 'user', attributes: USER_ATTRS },
@@ -463,6 +486,33 @@ class AttendanceController {
                 lateExcuseReviewedBy: req.user.id,
                 lateExcuseReviewedAt: new Date(),
                 lateExcuseReviewNote: reviewNote || null,
+            });
+
+            res.json(attendance);
+        } catch (err) { next(err); }
+    }
+
+    // Admin/superadmin review alasan pulang cepat (check-out sebelum durasi
+    // kerja minimal terpenuhi). Approve/reject murni catatan — jam & status
+    // kehadiran tetap seperti tercatat.
+    static async reviewEarlyLeave(req, res, next) {
+        try {
+            const { status, reviewNote } = req.body;
+            if (!['APPROVED', 'REJECTED'].includes(status)) {
+                throw { name: 'BadRequest', message: 'Status review harus APPROVED atau REJECTED' };
+            }
+
+            const attendance = await Attendance.findOne({ where: { id: req.params.id, ...companyFilter(req) } });
+            if (!attendance) throw { name: 'NotFound', message: 'Data absensi tidak ditemukan' };
+            if (attendance.earlyLeaveStatus !== 'PENDING_REVIEW') {
+                throw { name: 'BadRequest', message: 'Data ini tidak sedang menunggu review pulang cepat' };
+            }
+
+            await attendance.update({
+                earlyLeaveStatus: status,
+                earlyLeaveReviewedBy: req.user.id,
+                earlyLeaveReviewedAt: new Date(),
+                earlyLeaveReviewNote: reviewNote || null,
             });
 
             res.json(attendance);

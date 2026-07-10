@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { hrisApi } from '../../api'
@@ -6,7 +6,7 @@ import { useAuth } from '../../context/AuthContext'
 import CameraCapture from '../../components/CameraCapture'
 import { useCompanyGuard } from '../../hooks/useCompanyGuard'
 import CompanyRequiredBanner from '../../components/CompanyRequiredBanner'
-import { LogOut, MapPin, Loader2, Camera, Building2, Laptop, Briefcase, X, Pencil, Plus, Trophy, AlarmClock as AlarmClockIcon, UserX, Thermometer } from 'lucide-react'
+import { LogOut, MapPin, Loader2, Camera, Building2, Laptop, Briefcase, X, Pencil, Plus, Trophy, AlarmClock as AlarmClockIcon, UserX, Thermometer, Timer } from 'lucide-react'
 import LeaderboardCard from '../../components/hris/LeaderboardCard'
 
 const avatarInitials = (name = '') => name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
@@ -25,6 +25,43 @@ const REVIEW_COLOR = { PENDING_REVIEW: 'badge-amber', APPROVED: 'badge-green', R
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'
 const fmtTime = (d) => d ? new Date(d).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '—'
 const mapsLink = (lat, lng) => `https://www.google.com/maps?q=${lat},${lng}`
+
+// 370 -> "6j 10m", 480 -> "8j", 45 -> "45m"
+const fmtDur = (m) => {
+  const h = Math.floor(m / 60), mm = m % 60
+  return h && mm ? `${h}j ${mm}m` : h ? `${h}j` : `${mm}m`
+}
+const workedMinutesSince = (checkInAt, now = Date.now()) =>
+  Math.max(0, Math.floor((now - new Date(checkInAt).getTime()) / 60000))
+
+// Progress durasi kerja hari ini vs minimal (default 8 jam) — biar karyawan
+// (termasuk yang masuk siang karena izin telat) langsung tahu jam pulangnya.
+function WorkProgress({ checkInAt, minWorkMinutes }) {
+  const [now, setNow] = useState(Date.now())
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 30000)
+    return () => clearInterval(t)
+  }, [])
+  const worked = workedMinutesSince(checkInAt, now)
+  const done = worked >= minWorkMinutes
+  const pct = Math.min(100, Math.round((worked / minWorkMinutes) * 100))
+  const target = new Date(new Date(checkInAt).getTime() + minWorkMinutes * 60000)
+  return (
+    <div className="mt-3 pt-3 border-t border-slate-100 w-full">
+      <div className="flex items-center justify-between text-xs mb-1.5">
+        <span className={`flex items-center gap-1 font-medium ${done ? 'text-emerald-600' : 'text-slate-600'}`}>
+          <Timer size={12} /> Sudah bekerja {fmtDur(worked)} / {fmtDur(minWorkMinutes)}
+        </span>
+        <span className={done ? 'text-emerald-600 font-medium' : 'text-slate-400'}>
+          {done ? 'Durasi minimal terpenuhi ✓' : `Bisa check-out mulai ${fmtTime(target)}`}
+        </span>
+      </div>
+      <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
+        <div className={`h-full rounded-full transition-all ${done ? 'bg-emerald-500' : 'bg-brand'}`} style={{ width: `${pct}%` }} />
+      </div>
+    </div>
+  )
+}
 
 // Nama lokasi kantor kalau ON_SITE, atau link ke Google Maps pakai koordinat
 // GPS asli untuk WFA/Kerja Lapangan (gak ada lokasi kantor yang cocok).
@@ -107,6 +144,9 @@ export default function Attendance() {
   const pendingActionRef = useRef(null) // 'in' | 'out'
   const pendingModeRef = useRef('ON_SITE')
   const checkoutOverrideRef = useRef(false) // true saat checkout ganti mode ON_SITE -> FIELD
+  const earlyLeaveReasonRef = useRef('') // alasan pulang cepat, dikirim bareng check-out
+  const [showEarlyLeave, setShowEarlyLeave] = useState(false)
+  const [earlyLeaveInput, setEarlyLeaveInput] = useState('')
 
   const [editingRow, setEditingRow] = useState(null) // attendance row lagi diedit, atau null
   const [editForm, setEditForm] = useState(EMPTY_EDIT_FORM)
@@ -117,6 +157,8 @@ export default function Attendance() {
   const [lightboxUser, setLightboxUser] = useState(null) // { name, avatar } atau null
 
   const { data: today } = useQuery({ queryKey: ['hris-today'], queryFn: hrisApi.today })
+  const { data: hrisSettings } = useQuery({ queryKey: ['hris-settings'], queryFn: hrisApi.hrisSettings })
+  const minWorkMinutes = hrisSettings?.minWorkMinutes ?? 480
   const { data: history, isLoading } = useQuery({
     queryKey: ['hris-attendance-list'],
     queryFn: () => hrisApi.attendanceList({ limit: 30 }),
@@ -212,6 +254,16 @@ export default function Attendance() {
   function startCheckOut() {
     pendingActionRef.current = 'out'
     checkoutOverrideRef.current = false
+    earlyLeaveReasonRef.current = ''
+    // Belum memenuhi durasi kerja minimal (default 8 jam) — tetap boleh
+    // check-out, tapi wajib isi alasan dulu yang bakal direview admin.
+    if (today?.checkInAt && workedMinutesSince(today.checkInAt) < minWorkMinutes) {
+      setShowEarlyLeave(true)
+      return
+    }
+    proceedCheckOut()
+  }
+  function proceedCheckOut() {
     // Cuma tawarkan pindah ke Kerja Lapangan kalau check-in-nya On-site —
     // kombinasi lain (WFA/FIELD) tetap ikut mode yang sama seperti sekarang.
     if (today?.workMode === 'ON_SITE') {
@@ -219,6 +271,13 @@ export default function Attendance() {
     } else {
       setShowCamera(true)
     }
+  }
+  function confirmEarlyLeave() {
+    if (!earlyLeaveInput.trim()) return toast.error('Isi alasan pulang cepat dulu')
+    earlyLeaveReasonRef.current = earlyLeaveInput.trim()
+    setShowEarlyLeave(false)
+    setEarlyLeaveInput('')
+    proceedCheckOut()
   }
 
   function pickMode(mode) {
@@ -258,11 +317,11 @@ export default function Attendance() {
         checkIn.mutate({ lat, lng, photo, workMode: pendingModeRef.current, note: pendingModeRef.current === 'FIELD' ? fieldNote.trim() : undefined })
         setFieldNote('')
       } else if (checkoutOverrideRef.current) {
-        checkOut.mutate({ lat, lng, photo, workMode: 'FIELD', note: fieldNote.trim() })
+        checkOut.mutate({ lat, lng, photo, workMode: 'FIELD', note: fieldNote.trim(), earlyLeaveReason: earlyLeaveReasonRef.current || undefined })
         setFieldNote('')
         checkoutOverrideRef.current = false
       } else {
-        checkOut.mutate({ lat, lng, photo })
+        checkOut.mutate({ lat, lng, photo, earlyLeaveReason: earlyLeaveReasonRef.current || undefined })
       }
     } catch (err) {
       toast.error(err.message)
@@ -308,6 +367,9 @@ export default function Attendance() {
               {today?.lateExcuseStatus && today.lateExcuseStatus !== 'NONE' && (
                 <span className={`ml-2 ${REVIEW_COLOR[today.lateExcuseStatus]}`}>Telat: {REVIEW_LABEL[today.lateExcuseStatus]}</span>
               )}
+              {today?.earlyLeaveStatus && today.earlyLeaveStatus !== 'NONE' && (
+                <span className={`ml-2 ${REVIEW_COLOR[today.earlyLeaveStatus]}`}>Pulang Cepat: {REVIEW_LABEL[today.earlyLeaveStatus]}</span>
+              )}
             </p>
             <div className="flex items-center gap-3 mt-0.5">
               {today?.checkInAt && <LocationTag location={today.checkInLocation} lat={today.checkInLat} lng={today.checkInLng} />}
@@ -330,6 +392,9 @@ export default function Attendance() {
             <span className="badge-green">Presensi hari ini selesai</span>
           )}
         </div>
+        {today?.checkInAt && !today?.checkOutAt && (
+          <WorkProgress checkInAt={today.checkInAt} minWorkMinutes={minWorkMinutes} />
+        )}
       </div>
 
       {leaderboard && (
@@ -472,6 +537,24 @@ export default function Attendance() {
             <div className="flex justify-end gap-2">
               <button onClick={() => setShowFieldNote(false)} className="btn-secondary text-sm">Batal</button>
               <button onClick={confirmFieldNote} className="btn-primary text-sm">Lanjutkan</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showEarlyLeave && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4" onClick={() => { setShowEarlyLeave(false); setEarlyLeaveInput('') }}>
+          <div className="card w-full max-w-sm p-5" onClick={e => e.stopPropagation()}>
+            <p className="text-sm font-semibold text-slate-800 mb-1">Check-out Sebelum {fmtDur(minWorkMinutes)} Kerja</p>
+            <p className="text-xs text-slate-400 mb-3">
+              Kamu baru bekerja <span className="font-semibold text-slate-600">{fmtDur(workedMinutesSince(today?.checkInAt))}</span>,
+              kurang <span className="font-semibold text-amber-600">{fmtDur(Math.max(0, minWorkMinutes - workedMinutesSince(today?.checkInAt)))}</span> dari
+              durasi minimal. Tetap bisa check-out, tapi isi alasannya dulu — akan dilaporkan ke admin untuk direview.
+            </p>
+            <textarea autoFocus className="input mb-3" rows={3} placeholder="mis. Sakit sore ini / ada urusan keluarga mendadak" value={earlyLeaveInput} onChange={e => setEarlyLeaveInput(e.target.value)} />
+            <div className="flex justify-end gap-2">
+              <button onClick={() => { setShowEarlyLeave(false); setEarlyLeaveInput('') }} className="btn-secondary text-sm">Batal</button>
+              <button onClick={confirmEarlyLeave} className="btn-primary text-sm">Lanjut Check-out</button>
             </div>
           </div>
         </div>
@@ -674,6 +757,14 @@ export default function Attendance() {
                     <span className={STATUS_COLOR[r.status]}>{STATUS_LABEL[r.status]}</span>
                     {r.lateExcuseStatus && r.lateExcuseStatus !== 'NONE' && (
                       <div className={`mt-1 ${REVIEW_COLOR[r.lateExcuseStatus]}`}>Telat: {REVIEW_LABEL[r.lateExcuseStatus]}</div>
+                    )}
+                    {r.earlyLeaveStatus && r.earlyLeaveStatus !== 'NONE' && (
+                      <div className={`mt-1 ${REVIEW_COLOR[r.earlyLeaveStatus]}`}>
+                        Pulang Cepat: {REVIEW_LABEL[r.earlyLeaveStatus]}
+                        {r.checkInAt && r.checkOutAt && (
+                          <span className="ml-1">(−{fmtDur(Math.max(0, minWorkMinutes - workedMinutesSince(r.checkInAt, new Date(r.checkOutAt).getTime())))})</span>
+                        )}
+                      </div>
                     )}
                   </td>
                   {canEdit && (

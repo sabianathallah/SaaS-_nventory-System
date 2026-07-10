@@ -25,6 +25,7 @@ import HrisPaymentAdjustments from './pages/hris/PaymentAdjustments'
 import HrisSalaryProfiles from './pages/hris/admin/SalaryProfiles'
 import HrisPayslipsAdmin from './pages/hris/admin/Payslips'
 import HrisPayslip from './pages/hris/Payslip'
+import HrisWorkPolicy from './pages/hris/admin/WorkPolicy'
 import Products from './pages/Products'
 import ProductDetail from './pages/ProductDetail'
 import ProductEdit from './pages/ProductEdit'
@@ -155,6 +156,7 @@ function AppRoutes() {
                 {/* Hub gabungan Cuti+WFA+Izin Telat — eksperimen UX, route lama di atas sengaja dibiarkan supaya gampang revert */}
                 <Route path="/hris/pengajuan"       element={<PageVisibleRoute pageKey="hris"><PermissionRoute permission="hris.view" page="Pengajuan"><HrisRequests /></PermissionRoute></PageVisibleRoute>} />
                 <Route path="/hris/admin/wfa-quota" element={<PageVisibleRoute pageKey="hris"><PermissionRoute permission="hris.manage" page="Kuota WFA"><HrisWfaQuota /></PermissionRoute></PageVisibleRoute>} />
+                <Route path="/hris/admin/work-policy" element={<PageVisibleRoute pageKey="hris"><PermissionRoute permission="hris.manage" page="Aturan Jam Kerja"><HrisWorkPolicy /></PermissionRoute></PageVisibleRoute>} />
                 <Route path="/hris/payment-adjustments" element={<PageVisibleRoute pageKey="hris"><PermissionRoute permission="hris.reports.view" page="Penyesuaian Payment"><HrisPaymentAdjustments /></PermissionRoute></PageVisibleRoute>} />
                 <Route path="/hris/admin/salary-profiles" element={<PageVisibleRoute pageKey="hris"><PermissionRoute permission="hris.payslip.manage" page="Profil Gaji"><HrisSalaryProfiles /></PermissionRoute></PageVisibleRoute>} />
                 <Route path="/hris/admin/payslips" element={<PageVisibleRoute pageKey="hris"><PermissionRoute permission="hris.payslip.manage" page="Slip Gaji"><HrisPayslipsAdmin /></PermissionRoute></PageVisibleRoute>} />

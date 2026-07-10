@@ -278,11 +278,12 @@ export const hrisApi = {
     fd.append('photo', photo)
     return api.post('/hris/attendance/check-in', fd).then(r => r.data)
   },
-  checkOut:       ({ lat, lng, note, photo, workMode }) => {
+  checkOut:       ({ lat, lng, note, photo, workMode, earlyLeaveReason }) => {
     const fd = new FormData()
     fd.append('lat', lat); fd.append('lng', lng)
     if (note) fd.append('note', note)
     if (workMode) fd.append('workMode', workMode)
+    if (earlyLeaveReason) fd.append('earlyLeaveReason', earlyLeaveReason)
     fd.append('photo', photo)
     return api.post('/hris/attendance/check-out', fd).then(r => r.data)
   },
@@ -293,6 +294,9 @@ export const hrisApi = {
   pendingReviewAttendance: (params) => api.get('/hris/attendance/pending-review', { params }).then(r => r.data),
   reviewAttendance:        (id, data) => api.patch(`/hris/attendance/${id}/review`, data).then(r => r.data),
   reviewLateAttendance:    (id, data) => api.patch(`/hris/attendance/${id}/review-late`, data).then(r => r.data),
+  reviewEarlyLeave:        (id, data) => api.patch(`/hris/attendance/${id}/review-early-leave`, data).then(r => r.data),
+  hrisSettings:       ()     => api.get('/hris/settings').then(r => r.data),
+  updateHrisSettings: (data) => api.put('/hris/settings', data).then(r => r.data),
   submitLateReason:        (id, data) => api.patch(`/hris/attendance/${id}/late-reason`, data).then(r => r.data),
 
   lateExcuseList:   (params)   => api.get('/hris/late-excuse', { params }).then(r => r.data),

@@ -45,6 +45,12 @@ module.exports = (sequelize, DataTypes) => {
         onDelete: 'SET NULL',
         onUpdate: 'CASCADE',
       });
+      Attendance.belongsTo(models.User, {
+        foreignKey: { name: 'earlyLeaveReviewedBy', allowNull: true },
+        as: 'earlyLeaveReviewer',
+        onDelete: 'SET NULL',
+        onUpdate: 'CASCADE',
+      });
       Attendance.belongsTo(models.LateExcuseRequest, {
         foreignKey: { name: 'lateExcuseRequestId', allowNull: true },
         as: 'lateExcuseRequest',
@@ -105,6 +111,15 @@ module.exports = (sequelize, DataTypes) => {
     lateExcuseReviewedAt: { type: DataTypes.DATE, allowNull: true },
     lateExcuseReviewNote: { type: DataTypes.TEXT, allowNull: true },
     lateExcuseRequestId:  { type: DataTypes.INTEGER, allowNull: true },
+    earlyLeaveStatus: {
+      type: DataTypes.ENUM('NONE', 'PENDING_REVIEW', 'APPROVED', 'REJECTED'),
+      allowNull: false,
+      defaultValue: 'NONE',
+    },
+    earlyLeaveReason:     { type: DataTypes.TEXT, allowNull: true },
+    earlyLeaveReviewedBy: { type: DataTypes.INTEGER, allowNull: true },
+    earlyLeaveReviewedAt: { type: DataTypes.DATE, allowNull: true },
+    earlyLeaveReviewNote: { type: DataTypes.TEXT, allowNull: true },
     note:      { type: DataTypes.TEXT, allowNull: true },
     editedBy:  { type: DataTypes.INTEGER, allowNull: true },
     editedAt:  { type: DataTypes.DATE, allowNull: true },

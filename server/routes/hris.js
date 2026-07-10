@@ -16,8 +16,13 @@ const LateExcuseController = require('../controllers/lateExcuseController');
 const SickLeaveController = require('../controllers/sickLeaveController');
 const SalaryProfileController = require('../controllers/salaryProfileController');
 const PayslipController = require('../controllers/payslipController');
+const HrisSettingController = require('../controllers/hrisSettingController');
 
 router.use(requirePermission('hris.view'));
+
+// ── Aturan Jam Kerja (durasi minimal & toleransi telat, per company) ─────────
+router.get('/settings', HrisSettingController.get);
+router.put('/settings', requirePermission('hris.manage'), requireCompany, HrisSettingController.update);
 
 // ── Attendance ───────────────────────────────────────────────────────────────
 router.get('/attendance/today',   AttendanceController.today);
@@ -32,6 +37,7 @@ router.post('/attendance/check-out', requireCompany, uploadSingle('photo', 'saas
 router.post('/attendance',        requirePermission('hris.attendance.edit'), requireCompany, AttendanceController.adminCreate);
 router.patch('/attendance/:id/review', requirePermission('hris.attendance.review'), AttendanceController.review);
 router.patch('/attendance/:id/review-late', requirePermission('hris.attendance.review'), AttendanceController.reviewLate);
+router.patch('/attendance/:id/review-early-leave', requirePermission('hris.attendance.review'), AttendanceController.reviewEarlyLeave);
 router.patch('/attendance/:id/late-reason', AttendanceController.submitLateReason);
 router.patch('/attendance/:id', requirePermission('hris.attendance.edit'), AttendanceController.update);
 
