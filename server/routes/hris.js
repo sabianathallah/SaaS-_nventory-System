@@ -103,8 +103,8 @@ router.patch('/wfa/requests/:id/cancel', WfaController.cancel);
 router.get('/wfa/payment-adjustments', requirePermission('hris.reports.view'), WfaController.listPaymentAdjustments);
 
 // ── Profil Gaji (data dasar buat generate slip gaji) ──────────────────────────
-router.get('/salary-profiles',  requirePermission('hris.payslip.manage'), SalaryProfileController.list);
-router.put('/salary-profiles',  requirePermission('hris.payslip.manage'), SalaryProfileController.upsert);
+router.get('/salary-profiles',  requirePermission('hris.salary.manage'), SalaryProfileController.list);
+router.put('/salary-profiles',  requirePermission('hris.salary.manage'), SalaryProfileController.upsert);
 
 // ── Slip Gaji ──────────────────────────────────────────────────────────────────
 router.get('/payslips',              PayslipController.list);

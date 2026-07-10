@@ -119,7 +119,7 @@ const HRIS_NAV_GROUPS = [
       { to: '/hris/admin/wfa-quota',    icon: Laptop,        label: 'Kuota WFA',     requirePermission: 'hris.manage' },
       { to: '/hris/admin/work-policy',  icon: CalendarClock, label: 'Aturan Jam Kerja', requirePermission: 'hris.manage' },
       { to: '/hris/payment-adjustments', icon: Wallet,       label: 'Penyesuaian Payment', requirePermission: 'hris.reports.view' },
-      { to: '/hris/admin/salary-profiles', icon: Wallet,     label: 'Profil Gaji',   requirePermission: 'hris.payslip.manage' },
+      { to: '/hris/admin/salary-profiles', icon: Wallet,     label: 'Profil Gaji',   requirePermission: 'hris.salary.manage' },
       { to: '/hris/admin/payslips',     icon: Receipt,       label: 'Slip Gaji (Admin)', requirePermission: 'hris.payslip.manage' },
       { to: '/hris/reports',            icon: BarChart2,     label: 'Laporan HRIS', requirePermission: 'hris.reports.view' },
     ],

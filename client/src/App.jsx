@@ -158,7 +158,7 @@ function AppRoutes() {
                 <Route path="/hris/admin/wfa-quota" element={<PageVisibleRoute pageKey="hris"><PermissionRoute permission="hris.manage" page="Kuota WFA"><HrisWfaQuota /></PermissionRoute></PageVisibleRoute>} />
                 <Route path="/hris/admin/work-policy" element={<PageVisibleRoute pageKey="hris"><PermissionRoute permission="hris.manage" page="Aturan Jam Kerja"><HrisWorkPolicy /></PermissionRoute></PageVisibleRoute>} />
                 <Route path="/hris/payment-adjustments" element={<PageVisibleRoute pageKey="hris"><PermissionRoute permission="hris.reports.view" page="Penyesuaian Payment"><HrisPaymentAdjustments /></PermissionRoute></PageVisibleRoute>} />
-                <Route path="/hris/admin/salary-profiles" element={<PageVisibleRoute pageKey="hris"><PermissionRoute permission="hris.payslip.manage" page="Profil Gaji"><HrisSalaryProfiles /></PermissionRoute></PageVisibleRoute>} />
+                <Route path="/hris/admin/salary-profiles" element={<PageVisibleRoute pageKey="hris"><PermissionRoute permission="hris.salary.manage" page="Profil Gaji"><HrisSalaryProfiles /></PermissionRoute></PageVisibleRoute>} />
                 <Route path="/hris/admin/payslips" element={<PageVisibleRoute pageKey="hris"><PermissionRoute permission="hris.payslip.manage" page="Slip Gaji"><HrisPayslipsAdmin /></PermissionRoute></PageVisibleRoute>} />
                 <Route path="/hris/payslip" element={<PageVisibleRoute pageKey="hris"><PermissionRoute permission="hris.view" page="Slip Gaji Saya"><HrisPayslip /></PermissionRoute></PageVisibleRoute>} />
 

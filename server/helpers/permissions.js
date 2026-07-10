@@ -104,7 +104,8 @@ const ALL_PERMISSIONS = [
   { key: 'hris.shift.manage',         label: 'Kelola Shift',                               group: 'HRIS',                    parent: 'hris.manage',            desc: 'Tambah, edit, hapus shift & assign shift ke user' },
   { key: 'hris.location.manage',      label: 'Kelola Lokasi Kantor',                       group: 'HRIS',                    parent: 'hris.manage',            desc: 'Tambah, edit, hapus lokasi kantor untuk validasi presensi' },
   { key: 'hris.reports.view',         label: 'Lihat Laporan HRIS',                         group: 'HRIS',                    parent: 'hris.manage',            desc: 'Lihat laporan rekap absensi, cuti, dan lembur' },
-  { key: 'hris.payslip.manage',       label: 'Kelola Slip Gaji',                           group: 'HRIS',                    parent: 'hris.manage',            desc: 'Kelola profil gaji karyawan, generate & publish slip gaji' },
+  { key: 'hris.payslip.manage',       label: 'Kelola Slip Gaji',                           group: 'HRIS',                    parent: 'hris.manage',            desc: 'Generate, edit, publish & hapus slip gaji karyawan' },
+  { key: 'hris.salary.manage',        label: 'Kelola Profil Gaji',                         group: 'HRIS',                    parent: 'hris.manage',            desc: 'Pendataan gaji pokok & tunjangan karyawan (tanpa akses generate/publish slip)' },
 ];
 
 const ALL_KEYS = ALL_PERMISSIONS.map(p => p.key);
@@ -149,7 +150,15 @@ const DEFAULT_PERMISSIONS = {
     'admin.manage', 'admin.users', 'reports.manage', 'db_link.view',
     'hris.manage', 'hris.view', 'hris.attendance.edit', 'hris.attendance.review', 'hris.leave.review',
     'hris.wfa.review', 'hris.overtime.review', 'hris.shift.manage', 'hris.location.manage', 'hris.reports.view',
-    'hris.payslip.manage',
+    'hris.payslip.manage', 'hris.salary.manage',
+  ],
+
+  FINANCE: [
+    'dashboard.view_stock', 'dashboard.view_value',
+    'inventory.view', 'inventory.view_value',
+    'shipping.manual.view', 'shipping.manual.approve_payment',
+    'reports.dashboard',
+    'hris.view', 'hris.reports.view', 'hris.salary.manage',
   ],
 
   CEO: [
