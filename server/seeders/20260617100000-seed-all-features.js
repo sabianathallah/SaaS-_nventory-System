@@ -258,7 +258,7 @@ module.exports = {
         buyerName: r.buyerName || null, buyerAddress: r.buyerAddress || null,
         buyerPhone: r.buyerPhone || null, recipientInfo: r.recipientInfo || null,
         shippingCost: r.shippingCost, subtotal: r.subtotal, total: r.total,
-        paymentProofUrl: null,
+        paymentProofUrls: JSON.stringify([]),
         paymentProofVerifiedBy: r.paymentProofVerifiedBy || null,
         paymentProofVerifiedAt: r.paymentProofVerifiedAt || null,
         expeditionName: r.expeditionName || null,

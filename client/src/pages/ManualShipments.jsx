@@ -31,7 +31,7 @@ function nextActionHint(r) {
   if (r.status === 'cancelled' || r.status === 'completed') return null
   if (r.status === 'pending') {
     if (r.type === 'non_sales') return { text: 'Siap dikirim', icon: PackageCheck, color: 'text-indigo-500' }
-    return r.paymentProofUrl
+    return r.paymentProofUrls?.length
       ? { text: 'Konfirmasi pembayaran', icon: CreditCard, color: 'text-blue-500' }
       : { text: 'Tunggu bukti transfer', icon: CreditCard, color: 'text-amber-500' }
   }

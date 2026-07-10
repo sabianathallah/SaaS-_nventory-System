@@ -75,7 +75,7 @@ function StatusTimeline({ status, type }) {
 
 // ── Guided Next Action Card ───────────────────────────────────────────────────
 function NextActionCard({ s, perm, proofRef, statusMut, proofMut }) {
-  const { status, type, paymentProofUrl } = s
+  const { status, type, paymentProofUrls } = s
   const canShip    = perm('shipping.manual.manage')
   const canApprove = perm('shipping.manual.approve_payment')
   const canResi    = perm('shipping.manual.upload_resi')
@@ -162,7 +162,7 @@ function NextActionCard({ s, perm, proofRef, statusMut, proofMut }) {
     cfgKey = 'ready_ship'
   } else if (status === 'pending') {
     if (type === 'non_sales') cfgKey = 'ready_ship'
-    else if (!paymentProofUrl) cfgKey = 'sales_no_proof'
+    else if (!paymentProofUrls?.length) cfgKey = 'sales_no_proof'
     else cfgKey = 'sales_confirm'
   }
 
@@ -566,12 +566,16 @@ export default function ManualShipmentDetail() {
           {s.type === 'sales' && (
             <div className="card p-4 space-y-3">
               <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Bukti Transfer</h3>
-              {s.paymentProofUrl ? (
+              {s.paymentProofUrls?.length ? (
                 <div className="space-y-1">
-                  <a href={s.paymentProofUrl} target="_blank" rel="noreferrer"
-                    className="flex items-center gap-2 text-sm text-blue-600 hover:underline">
-                    <ImageIcon size={14} /> Lihat Bukti <ExternalLink size={11} />
-                  </a>
+                  {s.paymentProofUrls.map((p, i) => (
+                    <a key={i} href={p.url} target="_blank" rel="noreferrer"
+                      className="flex items-center gap-2 text-sm text-blue-600 hover:underline">
+                      <ImageIcon size={14} /> Bukti {i + 1}
+                      {p.uploadedAt && <span className="text-xs text-slate-400">· {fmtDateTime(p.uploadedAt)}</span>}
+                      <ExternalLink size={11} />
+                    </a>
+                  ))}
                   {s.paymentProofVerifiedBy && (
                     <div className="text-xs text-emerald-600 flex items-center gap-1">
                       <CheckCircle2 size={12} /> Dikonfirmasi {s.paymentVerifier?.name} · {fmtDateTime(s.paymentProofVerifiedAt)}
@@ -581,13 +585,13 @@ export default function ManualShipmentDetail() {
               ) : (
                 <p className="text-xs text-slate-400">Belum ada bukti transfer</p>
               )}
-              {['pending', 'paid'].includes(s.status) && perm('shipping.manual.approve_payment') && s.paymentProofUrl && (
+              {['pending', 'paid'].includes(s.status) && perm('shipping.manual.approve_payment') && s.paymentProofUrls?.length > 0 && (
                 <>
                   <input type="file" ref={proofRef} accept="image/*" className="hidden"
                     onChange={e => e.target.files[0] && proofMut.mutate(e.target.files[0])} />
                   <button onClick={() => proofRef.current?.click()} disabled={proofMut.isPending}
                     className="w-full btn-secondary flex items-center gap-2 justify-center text-sm">
-                    <Upload size={14} /> Ganti Bukti TF
+                    <Upload size={14} /> {proofMut.isPending ? 'Uploading…' : 'Tambah Bukti TF'}
                   </button>
                 </>
               )}

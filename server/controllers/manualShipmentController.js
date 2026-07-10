@@ -310,7 +310,7 @@ exports.changeStatus = async (req, res, next) => {
 
     if (status === 'paid') {
       if (shipment.type !== 'sales') { await t.rollback(); return res.status(400).json({ message: 'Status paid hanya untuk transaksi sales' }); }
-      if (!shipment.paymentProofUrl) { await t.rollback(); return res.status(400).json({ message: 'Upload bukti transfer terlebih dahulu' }); }
+      if (!shipment.paymentProofUrls?.length) { await t.rollback(); return res.status(400).json({ message: 'Upload bukti transfer terlebih dahulu' }); }
       await shipment.update({
         status: 'paid',
         paymentProofVerifiedBy: req.user.id,
@@ -361,8 +361,12 @@ exports.uploadPaymentProof = async (req, res, next) => {
     const fileUrl = req.file?.path || req.file?.secure_url || req.body.paymentProofUrl;
     if (!fileUrl) return res.status(400).json({ message: 'File bukti transfer wajib diupload' });
 
-    await shipment.update({ paymentProofUrl: fileUrl });
-    res.json({ data: { paymentProofUrl: fileUrl }, message: 'Bukti transfer berhasil diupload' });
+    const proofs = [
+      ...(shipment.paymentProofUrls || []),
+      { url: fileUrl, uploadedAt: new Date(), uploadedBy: req.user.id },
+    ];
+    await shipment.update({ paymentProofUrls: proofs });
+    res.json({ data: { paymentProofUrls: proofs }, message: 'Bukti transfer berhasil diupload' });
   } catch (err) { next(err); }
 };
 

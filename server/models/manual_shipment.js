@@ -28,7 +28,7 @@ module.exports = (sequelize, DataTypes) => {
     shippingCost:           { type: DataTypes.DECIMAL(15, 2), allowNull: false, defaultValue: 0 },
     subtotal:               { type: DataTypes.DECIMAL(15, 2), allowNull: false, defaultValue: 0 },
     total:                  { type: DataTypes.DECIMAL(15, 2), allowNull: false, defaultValue: 0 },
-    paymentProofUrl:        { type: DataTypes.TEXT,        allowNull: true },
+    paymentProofUrls:       { type: DataTypes.JSONB,       allowNull: false, defaultValue: [] },
     paymentProofVerifiedBy: { type: DataTypes.INTEGER,     allowNull: true },
     paymentProofVerifiedAt: { type: DataTypes.DATE,        allowNull: true },
     expeditionName:         { type: DataTypes.STRING(100), allowNull: true },
