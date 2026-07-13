@@ -268,6 +268,17 @@ class RequestController {
         updatedBy: req.user.id,
       });
 
+      // Sinkronkan data penerima ke Shipping Manual tertaut (dua arah, seperti
+      // nomor resi). Hanya saat shipment masih bisa diedit (draft/pending).
+      if (recipientName !== undefined || recipientPhone !== undefined || recipientAddress !== undefined) {
+        await ManualShipment.update({
+          ...(recipientName    !== undefined && { recipientName }),
+          ...(recipientPhone   !== undefined && { recipientPhone }),
+          ...(recipientAddress !== undefined && { recipientAddress }),
+          updatedBy: req.user.id,
+        }, { where: { sourceRequestId: request.id, status: { [Op.in]: ['draft', 'pending'] } } });
+      }
+
       if (items) {
         await RequestItem.destroy({ where: { requestId: request.id } });
         for (const item of items) {

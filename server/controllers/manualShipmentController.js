@@ -269,6 +269,20 @@ exports.update = async (req, res, next) => {
     }
 
     await shipment.update({ ...updatePayload, updatedBy: req.user.id }, { transaction: t });
+
+    // Sinkronkan data penerima ke Pengajuan asal (dua arah, seperti nomor resi).
+    // Item sengaja TIDAK disinkronkan — pengajuan adalah dokumen yang sudah
+    // di-approve; divergensi item ditandai lewat itemsModifiedFromSource.
+    if (shipment.sourceRequestId &&
+        (recipientName !== undefined || recipientAddress !== undefined || recipientPhone !== undefined)) {
+      await Request.update({
+        ...(recipientName    !== undefined && { recipientName:    updatePayload.recipientName }),
+        ...(recipientAddress !== undefined && { recipientAddress: updatePayload.recipientAddress }),
+        ...(recipientPhone   !== undefined && { recipientPhone:   updatePayload.recipientPhone }),
+        updatedBy: req.user.id,
+      }, { where: { id: shipment.sourceRequestId }, transaction: t });
+    }
+
     await t.commit();
 
     const result = await ManualShipment.findByPk(shipment.id, { include: [...HEADER_INCLUDE, ITEM_INCLUDE] });
