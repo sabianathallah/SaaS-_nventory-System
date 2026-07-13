@@ -92,11 +92,12 @@ class StockMovementController {
     static async getSummary(req, res, next) {
         try {
             const filter = buildFilter(req.query, {
-                type:        'exact',
-                ProductId:   'exact',
-                WarehouseId: 'exact',
-                dateFrom:    { field: 'date', type: 'gte' },
-                dateTo:      { field: 'date', type: 'lte' },
+                type:         'exact',
+                ProductId:    'exact',
+                ProductSKUId: 'exact',
+                WarehouseId:  'exact',
+                dateFrom:     { field: 'date', type: 'gte' },
+                dateTo:       { field: 'date', type: 'lte' },
             });
             const { productWhere, purposeWhere } = extraFilters(req.query);
             const base = { ...companyFilter(req), ...filter };
@@ -122,10 +123,12 @@ class StockMovementController {
     static async getChart(req, res, next) {
         try {
             const filter = buildFilter(req.query, {
-                ProductId:   'exact',
-                WarehouseId: 'exact',
-                dateFrom:    { field: 'date', type: 'gte' },
-                dateTo:      { field: 'date', type: 'lte' },
+                type:         'exact',
+                ProductId:    'exact',
+                ProductSKUId: 'exact',
+                WarehouseId:  'exact',
+                dateFrom:     { field: 'date', type: 'gte' },
+                dateTo:       { field: 'date', type: 'lte' },
             });
             const { productWhere, purposeWhere } = extraFilters(req.query);
             const where = { ...companyFilter(req), ...filter };
@@ -156,11 +159,12 @@ class StockMovementController {
     static async exportCsv(req, res, next) {
         try {
             const filter = buildFilter(req.query, {
-                type:        'exact',
-                ProductId:   'exact',
-                WarehouseId: 'exact',
-                dateFrom:    { field: 'date', type: 'gte' },
-                dateTo:      { field: 'date', type: 'lte' },
+                type:         'exact',
+                ProductId:    'exact',
+                ProductSKUId: 'exact',
+                WarehouseId:  'exact',
+                dateFrom:     { field: 'date', type: 'gte' },
+                dateTo:       { field: 'date', type: 'lte' },
             });
             const { productWhere, purposeWhere } = extraFilters(req.query);
             const where = { ...companyFilter(req), ...filter };
