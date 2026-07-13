@@ -1,6 +1,6 @@
 import { useState, useRef, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useQuery, useMutation } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { requestApi, requestTypeApi } from '../api'
 import { productsApi, productSkusApi, warehousesApi, skuWarehouseStocksApi, articlesApi, skuChannelStocksApi } from '../api'
@@ -211,6 +211,7 @@ function SkuPicker({ onAdd }) {
 export default function PengajuanBaru() {
   const navigate = useNavigate()
   const { user } = useAuth()
+  const qc = useQueryClient()
 
   const [category,         setCategory]         = useState('')         // 'sales' | 'non_sales' | 'stock_out'
   const [requestTypeId,    setRequestTypeId]    = useState('')         // only for non_sales sub-type
@@ -224,6 +225,21 @@ export default function PengajuanBaru() {
   const [items,            setItems]            = useState([])
 
   const { data: types } = useQuery({ queryKey: ['request-types'], queryFn: requestTypeApi.list })
+
+  // Tambah keperluan non-sales baru langsung dari form
+  const [addingType,  setAddingType]  = useState(false)
+  const [newTypeName, setNewTypeName] = useState('')
+  const quickAddType = useMutation({
+    mutationFn: (name) => requestTypeApi.quickCreate({ name }),
+    onSuccess: (created) => {
+      qc.invalidateQueries({ queryKey: ['request-types'] })
+      setRequestTypeId(String(created.id))
+      setAddingType(false)
+      setNewTypeName('')
+      toast.success(`Keperluan "${created.name}" ditambahkan`)
+    },
+    onError: (err) => toast.error(err.response?.data?.message ?? 'Gagal menambah keperluan'),
+  })
 
   // Filter sub-tipe non-sales dari DB
   const nonSalesSubTypes = useMemo(() =>
@@ -328,14 +344,47 @@ export default function PengajuanBaru() {
           {category === 'non_sales' && (
             <div className="mt-4 pt-4 border-t border-slate-100">
               <label className="label mb-1">Keperluan <span className="text-red-400">*</span></label>
-              {nonSalesSubTypes.length === 0 ? (
-                <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-                  Belum ada sub-tipe non-sales. Admin bisa menambahkannya di halaman <strong>Catalog → Jenis Pengajuan</strong>.
-                </p>
+              {addingType || nonSalesSubTypes.length === 0 ? (
+                <div className="flex items-center gap-2">
+                  <input
+                    value={newTypeName}
+                    onChange={e => setNewTypeName(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        if (newTypeName.trim()) quickAddType.mutate(newTypeName.trim())
+                      }
+                    }}
+                    placeholder="Nama keperluan baru — mis. Giveaway, Konten TikTok…"
+                    className="input flex-1"
+                    autoFocus
+                  />
+                  <button
+                    type="button"
+                    onClick={() => newTypeName.trim() && quickAddType.mutate(newTypeName.trim())}
+                    disabled={!newTypeName.trim() || quickAddType.isPending}
+                    className="btn-primary text-xs px-3 py-2 disabled:opacity-50"
+                  >
+                    {quickAddType.isPending ? 'Menyimpan…' : 'Simpan'}
+                  </button>
+                  {nonSalesSubTypes.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => { setAddingType(false); setNewTypeName('') }}
+                      className="btn-secondary text-xs px-3 py-2"
+                    >
+                      Batal
+                    </button>
+                  )}
+                </div>
               ) : (
                 <select
                   value={requestTypeId}
                   onChange={e => {
+                    if (e.target.value === '__new__') {
+                      setAddingType(true)
+                      return
+                    }
                     setRequestTypeId(e.target.value)
                     const chosen = nonSalesSubTypes.find(t => String(t.id) === e.target.value)
                     if (chosen) {
@@ -348,6 +397,7 @@ export default function PengajuanBaru() {
                 >
                   <option value="">— Pilih keperluan —</option>
                   {nonSalesSubTypes.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                  <option value="__new__">＋ Tambah keperluan baru…</option>
                 </select>
               )}
             </div>

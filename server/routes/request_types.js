@@ -8,6 +8,7 @@ const requireCompany = require('../middlewares/requireCompany');
 const canManage = rpAny('request.manage', 'inventory.manage');
 
 router.get('/',       ctrl.list);          // siapa pun (perlu untuk form buat pengajuan)
+router.post('/quick', requireCompany, ctrl.quickCreate); // siapa pun — hanya bisa buat tipe non_sales
 router.post('/',      canManage, requireCompany, ctrl.create);
 router.put('/:id',    canManage, ctrl.update);
 router.delete('/:id', canManage, ctrl.destroy);

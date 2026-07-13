@@ -235,6 +235,7 @@ export const manualShipmentsApi = {
 export const requestTypeApi = {
   list:    ()          => api.get('/request-types').then(r => r.data),
   create:  (data)      => api.post('/request-types', data).then(r => r.data),
+  quickCreate: (data)  => api.post('/request-types/quick', data).then(r => r.data),
   update:  (id, data)  => api.put(`/request-types/${id}`, data).then(r => r.data),
   destroy: (id)        => api.delete(`/request-types/${id}`).then(r => r.data),
 }
