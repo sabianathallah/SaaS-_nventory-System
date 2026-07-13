@@ -10,6 +10,7 @@ const fmtTime = (d) => d ? new Date(d).toLocaleTimeString('id-ID', { hour: '2-di
 export default function AttendanceReview() {
   const qc = useQueryClient()
   const [rejecting, setRejecting] = useState(null) // { id, note, kind: 'field' | 'late' }
+  const [approvingField, setApprovingField] = useState(null) // { id, atVendor: bool, score: string }
 
   const { data: list, isLoading } = useQuery({
     queryKey: ['hris-attendance-pending-review'],
@@ -26,8 +27,8 @@ export default function AttendanceReview() {
   }
 
   const reviewField = useMutation({
-    mutationFn: ({ id, status, reviewNote }) => hrisApi.reviewAttendance(id, { status, reviewNote }),
-    onSuccess: () => { toast.success('Presensi direview'); setRejecting(null); invalidate() },
+    mutationFn: ({ id, status, reviewNote, fieldScore }) => hrisApi.reviewAttendance(id, { status, reviewNote, fieldScore }),
+    onSuccess: () => { toast.success('Presensi direview'); setRejecting(null); setApprovingField(null); invalidate() },
     onError: (e) => toast.error(e.response?.data?.message ?? 'Gagal review'),
   })
   const reviewLateAttendance = useMutation({
@@ -46,6 +47,19 @@ export default function AttendanceReview() {
     onError: (e) => toast.error(e.response?.data?.message ?? 'Gagal review'),
   })
 
+  function submitApproveField() {
+    if (approvingField.atVendor) {
+      reviewField.mutate({ id: approvingField.id, status: 'APPROVED' })
+      return
+    }
+    const score = Number(approvingField.score)
+    if (!Number.isInteger(score) || score < 0 || score > 100) {
+      toast.error('Skor harus angka bulat 0–100')
+      return
+    }
+    reviewField.mutate({ id: approvingField.id, status: 'APPROVED', fieldScore: score })
+  }
+
   function submitReject() {
     if (rejecting.kind === 'field') reviewField.mutate({ id: rejecting.id, status: 'REJECTED', reviewNote: rejecting.note || undefined })
     else if (rejecting.kind === 'early') reviewEarlyLeave.mutate({ id: rejecting.id, status: 'REJECTED', reviewNote: rejecting.note || undefined })
@@ -63,6 +77,52 @@ export default function AttendanceReview() {
           Review klaim Kerja Lapangan, keterlambatan dadakan, pulang cepat, dan pengajuan izin telat di muka. Approve/reject tidak mengubah jam yang sudah tercatat, kecuali izin telat yang disetujui (jadi Hadir).
         </p>
       </div>
+
+      {approvingField && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4" onClick={() => setApprovingField(null)}>
+          <div className="card w-full max-w-sm p-5" onClick={e => e.stopPropagation()}>
+            <p className="text-sm font-semibold text-slate-800 mb-1">Setujui Klaim Kerja Lapangan</p>
+            <p className="text-xs text-slate-400 mb-3">Posisi karyawan saat absen menentukan poin leaderboard hari itu.</p>
+            <div className="space-y-2 mb-3">
+              <label className={`flex items-start gap-2.5 p-2.5 rounded-lg border cursor-pointer ${approvingField.atVendor ? 'border-emerald-300 bg-emerald-50/50' : 'border-slate-200'}`}>
+                <input type="radio" className="mt-0.5" checked={approvingField.atVendor} onChange={() => setApprovingField(a => ({ ...a, atVendor: true }))} />
+                <span>
+                  <span className="block text-sm font-medium text-slate-700">Sudah di lokasi vendor</span>
+                  <span className="block text-[11px] text-slate-400">Poin dihitung penuh seperti hadir biasa</span>
+                </span>
+              </label>
+              <label className={`flex items-start gap-2.5 p-2.5 rounded-lg border cursor-pointer ${!approvingField.atVendor ? 'border-amber-300 bg-amber-50/50' : 'border-slate-200'}`}>
+                <input type="radio" className="mt-0.5" checked={!approvingField.atVendor} onChange={() => setApprovingField(a => ({ ...a, atVendor: false }))} />
+                <span>
+                  <span className="block text-sm font-medium text-slate-700">Belum sampai vendor / masih di jalan</span>
+                  <span className="block text-[11px] text-slate-400">Poin leaderboard hari ini ditentukan manual</span>
+                </span>
+              </label>
+            </div>
+            {!approvingField.atVendor && (
+              <div className="mb-3">
+                <label className="label">Poin (0–100)</label>
+                <div className="flex items-center gap-1.5 mb-2">
+                  {[100, 75, 50, 25].map(v => (
+                    <button key={v} type="button" onClick={() => setApprovingField(a => ({ ...a, score: String(v) }))}
+                      className={`px-2.5 py-1 rounded-full text-xs font-semibold border ${approvingField.score === String(v) ? 'bg-brand text-white border-brand' : 'text-slate-600 border-slate-200 hover:bg-slate-50'}`}>
+                      {v}
+                    </button>
+                  ))}
+                </div>
+                <input type="number" min="0" max="100" className="input w-28" value={approvingField.score}
+                  onChange={e => setApprovingField(a => ({ ...a, score: e.target.value }))} />
+              </div>
+            )}
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setApprovingField(null)} className="btn-secondary text-sm">Batal</button>
+              <button onClick={submitApproveField} disabled={reviewField.isPending} className="btn-primary text-sm">
+                {reviewField.isPending ? 'Menyimpan…' : 'Setujui'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {rejecting && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4" onClick={() => setRejecting(null)}>
@@ -165,7 +225,7 @@ export default function AttendanceReview() {
                       {r.reviewStatus === 'PENDING_REVIEW' && (
                         <div className="flex items-center gap-1.5">
                           <span className="text-[10px] text-slate-400">Lapangan:</span>
-                          <button title="Setujui" onClick={() => reviewField.mutate({ id: r.id, status: 'APPROVED' })} className="w-6 h-6 rounded flex items-center justify-center text-emerald-600 hover:bg-emerald-50">
+                          <button title="Setujui" onClick={() => setApprovingField({ id: r.id, atVendor: true, score: '75' })} className="w-6 h-6 rounded flex items-center justify-center text-emerald-600 hover:bg-emerald-50">
                             <Check size={13} />
                           </button>
                           <button title="Tolak" onClick={() => setRejecting({ id: r.id, note: '', kind: 'field' })} className="w-6 h-6 rounded flex items-center justify-center text-red-600 hover:bg-red-50">

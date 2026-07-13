@@ -6,7 +6,7 @@ import { useAuth } from '../../context/AuthContext'
 import CameraCapture from '../../components/CameraCapture'
 import { useCompanyGuard } from '../../hooks/useCompanyGuard'
 import CompanyRequiredBanner from '../../components/CompanyRequiredBanner'
-import { LogOut, MapPin, Loader2, Camera, Building2, Laptop, Briefcase, X, Pencil, Plus, Trophy, AlarmClock as AlarmClockIcon, UserX, Thermometer, Timer } from 'lucide-react'
+import { LogOut, MapPin, Loader2, Camera, Building2, Laptop, Briefcase, X, Pencil, Plus, Trophy, AlarmClock as AlarmClockIcon, UserX, Thermometer, Timer, Medal } from 'lucide-react'
 import LeaderboardCard from '../../components/hris/LeaderboardCard'
 
 const avatarInitials = (name = '') => name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
@@ -400,10 +400,23 @@ export default function Attendance() {
       {leaderboard && (
         <div className="mb-6">
           <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Leaderboard Kehadiran Bulan Ini</p>
+          {(leaderboard.scoreboard ?? []).length > 0 && (
+            <div className="mb-4">
+              <LeaderboardCard
+                icon={Medal} title="🎖️ Skor Kedisiplinan"
+                entries={leaderboard.scoreboard.map(u => ({ ...u, value: u.score }))}
+                unit=" poin"
+                badgeClass="text-indigo-700 bg-indigo-50 border border-indigo-200"
+                barClass="bg-indigo-500" ringClass="border-indigo-200" fallbackClass="bg-indigo-50 text-indigo-700"
+                onAvatarClick={setLightboxUser}
+                extra={(e) => <p className="text-[10px] text-slate-400 mt-0.5">rata-rata dari {e.scoredDays} hari kerja</p>}
+              />
+            </div>
+          )}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <LeaderboardCard
               icon={Trophy} title="🏆 Paling Tepat Waktu"
-              entries={(leaderboard.mostOnTime ?? []).map(u => ({ ...u, value: u.presentCount }))}
+              entries={(leaderboard.mostOnTime ?? []).map(u => ({ ...u, value: u.onTimeCount ?? u.presentCount }))}
               unit="x hadir"
               badgeClass="text-emerald-700 bg-emerald-50 border border-emerald-200"
               barClass="bg-emerald-500" ringClass="border-emerald-200" fallbackClass="bg-emerald-50 text-emerald-700"

@@ -7,6 +7,7 @@ const { distanceInMeters } = require('../helpers/geo');
 const { userHasPermission } = require('../helpers/permCheck');
 const { todayDateOnly, nowPartsInJakarta, addDaysStr, weekdayOf } = require('../helpers/timezone');
 const { lateSeverity } = require('../helpers/lateSeverity');
+const { dailyScore } = require('../helpers/attendanceScore');
 const { getHrisSettings, fmtMinutes } = require('../helpers/hrisSettings');
 const { backfillAbsentForDates } = require('../helpers/absentBackfill');
 
@@ -309,7 +310,7 @@ class AttendanceController {
             const end   = `${year}-${String(month).padStart(2, '0')}-${String(endDate).padStart(2, '0')}`;
             const dateRange = { [Op.between]: [start, end] };
 
-            const [rows, sickRows] = await Promise.all([
+            const [rows, sickRows, hrisSettings] = await Promise.all([
                 Attendance.findAll({
                     where: { date: dateRange, ...companyFilter(req) },
                     include: [
@@ -321,13 +322,14 @@ class AttendanceController {
                     where: { date: dateRange, status: 'APPROVED', ...companyFilter(req) },
                     include: [{ model: User, as: 'user', attributes: ['id', 'name', 'avatar'] }],
                 }),
+                getHrisSettings(req),
             ]);
 
             const byUser = new Map();
             const getUser = (id, u) => {
                 let cur = byUser.get(id);
                 if (!cur) {
-                    cur = { userId: id, name: u?.name ?? '—', avatar: u?.avatar ?? null, lateCount: 0, presentCount: 0, absentCount: 0, sickCount: 0, severity: { RINGAN: 0, SEDANG: 0, BERAT: 0 } };
+                    cur = { userId: id, name: u?.name ?? '—', avatar: u?.avatar ?? null, lateCount: 0, presentCount: 0, onTimeCount: 0, absentCount: 0, sickCount: 0, severity: { RINGAN: 0, SEDANG: 0, BERAT: 0 }, scoreSum: 0, scoredDays: 0 };
                     byUser.set(id, cur);
                 }
                 return cur;
@@ -341,8 +343,20 @@ class AttendanceController {
                     const severity = lateSeverity(r.checkInAt, r.shift?.startTime);
                     if (severity) cur.severity[severity.key] += 1;
                 }
-                if (r.status === 'PRESENT') cur.presentCount += 1;
+                if (r.status === 'PRESENT') {
+                    cur.presentCount += 1;
+                    // Hadir via izin telat approved tetap PRESENT, tapi bukan
+                    // "tepat waktu" — jangan dihitung buat list Paling Rajin.
+                    if (r.lateExcuseStatus !== 'APPROVED') cur.onTimeCount += 1;
+                }
                 if (r.status === 'ABSENT') cur.absentCount += 1;
+                // Skor kedisiplinan harian — telat dibobot per menit, izin telat
+                // & FIELD dapat poin parsial, hari netral (cuti) tidak dihitung.
+                const daily = dailyScore(r, hrisSettings);
+                if (daily.counted) {
+                    cur.scoreSum += daily.score;
+                    cur.scoredDays += 1;
+                }
             });
             sickRows.forEach(r => {
                 if (!r.userId) return;
@@ -351,12 +365,22 @@ class AttendanceController {
 
             const all = Array.from(byUser.values());
             const mostLate = all.filter(u => u.lateCount > 0).sort((a, b) => b.lateCount - a.lateCount).slice(0, 5);
-            const mostOnTime = all.filter(u => u.lateCount === 0 && u.presentCount > 0)
-                .sort((a, b) => b.presentCount - a.presentCount).slice(0, 5);
+            const mostOnTime = all.filter(u => u.lateCount === 0 && u.onTimeCount > 0)
+                .sort((a, b) => b.onTimeCount - a.onTimeCount).slice(0, 5);
             const mostAbsent = all.filter(u => u.absentCount > 0).sort((a, b) => b.absentCount - a.absentCount).slice(0, 5);
             const mostSick = all.filter(u => u.sickCount > 0).sort((a, b) => b.sickCount - a.sickCount).slice(0, 5);
 
-            res.json({ mostLate, mostOnTime, mostAbsent, mostSick });
+            // Ranking utama: rata-rata skor harian. Tie-break: yang hadir lebih
+            // banyak hari lebih tinggi (skor 100 dari 20 hari > 100 dari 2 hari).
+            const scoreboard = all.filter(u => u.scoredDays > 0)
+                .map(({ userId, name, avatar, scoreSum, scoredDays }) => ({
+                    userId, name, avatar, scoredDays,
+                    score: Math.round(scoreSum / scoredDays),
+                }))
+                .sort((a, b) => b.score - a.score || b.scoredDays - a.scoredDays)
+                .slice(0, 10);
+
+            res.json({ scoreboard, mostLate, mostOnTime, mostAbsent, mostSick });
         } catch (err) { next(err); }
     }
 
@@ -418,9 +442,20 @@ class AttendanceController {
 
     static async review(req, res, next) {
         try {
-            const { status, reviewNote } = req.body;
+            const { status, reviewNote, fieldScore } = req.body;
             if (!['APPROVED', 'REJECTED'].includes(status)) {
                 throw { name: 'BadRequest', message: 'Status review harus APPROVED atau REJECTED' };
+            }
+
+            // Skor manual hanya relevan saat approve klaim yang absennya
+            // belum di lokasi vendor. NULL = sudah di vendor, dihitung normal.
+            let fieldScorePatch = { fieldScore: null };
+            if (status === 'APPROVED' && fieldScore != null) {
+                const score = Number(fieldScore);
+                if (!Number.isInteger(score) || score < 0 || score > 100) {
+                    throw { name: 'BadRequest', message: 'Skor kerja lapangan harus 0–100' };
+                }
+                fieldScorePatch = { fieldScore: score };
             }
 
             const attendance = await Attendance.findOne({ where: { id: req.params.id, ...companyFilter(req) } });
@@ -437,6 +472,7 @@ class AttendanceController {
 
             await attendance.update({
                 ...statusPatch,
+                ...fieldScorePatch,
                 reviewStatus: status,
                 reviewedBy: req.user.id,
                 reviewedAt: new Date(),
