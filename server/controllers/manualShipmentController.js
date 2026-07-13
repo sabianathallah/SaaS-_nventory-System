@@ -3,7 +3,7 @@ const { Op } = require('sequelize');
 const {
   sequelize, ManualShipment, ManualShipmentItem,
   ShipmentCategory, Product, ProductSKU,
-  ProductVariantOption, ProductVariantType, User,
+  ProductVariantOption, ProductVariantType, User, Request,
 } = require('../models');
 const { companyFilter, companyId: getCompanyId } = require('../helpers/tenancy');
 
@@ -390,6 +390,15 @@ exports.uploadCourierResi = async (req, res, next) => {
       courierResiNumber:   courierResiNumber?.trim() || shipment.courierResiNumber,
       courierResiImageUrl: resiImageUrl || shipment.courierResiImageUrl,
     });
+
+    // Sinkronkan resi ke Pengajuan asal agar trackingNumber-nya ikut ter-update
+    if (shipment.sourceRequestId && shipment.courierResiNumber) {
+      await Request.update(
+        { trackingNumber: shipment.courierResiNumber, updatedBy: req.user.id },
+        { where: { id: shipment.sourceRequestId } },
+      );
+    }
+
     res.json({ data: shipment, message: 'Resi kurir berhasil disimpan' });
   } catch (err) { next(err); }
 };

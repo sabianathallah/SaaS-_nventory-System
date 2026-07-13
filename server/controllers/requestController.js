@@ -387,14 +387,23 @@ class RequestController {
         await item.update({ shippedQty: shipped });
       }
 
+      const trackingNumber = req.body.trackingNumber?.trim() || request.trackingNumber || null;
       await request.update({
         status: 'SENT',
         sentAt: req.body.sentAt || new Date().toISOString().slice(0, 10),
-        trackingNumber: req.body.trackingNumber || null,
+        trackingNumber,
         shippingNote: req.body.shippingNote || null,
         processedBy: req.user.id,
         updatedBy: req.user.id,
       });
+
+      // Sinkronkan resi ke Shipping Manual yang dibuat dari pengajuan ini
+      if (trackingNumber) {
+        await ManualShipment.update(
+          { courierResiNumber: trackingNumber, updatedBy: req.user.id },
+          { where: { sourceRequestId: request.id, ...companyFilter(req) } },
+        );
+      }
       const updated = await Request.findByPk(request.id, { include: [...BASE_INCLUDE, ITEM_INCLUDE] });
       res.json(updated);
     } catch (err) { next(err); }
