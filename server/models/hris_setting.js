@@ -13,7 +13,7 @@ module.exports = (sequelize, DataTypes) => {
     scoreLateTier2:    { type: DataTypes.INTEGER, allowNull: false, defaultValue: 85 },
     scoreLateTier3:    { type: DataTypes.INTEGER, allowNull: false, defaultValue: 80 },
     scoreLateTier4:    { type: DataTypes.INTEGER, allowNull: false, defaultValue: 75 },
-    scoreLateExcused:  { type: DataTypes.INTEGER, allowNull: false, defaultValue: 70 },
+    lateExcuseBonus:   { type: DataTypes.INTEGER, allowNull: false, defaultValue: 5 },
     scoreHalfDay:      { type: DataTypes.INTEGER, allowNull: false, defaultValue: 50 },
     fieldPendingScore: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 75 },
   }, {

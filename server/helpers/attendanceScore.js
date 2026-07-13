@@ -10,7 +10,10 @@ const { DEFAULT_SCORES } = require('./hrisSettings');
 // - 09:30 - 09:45                          -> scoreLateTier2   (default 85)
 // - 09:46 - 10:00                          -> scoreLateTier3   (default 80)
 // - > 10:00                                -> scoreLateTier4   (default 75)
-// - Izin telat APPROVED (status hadir)     -> scoreLateExcused (default 70)
+// - Izin telat APPROVED (status hadir)     -> skor tier jam datang + lateExcuseBonus
+//                                             (default +5, maks 100) — jam datang tetap
+//                                             ngaruh, dan yang izin resmi selalu lebih
+//                                             tinggi dari yang telat tanpa izin
 // - HALF_DAY                               -> scoreHalfDay     (default 50)
 // - FIELD masih PENDING_REVIEW             -> fieldPendingScore (default 75)
 // - FIELD APPROVED + fieldScore terisi     -> pakai skor manual reviewer (absen di jalan)
@@ -62,7 +65,10 @@ function dailyScore(att, settings = {}) {
         // APPROVED tanpa adjust -> sudah di vendor saat absen, jatuh ke hitungan normal
     }
 
-    if (att.lateExcuseStatus === 'APPROVED') return { score: scores.scoreLateExcused, counted: true };
+    if (att.lateExcuseStatus === 'APPROVED') {
+        const base = arrivalScore(att.checkInAt, att.shift?.startTime, scores);
+        return { score: Math.min(base + scores.lateExcuseBonus, 100), counted: true };
+    }
     if (att.status === 'HALF_DAY') return { score: scores.scoreHalfDay, counted: true };
 
     return { score: arrivalScore(att.checkInAt, att.shift?.startTime, scores), counted: true };

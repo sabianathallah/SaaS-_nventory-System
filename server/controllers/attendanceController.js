@@ -380,7 +380,12 @@ class AttendanceController {
                 .sort((a, b) => b.score - a.score || b.scoredDays - a.scoredDays)
                 .slice(0, 10);
 
-            res.json({ scoreboard, mostLate, mostOnTime, mostAbsent, mostSick });
+            // Nilai skor ikut dikirim supaya penjelasan cara hitung di UI
+            // transparan dan selalu sinkron dengan setting company.
+            const { scoreOnTime, scoreLateTier1, scoreLateTier2, scoreLateTier3, scoreLateTier4, lateExcuseBonus, fieldPendingScore } = hrisSettings;
+            const scoring = { scoreOnTime, scoreLateTier1, scoreLateTier2, scoreLateTier3, scoreLateTier4, lateExcuseBonus, fieldPendingScore };
+
+            res.json({ scoreboard, scoring, mostLate, mostOnTime, mostAbsent, mostSick });
         } catch (err) { next(err); }
     }
 

@@ -411,6 +411,22 @@ export default function Attendance() {
                 onAvatarClick={setLightboxUser}
                 extra={(e) => <p className="text-[10px] text-slate-400 mt-0.5">rata-rata dari {e.scoredDays} hari kerja</p>}
               />
+              {leaderboard.scoring && (
+                <div className="mt-2 rounded-lg border border-slate-100 bg-slate-50/60 px-3.5 py-2.5">
+                  <p className="text-[11px] font-semibold text-slate-500 mb-1">Cara hitung skor (per hari, patokan jam mulai shift masing-masing)</p>
+                  <p className="text-[11px] text-slate-400 leading-relaxed">
+                    Tepat waktu <b className="text-slate-500">{leaderboard.scoring.scoreOnTime}</b> ·
+                    telat 1–29 mnt <b className="text-slate-500">{leaderboard.scoring.scoreLateTier1}</b> ·
+                    30–45 mnt <b className="text-slate-500">{leaderboard.scoring.scoreLateTier2}</b> ·
+                    46–60 mnt <b className="text-slate-500">{leaderboard.scoring.scoreLateTier3}</b> ·
+                    &gt;60 mnt <b className="text-slate-500">{leaderboard.scoring.scoreLateTier4}</b> ·
+                    izin telat disetujui = skor jam datang <b className="text-slate-500">+{leaderboard.scoring.lateExcuseBonus}</b> ·
+                    lapangan belum direview <b className="text-slate-500">{leaderboard.scoring.fieldPendingScore}</b> (disetujui &amp; sudah di vendor = normal, belum sampai = dinilai admin) ·
+                    absen/klaim ditolak <b className="text-slate-500">0</b> ·
+                    cuti &amp; sakit tidak dihitung. Skor akhir = rata-rata harian bulan berjalan.
+                  </p>
+                </div>
+              )}
             </div>
           )}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

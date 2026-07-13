@@ -12,7 +12,7 @@ const DEFAULT_SCORES = {
   scoreLateTier2: 85,   // telat 30-45 menit
   scoreLateTier3: 80,   // telat 46-60 menit
   scoreLateTier4: 75,   // telat > 60 menit
-  scoreLateExcused: 70, // izin telat approved (status hadir)
+  lateExcuseBonus: 5,   // bonus di atas skor jam datang untuk izin telat approved
   scoreHalfDay: 50,     // setengah hari
   fieldPendingScore: DEFAULT_FIELD_PENDING_SCORE,
 };

@@ -19,7 +19,7 @@ const SCORE_FIELDS = [
   { key: 'scoreLateTier2',    def: 85,  label: 'Telat 30–45 menit',  hint: 'mis. 09:30 – 09:45' },
   { key: 'scoreLateTier3',    def: 80,  label: 'Telat 46–60 menit',  hint: 'mis. 09:46 – 10:00' },
   { key: 'scoreLateTier4',    def: 75,  label: 'Telat > 60 menit',   hint: 'mis. setelah 10:00' },
-  { key: 'scoreLateExcused',  def: 70,  label: 'Izin telat disetujui', hint: 'status tetap Hadir' },
+  { key: 'lateExcuseBonus',   def: 5,   label: 'Bonus izin telat',   hint: '+ poin di atas skor jam datang (maks total 100)' },
   { key: 'scoreHalfDay',      def: 50,  label: 'Setengah hari',      hint: 'status Half Day' },
   { key: 'fieldPendingScore', def: 75,  label: 'Lapangan belum direview', hint: 'skor sementara sampai admin review' },
 ]
@@ -115,9 +115,11 @@ export default function WorkPolicy() {
           </div>
           <p className="text-xs text-slate-400 mb-3 leading-relaxed">
             Poin per hari (0–100) untuk leaderboard kedisiplinan, dihitung dari jam datang relatif
-            ke jam mulai shift masing-masing. Kerja lapangan yang disetujui &amp; sudah di vendor saat
-            absen dihitung normal, yang belum sampai vendor poinnya diisi reviewer, ditolak = 0.
-            Absen = 0, cuti/sakit tidak dihitung.
+            ke jam mulai shift masing-masing. Izin telat yang disetujui dapat bonus di atas skor
+            jam datangnya — selalu lebih tinggi dari telat tanpa izin. Kerja lapangan yang disetujui
+            &amp; sudah di vendor saat absen dihitung normal, yang belum sampai vendor poinnya diisi
+            reviewer, ditolak = 0. Absen = 0, cuti/sakit tidak dihitung. Aturan ini tampil ke semua
+            karyawan di halaman Presensi.
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
             {SCORE_FIELDS.map(f => (
