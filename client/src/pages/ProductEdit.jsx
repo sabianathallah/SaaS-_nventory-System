@@ -299,6 +299,31 @@ function VariantBuilder({ productId }) {
 
 const EMPTY_MANUAL = { sku_code: '', price: '', qty: '', variantOptionIds: [] }
 
+function SortableSkuRow({ sku, dirty, val, edit, saveRow, setQrSku, deleteSku, variantLabel }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: sku.id })
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    position: 'relative',
+    zIndex: isDragging ? 50 : 'auto',
+  }
+  return (
+    <tr ref={setNodeRef} style={style} className={`group transition-colors ${dirty(sku.id) ? 'bg-amber-50/50' : 'hover:bg-slate-50/60'} ${isDragging ? 'bg-white shadow-lg' : ''}`}>
+      <td className="td w-8">
+        <span {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-400 touch-none inline-flex pt-0.5">
+          <GripVertical size={13} />
+        </span>
+      </td>
+      <td className="td">{variantLabel(sku)}</td>
+      <td className="td"><input value={val(sku, 'sku_code')} onChange={e => edit(sku.id, 'sku_code', e.target.value)} onBlur={() => saveRow(sku)} className="font-mono text-xs w-full bg-transparent focus:bg-white border border-transparent focus:border-brand/30 rounded px-2 py-1 focus:outline-none transition-all hover:border-slate-200" /></td>
+      <td className="td"><input type="number" min="0" value={val(sku, 'price')} onChange={e => edit(sku.id, 'price', e.target.value)} onBlur={() => saveRow(sku)} className="w-full bg-transparent focus:bg-white border border-transparent focus:border-brand/30 rounded px-2 py-1 text-right tabular-nums focus:outline-none transition-all hover:border-slate-200" /></td>
+      <td className="td"><input type="number" min="0" value={val(sku, 'qty')} onChange={e => edit(sku.id, 'qty', e.target.value)} onBlur={() => saveRow(sku)} className="w-20 bg-transparent focus:bg-white border border-transparent focus:border-brand/30 rounded px-2 py-1 text-right tabular-nums focus:outline-none transition-all hover:border-slate-200 ml-auto block" /></td>
+      <td className="td"><div className="flex items-center justify-end gap-0.5 transition-opacity"><button type="button" onClick={() => setQrSku(sku)} className="p-1.5 rounded text-slate-400 hover:text-violet-500 hover:bg-violet-50 transition-all"><QrCode size={13} /></button><button type="button" onClick={() => { if (confirm('Hapus SKU ini?')) deleteSku.mutate(sku.id) }} className="opacity-0 group-hover:opacity-100 p-1.5 rounded text-slate-300 hover:text-red-400 hover:bg-red-50 transition-all"><Trash2 size={13} /></button></div></td>
+    </tr>
+  )
+}
+
 function SkuTable({ productId, productName }) {
   const qc = useQueryClient()
   const [edits, setEdits]           = useState({})
@@ -306,9 +331,14 @@ function SkuTable({ productId, productName }) {
   const [qrSku, setQrSku]           = useState(null)
   const [showManual, setShowManual] = useState(false)
   const [manual, setManual]         = useState(EMPTY_MANUAL)
+  const [localSkus, setLocalSkus]   = useState([])
+
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
 
   const { data: skus = [], isLoading } = useQuery({ queryKey: ['product-skus', productId], queryFn: () => productSkusApi.list(productId) })
   const { data: types = [] }           = useQuery({ queryKey: ['variant-types', productId], queryFn: () => productVariantsApi.getTypes(productId) })
+
+  useEffect(() => { setLocalSkus(skus) }, [skus])
 
   const updateSku = useMutation({
     mutationFn: ({ skuId, data }) => productSkusApi.update(productId, skuId, data),
@@ -321,6 +351,22 @@ function SkuTable({ productId, productName }) {
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['product-skus', productId] }); setShowManual(false); setManual(EMPTY_MANUAL); toast.success('SKU ditambahkan') },
     onError: e => toast.error(e.response?.data?.message || 'Gagal menambah SKU'),
   })
+  const reorderSkus = useMutation({
+    mutationFn: order => productSkusApi.reorder(productId, order),
+    onError: () => { toast.error('Gagal menyimpan urutan SKU'); qc.invalidateQueries({ queryKey: ['product-skus', productId] }) },
+  })
+
+  const handleSkuDragEnd = (event) => {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    setLocalSkus(prev => {
+      const oldIdx    = prev.findIndex(s => s.id === active.id)
+      const newIdx    = prev.findIndex(s => s.id === over.id)
+      const reordered = arrayMove(prev, oldIdx, newIdx)
+      reorderSkus.mutate(reordered.map(s => s.id))
+      return reordered
+    })
+  }
 
   const edit  = (sid, f, v) => setEdits(p => ({ ...p, [sid]: { ...p[sid], [f]: v } }))
   const dirty = (sid)       => !!(edits[sid] && Object.keys(edits[sid]).length)
@@ -408,22 +454,20 @@ function SkuTable({ productId, productName }) {
       ) : skus.length > 0 ? (
         <div className="rounded-xl border border-slate-200 overflow-hidden">
           <table className="w-full text-sm">
-            <thead><tr><th className="th">Variant</th><th className="th">SKU Code</th><th className="th text-right">Harga (Rp)</th><th className="th text-right">Stok</th><th className="th w-20" /></tr></thead>
-            <tbody className="divide-y divide-slate-100">
-              {skus.map(sku => (
-                <tr key={sku.id} className={`group transition-colors ${dirty(sku.id) ? 'bg-amber-50/50' : 'hover:bg-slate-50/60'}`}>
-                  <td className="td">{variantLabel(sku)}</td>
-                  <td className="td"><input value={val(sku, 'sku_code')} onChange={e => edit(sku.id, 'sku_code', e.target.value)} onBlur={() => saveRow(sku)} className="font-mono text-xs w-full bg-transparent focus:bg-white border border-transparent focus:border-brand/30 rounded px-2 py-1 focus:outline-none transition-all hover:border-slate-200" /></td>
-                  <td className="td"><input type="number" min="0" value={val(sku, 'price')} onChange={e => edit(sku.id, 'price', e.target.value)} onBlur={() => saveRow(sku)} className="w-full bg-transparent focus:bg-white border border-transparent focus:border-brand/30 rounded px-2 py-1 text-right tabular-nums focus:outline-none transition-all hover:border-slate-200" /></td>
-                  <td className="td"><input type="number" min="0" value={val(sku, 'qty')} onChange={e => edit(sku.id, 'qty', e.target.value)} onBlur={() => saveRow(sku)} className="w-20 bg-transparent focus:bg-white border border-transparent focus:border-brand/30 rounded px-2 py-1 text-right tabular-nums focus:outline-none transition-all hover:border-slate-200 ml-auto block" /></td>
-                  <td className="td"><div className="flex items-center justify-end gap-0.5 transition-opacity"><button type="button" onClick={() => setQrSku(sku)} className="p-1.5 rounded text-slate-400 hover:text-violet-500 hover:bg-violet-50 transition-all"><QrCode size={13} /></button><button type="button" onClick={() => { if (confirm('Hapus SKU ini?')) deleteSku.mutate(sku.id) }} className="opacity-0 group-hover:opacity-100 p-1.5 rounded text-slate-300 hover:text-red-400 hover:bg-red-50 transition-all"><Trash2 size={13} /></button></div></td>
-                </tr>
-              ))}
-            </tbody>
+            <thead><tr><th className="th w-8" /><th className="th">Variant</th><th className="th">SKU Code</th><th className="th text-right">Harga (Rp)</th><th className="th text-right">Stok</th><th className="th w-20" /></tr></thead>
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleSkuDragEnd}>
+              <SortableContext items={localSkus.map(s => s.id)} strategy={verticalListSortingStrategy}>
+                <tbody className="divide-y divide-slate-100">
+                  {localSkus.map(sku => (
+                    <SortableSkuRow key={sku.id} sku={sku} dirty={dirty} val={val} edit={edit} saveRow={saveRow} setQrSku={setQrSku} deleteSku={deleteSku} variantLabel={variantLabel} />
+                  ))}
+                </tbody>
+              </SortableContext>
+            </DndContext>
             {skus.length > 1 && (
               <tfoot className="bg-slate-50/80 border-t border-slate-200">
                 <tr>
-                  <td colSpan={2} className="px-4 py-2.5 text-xs font-semibold text-slate-500">Total</td>
+                  <td colSpan={3} className="px-4 py-2.5 text-xs font-semibold text-slate-500">Total</td>
                   <td className="px-4 py-2.5 text-xs font-bold text-slate-700 text-right tabular-nums">Rp {skus.reduce((s, k) => s + Number(k.price || 0), 0).toLocaleString('id-ID')}</td>
                   <td className="px-4 py-2.5 text-xs font-bold text-slate-700 text-right tabular-nums">{totalQty.toLocaleString('id-ID')}</td>
                   <td />

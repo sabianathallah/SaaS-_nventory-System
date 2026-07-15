@@ -54,6 +54,7 @@ export const productSkusApi = {
   create: (pid, data)   => api.post(`/products/${pid}/skus`, data).then(r => r.data),
   update: (pid, sid, d) => api.put(`/products/${pid}/skus/${sid}`, d).then(r => r.data),
   delete: (pid, sid)    => api.delete(`/products/${pid}/skus/${sid}`).then(r => r.data),
+  reorder:(pid, order)  => api.patch(`/products/${pid}/skus/reorder`, { order }).then(r => r.data),
 }
 export const warehousesApi     = crud('/warehouses')
 export const suppliersApi      = crud('/suppliers')

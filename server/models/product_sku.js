@@ -38,6 +38,7 @@ module.exports = (sequelize, DataTypes) => {
       defaultValue: 0,
     },
     companyId: { type: DataTypes.INTEGER, allowNull: true },
+    position: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
   }, {
     sequelize,
     modelName: 'ProductSKU',

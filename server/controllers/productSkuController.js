@@ -42,7 +42,7 @@ class ProductSkuController {
           through: { attributes: [] },
           include: [{ model: ProductVariantType, attributes: ['id', 'name'] }],
         }],
-        order: [['createdAt', 'ASC']],
+        order: [['position', 'ASC'], ['createdAt', 'ASC'], ['id', 'ASC']],
       });
 
       res.status(200).json(skus.map(s => {
@@ -75,12 +75,14 @@ class ProductSkuController {
 
       if (!sku_code) sku_code = generateSkuCode(product.name, options);
 
+      const maxPosition = await ProductSKU.max('position', { where: { ProductId: product.id } });
       const sku = await ProductSKU.create({
         ProductId: product.id,
         sku_code,
         price,
         qty,
         companyId: companyId(req),
+        position: (maxPosition ?? -1) + 1,
       });
 
       // Link to variant options
@@ -101,6 +103,31 @@ class ProductSkuController {
         }],
       });
       res.status(201).json(result);
+    } catch (err) { next(err); }
+  }
+
+  // PATCH /products/:productId/skus/reorder
+  // body: { order: [skuId, skuId, ...] }
+  static async reorderSkus(req, res, next) {
+    try {
+      const product = await Product.findOne({ where: { id: req.params.productId, ...companyFilter(req) } });
+      if (!product) throw { name: 'NotFound', message: 'Product not found' };
+
+      const { order } = req.body;
+      if (!Array.isArray(order) || order.length === 0) {
+        throw { name: 'BadRequest', message: 'order must be a non-empty array of ids' };
+      }
+
+      await Promise.all(
+        order.map((id, index) =>
+          ProductSKU.update(
+            { position: index },
+            { where: { id, ProductId: product.id } }
+          )
+        )
+      );
+
+      res.status(200).json({ message: 'Reordered successfully' });
     } catch (err) { next(err); }
   }
 
