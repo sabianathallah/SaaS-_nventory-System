@@ -8,7 +8,7 @@ import { Table, Pagination } from '../components/Table'
 import { useCompanyGuard } from '../hooks/useCompanyGuard'
 import CompanyRequiredBanner from '../components/CompanyRequiredBanner'
 import toast from 'react-hot-toast'
-import { PackagePlus, Eye, PencilLine, X } from 'lucide-react'
+import { PackagePlus, Eye, PencilLine, X, Search, StickyNote } from 'lucide-react'
 
 const WH_KEY = 'stockin_warehouse_filter'
 
@@ -19,9 +19,23 @@ export default function StockIn() {
   const navigate = useNavigate()
   const qc = useQueryClient()
   const [searchParams, setSearchParams] = useSearchParams()
-  const page  = Number(searchParams.get('page')  || '1')
-  const limit = Number(searchParams.get('limit') || '10')
+  const page       = Number(searchParams.get('page')  || '1')
+  const limit      = Number(searchParams.get('limit') || '10')
+  const search     = searchParams.get('q')     || ''
+  const noteSearch = searchParams.get('noteq') || ''
   const setPage = (p) => setSearchParams(prev => { prev.set('page', String(p)); return prev }, { replace: true })
+  const [searchInput, setSearchInput] = useState(search)
+  const [noteInput,   setNoteInput]   = useState(noteSearch)
+  const handleSearch = (e) => {
+    e.preventDefault()
+    setSearchParams(prev => {
+      const q = searchInput.trim(); const n = noteInput.trim()
+      if (q) prev.set('q', q);     else prev.delete('q')
+      if (n) prev.set('noteq', n); else prev.delete('noteq')
+      prev.delete('page')
+      return prev
+    }, { replace: true })
+  }
   const { hasPermission, user } = useAuth()
 
   const canCreate    = hasPermission('stock.in.create') || hasPermission('stock.manage')
@@ -41,8 +55,8 @@ export default function StockIn() {
   })
 
   const { data, isLoading } = useQuery({
-    queryKey: ['stock-in', { page, limit, WarehouseId: warehouseFilter || undefined }],
-    queryFn:  () => stockInApi.list({ page, limit, WarehouseId: warehouseFilter || undefined }),
+    queryKey: ['stock-in', { page, limit, WarehouseId: warehouseFilter || undefined, search, noteSearch }],
+    queryFn:  () => stockInApi.list({ page, limit, WarehouseId: warehouseFilter || undefined, search: search || undefined, noteSearch: noteSearch || undefined }),
   })
 
   const { data: drafts = [] } = useQuery({
@@ -169,7 +183,7 @@ export default function StockIn() {
           </button>
         )}
       />
-      <div className="mb-3 flex gap-2">
+      <div className="mb-3 flex gap-2 flex-wrap items-center">
         <select
           value={warehouseFilter}
           onChange={e => handleWarehouseChange(e.target.value)}
@@ -180,6 +194,27 @@ export default function StockIn() {
             <option key={w.id} value={w.id}>{w.name}</option>
           ))}
         </select>
+        <form onSubmit={handleSearch} className="flex gap-2 flex-wrap">
+          <div className="relative">
+            <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              value={searchInput}
+              onChange={e => setSearchInput(e.target.value)}
+              placeholder="Cari supplier / produk…"
+              className="input text-sm pl-7 w-52"
+            />
+          </div>
+          <div className="relative">
+            <StickyNote size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-amber-400" />
+            <input
+              value={noteInput}
+              onChange={e => setNoteInput(e.target.value)}
+              placeholder="Cari di catatan…"
+              className="input text-sm pl-7 w-44"
+            />
+          </div>
+          <button type="submit" className="btn-secondary text-sm px-3">Cari</button>
+        </form>
       </div>
       <div className="card overflow-hidden">
         <Table columns={columns} data={tableData} loading={isLoading} emptyText="Belum ada transaksi" />

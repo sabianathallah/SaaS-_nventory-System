@@ -1,4 +1,5 @@
 'use strict';
+const { Op } = require('sequelize');
 const {
   sequelize, Stock_In_Header, Stock_In_Item, Stock_Movement, Stock, SkuWarehouseStock,
   Supplier, Warehouse, User, ProductSKU, Product, ProductVariantOption, ProductVariantType,
@@ -34,8 +35,24 @@ class StockInHeaderController {
         dateFrom:    { field: 'date', type: 'gte' },
         dateTo:      { field: 'date', type: 'lte' },
       });
+      // Search umum: nama supplier + nama produk di dalam item.
+      // Search catatan terpisah (item stock in tidak punya kolom catatan).
+      const extra = [];
+      if (req.query.search) {
+        const term = sequelize.escape(`%${req.query.search}%`);
+        extra.push({
+          [Op.or]: [
+            sequelize.literal(`"Stock_In_Header"."SupplierId" IN (SELECT id FROM "Suppliers" WHERE "name" ILIKE ${term})`),
+            sequelize.literal(`"Stock_In_Header"."id" IN (SELECT sii."StockInHeaderId" FROM "Stock_In_Items" sii JOIN "ProductSKUs" ps ON sii."ProductSKUId" = ps.id JOIN "Products" p ON ps."ProductId" = p.id WHERE p."name" ILIKE ${term})`),
+          ],
+        });
+      }
+      if (req.query.noteSearch) {
+        extra.push({ note: { [Op.iLike]: `%${req.query.noteSearch}%` } });
+      }
+
       const { rows, count } = await Stock_In_Header.findAndCountAll({
-        where: { ...companyFilter(req), ...filter },
+        where: { ...companyFilter(req), ...filter, ...(extra.length && { [Op.and]: extra }) },
         include: [
           { model: Supplier,  attributes: ['id', 'name'] },
           { model: Warehouse, attributes: ['id', 'name'] },
