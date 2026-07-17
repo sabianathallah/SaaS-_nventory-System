@@ -73,6 +73,12 @@ function canProcess(req) {
   return perms.includes('request.process') || perms.includes('request.manage');
 }
 
+// Draft hanya terlihat oleh pembuatnya — approver tidak perlu lihat draft orang
+// lain. Dipakai sebagai kondisi tambahan (Op.and) di list/counts/detail/export.
+function draftVisibility(req) {
+  return { [Op.or]: [{ status: { [Op.ne]: 'DRAFT' } }, { requestorId: req.user.id }] };
+}
+
 // Attach permissions to req for downstream use — called once per request
 async function attachPermissions(req) {
   if (req.userPermissions) return;
@@ -92,7 +98,7 @@ class RequestController {
   static async statusCounts(req, res, next) {
     try {
       await attachPermissions(req);
-      const where = { ...companyFilter(req) };
+      const where = { ...companyFilter(req), [Op.and]: [draftVisibility(req)] };
       if (!canViewAll(req)) where.requestorId = req.user.id;
 
       const rows = await Request.findAll({
@@ -102,7 +108,7 @@ class RequestController {
         raw: true,
       });
 
-      const result = { PENDING: 0, APPROVED: 0, SENT: 0, DONE: 0, REJECTED: 0 };
+      const result = { DRAFT: 0, PENDING: 0, APPROVED: 0, SENT: 0, DONE: 0, REJECTED: 0 };
       for (const row of rows) {
         if (row.status in result) result[row.status] = parseInt(row.count, 10);
       }
@@ -116,7 +122,7 @@ class RequestController {
     try {
       await attachPermissions(req);
       const { page, limit, offset } = paginate(req.query);
-      const where = { ...companyFilter(req) };
+      const where = { ...companyFilter(req), [Op.and]: [draftVisibility(req)] };
 
       if (!canViewAll(req)) where.requestorId = req.user.id;
       if (req.query.status)        where.status        = req.query.status;
@@ -131,10 +137,27 @@ class RequestController {
       }
 
       if (req.query.search) {
-        where[Op.or] = [
-          { recipientName: { [Op.iLike]: `%${req.query.search}%` } },
-          { divisi:        { [Op.iLike]: `%${req.query.search}%` } },
-        ];
+        const term = sequelize.escape(`%${req.query.search}%`);
+        where[Op.and].push({
+          [Op.or]: [
+            { recipientName: { [Op.iLike]: `%${req.query.search}%` } },
+            { divisi:        { [Op.iLike]: `%${req.query.search}%` } },
+            // Ikut cari nama produk di dalam item pengajuan
+            sequelize.literal(`"Request"."id" IN (SELECT "requestId" FROM "RequestItems" WHERE "productName" ILIKE ${term})`),
+          ],
+        });
+      }
+
+      // Search khusus catatan — terpisah dari search umum supaya hasil pencarian
+      // teks bebas di catatan tidak tercampur dengan nama penerima/produk.
+      if (req.query.noteSearch) {
+        const term = sequelize.escape(`%${req.query.noteSearch}%`);
+        where[Op.and].push({
+          [Op.or]: [
+            { note: { [Op.iLike]: `%${req.query.noteSearch}%` } },
+            sequelize.literal(`"Request"."id" IN (SELECT "requestId" FROM "RequestItems" WHERE "note" ILIKE ${term})`),
+          ],
+        });
       }
 
       const { rows, count } = await Request.findAndCountAll({
@@ -151,7 +174,7 @@ class RequestController {
   static async exportData(req, res, next) {
     try {
       await attachPermissions(req);
-      const where = { ...companyFilter(req) };
+      const where = { ...companyFilter(req), [Op.and]: [draftVisibility(req)] };
       if (!canViewAll(req)) where.requestorId = req.user.id;
       if (req.query.status)        where.status        = req.query.status;
       if (req.query.requestTypeId) where.requestTypeId = parseInt(req.query.requestTypeId);
@@ -174,7 +197,7 @@ class RequestController {
   static async getById(req, res, next) {
     try {
       await attachPermissions(req);
-      const where = { id: req.params.id, ...companyFilter(req) };
+      const where = { id: req.params.id, ...companyFilter(req), [Op.and]: [draftVisibility(req)] };
       if (!canViewAll(req)) where.requestorId = req.user.id;
 
       const request = await Request.findOne({
@@ -190,9 +213,12 @@ class RequestController {
   static async create(req, res, next) {
     try {
       const cid = companyId(req);
-      const { requestTypeId, shipmentType: directShipmentType, recipientName, recipientPhone, recipientAddress, neededAt, note, needsReturn, divisi, items } = req.body;
+      const { requestTypeId, shipmentType: directShipmentType, recipientName, recipientPhone, recipientAddress, neededAt, note, needsReturn, divisi, items, isDraft } = req.body;
 
-      if (!items?.length) return res.status(400).json({ message: 'Minimal 1 produk wajib diisi' });
+      // Draft boleh disimpan tanpa produk — validasi minimal 1 produk baru
+      // berlaku saat pengajuan benar-benar diajukan (create normal / submit).
+      const asDraft = isDraft === true || isDraft === 'true';
+      if (!asDraft && !items?.length) return res.status(400).json({ message: 'Minimal 1 produk wajib diisi' });
 
       // Resolve requestTypeId: bisa dari picker (non_sales) atau auto find-or-create (sales / stock_out)
       let rtId = requestTypeId ? Number(requestTypeId) : null;
@@ -220,11 +246,11 @@ class RequestController {
         neededAt: neededAt || null,
         note: note || null,
         needsReturn: needsReturn === true || needsReturn === 'true',
-        status: 'PENDING',
+        status: asDraft ? 'DRAFT' : 'PENDING',
         companyId: cid,
       });
 
-      for (const item of items) {
+      for (const item of items ?? []) {
         await RequestItem.create({
           requestId:    request.id,
           ProductSKUId: item.ProductSKUId || null,
@@ -241,7 +267,28 @@ class RequestController {
     } catch (err) { next(err); }
   }
 
-  // PUT /requests/:id  — edit only when PENDING and own (or request.process)
+  // POST /requests/:id/submit — ajukan draft (DRAFT → PENDING), own or request.process
+  static async submit(req, res, next) {
+    try {
+      await attachPermissions(req);
+      const request = await Request.findOne({
+        where: { id: req.params.id, ...companyFilter(req) },
+        include: [ITEM_INCLUDE],
+      });
+      if (!request) return res.status(404).json({ message: 'Pengajuan tidak ditemukan' });
+
+      const isOwn = request.requestorId === req.user.id;
+      if (!isOwn && !canProcess(req))  return res.status(403).json({ message: 'Forbidden' });
+      if (request.status !== 'DRAFT')  return res.status(400).json({ message: 'Hanya pengajuan berstatus DRAFT yang bisa diajukan' });
+      if (!request.items?.length)      return res.status(400).json({ message: 'Minimal 1 produk wajib diisi sebelum diajukan' });
+
+      await request.update({ status: 'PENDING', updatedBy: req.user.id });
+      const full = await Request.findByPk(request.id, { include: [...BASE_INCLUDE, ITEM_INCLUDE] });
+      res.json(full);
+    } catch (err) { next(err); }
+  }
+
+  // PUT /requests/:id  — edit only when DRAFT/PENDING and own (or request.process)
   static async update(req, res, next) {
     try {
       await attachPermissions(req);
@@ -253,7 +300,7 @@ class RequestController {
 
       const isOwn = request.requestorId === req.user.id;
       if (!isOwn && !canProcess(req))  return res.status(403).json({ message: 'Forbidden' });
-      if (request.status !== 'PENDING') return res.status(400).json({ message: 'Hanya pengajuan berstatus PENDING yang bisa diedit' });
+      if (!['DRAFT', 'PENDING'].includes(request.status)) return res.status(400).json({ message: 'Hanya pengajuan berstatus DRAFT atau PENDING yang bisa diedit' });
 
       const { requestTypeId, recipientName, recipientPhone, recipientAddress, neededAt, note, needsReturn, divisi, items } = req.body;
       await request.update({
@@ -299,7 +346,7 @@ class RequestController {
     } catch (err) { next(err); }
   }
 
-  // DELETE /requests/:id — PENDING only, own or request.process
+  // DELETE /requests/:id — DRAFT/PENDING only, own or request.process
   static async destroy(req, res, next) {
     try {
       await attachPermissions(req);
@@ -308,7 +355,7 @@ class RequestController {
 
       const isOwn = request.requestorId === req.user.id;
       if (!isOwn && !canProcess(req))    return res.status(403).json({ message: 'Forbidden' });
-      if (request.status !== 'PENDING')  return res.status(400).json({ message: 'Hanya pengajuan PENDING yang bisa dihapus' });
+      if (!['DRAFT', 'PENDING'].includes(request.status)) return res.status(400).json({ message: 'Hanya pengajuan DRAFT atau PENDING yang bisa dihapus' });
 
       await request.destroy();
       res.json({ message: 'Pengajuan dihapus' });

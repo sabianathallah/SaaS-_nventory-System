@@ -5,7 +5,8 @@ import toast from 'react-hot-toast'
 import { requestApi, requestTypeApi } from '../api'
 import { productsApi, productSkusApi, warehousesApi, skuWarehouseStocksApi, articlesApi, skuChannelStocksApi } from '../api'
 import { useAuth } from '../context/AuthContext'
-import { Plus, Trash2, ChevronDown, ArrowLeft, ShoppingBag, Package, Warehouse } from 'lucide-react'
+import { useFormAutosave } from '../hooks/useSessionDraft'
+import { Plus, Trash2, ChevronDown, ArrowLeft, ShoppingBag, Package, Warehouse, Save } from 'lucide-react'
 
 // ── 3 kategori utama ──────────────────────────────────────────────────────────
 const CATEGORIES = [
@@ -224,6 +225,26 @@ export default function PengajuanBaru() {
   const [note,             setNote]             = useState('')
   const [items,            setItems]            = useState([])
 
+  // Auto-save isian form ke perangkat — kalau halaman tertutup di tengah
+  // pengisian, isian dipulihkan saat form dibuka lagi.
+  const clearFormAutosave = useFormAutosave('pengajuan-baru-form', {
+    values: { category, requestTypeId, divisi, recipientName, recipientPhone, recipientAddress, neededAt, needsReturn, note, items },
+    restore: (d) => {
+      if (!d) return
+      setCategory(d.category ?? '')
+      setRequestTypeId(d.requestTypeId ?? '')
+      if (d.divisi !== undefined) setDivisi(d.divisi)
+      setRecipientName(d.recipientName ?? '')
+      setRecipientPhone(d.recipientPhone ?? '')
+      setRecipientAddress(d.recipientAddress ?? '')
+      setNeededAt(d.neededAt ?? '')
+      setNeedsReturn(d.needsReturn ?? false)
+      setNote(d.note ?? '')
+      setItems(Array.isArray(d.items) ? d.items : [])
+      if (d.category || d.items?.length) toast('Isian form sebelumnya dipulihkan', { icon: '📝' })
+    },
+  })
+
   const { data: types } = useQuery({ queryKey: ['request-types'], queryFn: requestTypeApi.list })
 
   // Tambah keperluan non-sales baru langsung dari form
@@ -260,8 +281,9 @@ export default function PengajuanBaru() {
 
   const createMutation = useMutation({
     mutationFn: (data) => requestApi.create(data),
-    onSuccess: (data) => {
-      toast.success('Pengajuan berhasil dibuat!')
+    onSuccess: (data, variables) => {
+      clearFormAutosave()
+      toast.success(variables.isDraft ? 'Draft pengajuan disimpan' : 'Pengajuan berhasil dibuat!')
       navigate(`/pengajuan/${data.id}`)
     },
     onError: (err) => toast.error(err.response?.data?.message ?? 'Gagal membuat pengajuan'),
@@ -269,30 +291,38 @@ export default function PengajuanBaru() {
 
   const removeItem = (i) => setItems(prev => prev.filter((_, idx) => idx !== i))
 
+  const buildPayload = (isDraft) => ({
+    ...(category === 'non_sales'
+      ? { requestTypeId: Number(requestTypeId) }
+      : { shipmentType: category }),
+    divisi,
+    note,
+    items,
+    isDraft,
+    needsReturn: category === 'non_sales' ? needsReturn : false,
+    neededAt: neededAt || null,
+    // field penerima hanya untuk sales & non_sales
+    ...(category !== 'stock_out' && {
+      recipientName:    recipientName    || null,
+      recipientPhone:   recipientPhone   || null,
+      recipientAddress: recipientAddress || null,
+    }),
+  })
+
   const handleSubmit = (e) => {
     e.preventDefault()
     if (!category)                                              return toast.error('Pilih kategori pengajuan')
     if (category === 'non_sales' && !requestTypeId)           return toast.error('Pilih keperluan non-sales')
     if (items.length === 0)                                    return toast.error('Tambahkan minimal 1 produk')
+    createMutation.mutate(buildPayload(false))
+  }
 
-    const payload = {
-      ...(category === 'non_sales'
-        ? { requestTypeId: Number(requestTypeId) }
-        : { shipmentType: category }),
-      divisi,
-      note,
-      items,
-      needsReturn: category === 'non_sales' ? needsReturn : false,
-      neededAt: neededAt || null,
-      // field penerima hanya untuk sales & non_sales
-      ...(category !== 'stock_out' && {
-        recipientName:    recipientName    || null,
-        recipientPhone:   recipientPhone   || null,
-        recipientAddress: recipientAddress || null,
-      }),
-    }
-
-    createMutation.mutate(payload)
+  // Draft: kategori tetap wajib (jadi dasar record), tapi produk boleh kosong —
+  // dilengkapi nanti sebelum diajukan dari halaman detail.
+  const handleSaveDraft = () => {
+    if (!category)                                    return toast.error('Pilih kategori pengajuan')
+    if (category === 'non_sales' && !requestTypeId) return toast.error('Pilih keperluan non-sales')
+    createMutation.mutate(buildPayload(true))
   }
 
   const activeCat   = CATEGORIES.find(c => c.id === category)
@@ -503,8 +533,13 @@ export default function PengajuanBaru() {
           </div>
         )}
 
-        <div className="flex gap-2 justify-end">
+        <div className="flex gap-2 justify-end items-center flex-wrap">
+          <span className="text-[11px] text-slate-400 mr-auto">Isian form tersimpan otomatis di perangkat ini</span>
           <button type="button" onClick={() => navigate(-1)} className="btn-secondary">Batal</button>
+          <button type="button" onClick={handleSaveDraft} disabled={createMutation.isPending || !showDetails}
+            className="btn-secondary flex items-center gap-1.5">
+            <Save size={13} /> Simpan Draft
+          </button>
           <button type="submit" disabled={createMutation.isPending || !showDetails} className="btn-primary">
             {createMutation.isPending ? 'Menyimpan…' : 'Kirim Pengajuan'}
           </button>

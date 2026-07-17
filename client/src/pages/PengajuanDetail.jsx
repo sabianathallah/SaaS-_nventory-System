@@ -11,8 +11,9 @@ import {
   Clock, ThumbsUp, ThumbsDown, AlertTriangle, Truck, ExternalLink,
 } from 'lucide-react'
 
-const STATUS_LABEL = { PENDING:'Menunggu', APPROVED:'Disetujui', REJECTED:'Ditolak', SENT:'Dikirim', DONE:'Selesai' }
+const STATUS_LABEL = { DRAFT:'Draft', PENDING:'Menunggu', APPROVED:'Disetujui', REJECTED:'Ditolak', SENT:'Dikirim', DONE:'Selesai' }
 const STATUS_COLOR = {
+  DRAFT:    'bg-slate-100 text-slate-500 border-slate-200',
   PENDING:  'bg-amber-100 text-amber-700 border-amber-200',
   APPROVED: 'bg-blue-100 text-blue-700 border-blue-200',
   REJECTED: 'bg-red-100 text-red-700 border-red-200',
@@ -258,6 +259,15 @@ function ReturnModal({ onConfirm, onClose }) {
 
 // ── Status stepper ────────────────────────────────────────────────────────────
 function StatusStepper({ status, needsReturn, returnedAt, shipmentType }) {
+  if (status === 'DRAFT') return (
+    <div className="flex items-center gap-2 p-3 bg-slate-50 border border-slate-200 rounded-xl">
+      <span className="w-6 h-6 rounded-full bg-slate-400 text-white flex items-center justify-center flex-shrink-0">
+        <Pencil size={11} />
+      </span>
+      <span className="text-sm font-medium text-slate-600">Masih Draft — belum masuk antrian approval</span>
+    </div>
+  )
+
   if (status === 'REJECTED') return (
     <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-xl">
       <span className="w-6 h-6 rounded-full bg-red-500 text-white flex items-center justify-center flex-shrink-0">
@@ -558,11 +568,17 @@ export default function PengajuanDetail() {
   const markReturned  = useMutation({ mutationFn: (d) => requestApi.markReturned(id, d),      onSuccess: invalidate, onError: e => toast.error(e.response?.data?.message ?? 'Gagal') })
   const shipRemaining = useMutation({ mutationFn: () => requestApi.shipRemaining(id),         onSuccess: invalidate, onError: e => toast.error(e.response?.data?.message ?? 'Gagal') })
   const markDone      = useMutation({ mutationFn: () => requestApi.markDone(id),              onSuccess: invalidate, onError: e => toast.error(e.response?.data?.message ?? 'Gagal') })
+  const submitDraft   = useMutation({
+    mutationFn: () => requestApi.submit(id),
+    onSuccess: () => { invalidate(); toast.success('Pengajuan diajukan — menunggu persetujuan') },
+    onError: e => toast.error(e.response?.data?.message ?? 'Gagal mengajukan'),
+  })
   const destroy       = useMutation({ mutationFn: () => requestApi.destroy(id),              onSuccess: () => navigate('/pengajuan'), onError: e => toast.error(e.response?.data?.message ?? 'Gagal') })
 
   const saveEdit = useMutation({
     mutationFn: () => {
-      if (formItems.length === 0) throw new Error('Minimal 1 produk harus diisi')
+      // Draft boleh disimpan tanpa produk — divalidasi lagi saat diajukan
+      if (formItems.length === 0 && req?.status !== 'DRAFT') throw new Error('Minimal 1 produk harus diisi')
       return requestApi.update(id, { ...form, items: formItems })
     },
     onSuccess: () => { invalidate(); setEditing(false); toast.success('Pengajuan diperbarui') },
@@ -572,8 +588,9 @@ export default function PengajuanDetail() {
   const canProcess = hasPermission('request.process') || hasPermission('request.manage') ||
                      user?.role === 'SUPER_ADMIN' || user?.role === 'COMPANY_ADMIN'
   const isOwn      = req?.requestorId === user?.id
-  const canEdit    = req?.status === 'PENDING' && (isOwn || canProcess)
+  const canEdit    = ['DRAFT', 'PENDING'].includes(req?.status) && (isOwn || canProcess)
   const canDelete  = canEdit
+  const isDraft    = req?.status === 'DRAFT'
 
   if (isLoading) return <div className="px-6 py-6 text-sm text-slate-400">Memuat…</div>
   if (error)     return (
@@ -891,6 +908,28 @@ export default function PengajuanDetail() {
 
         {/* Right: action panel (1/3, sticky) */}
         <div className="space-y-4 lg:sticky lg:top-6 lg:self-start">
+          {isDraft && (isOwn || canProcess) && (
+            <div className="card p-4 border-l-4 border-l-slate-300">
+              <div className="flex items-center gap-2 mb-2">
+                <Pencil size={16} className="text-slate-400" />
+                <span className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Draft</span>
+              </div>
+              <p className="text-sm font-semibold text-slate-800 mb-1">Pengajuan Belum Diajukan</p>
+              <p className="text-xs text-slate-500 mb-3 leading-relaxed">
+                Draft ini hanya terlihat oleh kamu. Lengkapi detail dan produk, lalu ajukan supaya masuk antrian approval.
+              </p>
+              {(req.items?.length ?? 0) === 0 && (
+                <p className="text-xs text-amber-600 mb-2">⚠ Tambahkan minimal 1 produk dulu sebelum bisa diajukan.</p>
+              )}
+              <button
+                onClick={() => { if (confirm('Ajukan pengajuan ini? Setelah diajukan akan masuk antrian approval.')) submitDraft.mutate() }}
+                disabled={submitDraft.isPending || (req.items?.length ?? 0) === 0 || editing}
+                className="btn-primary text-sm flex items-center gap-2 justify-center w-full disabled:opacity-50">
+                <Send size={14} /> {submitDraft.isPending ? 'Mengajukan…' : 'Ajukan Pengajuan'}
+              </button>
+            </div>
+          )}
+
           <NextActionCard
             req={req}
             canProcess={canProcess}

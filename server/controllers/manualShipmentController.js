@@ -110,19 +110,30 @@ function calcTotals(items, shippingCost) {
 // ── LIST ──────────────────────────────────────────────────────────────────────
 exports.list = async (req, res, next) => {
   try {
-    const { page = 1, limit = 15, status, type, search } = req.query;
+    const { page = 1, limit = 15, status, type, search, noteSearch } = req.query;
     const offset = (Number(page) - 1) * Number(limit);
 
+    const and = [];
     const where = { ...companyFilter(req) };
     if (status) where.status = status;
     if (type)   where.type   = type;
     if (search) {
-      where[Op.or] = [
-        { invoiceNumber: { [Op.iLike]: `%${search}%` } },
-        { buyerName:      { [Op.iLike]: `%${search}%` } },
-        { recipientName:  { [Op.iLike]: `%${search}%` } },
-      ];
+      const term = sequelize.escape(`%${search}%`);
+      and.push({
+        [Op.or]: [
+          { invoiceNumber: { [Op.iLike]: `%${search}%` } },
+          { buyerName:      { [Op.iLike]: `%${search}%` } },
+          { recipientName:  { [Op.iLike]: `%${search}%` } },
+          // Ikut cari nama produk di dalam item shipping
+          sequelize.literal(`"ManualShipment"."id" IN (SELECT "shipmentId" FROM "ManualShipmentItems" WHERE "productName" ILIKE ${term})`),
+        ],
+      });
     }
+    // Search khusus catatan — terpisah dari search umum
+    if (noteSearch) {
+      and.push({ notes: { [Op.iLike]: `%${noteSearch}%` } });
+    }
+    if (and.length) where[Op.and] = and;
 
     const { rows, count } = await ManualShipment.findAndCountAll({
       where,

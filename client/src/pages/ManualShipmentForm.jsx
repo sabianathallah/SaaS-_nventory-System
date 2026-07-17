@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, Plus, Trash2, ShoppingCart, Gift, Search, X, Package, RefreshCw } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { manualShipmentsApi, shipmentCategoriesApi, productsApi, productSkusApi } from '../api'
+import { useFormAutosave } from '../hooks/useSessionDraft'
 
 const fmtRp = n => 'Rp ' + Number(n || 0).toLocaleString('id-ID')
 
@@ -215,6 +216,29 @@ export default function ManualShipmentForm() {
   const [addingCat, setAddingCat]           = useState(false)
   const [refreshingPrices, setRefreshingPrices] = useState(false)
 
+  // Auto-save isian form ke perangkat (hanya mode buat baru — mode edit selalu
+  // prefill dari server). Kalau halaman tertutup di tengah pengisian, isian
+  // dipulihkan saat form dibuka lagi.
+  const clearFormAutosave = useFormAutosave('manual-shipment-form', {
+    enabled: !isEdit,
+    values: { type, shipmentCategoryId, recipientName, recipientAddress, recipientPhone, shippingCost, expeditionName, expedCustom, expedCustomMode, notes, items },
+    restore: (d) => {
+      if (!d) return
+      setType(d.type ?? 'sales')
+      setCategoryId(d.shipmentCategoryId ?? '')
+      setRecipientName(d.recipientName ?? '')
+      setRecipientAddress(d.recipientAddress ?? '')
+      setRecipientPhone(d.recipientPhone ?? '')
+      setShippingCost(d.shippingCost ?? '')
+      setExpeditionName(d.expeditionName ?? '')
+      setExpedCustom(d.expedCustom ?? '')
+      setExpedCustomMode(d.expedCustomMode ?? false)
+      setNotes(d.notes ?? '')
+      setItems(Array.isArray(d.items) ? d.items : [])
+      if (d.recipientName || d.items?.length) toast('Isian form sebelumnya dipulihkan', { icon: '📝' })
+    },
+  })
+
   // Load for edit
   const { data: existingRes, isLoading: loadingExisting } = useQuery({
     queryKey: ['manual-shipment', id],
@@ -284,6 +308,7 @@ export default function ManualShipmentForm() {
       ? manualShipmentsApi.update(id, payload)
       : manualShipmentsApi.create(payload),
     onSuccess: (res) => {
+      if (!isEdit) clearFormAutosave()
       toast.success(isEdit ? 'Shipping diperbarui' : 'Shipping berhasil dibuat')
       qc.invalidateQueries({ queryKey: ['manual-shipments'] })
       navigate(`/shipping-manual/${res.data.id}`)
@@ -596,6 +621,9 @@ export default function ManualShipmentForm() {
             </div>
 
             {/* Submit */}
+            {!isEdit && (
+              <p className="text-[11px] text-slate-400 text-right">Isian form tersimpan otomatis di perangkat ini</p>
+            )}
             <div className="flex gap-3 justify-end">
               <button type="button" onClick={() => navigate(-1)} className="btn-secondary">
                 Batal

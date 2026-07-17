@@ -6,9 +6,10 @@ import { useAuth } from '../context/AuthContext'
 import { exportExcel } from '../utils/exportExcel'
 import { useCompanyGuard } from '../hooks/useCompanyGuard'
 import CompanyRequiredBanner from '../components/CompanyRequiredBanner'
-import { Plus, FileDown, Search, SlidersHorizontal, X } from 'lucide-react'
+import { Plus, FileDown, Search, SlidersHorizontal, X, StickyNote } from 'lucide-react'
 
 const STATUS_LABEL = {
+  DRAFT:    'Draft',
   PENDING:  'Menunggu',
   APPROVED: 'Disetujui',
   REJECTED: 'Ditolak',
@@ -16,6 +17,7 @@ const STATUS_LABEL = {
   DONE:     'Selesai',
 }
 const STATUS_COLOR = {
+  DRAFT:    'bg-slate-100 text-slate-500',
   PENDING:  'bg-amber-100 text-amber-700',
   APPROVED: 'bg-blue-100 text-blue-700',
   REJECTED: 'bg-red-100 text-red-700',
@@ -25,6 +27,7 @@ const STATUS_COLOR = {
 
 const STATUS_TABS = [
   { value: '',         label: 'Semua',    countKey: 'ALL' },
+  { value: 'DRAFT',    label: 'Draft',    countKey: 'DRAFT' },
   { value: 'PENDING',  label: 'Menunggu', countKey: 'PENDING' },
   { value: 'APPROVED', label: 'Disetujui',countKey: 'APPROVED' },
   { value: 'SENT',     label: 'Dikirim',  countKey: 'SENT' },
@@ -45,6 +48,7 @@ export default function Pengajuan() {
   const sp = (updates) => setSearchParams(prev => { const n = new URLSearchParams(prev); Object.entries(updates).forEach(([k,v]) => v ? n.set(k,v) : n.delete(k)); return n })
 
   const search        = searchParams.get('q')      || ''
+  const noteSearch    = searchParams.get('noteq')  || ''
   const status        = searchParams.get('status') || ''
   const requestTypeId = searchParams.get('type')   || ''
   const needsReturn   = searchParams.get('return') || ''
@@ -53,6 +57,7 @@ export default function Pengajuan() {
   const page          = Number(searchParams.get('page') || '1')
 
   const [searchInput,   setSearchInput]   = useState(search)
+  const [noteInput,     setNoteInput]     = useState(noteSearch)
   const [showMoreFilters, setShowMoreFilters] = useState(!!(needsReturn || dateFrom || dateTo))
 
   const setSearch        = (v) => sp({ q: v, page: '' })
@@ -79,6 +84,7 @@ export default function Pengajuan() {
   const filters = {
     page, limit: 20,
     ...(search        && { search }),
+    ...(noteSearch    && { noteSearch }),
     ...(status        && { status }),
     ...(requestTypeId && { requestTypeId }),
     ...(needsReturn !== '' && { needsReturn }),
@@ -100,6 +106,7 @@ export default function Pengajuan() {
 
   function resetFilters() {
     setSearchInput('')
+    setNoteInput('')
     setSearchParams(new URLSearchParams())
   }
 
@@ -173,13 +180,22 @@ export default function Pengajuan() {
 
       {/* Search + filter bar */}
       <div className="flex gap-2 mb-4 flex-wrap items-center">
-        <form onSubmit={e => { e.preventDefault(); setSearch(searchInput.trim()) }} className="flex gap-2 flex-1 min-w-0">
+        <form onSubmit={e => { e.preventDefault(); sp({ q: searchInput.trim(), noteq: noteInput.trim(), page: '' }) }} className="flex gap-2 flex-1 min-w-0 flex-wrap">
           <div className="relative flex-1 min-w-[180px] max-w-xs">
             <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               value={searchInput}
               onChange={e => setSearchInput(e.target.value)}
-              placeholder="Cari penerima / divisi…"
+              placeholder="Cari penerima / divisi / produk…"
+              className="input text-sm pl-7 w-full"
+            />
+          </div>
+          <div className="relative flex-1 min-w-[160px] max-w-xs">
+            <StickyNote size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-amber-400" />
+            <input
+              value={noteInput}
+              onChange={e => setNoteInput(e.target.value)}
+              placeholder="Cari di catatan…"
               className="input text-sm pl-7 w-full"
             />
           </div>
@@ -204,7 +220,7 @@ export default function Pengajuan() {
           {hasExtraFilters && <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 flex-shrink-0" />}
         </button>
 
-        {(search || requestTypeId || hasExtraFilters) && (
+        {(search || noteSearch || requestTypeId || hasExtraFilters) && (
           <button onClick={resetFilters} className="text-xs text-slate-400 hover:text-slate-600 flex items-center gap-1">
             <X size={12} /> Reset
           </button>

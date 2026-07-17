@@ -1,4 +1,5 @@
 'use strict';
+const { Op } = require('sequelize');
 const { sequelize, Stock_Out_Header, Stock_Movement, Stock, SkuWarehouseStock, User, Product, ProductSKU, ProductVariantOption, Warehouse } = require('../models');
 const { companyFilter, companyId } = require('../helpers/tenancy');
 const { upsertSkuWarehouseStock } = require('../helpers/skuStock');
@@ -14,8 +15,31 @@ class StockOutHeaderController {
                 dateFrom:     { field: 'date', type: 'gte' },
                 dateTo:       { field: 'date', type: 'lte' },
             });
+            // Search umum: tujuan/keperluan header + nama produk di dalam item.
+            // Search catatan terpisah: catatan header + catatan per item.
+            const extra = [];
+            if (req.query.search) {
+                const term = sequelize.escape(`%${req.query.search}%`);
+                extra.push({
+                    [Op.or]: [
+                        { destination: { [Op.iLike]: `%${req.query.search}%` } },
+                        { purpose:     { [Op.iLike]: `%${req.query.search}%` } },
+                        sequelize.literal(`"Stock_Out_Header"."id" IN (SELECT sm."ReferenceId" FROM "Stock_Movements" sm JOIN "Products" p ON sm."ProductId" = p.id WHERE sm."type" = 'OUT' AND p."name" ILIKE ${term})`),
+                    ],
+                });
+            }
+            if (req.query.noteSearch) {
+                const term = sequelize.escape(`%${req.query.noteSearch}%`);
+                extra.push({
+                    [Op.or]: [
+                        { notes: { [Op.iLike]: `%${req.query.noteSearch}%` } },
+                        sequelize.literal(`"Stock_Out_Header"."id" IN (SELECT "ReferenceId" FROM "Stock_Movements" WHERE "type" = 'OUT' AND "note" ILIKE ${term})`),
+                    ],
+                });
+            }
+
             const { rows, count } = await Stock_Out_Header.findAndCountAll({
-                where: { ...companyFilter(req), ...filter },
+                where: { ...companyFilter(req), ...filter, ...(extra.length && { [Op.and]: extra }) },
                 attributes: {
                     include: [
                         [

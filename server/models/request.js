@@ -22,7 +22,7 @@ module.exports = (sequelize, DataTypes) => {
     neededAt:         { type: DataTypes.DATEONLY, allowNull: true },
     note:             { type: DataTypes.TEXT, allowNull: true },
     status: {
-      type: DataTypes.ENUM('PENDING','APPROVED','REJECTED','SENT','DONE'),
+      type: DataTypes.ENUM('DRAFT','PENDING','APPROVED','REJECTED','SENT','DONE'),
       allowNull: false,
       defaultValue: 'PENDING',
     },

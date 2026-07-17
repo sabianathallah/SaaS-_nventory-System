@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { Plus, ShoppingCart, Gift, Search, CreditCard, Truck, PackageCheck, Clock } from 'lucide-react'
+import { Plus, ShoppingCart, Gift, Search, CreditCard, Truck, PackageCheck, Clock, StickyNote } from 'lucide-react'
 import { manualShipmentsApi } from '../api'
 import PageHeader from '../components/PageHeader'
 import { Table, Pagination } from '../components/Table'
@@ -86,15 +86,17 @@ export default function ManualShipments() {
   const page   = Number(searchParams.get('page')   || '1')
   const type   = searchParams.get('type')   || ''
   const status = searchParams.get('status') || ''
-  const search = searchParams.get('search') || ''
+  const search     = searchParams.get('search') || ''
+  const noteSearch = searchParams.get('noteq')  || ''
 
   const [searchInput, setSearchInput] = useState(search)
+  const [noteInput,   setNoteInput]   = useState(noteSearch)
 
   const canCreate = isSuperAdmin || hasPermission('shipping.manual.create') || hasPermission('shipping.manual.manage')
 
   const { data, isLoading } = useQuery({
-    queryKey: ['manual-shipments', { page, type, status, search }],
-    queryFn:  () => manualShipmentsApi.list({ page, limit: 15, type: type || undefined, status: status || undefined, search: search || undefined }),
+    queryKey: ['manual-shipments', { page, type, status, search, noteSearch }],
+    queryFn:  () => manualShipmentsApi.list({ page, limit: 15, type: type || undefined, status: status || undefined, search: search || undefined, noteSearch: noteSearch || undefined }),
   })
 
   const setParam = (key, val) => setSearchParams(prev => {
@@ -105,7 +107,13 @@ export default function ManualShipments() {
 
   const handleSearch = e => {
     e.preventDefault()
-    setParam('search', searchInput.trim())
+    setSearchParams(prev => {
+      const q = searchInput.trim(); const n = noteInput.trim()
+      if (q) prev.set('search', q); else prev.delete('search')
+      if (n) prev.set('noteq', n);  else prev.delete('noteq')
+      prev.delete('page')
+      return prev
+    }, { replace: true })
   }
 
   const columns = [
@@ -240,13 +248,25 @@ export default function ManualShipments() {
         </select>
 
         {/* Search */}
-        <form onSubmit={handleSearch} className="flex gap-2 ml-auto">
-          <input
-            value={searchInput}
-            onChange={e => setSearchInput(e.target.value)}
-            placeholder="Cari invoice / nama..."
-            className="input text-sm h-9 py-0 w-56"
-          />
+        <form onSubmit={handleSearch} className="flex gap-2 ml-auto flex-wrap">
+          <div className="relative">
+            <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              value={searchInput}
+              onChange={e => setSearchInput(e.target.value)}
+              placeholder="Cari invoice / nama / produk..."
+              className="input text-sm h-9 py-0 pl-7 w-52"
+            />
+          </div>
+          <div className="relative">
+            <StickyNote size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-amber-400" />
+            <input
+              value={noteInput}
+              onChange={e => setNoteInput(e.target.value)}
+              placeholder="Cari di catatan..."
+              className="input text-sm h-9 py-0 pl-7 w-44"
+            />
+          </div>
           <button type="submit" className="btn-secondary h-9 px-3 flex items-center gap-1">
             <Search size={14} />
           </button>
