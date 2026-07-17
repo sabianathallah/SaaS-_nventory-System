@@ -1,8 +1,10 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { hrisApi } from '../../api'
 import { exportExcel } from '../../utils/exportExcel'
+import { Pagination } from '../../components/Table'
 import { FileDown, UserX } from 'lucide-react'
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
@@ -73,6 +75,19 @@ export default function Reports() {
       (userFilter === 'ALL' || a.userId === userFilter)
     )
   }, [data, statusFilter, userFilter])
+
+  // Pagination client-side untuk tabel Detail Presensi saja — chart, summary,
+  // ranking, dan export tetap memakai seluruh data hasil filter.
+  const [searchParams] = useSearchParams()
+  const [page, setPage] = useState(1)
+  const pageLimit = Number(searchParams.get('limit')) || 25
+  useEffect(() => { setPage(1) }, [statusFilter, userFilter, dateFrom, dateTo])
+  const totalPages = Math.max(1, Math.ceil(filteredAttendances.length / pageLimit))
+  const safePage = Math.min(page, totalPages)
+  const pagedAttendances = useMemo(
+    () => filteredAttendances.slice((safePage - 1) * pageLimit, safePage * pageLimit),
+    [filteredAttendances, safePage, pageLimit]
+  )
 
   const lateRanking = useMemo(() => {
     if (!data?.attendances?.length) return []
@@ -279,7 +294,7 @@ export default function Reports() {
                 <tr><td colSpan={6} className="td py-8 text-center text-slate-400">Memuat…</td></tr>
               ) : filteredAttendances.length === 0 ? (
                 <tr><td colSpan={6} className="td py-8 text-center text-slate-400">Tidak ada data</td></tr>
-              ) : filteredAttendances.map(a => (
+              ) : pagedAttendances.map(a => (
                 <tr key={a.id} className="tr">
                   <td className="td">{fmtDate(a.date)}</td>
                   <td className="td">{a.user?.name ?? '—'}</td>
@@ -299,6 +314,10 @@ export default function Reports() {
             </tbody>
           </table>
         </div>
+        <Pagination
+          pagination={{ page: safePage, totalPages, total: filteredAttendances.length, limit: pageLimit }}
+          onPageChange={setPage}
+        />
       </div>
     </div>
   )
