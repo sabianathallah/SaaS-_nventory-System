@@ -485,7 +485,7 @@ export default function IncomingGoodsDetail() {
                 const vendor = delivery.Vendor?.name?.replace(/[/\\?%*:|"<>]/g, '-') ?? 'Vendor'
                 const tgl    = delivery.date ?? new Date().toISOString().slice(0, 10)
                 const prev   = document.title
-                document.title = `Barang Masuk_${vendor}_${tgl}`
+                document.title = `Tanda Terima Barang_${vendor}_${tgl}`
                 window.print()
                 setTimeout(() => { document.title = prev }, 1000)
               }}

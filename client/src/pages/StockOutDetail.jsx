@@ -278,6 +278,7 @@ export default function StockOutDetail() {
   const [scannerConnected, setScannerConnected]     = useState(false)
   const [showPrintForm, setShowPrintForm]           = useState(false)
   const [printRecipient, setPrintRecipient]         = useState('')
+  const [printDocType, setPrintDocType]             = useState('SURAT_JALAN')
 
   const { data: detail, isLoading } = useQuery({
     queryKey: ['stock-out', id],
@@ -466,7 +467,7 @@ export default function StockOutDetail() {
           {items.length > 0 && (
             <>
             <button onClick={() => setShowPrintForm(true)} className="btn-secondary text-sm flex items-center gap-1.5">
-              <Printer size={14} /> Print Surat Jalan
+              <Printer size={14} /> Print PDF
             </button>
             <button onClick={handleExportExcel} className="btn-secondary text-sm flex items-center gap-1.5">
               <FileSpreadsheet size={14} /> Export Excel
@@ -558,17 +559,28 @@ export default function StockOutDetail() {
 
       {items.length > 0 && (
         <div className="print-only">
-          <StockOutPrintLayout detail={detail} items={items} recipient={printRecipient} />
+          <StockOutPrintLayout detail={detail} items={items} recipient={printRecipient} docType={printDocType} canViewValue={canViewValue} />
         </div>
       )}
 
       {showPrintForm && (
-        <PrintRecipientModal
-          defaultValue={printRecipient}
-          onConfirm={(name) => {
-            setPrintRecipient(name)
+        <PrintDocModal
+          defaultRecipient={printRecipient}
+          defaultDocType={printDocType}
+          onConfirm={({ docType, recipient }) => {
+            setPrintDocType(docType)
+            setPrintRecipient(recipient)
             setShowPrintForm(false)
-            setTimeout(() => window.print(), 100)
+            setTimeout(() => {
+              const tgl   = String(detail.date ?? detail.createdAt ?? new Date().toISOString()).slice(0, 10)
+              const docNo = String(detail.id).padStart(4, '0')
+              const prev  = document.title
+              document.title = docType === 'LAPORAN'
+                ? `Laporan Stock Out_SO-${docNo}_${tgl}`
+                : `Surat Jalan_SJ-${docNo}_${tgl}`
+              window.print()
+              setTimeout(() => { document.title = prev }, 1000)
+            }, 100)
           }}
           onClose={() => setShowPrintForm(false)}
         />
@@ -861,26 +873,55 @@ export default function StockOutDetail() {
   )
 }
 
-// ── Print Recipient Modal ─────────────────────────────────────────────────────
-function PrintRecipientModal({ defaultValue, onConfirm, onClose }) {
-  const [name, setName] = useState(defaultValue ?? '')
+// ── Print Doc Modal ───────────────────────────────────────────────────────────
+// Pilih jenis dokumen: Surat Jalan (untuk vendor, ada penerima + ttd serah
+// terima) atau Laporan Stock Out (internal, tanpa penerima).
+function PrintDocModal({ defaultRecipient, defaultDocType, onConfirm, onClose }) {
+  const [docType, setDocType] = useState(defaultDocType ?? 'SURAT_JALAN')
+  const [name, setName]       = useState(defaultRecipient ?? '')
+
+  const confirm = () => onConfirm({ docType, recipient: docType === 'SURAT_JALAN' ? name.trim() : '' })
+
+  const typeBtn = (value, label, desc) => (
+    <button
+      type="button"
+      onClick={() => setDocType(value)}
+      className={`flex-1 text-left rounded-xl border p-3 transition-colors ${docType === value ? 'border-violet-400 bg-violet-50' : 'border-slate-200 hover:border-slate-300'}`}
+    >
+      <p className={`text-sm font-bold ${docType === value ? 'text-violet-700' : 'text-slate-700'}`}>{label}</p>
+      <p className="text-[11px] text-slate-400 mt-0.5">{desc}</p>
+    </button>
+  )
 
   return (
     <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4 no-print">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-5">
-        <p className="text-sm font-bold text-slate-800 mb-1">Diserahkan Kepada</p>
-        <p className="text-xs text-slate-400 mb-4">Nama vendor / pihak yang menerima barang — akan tercetak di kolom tanda tangan Surat Jalan</p>
-        <input
-          autoFocus
-          className="input mb-4"
-          placeholder="Contoh: PT Vendor Jaya / Budi (Kurir)…"
-          value={name}
-          onChange={e => setName(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter') onConfirm(name.trim()) }}
-        />
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-5">
+        <p className="text-sm font-bold text-slate-800 mb-1">Print PDF</p>
+        <p className="text-xs text-slate-400 mb-4">Pilih jenis dokumen yang mau dicetak</p>
+
+        <div className="flex gap-2 mb-4">
+          {typeBtn('SURAT_JALAN', 'Surat Jalan', 'Untuk vendor / pihak penerima barang')}
+          {typeBtn('LAPORAN', 'Laporan Stock Out', 'Untuk laporan ke tim internal')}
+        </div>
+
+        {docType === 'SURAT_JALAN' && (
+          <>
+            <p className="text-xs font-semibold text-slate-600 mb-1">Diserahkan Kepada</p>
+            <p className="text-[11px] text-slate-400 mb-2">Nama vendor / pihak yang menerima barang — akan tercetak di kolom tanda tangan Surat Jalan</p>
+            <input
+              autoFocus
+              className="input mb-4"
+              placeholder="Contoh: PT Vendor Jaya / Budi (Kurir)…"
+              value={name}
+              onChange={e => setName(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') confirm() }}
+            />
+          </>
+        )}
+
         <div className="flex gap-2">
           <button type="button" onClick={onClose} className="btn-secondary flex-1 justify-center">Batal</button>
-          <button type="button" onClick={() => onConfirm(name.trim())} className="btn-primary flex-1 justify-center">
+          <button type="button" onClick={confirm} className="btn-primary flex-1 justify-center">
             <Printer size={14} /> Cetak
           </button>
         </div>
@@ -889,15 +930,21 @@ function PrintRecipientModal({ defaultValue, onConfirm, onClose }) {
   )
 }
 
-// ── Print Layout (Surat Jalan) ───────────────────────────────────────────────
-function StockOutPrintLayout({ detail, items, recipient }) {
+// ── Print Layout (Surat Jalan / Laporan Stock Out) ───────────────────────────
+// docType 'SURAT_JALAN' -> dokumen serah terima ke vendor (penerima + ttd
+// kirim/terima). docType 'LAPORAN' -> laporan internal: tanpa penerima,
+// kolom nilai barang ikut tercetak kalau user punya izin lihat nilai.
+function StockOutPrintLayout({ detail, items, recipient, docType = 'SURAT_JALAN', canViewValue = false }) {
   const fmtPrint = (d) => {
     if (!d) return '—'
     return new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })
   }
 
+  const isLaporan  = docType === 'LAPORAN'
+  const showValue  = isLaporan && canViewValue
   const ROWS_PER_PAGE = 25
-  const totalQty = items.reduce((s, i) => s + (i.quantity ?? 0), 0)
+  const totalQty   = items.reduce((s, i) => s + (i.quantity ?? 0), 0)
+  const grandTotal = detail.grandTotal ?? items.reduce((s, i) => s + Number(i.ProductSKU?.price ?? 0) * (i.quantity ?? 0), 0)
 
   const pages = []
   for (let i = 0; i < Math.max(1, items.length); i += ROWS_PER_PAGE) {
@@ -913,7 +960,7 @@ function StockOutPrintLayout({ detail, items, recipient }) {
           </div>
           <div className="print-divider" />
 
-          <div className="print-title">SURAT JALAN</div>
+          <div className="print-title">{isLaporan ? 'LAPORAN STOCK OUT' : 'SURAT JALAN'}</div>
 
           <div className="print-meta">
             <table className="print-meta-table">
@@ -921,7 +968,7 @@ function StockOutPrintLayout({ detail, items, recipient }) {
                 <tr>
                   <td className="print-meta-key">No. Dokumen</td>
                   <td className="print-meta-sep">:</td>
-                  <td className="print-meta-val"><strong>SJ-{String(detail.id).padStart(4, '0')}</strong></td>
+                  <td className="print-meta-val"><strong>{isLaporan ? 'SO' : 'SJ'}-{String(detail.id).padStart(4, '0')}</strong></td>
                   <td className="print-meta-key">Tanggal</td>
                   <td className="print-meta-sep">:</td>
                   <td className="print-meta-val">{fmtPrint(detail.date ?? detail.createdAt)}</td>
@@ -934,11 +981,13 @@ function StockOutPrintLayout({ detail, items, recipient }) {
                   <td className="print-meta-sep">:</td>
                   <td className="print-meta-val">{detail.purpose ?? '—'}</td>
                 </tr>
-                <tr>
-                  <td className="print-meta-key">Diserahkan Kepada</td>
-                  <td className="print-meta-sep">:</td>
-                  <td className="print-meta-val" colSpan={4}><strong>{recipient || '—'}</strong></td>
-                </tr>
+                {!isLaporan && (
+                  <tr>
+                    <td className="print-meta-key">Diserahkan Kepada</td>
+                    <td className="print-meta-sep">:</td>
+                    <td className="print-meta-val" colSpan={4}><strong>{recipient || '—'}</strong></td>
+                  </tr>
+                )}
                 <tr>
                   <td className="print-meta-key">Total Item</td>
                   <td className="print-meta-sep">:</td>
@@ -969,6 +1018,8 @@ function StockOutPrintLayout({ detail, items, recipient }) {
                 <th className="print-th">Produk</th>
                 <th className="print-th">Varian / SKU</th>
                 <th className="print-th print-th-time">Qty</th>
+                {showValue && <th className="print-th print-th-time">Harga Satuan</th>}
+                {showValue && <th className="print-th print-th-time">Subtotal</th>}
               </tr>
             </thead>
             <tbody>
@@ -976,12 +1027,15 @@ function StockOutPrintLayout({ detail, items, recipient }) {
                 const sku     = item.ProductSKU
                 const opts    = sku?.ProductVariantOptions ?? []
                 const variant = opts.map(o => o.value).join(' / ') || sku?.sku_code || '—'
+                const price   = Number(sku?.price ?? 0)
                 return (
                   <tr key={item.id ?? idx} className={idx % 2 === 0 ? 'print-row-even' : ''}>
                     <td className="print-td print-td-center">{pageIdx * ROWS_PER_PAGE + idx + 1}</td>
                     <td className="print-td">{item.Product?.name ?? `#${item.ProductId}`}</td>
                     <td className="print-td print-td-center">{sku ? variant : '—'}</td>
                     <td className="print-td print-td-center"><strong>{item.quantity}</strong></td>
+                    {showValue && <td className="print-td print-td-center">Rp {fmt(price)}</td>}
+                    {showValue && <td className="print-td print-td-center">Rp {fmt(price * item.quantity)}</td>}
                   </tr>
                 )
               })}
@@ -991,6 +1045,8 @@ function StockOutPrintLayout({ detail, items, recipient }) {
                 <tr>
                   <td className="print-td" colSpan={3} style={{ textAlign: 'right', fontWeight: 700 }}>Total Qty</td>
                   <td className="print-td print-td-center"><strong>{totalQty}</strong></td>
+                  {showValue && <td className="print-td" style={{ textAlign: 'right', fontWeight: 700 }}>Grand Total</td>}
+                  {showValue && <td className="print-td print-td-center"><strong>Rp {fmt(grandTotal)}</strong></td>}
                 </tr>
               </tfoot>
             )}
@@ -999,18 +1055,18 @@ function StockOutPrintLayout({ detail, items, recipient }) {
           {pageIdx === pages.length - 1 && (
             <div className="print-footer">
               <div className="print-sign-block">
-                <div className="print-sign-title">Mengirim,</div>
+                <div className="print-sign-title">{isLaporan ? 'Dibuat oleh,' : 'Mengirim,'}</div>
                 <div className="print-sign-space" />
                 <div className="print-sign-line" />
                 <div className="print-sign-name">{detail.User?.name ?? ' '}</div>
-                <div className="print-sign-role">Pihak Preface</div>
+                <div className="print-sign-role">{isLaporan ? 'Tim Gudang' : 'Pihak Preface'}</div>
               </div>
               <div className="print-sign-block">
-                <div className="print-sign-title">Menerima,</div>
+                <div className="print-sign-title">{isLaporan ? 'Mengetahui,' : 'Menerima,'}</div>
                 <div className="print-sign-space" />
                 <div className="print-sign-line" />
-                <div className="print-sign-name">{recipient || ' '}</div>
-                <div className="print-sign-role">{detail.purpose ?? 'Perwakilan Penerima'}</div>
+                <div className="print-sign-name">{isLaporan ? ' ' : (recipient || ' ')}</div>
+                <div className="print-sign-role">{isLaporan ? 'Supervisor / Owner' : (detail.purpose ?? 'Perwakilan Penerima')}</div>
               </div>
             </div>
           )}

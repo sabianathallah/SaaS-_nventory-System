@@ -66,7 +66,7 @@ export default function HandoverDetail() {
         const eks  = handover.ekspedisi?.replace(/[/\\?%*:|"<>]/g, '-') ?? 'Ekspedisi'
         const tgl  = handover.date ?? new Date().toISOString().slice(0, 10)
         const prev = document.title
-        document.title = `Handover_${eks}_${tgl}`
+        document.title = `Serah Terima Paket_${eks}_${tgl}`
         window.print()
         setTimeout(() => { document.title = prev }, 1000)
       }, 500)
@@ -419,7 +419,7 @@ export default function HandoverDetail() {
                 const eks  = handover.ekspedisi?.replace(/[/\\?%*:|"<>]/g, '-') ?? 'Ekspedisi'
                 const tgl  = handover.date ?? new Date().toISOString().slice(0, 10)
                 const prev = document.title
-                document.title = `Handover_${eks}_${tgl}`
+                document.title = `Serah Terima Paket_${eks}_${tgl}`
                 window.print()
                 setTimeout(() => { document.title = prev }, 1000)
               }}

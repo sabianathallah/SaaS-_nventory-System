@@ -296,7 +296,14 @@ export default function OpnameDetail() {
           {items.length > 0 && (
             <>
             <button
-              onClick={() => window.print()}
+              onClick={() => {
+                const gudang = session.Warehouse?.name?.replace(/[/\\?%*:|"<>]/g, '-') ?? 'Gudang'
+                const tgl    = String(session.finished_at ?? session.started_at ?? new Date().toISOString()).slice(0, 10)
+                const prev   = document.title
+                document.title = `Hasil Stock Opname_${gudang}_${tgl}`
+                window.print()
+                setTimeout(() => { document.title = prev }, 1000)
+              }}
               className="btn-secondary text-sm flex items-center gap-1.5"
             >
               <Printer size={14} /> Print PDF
