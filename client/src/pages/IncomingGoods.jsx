@@ -364,8 +364,10 @@ export default function IncomingGoods() {
     },
   ]
 
-  const missingCount  = (data?.data ?? []).filter(r => !hasSJ(r)).length
-  const unclearCount  = (data?.data ?? []).filter(r => r.selisihStatus === 'unclear').length
+  // Counter global dari backend (seluruh data, bukan cuma halaman aktif);
+  // fallback ke hitungan halaman kalau backend lama belum mengirim counts.
+  const missingCount  = data?.counts?.sjMissing      ?? (data?.data ?? []).filter(r => !hasSJ(r)).length
+  const unclearCount  = data?.counts?.selisihUnclear ?? (data?.data ?? []).filter(r => r.selisihStatus === 'unclear').length
   const activeFilter  = selisihFilter === 'unclear' ? 'selisih' : sjFilter !== 'all' ? 'sj' : statusFilter !== 'all' ? 'status' : 'all'
 
   return (

@@ -47,11 +47,12 @@ exports.list = async (req, res, next) => {
   try {
     const { page = 1, limit = 15, sjMissing, selisihFilter, status } = req.query;
     const offset = (Number(page) - 1) * Number(limit);
+    // "Belum ada SJ" = nomor SJ kosong DAN foto SJ kosong (null / [] / '')
+    const SJ_MISSING_SQL = literal(
+      `(("sjNumber" IS NULL OR "sjNumber" = '') AND ("sjPhotos" IS NULL OR "sjPhotos"::text IN ('[]', 'null', '""')))`
+    );
     const where = { ...companyFilter(req) };
-    if (sjMissing === 'true') {
-      where.sjNumber = null;
-      where.sjPhotos = null;
-    }
+    if (sjMissing === 'true') where[Op.and] = [SJ_MISSING_SQL];
     if (selisihFilter === 'unclear') where.selisihStatus = 'unclear';
     if (status) where.status = status;
     const { rows, count } = await VendorDelivery.findAndCountAll({
@@ -70,7 +71,18 @@ exports.list = async (req, res, next) => {
       const selisihCount = items.filter(i => (i.qtySJ ?? 0) !== (i.qtyActual ?? 0)).length;
       return { ...r.toJSON(), itemCount: items.length, selisihCount, items: undefined };
     });
-    res.json({ data, pagination: { total: count, page: Number(page), limit: Number(limit), totalPages: Math.ceil(count / Number(limit)) } });
+
+    // Counter global untuk badge warning — seluruh data perusahaan, bukan cuma halaman ini
+    const [sjMissingCount, selisihUnclearCount] = await Promise.all([
+      VendorDelivery.count({ where: { ...companyFilter(req), [Op.and]: [SJ_MISSING_SQL] } }),
+      VendorDelivery.count({ where: { ...companyFilter(req), selisihStatus: 'unclear' } }),
+    ]);
+
+    res.json({
+      data,
+      counts: { sjMissing: sjMissingCount, selisihUnclear: selisihUnclearCount },
+      pagination: { total: count, page: Number(page), limit: Number(limit), totalPages: Math.ceil(count / Number(limit)) },
+    });
   } catch (err) { next(err); }
 };
 
