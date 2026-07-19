@@ -13,7 +13,7 @@ import { exportExcel } from '../utils/exportExcel'
 import {
   ArrowLeft, PackagePlus, ScanLine, Plus, Trash2,
   Save, ChevronDown, Package, X, FileSpreadsheet,
-  ScanBarcode, Unplug, BookmarkCheck,
+  ScanBarcode, Unplug, BookmarkCheck, Lock, LockOpen,
 } from 'lucide-react'
 
 const fmt     = (n) => Number(n ?? 0).toLocaleString('id-ID')
@@ -168,17 +168,31 @@ function ProductSkuPicker({ onSelect }) {
 }
 
 // ── Item row (view mode) ──────────────────────────────────────────────────────
-function ItemRow({ item, canDelete, headerId, canViewValue }) {
+function ItemRow({ item, canDelete, headerId, canViewValue, editable }) {
   const qc = useQueryClient()
   const sku   = item.ProductSKU
   const prod  = sku?.Product
   const total = Number(item.price) * item.quantity
+  const [qty, setQty] = useState(item.quantity)
+  useEffect(() => { setQty(item.quantity) }, [item.quantity])
 
   const removeMutation = useMutation({
     mutationFn: () => stockInApi.removeItem(headerId, item.id),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['stock-in', String(headerId)] }); toast.success('Item dihapus') },
     onError:   e => toast.error(e.response?.data?.message || 'Error'),
   })
+
+  const updateMutation = useMutation({
+    mutationFn: (quantity) => stockInApi.updateItem(headerId, item.id, { quantity }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['stock-in', String(headerId)] }); toast.success('Qty diperbarui — stok ikut dikoreksi') },
+    onError:   e => { setQty(item.quantity); toast.error(e.response?.data?.message || 'Error') },
+  })
+
+  const commitQty = () => {
+    const v = Number(qty)
+    if (!v || v <= 0) { setQty(item.quantity); return }
+    if (v !== item.quantity) updateMutation.mutate(v)
+  }
 
   return (
     <tr className="tr border-b border-slate-100 hover:bg-slate-50/50">
@@ -194,7 +208,19 @@ function ItemRow({ item, canDelete, headerId, canViewValue }) {
         <p className="text-[10px] font-mono text-slate-300 mt-0.5">{sku?.sku_code}</p>
       </td>
       <td className="td py-3 text-right">
-        <span className="font-bold text-slate-800">{item.quantity}</span>
+        {editable ? (
+          <input
+            type="number" min="1"
+            className="input w-20 text-right py-1 inline-block"
+            value={qty}
+            disabled={updateMutation.isPending}
+            onChange={e => setQty(e.target.value)}
+            onBlur={commitQty}
+            onKeyDown={e => e.key === 'Enter' && e.currentTarget.blur()}
+          />
+        ) : (
+          <span className="font-bold text-slate-800">{item.quantity}</span>
+        )}
         <span className="text-xs text-slate-400 ml-1">{prod?.unit}</span>
       </td>
       {canViewValue && <td className="td py-3 text-right font-mono text-sm text-slate-600">Rp {fmt(item.price)}</td>}
@@ -217,7 +243,7 @@ function ItemRow({ item, canDelete, headerId, canViewValue }) {
 // ── Items table ───────────────────────────────────────────────────────────────
 // draftMode=true  → items come from server draft (item.ProductSKU structure), onRemove(item.id)
 // draftMode=false → view mode, uses ItemRow
-function ItemsTable({ items, canDelete, headerId, onRemove, draftMode, removeLoading, canViewValue }) {
+function ItemsTable({ items, canDelete, headerId, onRemove, draftMode, removeLoading, canViewValue, editable }) {
   const cols = 3 + (canViewValue ? 2 : 0) + (canDelete ? 1 : 0)
   return (
     <div className="overflow-x-auto">
@@ -237,7 +263,7 @@ function ItemsTable({ items, canDelete, headerId, onRemove, draftMode, removeLoa
           <tr><td colSpan={cols} className="td py-10 text-center text-slate-400">Belum ada item</td></tr>
         )}
         {items.map((item, idx) => {
-          if (!draftMode) return <ItemRow key={item.id} item={item} canDelete={canDelete} headerId={headerId} canViewValue={canViewValue} />
+          if (!draftMode) return <ItemRow key={item.id} item={item} canDelete={canDelete} headerId={headerId} canViewValue={canViewValue} editable={editable} />
           const sku  = item.ProductSKU
           const prod = sku?.Product
           return (
@@ -287,6 +313,7 @@ export default function StockInDetail() {
   const canManualInput = hasPermission('stock.in.manual_input') || hasPermission('stock.manage')
   const canDeleteItem  = hasPermission('stock.in.delete_item')  || hasPermission('stock.manage')
   const canViewValue   = hasPermission('inventory.view_value')  || hasPermission('inventory.manage')
+  const canEditSession = hasPermission('stock.in.create')       || hasPermission('stock.manage')
 
   // ── Draft (server-side) ──────────────────────────────────────────────────────
   const { data: draft, isLoading: draftLoading } = useQuery({
@@ -404,6 +431,22 @@ export default function StockInDetail() {
     addItemMutation.mutate({ ProductSKUId: sku.id, quantity, price: price || 0 })
   }
 
+  // ── Sesi edit (view mode) ────────────────────────────────────────────────────
+  const toggleSessionMutation = useMutation({
+    mutationFn: (status) => stockInApi.setStatus(id, status),
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ['stock-in', id] })
+      toast.success(data.status === 'open' ? 'Sesi dibuka — item bisa diedit' : 'Sesi ditutup — dokumen terkunci')
+    },
+    onError: e => toast.error(e.response?.data?.message || 'Error'),
+  })
+
+  const addHeaderItemMutation = useMutation({
+    mutationFn: (data) => stockInApi.addItem(id, data),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['stock-in', id] }); toast.success('Item ditambahkan — stok ikut bertambah') },
+    onError: e => toast.error(e.response?.data?.message || 'Error'),
+  })
+
   const handleScan = async (code) => {
     if (!draftId) { toast.error('Draft belum siap, coba lagi'); scanGrabRef.current?.focus(); return }
     let sku
@@ -445,6 +488,7 @@ export default function StockInDetail() {
 
     const items      = detail.Stock_In_Items ?? []
     const grandTotal = detail.grandTotal ?? items.reduce((s, i) => s + Number(i.price) * i.quantity, 0)
+    const isOpen     = detail.status === 'open'
 
     const handleExportExcel = () => {
       const headers = ['No', 'Produk', 'SKU', 'Varian', 'Qty', 'Unit', 'Harga Satuan (Rp)', 'Subtotal (Rp)']
@@ -469,11 +513,30 @@ export default function StockInDetail() {
             <ArrowLeft size={16} />
           </button>
           <div className="flex-1">
-            <h1 className="text-lg font-bold text-slate-800">Stock IN #{detail.id}</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-lg font-bold text-slate-800">Stock IN #{detail.id}</h1>
+              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold border ${
+                isOpen ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-500 border-slate-200'
+              }`}>
+                {isOpen ? <LockOpen size={10} /> : <Lock size={10} />} {isOpen ? 'Sesi Terbuka' : 'Closed'}
+              </span>
+            </div>
             <p className="text-xs text-slate-400">
               {new Date(detail.date).toLocaleDateString('id-ID', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}
             </p>
           </div>
+          {canEditSession && (
+            <button
+              onClick={() => {
+                if (isOpen) return toggleSessionMutation.mutate('closed')
+                if (confirm('Buka sesi edit? Perubahan item akan langsung mengoreksi stok gudang.')) toggleSessionMutation.mutate('open')
+              }}
+              disabled={toggleSessionMutation.isPending}
+              className={`text-sm flex items-center gap-1.5 ${isOpen ? 'btn-primary' : 'btn-secondary'}`}
+            >
+              {isOpen ? <><Lock size={14} /> Tutup Sesi</> : <><LockOpen size={14} /> Buka Sesi</>}
+            </button>
+          )}
           <button onClick={handleExportExcel} className="btn-secondary text-sm flex items-center gap-1.5">
             <FileSpreadsheet size={14} /> Export Excel
           </button>
@@ -508,7 +571,13 @@ export default function StockInDetail() {
             <PackagePlus size={13} className="text-red-700" />
             <span className="text-xs font-bold text-slate-600 uppercase tracking-wide">Items ({items.length})</span>
           </div>
-          <ItemsTable items={items} canDelete={canDeleteItem} headerId={detail.id} draftMode={false} canViewValue={canViewValue} />
+          {isOpen && canManualInput && (
+            <div className="p-4 border-b border-slate-100 bg-emerald-50/40">
+              <p className="text-xs font-bold text-emerald-700 uppercase tracking-wide mb-3">Tambah Item (sesi terbuka)</p>
+              <ProductSkuPicker onSelect={({ sku, quantity, price }) => addHeaderItemMutation.mutate({ ProductSKUId: sku.id, quantity, price: price || 0 })} />
+            </div>
+          )}
+          <ItemsTable items={items} canDelete={canDeleteItem && isOpen} headerId={detail.id} draftMode={false} canViewValue={canViewValue} editable={isOpen && canEditSession} />
           {canViewValue && (
             <div className="px-5 py-4 bg-slate-50 border-t border-slate-200 flex justify-end items-center gap-3">
               <span className="text-sm font-semibold text-slate-600">GRAND TOTAL</span>

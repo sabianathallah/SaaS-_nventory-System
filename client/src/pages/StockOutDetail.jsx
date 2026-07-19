@@ -9,7 +9,7 @@ import { useExternalScanner } from '../hooks/useExternalScanner'
 import { useCompanyGuard } from '../hooks/useCompanyGuard'
 import CompanyRequiredBanner from '../components/CompanyRequiredBanner'
 import toast from 'react-hot-toast'
-import { ArrowLeft, PackageMinus, ScanLine, Plus, Trash2, Save, ScanBarcode, ChevronDown, Package, FileSpreadsheet, BookmarkCheck, X, Printer } from 'lucide-react'
+import { ArrowLeft, PackageMinus, ScanLine, Plus, Trash2, Save, ScanBarcode, ChevronDown, Package, FileSpreadsheet, BookmarkCheck, X, Printer, Lock, LockOpen } from 'lucide-react'
 import { exportExcel } from '../utils/exportExcel'
 import logoPreface from '../assets/logo-preface.jpeg'
 
@@ -36,6 +36,77 @@ const skuLabel = (sku) => {
 const fmtDate = (d) => d ? new Date(d).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10)
 
 const EMPTY_FORM = { warehouseId: '', purpose: '', purposeDetail: '', note: '', date: fmtDate(), items: [] }
+
+// ── Item row (view mode) — qty editable & bisa dihapus saat sesi terbuka ───────
+function OutItemRow({ item, headerId, canViewValue, editable, canDelete, showActionCol }) {
+  const qc = useQueryClient()
+  const sku     = item.ProductSKU
+  const opts    = sku?.ProductVariantOptions ?? []
+  const variant = opts.map(o => o.value).join(' / ') || sku?.sku_code || '—'
+  const price   = Number(sku?.price ?? 0)
+  const [qty, setQty] = useState(item.quantity)
+  useEffect(() => { setQty(item.quantity) }, [item.quantity])
+  const invalidate = () => qc.invalidateQueries({ queryKey: ['stock-out', String(headerId)] })
+
+  const updateMutation = useMutation({
+    mutationFn: (quantity) => stockOutApi.updateItem(headerId, item.id, { quantity }),
+    onSuccess: () => { invalidate(); toast.success('Qty diperbarui — stok ikut dikoreksi') },
+    onError:   e => { setQty(item.quantity); toast.error(e.response?.data?.message || 'Error') },
+  })
+  const removeMutation = useMutation({
+    mutationFn: () => stockOutApi.removeItem(headerId, item.id),
+    onSuccess: () => { invalidate(); toast.success('Item dihapus, stok dikembalikan') },
+    onError:   e => toast.error(e.response?.data?.message || 'Error'),
+  })
+
+  const commitQty = () => {
+    const v = Number(qty)
+    if (!v || v <= 0) { setQty(item.quantity); return }
+    if (v !== item.quantity) updateMutation.mutate(v)
+  }
+
+  return (
+    <tr className="tr border-b border-slate-100 hover:bg-slate-50/50">
+      <td className="td py-3">
+        <p className="font-semibold text-slate-800">{item.Product?.name ?? `#${item.ProductId}`}</p>
+        <p className="text-xs font-mono text-slate-400">{item.Product?.sku}</p>
+      </td>
+      <td className="td py-3">
+        <span className="text-sm text-slate-600">{sku ? variant : '—'}</span>
+      </td>
+      <td className="td py-3 text-right">
+        {editable ? (
+          <input
+            type="number" min="1"
+            className="input w-20 text-right py-1 inline-block"
+            value={qty}
+            disabled={updateMutation.isPending}
+            onChange={e => setQty(e.target.value)}
+            onBlur={commitQty}
+            onKeyDown={e => e.key === 'Enter' && e.currentTarget.blur()}
+          />
+        ) : (
+          <span className="font-mono font-bold text-danger">{fmt(item.quantity)}</span>
+        )}
+      </td>
+      {canViewValue && <td className="td py-3 text-right font-mono text-slate-500">Rp {fmt(price)}</td>}
+      {canViewValue && <td className="td py-3 text-right font-mono font-semibold text-slate-800">Rp {fmt(price * item.quantity)}</td>}
+      {showActionCol && (
+        <td className="td py-3 w-10">
+          {canDelete && (
+            <button
+              onClick={() => { if (confirm('Hapus item ini? Stok akan dikembalikan ke gudang.')) removeMutation.mutate() }}
+              disabled={removeMutation.isPending}
+              className="p-1.5 rounded text-slate-300 hover:text-red-500 hover:bg-red-50 transition-colors"
+            >
+              <Trash2 size={13} />
+            </button>
+          )}
+        </td>
+      )}
+    </tr>
+  )
+}
 
 // ── Product → SKU picker untuk Stock OUT ────────────────────────────────────────
 function ProductSkuPicker({ onSelect, warehouseId, stocks }) {
@@ -229,6 +300,8 @@ export default function StockOutDetail() {
   const canManualOutput = hasPermission('stock.out.manual_input') || hasPermission('stock.manage')
   const canScanOut      = hasPermission('stock.out.scan')         || hasPermission('stock.manage')
   const canViewValue    = hasPermission('inventory.view_value')   || hasPermission('inventory.manage')
+  const canEditSession  = hasPermission('stock.out.create')       || hasPermission('stock.manage')
+  const canDeleteItemOut = hasPermission('stock.out.delete_item') || hasPermission('stock.manage')
 
   // ── Draft (server-side) ──────────────────────────────────────────────────────
   const { data: draft, isLoading: draftLoading } = useQuery({
@@ -375,6 +448,32 @@ export default function StockOutDetail() {
     onError: () => navigate('/stock-out'),
   })
 
+  // ── Sesi edit (view mode) ────────────────────────────────────────────────────
+  const toggleSessionMutation = useMutation({
+    mutationFn: (status) => stockOutApi.setStatus(id, status),
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ['stock-out', id] })
+      toast.success(data.status === 'open' ? 'Sesi dibuka — item bisa diedit' : 'Sesi ditutup — dokumen terkunci')
+    },
+    onError: e => toast.error(e.response?.data?.message || 'Error'),
+  })
+
+  const addHeaderItemMutation = useMutation({
+    mutationFn: (data) => stockOutApi.addItem(id, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['stock-out', id] })
+      toast.success('Item ditambahkan — stok terpotong')
+    },
+    onError: e => toast.error(e.response?.data?.message || 'Error'),
+  })
+
+  // Stok gudang untuk hint availability di picker saat sesi terbuka
+  const { data: viewWhStocks } = useQuery({
+    queryKey: ['sku-warehouse-stocks', { WarehouseId: detail?.WarehouseId }],
+    queryFn:  () => skuWarehouseStocksApi.list({ WarehouseId: detail.WarehouseId }),
+    enabled:  !isNew && !!detail?.WarehouseId && detail?.status === 'open',
+  })
+
   const addItem = ({ skuId, productId, quantity }) => {
     if (!draftId) return toast.error('Draft belum siap, coba lagi')
     addItemMutation.mutate({
@@ -429,7 +528,8 @@ export default function StockOutDetail() {
     if (isLoading) return <div className="p-8 text-slate-400 text-sm">Memuat…</div>
     if (!detail)   return <div className="p-8 text-red-500 text-sm">Stock OUT tidak ditemukan.</div>
 
-    const items = detail.movements ?? detail.Stock_Out_Items ?? detail.items ?? []
+    const items  = detail.movements ?? detail.Stock_Out_Items ?? detail.items ?? []
+    const isOpen = detail.status === 'open'
 
     const handleExportExcel = () => {
       const headers = ['No', 'Produk', 'SKU', 'Varian', 'Qty', 'Tujuan', 'Gudang', 'Tanggal']
@@ -459,11 +559,30 @@ export default function StockOutDetail() {
             <ArrowLeft size={16} />
           </button>
           <div className="flex-1">
-            <h1 className="text-lg font-bold text-slate-800">Stock OUT #{detail.id}</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-lg font-bold text-slate-800">Stock OUT #{detail.id}</h1>
+              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold border ${
+                isOpen ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-500 border-slate-200'
+              }`}>
+                {isOpen ? <LockOpen size={10} /> : <Lock size={10} />} {isOpen ? 'Sesi Terbuka' : 'Closed'}
+              </span>
+            </div>
             <p className="text-xs text-slate-400">
               {new Date(detail.date ?? detail.createdAt).toLocaleDateString('id-ID', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}
             </p>
           </div>
+          {canEditSession && (
+            <button
+              onClick={() => {
+                if (isOpen) return toggleSessionMutation.mutate('closed')
+                if (confirm('Buka sesi edit? Perubahan item akan langsung mengoreksi stok gudang.')) toggleSessionMutation.mutate('open')
+              }}
+              disabled={toggleSessionMutation.isPending}
+              className={`text-sm flex items-center gap-1.5 ${isOpen ? 'btn-primary' : 'btn-secondary'}`}
+            >
+              {isOpen ? <><Lock size={14} /> Tutup Sesi</> : <><LockOpen size={14} /> Buka Sesi</>}
+            </button>
+          )}
           {items.length > 0 && (
             <>
             <button onClick={() => setShowPrintForm(true)} className="btn-secondary text-sm flex items-center gap-1.5">
@@ -506,12 +625,26 @@ export default function StockOutDetail() {
           )}
         </div>
 
-        {items.length > 0 && (
+        {(items.length > 0 || isOpen) && (
           <div className="card">
             <div className="px-5 py-3 bg-slate-50 border-b border-slate-200 flex items-center gap-2">
               <PackageMinus size={13} className="text-danger" />
               <span className="text-xs font-bold text-slate-600 uppercase tracking-wide">Items ({items.length})</span>
             </div>
+            {isOpen && canManualOutput && (
+              <div className="p-4 border-b border-slate-100 bg-emerald-50/40">
+                <p className="text-xs font-bold text-emerald-700 uppercase tracking-wide mb-3">Tambah Item (sesi terbuka)</p>
+                <ProductSkuPicker
+                  warehouseId={detail.WarehouseId}
+                  stocks={viewWhStocks}
+                  onSelect={({ skuId, productId, quantity }) => addHeaderItemMutation.mutate({
+                    ProductSKUId: skuId ? Number(skuId) : undefined,
+                    ProductId:    productId ? Number(productId) : undefined,
+                    quantity,
+                  })}
+                />
+              </div>
+            )}
             <div className="overflow-x-auto">
             <table className="w-full min-w-[560px] text-sm">
               <thead>
@@ -521,29 +654,21 @@ export default function StockOutDetail() {
                   <th className="th py-2 text-right w-24">Qty</th>
                   {canViewValue && <th className="th py-2 text-right w-36">Harga Satuan</th>}
                   {canViewValue && <th className="th py-2 text-right w-36">Subtotal</th>}
+                  {isOpen && <th className="th py-2 w-10"></th>}
                 </tr>
               </thead>
               <tbody>
-                {items.map((item, idx) => {
-                  const sku     = item.ProductSKU
-                  const opts    = sku?.ProductVariantOptions ?? []
-                  const variant = opts.map(o => o.value).join(' / ') || sku?.sku_code || '—'
-                  const price   = Number(sku?.price ?? 0)
-                  return (
-                    <tr key={item.id ?? idx} className="tr border-b border-slate-100 hover:bg-slate-50/50">
-                      <td className="td py-3">
-                        <p className="font-semibold text-slate-800">{item.Product?.name ?? `#${item.ProductId}`}</p>
-                        <p className="text-xs font-mono text-slate-400">{item.Product?.sku}</p>
-                      </td>
-                      <td className="td py-3">
-                        <span className="text-sm text-slate-600">{sku ? variant : '—'}</span>
-                      </td>
-                      <td className="td py-3 text-right font-mono font-bold text-danger">{fmt(item.quantity)}</td>
-                      {canViewValue && <td className="td py-3 text-right font-mono text-slate-500">Rp {fmt(price)}</td>}
-                      {canViewValue && <td className="td py-3 text-right font-mono font-semibold text-slate-800">Rp {fmt(price * item.quantity)}</td>}
-                    </tr>
-                  )
-                })}
+                {items.map((item, idx) => (
+                  <OutItemRow
+                    key={item.id ?? idx}
+                    item={item}
+                    headerId={detail.id}
+                    canViewValue={canViewValue}
+                    editable={isOpen && canEditSession}
+                    canDelete={canDeleteItemOut}
+                    showActionCol={isOpen}
+                  />
+                ))}
               </tbody>
             </table>
             </div>

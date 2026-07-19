@@ -101,7 +101,14 @@ export default function StockIn() {
       key: 'id', label: 'No.', width: 90,
       render: r => r._isDraft
         ? <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-700 border border-amber-200 whitespace-nowrap">● Aktif</span>
-        : <span className="font-mono text-xs font-semibold text-slate-400">#{r.id}</span>,
+        : (
+          <div className="flex items-center gap-1.5">
+            <span className="font-mono text-xs font-semibold text-slate-400">#{r.id}</span>
+            {r.status === 'open' && (
+              <span className="inline-block px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-emerald-100 text-emerald-700 border border-emerald-200 whitespace-nowrap">OPEN</span>
+            )}
+          </div>
+        ),
     },
     {
       key: 'date', label: 'Tanggal', width: 130,

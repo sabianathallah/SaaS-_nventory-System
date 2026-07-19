@@ -175,12 +175,29 @@ class StockInHeaderController {
     try {
       const header = await Stock_In_Header.findOne({ where: { id: req.params.id, ...companyFilter(req) } });
       if (!header) throw { name: 'NotFound', message: 'Stock in not found' };
+      if (header.status !== 'open') {
+        return res.status(400).json({ message: 'Sesi masih terkunci. Buka sesi dulu untuk mengedit.' });
+      }
       // WarehouseId changes are blocked — moving stock requires delete + recreate
       if (req.body.WarehouseId && Number(req.body.WarehouseId) !== header.WarehouseId) {
         return res.status(400).json({ message: 'Gudang tidak dapat diubah. Hapus dan buat ulang dokumen untuk mengganti gudang.' });
       }
       const { date, SupplierId, note } = req.body;
       await header.update({ date, SupplierId, note, updatedBy: req.user.id });
+      res.status(200).json(header);
+    } catch (err) { next(err); }
+  }
+
+  // PATCH /:id/status — buka/tutup sesi edit
+  static async setStatus(req, res, next) {
+    try {
+      const header = await Stock_In_Header.findOne({ where: { id: req.params.id, ...companyFilter(req) } });
+      if (!header) throw { name: 'NotFound', message: 'Stock in not found' };
+      const { status } = req.body;
+      if (!['open', 'closed'].includes(status)) {
+        return res.status(400).json({ message: "status harus 'open' atau 'closed'" });
+      }
+      await header.update({ status, updatedBy: req.user.id });
       res.status(200).json(header);
     } catch (err) { next(err); }
   }
@@ -221,6 +238,10 @@ class StockInHeaderController {
     try {
       const header = await Stock_In_Header.findOne({ where: { id: req.params.id, ...companyFilter(req) } });
       if (!header) throw { name: 'NotFound', message: 'Stock in not found' };
+      if (header.status !== 'open') {
+        await t.rollback();
+        return res.status(400).json({ message: 'Sesi masih terkunci. Buka sesi dulu untuk menambah item.' });
+      }
 
       const { ProductSKUId, quantity, price } = req.body;
       if (!ProductSKUId || !quantity || quantity <= 0) {
@@ -273,6 +294,10 @@ class StockInHeaderController {
       if (!item) { await t.rollback(); throw { name: 'NotFound', message: 'Item not found' }; }
 
       const header = await Stock_In_Header.findByPk(req.params.id, { transaction: t });
+      if (header?.status !== 'open') {
+        await t.rollback();
+        return res.status(400).json({ message: 'Sesi masih terkunci. Buka sesi dulu untuk mengedit item.' });
+      }
 
       const newQty   = req.body.quantity != null ? Number(req.body.quantity) : item.quantity;
       const newPrice = req.body.price    != null ? Number(req.body.price)    : item.price;
@@ -317,6 +342,10 @@ class StockInHeaderController {
       if (!item) { await t.rollback(); throw { name: 'NotFound', message: 'Item not found' }; }
 
       const header = await Stock_In_Header.findByPk(req.params.id, { transaction: t });
+      if (header?.status !== 'open') {
+        await t.rollback();
+        return res.status(400).json({ message: 'Sesi masih terkunci. Buka sesi dulu untuk menghapus item.' });
+      }
       if (header) {
         const sku = await ProductSKU.findByPk(item.ProductSKUId, { transaction: t });
         if (sku) {

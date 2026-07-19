@@ -42,6 +42,8 @@ module.exports = (sequelize, DataTypes) => {
       defaultValue: 'Lainnya',
     },
     notes: DataTypes.STRING,
+    // Sesi edit: 'closed' = terkunci (default), 'open' = item bisa diedit
+    status: { type: DataTypes.STRING(10), allowNull: false, defaultValue: 'closed' },
     companyId: { type: DataTypes.INTEGER, allowNull: true },
     createdBy: {
       type: DataTypes.INTEGER,

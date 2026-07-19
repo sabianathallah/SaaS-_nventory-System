@@ -202,6 +202,9 @@ class StockOutHeaderController {
         try {
             const header = await Stock_Out_Header.findOne({ where: { id: req.params.id, ...companyFilter(req) } });
             if (!header) throw { name: 'NotFound', message: 'Stock out header not found' };
+            if (header.status !== 'open') {
+                return res.status(400).json({ message: 'Sesi masih terkunci. Buka sesi dulu untuk mengedit.' });
+            }
             // WarehouseId changes are blocked — moving stock requires delete + recreate
             if (req.body.WarehouseId && Number(req.body.WarehouseId) !== header.WarehouseId) {
                 return res.status(400).json({ message: 'Gudang tidak dapat diubah. Hapus dan buat ulang dokumen untuk mengganti gudang.' });
@@ -210,6 +213,165 @@ class StockOutHeaderController {
             await header.update({ date, destination, notes, updatedBy: req.user.id });
             res.status(200).json(header);
         } catch (err) { next(err); }
+    }
+
+    // PATCH /:id/status — buka/tutup sesi edit
+    static async setStatus(req, res, next) {
+        try {
+            const header = await Stock_Out_Header.findOne({ where: { id: req.params.id, ...companyFilter(req) } });
+            if (!header) throw { name: 'NotFound', message: 'Stock out header not found' };
+            const { status } = req.body;
+            if (!['open', 'closed'].includes(status)) {
+                return res.status(400).json({ message: "status harus 'open' atau 'closed'" });
+            }
+            await header.update({ status, updatedBy: req.user.id });
+            res.status(200).json(header);
+        } catch (err) { next(err); }
+    }
+
+    // ── Item sub-routes (item = Stock_Movement type OUT) ─────────────────────────
+    // Semua mutasi item mengoreksi stok dengan pola yang sama seperti create/delete.
+
+    static async addItem(req, res, next) {
+        const t = await sequelize.transaction();
+        try {
+            const header = await Stock_Out_Header.findOne({ where: { id: req.params.id, ...companyFilter(req) }, transaction: t });
+            if (!header) { await t.rollback(); throw { name: 'NotFound', message: 'Stock out header not found' }; }
+            if (header.status !== 'open') {
+                await t.rollback();
+                return res.status(400).json({ message: 'Sesi masih terkunci. Buka sesi dulu untuk menambah item.' });
+            }
+
+            const cid = companyId(req);
+            let { ProductId, ProductSKUId, quantity, note } = req.body;
+            const WarehouseId = header.WarehouseId;
+            quantity = Number(quantity);
+            if (!quantity || quantity <= 0) { await t.rollback(); return res.status(400).json({ message: 'Quantity harus > 0' }); }
+            if (!ProductId && ProductSKUId) {
+                const sku = await ProductSKU.findByPk(ProductSKUId, { transaction: t });
+                if (!sku) { await t.rollback(); return res.status(400).json({ message: `ProductSKU id=${ProductSKUId} tidak ditemukan` }); }
+                ProductId = sku.ProductId;
+            }
+            if (!ProductId) { await t.rollback(); return res.status(400).json({ message: 'ProductId atau ProductSKUId wajib diisi' }); }
+
+            if (ProductSKUId) {
+                const skuStock = await SkuWarehouseStock.findOne({ where: { ProductSKUId, WarehouseId }, transaction: t, lock: t.LOCK.UPDATE });
+                const available = skuStock ? Number(skuStock.qty) : 0;
+                if (available < quantity) {
+                    await t.rollback();
+                    return res.status(400).json({ message: `Stok tidak cukup di gudang (tersedia: ${available}, dibutuhkan: ${quantity})` });
+                }
+                const sku = await ProductSKU.findByPk(ProductSKUId, { transaction: t });
+                if (sku) await sku.decrement('qty', { by: quantity, transaction: t });
+                await upsertSkuWarehouseStock(t, SkuWarehouseStock, { ProductSKUId, WarehouseId, delta: -quantity, companyId: cid });
+                const stock = await Stock.findOne({ where: { ProductId, WarehouseId }, transaction: t });
+                if (stock) await stock.update({ quantity: Math.max(0, Number(stock.quantity) - quantity) }, { transaction: t });
+            } else {
+                const stock = await Stock.findOne({ where: { ProductId, WarehouseId }, transaction: t, lock: t.LOCK.UPDATE });
+                const available = stock ? Number(stock.quantity) : 0;
+                if (available < quantity) {
+                    await t.rollback();
+                    return res.status(400).json({ message: `Stok tidak cukup di gudang (tersedia: ${available}, dibutuhkan: ${quantity})` });
+                }
+                await stock.decrement('quantity', { by: quantity, transaction: t });
+            }
+
+            const movement = await Stock_Movement.create({
+                ProductId, ProductSKUId: ProductSKUId || null, WarehouseId, type: 'OUT', quantity,
+                ReferenceId: header.id, source: 'STOCK_OUT', note: note || null,
+                date: header.date || new Date(),
+                companyId: cid,
+            }, { transaction: t });
+
+            await header.update({ updatedBy: req.user.id }, { transaction: t });
+            await t.commit();
+            res.status(201).json(movement);
+        } catch (err) { await t.rollback(); next(err); }
+    }
+
+    static async updateItem(req, res, next) {
+        const t = await sequelize.transaction();
+        try {
+            const header = await Stock_Out_Header.findOne({ where: { id: req.params.id, ...companyFilter(req) }, transaction: t });
+            if (!header) { await t.rollback(); throw { name: 'NotFound', message: 'Stock out header not found' }; }
+            if (header.status !== 'open') {
+                await t.rollback();
+                return res.status(400).json({ message: 'Sesi masih terkunci. Buka sesi dulu untuk mengedit item.' });
+            }
+
+            const mv = await Stock_Movement.findOne({
+                where: { id: req.params.itemId, ReferenceId: header.id, type: 'OUT' },
+                transaction: t, lock: t.LOCK.UPDATE,
+            });
+            if (!mv) { await t.rollback(); throw { name: 'NotFound', message: 'Item not found' }; }
+
+            const newQty = Number(req.body.quantity);
+            if (!newQty || newQty <= 0) { await t.rollback(); return res.status(400).json({ message: 'Quantity harus > 0' }); }
+            const delta = newQty - mv.quantity; // >0 = keluar lebih banyak (butuh stok), <0 = stok balik
+
+            if (delta !== 0) {
+                if (mv.ProductSKUId) {
+                    if (delta > 0) {
+                        const skuStock = await SkuWarehouseStock.findOne({ where: { ProductSKUId: mv.ProductSKUId, WarehouseId: mv.WarehouseId }, transaction: t, lock: t.LOCK.UPDATE });
+                        const available = skuStock ? Number(skuStock.qty) : 0;
+                        if (available < delta) {
+                            await t.rollback();
+                            return res.status(400).json({ message: `Stok tidak cukup untuk menambah qty (tersedia: ${available}, dibutuhkan: ${delta})` });
+                        }
+                    }
+                    const sku = await ProductSKU.findByPk(mv.ProductSKUId, { transaction: t });
+                    if (sku) await sku.increment('qty', { by: -delta, transaction: t });
+                    await upsertSkuWarehouseStock(t, SkuWarehouseStock, { ProductSKUId: mv.ProductSKUId, WarehouseId: mv.WarehouseId, delta: -delta, companyId: mv.companyId });
+                    const stock = await Stock.findOne({ where: { ProductId: mv.ProductId, WarehouseId: mv.WarehouseId }, transaction: t });
+                    if (stock) await stock.update({ quantity: Math.max(0, Number(stock.quantity) - delta) }, { transaction: t });
+                } else {
+                    const stock = await Stock.findOne({ where: { ProductId: mv.ProductId, WarehouseId: mv.WarehouseId }, transaction: t, lock: t.LOCK.UPDATE });
+                    const available = stock ? Number(stock.quantity) : 0;
+                    if (delta > 0 && available < delta) {
+                        await t.rollback();
+                        return res.status(400).json({ message: `Stok tidak cukup untuk menambah qty (tersedia: ${available}, dibutuhkan: ${delta})` });
+                    }
+                    if (stock) await stock.increment('quantity', { by: -delta, transaction: t });
+                }
+            }
+
+            await mv.update({ quantity: newQty }, { transaction: t });
+            await header.update({ updatedBy: req.user.id }, { transaction: t });
+            await t.commit();
+            res.status(200).json(mv);
+        } catch (err) { await t.rollback(); next(err); }
+    }
+
+    static async removeItem(req, res, next) {
+        const t = await sequelize.transaction();
+        try {
+            const header = await Stock_Out_Header.findOne({ where: { id: req.params.id, ...companyFilter(req) }, transaction: t });
+            if (!header) { await t.rollback(); throw { name: 'NotFound', message: 'Stock out header not found' }; }
+            if (header.status !== 'open') {
+                await t.rollback();
+                return res.status(400).json({ message: 'Sesi masih terkunci. Buka sesi dulu untuk menghapus item.' });
+            }
+
+            const mv = await Stock_Movement.findOne({
+                where: { id: req.params.itemId, ReferenceId: header.id, type: 'OUT' },
+                transaction: t, lock: t.LOCK.UPDATE,
+            });
+            if (!mv) { await t.rollback(); throw { name: 'NotFound', message: 'Item not found' }; }
+
+            // Kembalikan stok lalu hapus movement (kebalikan dari addItem)
+            const stock = await Stock.findOne({ where: { ProductId: mv.ProductId, WarehouseId: mv.WarehouseId }, transaction: t });
+            if (stock) await stock.increment('quantity', { by: mv.quantity, transaction: t });
+            if (mv.ProductSKUId) {
+                const sku = await ProductSKU.findByPk(mv.ProductSKUId, { transaction: t });
+                if (sku) await sku.increment('qty', { by: mv.quantity, transaction: t });
+                await upsertSkuWarehouseStock(t, SkuWarehouseStock, { ProductSKUId: mv.ProductSKUId, WarehouseId: mv.WarehouseId, delta: mv.quantity, companyId: mv.companyId });
+            }
+            await mv.destroy({ transaction: t });
+
+            await header.update({ updatedBy: req.user.id }, { transaction: t });
+            await t.commit();
+            res.status(200).json({ message: 'Item dihapus, stok dikembalikan' });
+        } catch (err) { await t.rollback(); next(err); }
     }
 
     static async delete(req, res, next) {

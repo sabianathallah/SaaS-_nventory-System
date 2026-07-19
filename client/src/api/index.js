@@ -74,8 +74,15 @@ export const stockInApi = {
   addItem:    (id, data)          => api.post(`/stock-in-headers/${id}/items`, data).then(r => r.data),
   updateItem: (id, itemId, data)  => api.put(`/stock-in-headers/${id}/items/${itemId}`, data).then(r => r.data),
   removeItem: (id, itemId)        => api.delete(`/stock-in-headers/${id}/items/${itemId}`).then(r => r.data),
+  setStatus:  (id, status)        => api.patch(`/stock-in-headers/${id}/status`, { status }).then(r => r.data),
 }
-export const stockOutApi       = crud('/stock-out-headers')
+export const stockOutApi = {
+  ...crud('/stock-out-headers'),
+  setStatus:  (id, status)        => api.patch(`/stock-out-headers/${id}/status`, { status }).then(r => r.data),
+  addItem:    (id, data)          => api.post(`/stock-out-headers/${id}/items`, data).then(r => r.data),
+  updateItem: (id, itemId, data)  => api.put(`/stock-out-headers/${id}/items/${itemId}`, data).then(r => r.data),
+  removeItem: (id, itemId)        => api.delete(`/stock-out-headers/${id}/items/${itemId}`).then(r => r.data),
+}
 export const stockInDraftApi = {
   current:    ()                   => api.get('/stock-in-drafts/current').then(r => r.data),
   get:        (id)                 => api.get(`/stock-in-drafts/${id}`).then(r => r.data),

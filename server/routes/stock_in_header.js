@@ -17,6 +17,7 @@ router.get('/',            canView,                                          C.g
 router.get('/:id',         canView,                                          C.getById);
 router.post('/',           canCreate, requireCompany, requireWarehouseNotInOpname, C.create);
 router.put('/:id',         canEdit,                                          C.update);
+router.patch('/:id/status', canEdit,                                         C.setStatus);
 router.delete('/:id',      canDelete,                                        C.delete);
 
 router.post('/:id/items',           canCreate, requireCompany, requireWarehouseNotInOpname, C.addItem);
