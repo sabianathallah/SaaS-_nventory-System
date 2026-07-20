@@ -49,6 +49,30 @@ module.exports = (sequelize, DataTypes) => {
         onDelete: 'CASCADE',
         onUpdate: 'CASCADE'
       });
+      User.hasMany(models.Task, {
+        foreignKey: { name: 'assigneeId', allowNull: true },
+        as: 'assignedTasks',
+        onDelete: 'SET NULL',
+        onUpdate: 'CASCADE'
+      });
+      User.hasMany(models.Task, {
+        foreignKey: { name: 'createdBy', allowNull: false },
+        as: 'createdTasks',
+        onDelete: 'CASCADE',
+        onUpdate: 'CASCADE'
+      });
+      User.hasMany(models.TaskComment, {
+        foreignKey: { name: 'userId', allowNull: false },
+        as: 'taskComments',
+        onDelete: 'CASCADE',
+        onUpdate: 'CASCADE'
+      });
+      User.hasMany(models.Notification, {
+        foreignKey: { name: 'userId', allowNull: false },
+        as: 'notifications',
+        onDelete: 'CASCADE',
+        onUpdate: 'CASCADE'
+      });
       User.hasMany(models.OvertimeRequest, {
         foreignKey: { name: 'userId', allowNull: false },
         as: 'overtimeRequests',

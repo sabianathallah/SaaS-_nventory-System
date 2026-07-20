@@ -4,11 +4,12 @@ import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { usePageVisibility } from '../context/PageVisibilityContext'
 import CompanySwitcher from './CompanySwitcher'
+import NotificationBell from './NotificationBell'
 import { useCompanyGuard } from '../hooks/useCompanyGuard'
 import {
   LayoutDashboard, Package, Warehouse, Truck,
   ArrowDownToLine, ArrowUpFromLine, ArrowLeftRight, Repeat2,
-  ClipboardList, Users, Building2, BookOpen, LogOut, Bell,
+  ClipboardList, Users, Building2, BookOpen, LogOut,
   PackageOpen, Layers, ClipboardCheck, Menu, X, Eye, EyeOff,
   PackageCheck, Link2, BarChart2, BookMarked, ChevronDown,
   SendHorizonal, FileText, PanelLeftClose, PanelLeftOpen, UserCog,
@@ -71,7 +72,8 @@ const NAV_GROUPS = [
   {
     label: 'Umum',
     items: [
-      { to: '/database-links', icon: Link2, label: 'Database Links', pageKey: 'database-links' },
+      { to: '/tasks',           icon: ClipboardList, label: 'Tugas',           pageKey: 'tasks' },
+      { to: '/database-links',  icon: Link2,         label: 'Database Links', pageKey: 'database-links' },
     ],
   },
 ]
@@ -156,6 +158,7 @@ const PAGE_TITLES = {
   '/page-visibility': 'Visibilitas Halaman',
   '/laporan': 'Laporan Bulanan',
   '/pengajuan': 'Pengajuan Stok', '/pengajuan/baru': 'Buat Pengajuan',
+  '/tasks': 'Tugas',
 }
 
 function groupHasActivePath(group, pathname) {
@@ -585,9 +588,7 @@ export default function Layout({ children }) {
 
           <div className="flex items-center gap-2">
             <CompanySwitcher />
-            <button className="w-8 h-8 rounded-md flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors">
-              <Bell size={15} />
-            </button>
+            <NotificationBell />
             <div
               className="flex items-center gap-2 pl-2 border-l border-slate-200 cursor-pointer"
               onClick={() => setProfileOpen(true)}

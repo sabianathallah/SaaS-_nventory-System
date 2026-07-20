@@ -116,6 +116,19 @@ export const movementsApi = {
 export const opnameSessionsApi = crud('/stock-opname-sessions')
 export const opnameItemsApi    = crud('/stock-opname-items')
 export const usersApi          = crud('/users')
+
+// ── Task Management ───────────────────────────────────────────────────────────
+export const tasksApi = {
+  ...crud('/tasks'),
+  listComments: (id) => api.get(`/tasks/${id}/comments`).then(r => r.data),
+  addComment:   (id, content) => api.post(`/tasks/${id}/comments`, { content }).then(r => r.data),
+}
+export const notificationsApi = {
+  list:         (params) => api.get('/notifications', { params }).then(r => r.data),
+  unreadCount:  () => api.get('/notifications/unread-count').then(r => r.data),
+  markRead:     (id) => api.put(`/notifications/${id}/read`).then(r => r.data),
+  markAllRead:  () => api.put('/notifications/read-all').then(r => r.data),
+}
 export const companiesApi      = {
   ...crud('/companies'),
   create: (data) => api.post('/companies', toPayload(data)).then(r => r.data),

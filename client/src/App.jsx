@@ -52,6 +52,7 @@ import PageVisibility from './pages/PageVisibility'
 import Handover from './pages/Handover'
 import HandoverDetail from './pages/HandoverDetail'
 import DatabaseLinks from './pages/DatabaseLinks'
+import Tasks from './pages/Tasks'
 import Laporan from './pages/Laporan'
 import Transfers from './pages/Transfers'
 import TransferDetail from './pages/TransferDetail'
@@ -206,6 +207,7 @@ function AppRoutes() {
 
                 {/* ── Umum ── */}
                 <Route path="/database-links" element={<PageVisibleRoute pageKey="database-links"><PermissionRoute permission="db_link.view" page="Database Links"><DatabaseLinks /></PermissionRoute></PageVisibleRoute>} />
+                <Route path="/tasks" element={<PageVisibleRoute pageKey="tasks"><Tasks /></PageVisibleRoute>} />
                 <Route path="/laporan"        element={<PageVisibleRoute pageKey="laporan"><PermissionRoute permission="reports.manage" page="Laporan"><Laporan /></PermissionRoute></PageVisibleRoute>} />
 
                 {/* ── Pengajuan ── */}

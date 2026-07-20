@@ -106,6 +106,13 @@ const ALL_PERMISSIONS = [
   { key: 'hris.reports.view',         label: 'Lihat Laporan HRIS',                         group: 'HRIS',                    parent: 'hris.manage',            desc: 'Lihat laporan rekap absensi, cuti, dan lembur' },
   { key: 'hris.payslip.manage',       label: 'Kelola Slip Gaji',                           group: 'HRIS',                    parent: 'hris.manage',            desc: 'Generate, edit, publish & hapus slip gaji karyawan' },
   { key: 'hris.salary.manage',        label: 'Kelola Profil Gaji',                         group: 'HRIS',                    parent: 'hris.manage',            desc: 'Pendataan gaji pokok & tunjangan karyawan (tanpa akses generate/publish slip)' },
+
+  // ── Task Management ──────────────────────────────────────────────────────────
+  { key: 'tasks.manage', label: 'Akses Penuh Task Management', group: 'Task Management', isParent: true,  desc: 'Aktifkan semua fitur task management sekaligus' },
+  { key: 'tasks.view',   label: 'Lihat Semua Task',            group: 'Task Management', parent: 'tasks.manage', desc: 'Lihat seluruh task perusahaan, bukan hanya yang dibuat/ditugaskan ke diri sendiri' },
+  { key: 'tasks.create', label: 'Buat Task',                   group: 'Task Management', parent: 'tasks.manage', desc: 'Buat task baru & menugaskan ke pengguna lain' },
+  { key: 'tasks.edit',   label: 'Edit Semua Task',              group: 'Task Management', parent: 'tasks.manage', desc: 'Ubah task siapa pun, bukan hanya milik sendiri' },
+  { key: 'tasks.delete', label: 'Hapus Semua Task',             group: 'Task Management', parent: 'tasks.manage', desc: 'Hapus task siapa pun, bukan hanya milik sendiri' },
 ];
 
 const ALL_KEYS = ALL_PERMISSIONS.map(p => p.key);
