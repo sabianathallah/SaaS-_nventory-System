@@ -13,7 +13,7 @@ import {
   PackageOpen, Layers, ClipboardCheck, Menu, X, Eye, EyeOff,
   PackageCheck, Link2, BarChart2, BookMarked, ChevronDown,
   SendHorizonal, FileText, PanelLeftClose, PanelLeftOpen, UserCog,
-  Laptop, Wallet, CalendarClock, ShieldCheck, AlarmClock, Receipt,
+  Laptop, Wallet, CalendarClock, ShieldCheck, AlarmClock, Receipt, ListChecks,
 } from 'lucide-react'
 import logoPreface from '../assets/logo-preface.jpeg'
 
@@ -72,8 +72,19 @@ const NAV_GROUPS = [
   {
     label: 'Umum',
     items: [
-      { to: '/tasks',           icon: ClipboardList, label: 'Tugas',           pageKey: 'tasks' },
       { to: '/database-links',  icon: Link2,         label: 'Database Links', pageKey: 'database-links' },
+    ],
+  },
+]
+
+// Task Management module — halaman /tasks sudah punya sidebar internalnya
+// sendiri (view My Day/Important/dst), jadi nav group di sini cukup 1 entri
+// yang jadi pintu masuk ke module-nya (sama pola dengan Handbook).
+const TASKS_NAV_GROUPS = [
+  {
+    label: 'Task Management',
+    items: [
+      { to: '/tasks', icon: ListChecks, label: 'Papan Tugas' },
     ],
   },
 ]
@@ -192,7 +203,8 @@ function ModuleSwitcher({ collapsed, activeModule }) {
   const navigate = useNavigate()
   const { hasPermission, isSuperAdmin, isAdmin } = useAuth()
   const items = [
-    { key: 'inventory', label: 'Inventory', icon: Package,  to: '/dashboard', active: activeModule === 'inventory' },
+    { key: 'inventory', label: 'Inventory', icon: Package,    to: '/dashboard', active: activeModule === 'inventory' },
+    { key: 'tasks',     label: 'Tugas',     icon: ListChecks, to: '/tasks',     active: activeModule === 'tasks' },
     { key: 'handbook',  label: 'Handbook',   icon: BookOpen, to: '/handbook',  active: activeModule === 'handbook' },
     ...(isSuperAdmin || hasPermission('hris.view')
       ? [{ key: 'hris', label: 'HRIS', icon: UserCog, to: '/hris', active: activeModule === 'hris' }]
@@ -262,11 +274,12 @@ export default function Layout({ children }) {
   // Handbook module — sidebar kiri di-swap total, lihat HANDBOOK_NAV_GROUPS di atas
   const isHandbook  = location.pathname.startsWith('/handbook')
   const isHRIS      = location.pathname.startsWith('/hris')
+  const isTasksModule = location.pathname.startsWith('/tasks')
   const isAdminModule = ['/users', '/roles', '/companies', '/page-visibility'].some(
     (p) => location.pathname === p || location.pathname.startsWith(p + '/')
   )
-  const activeModule = isHandbook ? 'handbook' : isHRIS ? 'hris' : isAdminModule ? 'admin' : 'inventory'
-  const activeGroups = isHandbook ? HANDBOOK_NAV_GROUPS : isHRIS ? HRIS_NAV_GROUPS : isAdminModule ? ADMIN_NAV_GROUPS : NAV_GROUPS
+  const activeModule = isHandbook ? 'handbook' : isHRIS ? 'hris' : isTasksModule ? 'tasks' : isAdminModule ? 'admin' : 'inventory'
+  const activeGroups = isHandbook ? HANDBOOK_NAV_GROUPS : isHRIS ? HRIS_NAV_GROUPS : isTasksModule ? TASKS_NAV_GROUPS : isAdminModule ? ADMIN_NAV_GROUPS : NAV_GROUPS
   // Path yang punya "anak" (mis. /hris punya /hris/attendance, dst) butuh `end`
   // di NavLink, kalau tidak dia akan tetap ke-highlight walau lagi di sub-route.
   const allNavPaths = activeGroups.flatMap(g => g.items.map(i => i.to))
@@ -284,7 +297,7 @@ export default function Layout({ children }) {
 
   // Accordion groups (hanya relevan saat expanded) — default: buka semua group
   const [openGroups, setOpenGroups] = useState(() =>
-    new Set([...NAV_GROUPS, ...HANDBOOK_NAV_GROUPS, ...HRIS_NAV_GROUPS, ...ADMIN_NAV_GROUPS].map(g => g.label))
+    new Set([...NAV_GROUPS, ...HANDBOOK_NAV_GROUPS, ...HRIS_NAV_GROUPS, ...TASKS_NAV_GROUPS, ...ADMIN_NAV_GROUPS].map(g => g.label))
   )
 
   // Auto-open group saat navigasi
@@ -370,7 +383,7 @@ export default function Layout({ children }) {
           >
             <p className="font-bold text-sm text-slate-800 leading-tight whitespace-nowrap">Preface</p>
             <p className="text-[10px] text-slate-400 leading-tight whitespace-nowrap">
-              {isHandbook ? 'Company Handbook' : isHRIS ? 'HRIS' : isAdminModule ? 'Administrasi' : 'Inventory System'}
+              {isHandbook ? 'Company Handbook' : isHRIS ? 'HRIS' : isTasksModule ? 'Task Management' : isAdminModule ? 'Administrasi' : 'Inventory System'}
             </p>
           </div>
         </div>
