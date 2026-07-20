@@ -222,6 +222,15 @@ function printViaIframe(html) {
   return true
 }
 
+// Nama file PDF pakai nama dokumen sebagai judul — invoiceNumber mengandung "/"
+// (mis. INV/202607/0001) yang tidak valid di nama file (khususnya Windows),
+// jadi diganti "-" dulu. Format konsisten dengan Stock Out: Label_Kode_Tanggal.
+const pdfFileTitle = (label, shipment) => {
+  const code = String(shipment.invoiceNumber ?? '').replace(/\//g, '-')
+  const tgl  = String(shipment.createdAt ?? new Date().toISOString()).slice(0, 10)
+  return `${label}_${code}_${tgl}`
+}
+
 function printResiSementara(shipment, showItems = true) {
   const items = shipment.items ?? []
   // recipientName/Address/Phone are the current shared fields (both sales &
@@ -230,7 +239,7 @@ function printResiSementara(shipment, showItems = true) {
   const toName    = shipment.recipientName    || shipment.buyerName    || shipment.recipientInfo || '-'
   const toPhone   = shipment.recipientPhone   || shipment.buyerPhone   || ''
   const toAddress = shipment.recipientAddress || shipment.buyerAddress || ''
-  return printViaIframe(`<!DOCTYPE html><html><head><title>Resi ${shipment.invoiceNumber}</title><style>
+  return printViaIframe(`<!DOCTYPE html><html><head><title>${pdfFileTitle('Resi', shipment)}</title><style>
     @page{size:100mm 150mm;margin:5mm}
     *{margin:0;padding:0;box-sizing:border-box}
     body{font-family:Arial,sans-serif;color:#000;width:90mm}
@@ -283,7 +292,7 @@ function printInvoice(shipment) {
   const subtotal = Number(shipment.subtotal)
   const shipping = Number(shipment.shippingCost)
   const total    = Number(shipment.total)
-  return printViaIframe(`<!DOCTYPE html><html><head><title>Invoice ${shipment.invoiceNumber}</title><style>
+  return printViaIframe(`<!DOCTYPE html><html><head><title>${pdfFileTitle('Invoice', shipment)}</title><style>
     *{margin:0;padding:0;box-sizing:border-box;font-family:'Segoe UI',sans-serif}
     body{padding:40px;font-size:13px;color:#1a1a1a;max-width:720px;margin:0 auto}
     .header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:32px}
