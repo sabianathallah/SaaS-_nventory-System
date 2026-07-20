@@ -40,6 +40,8 @@ module.exports = (sequelize, DataTypes) => {
     dueDate:    { type: DataTypes.DATEONLY, allowNull: true },
     assigneeId: { type: DataTypes.INTEGER, allowNull: true },
     createdBy:  { type: DataTypes.INTEGER, allowNull: false },
+    isImportant: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+    myDayDate:   { type: DataTypes.DATEONLY, allowNull: true },
   }, {
     sequelize,
     modelName: 'Task',
