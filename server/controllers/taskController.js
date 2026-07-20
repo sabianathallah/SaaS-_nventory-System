@@ -1,5 +1,6 @@
 'use strict';
 const { Task, TaskComment, TaskList, Notification, User, sequelize } = require('../models');
+const { Op } = require('sequelize');
 const { companyFilter, companyId } = require('../helpers/tenancy');
 const { paginate, buildFilter, paginatedResponse } = require('../helpers/queryHelper');
 const { userHasPermission } = require('../helpers/permCheck');
@@ -43,7 +44,6 @@ class TaskController {
         try {
             const { page, limit, offset } = paginate(req.query);
             const filter = buildFilter(req.query, { status: 'exact', priority: 'exact', assigneeId: 'exact', listId: 'exact' });
-            const { Op } = require('sequelize');
 
             const canViewAll = await userHasPermission(req, 'tasks.view');
 
@@ -163,6 +163,17 @@ class TaskController {
             const prevAssigneeId = task.assigneeId;
             const isReassignedToOther = assigneeId !== undefined && Number(assigneeId) !== prevAssigneeId && assigneeId && Number(assigneeId) !== req.user.id;
             const isCompletingNow = status === 'DONE' && task.status !== 'DONE';
+
+            // Can't finish a task while any of its sub-tasks are still open —
+            // mirrors how MS To Do/San-Group treat steps as a completion gate.
+            if (isCompletingNow) {
+                const openSubtasks = await Task.count({
+                    where: { parentTaskId: task.id, status: { [Op.ne]: 'DONE' } },
+                });
+                if (openSubtasks > 0) {
+                    throw { name: 'BadRequest', message: `Selesaikan dulu ${openSubtasks} sub-task yang belum beres sebelum menutup task ini` };
+                }
+            }
 
             await task.update({
                 title: title ?? task.title,
@@ -290,7 +301,6 @@ class TaskController {
 
     static async stats(req, res, next) {
         try {
-            const { Op } = require('sequelize');
             const canViewAll = await userHasPermission(req, 'tasks.view');
             const ownFilter = canViewAll ? {} : {
                 [Op.or]: [{ assigneeId: req.user.id }, { createdBy: req.user.id }],

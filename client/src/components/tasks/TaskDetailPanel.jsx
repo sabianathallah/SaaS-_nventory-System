@@ -7,9 +7,6 @@ import { X, Send, Star, Sun, Trash2, Check, Plus } from 'lucide-react'
 import { STATUS_CONFIG, PRIORITY_CONFIG, RECURRENCE_CONFIG, avatarColor, initials } from './taskConfig'
 import DescriptionEditor from './DescriptionEditor'
 
-const TABS = ['details', 'subtasks', 'comments']
-const TAB_LABELS = { details: 'Details', subtasks: 'Sub-tasks', comments: 'Comments' }
-
 export default function TaskDetailPanel({ task, userOptions, onClose, canDelete }) {
   const qc = useQueryClient()
   const { user } = useAuth()
@@ -46,7 +43,14 @@ export default function TaskDetailPanel({ task, userOptions, onClose, canDelete 
   const save = useMutation({
     mutationFn: (patch) => tasksApi.update(task.id, patch),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['tasks'] }); toast.success('Task diperbarui') },
-    onError: e => toast.error(e.response?.data?.message || 'Error'),
+    onError: (e, patch) => {
+      // Roll the local form field back to the task's last known-good value —
+      // otherwise e.g. a rejected "mark as DONE" (blocked by open sub-tasks)
+      // leaves the <select> visually showing DONE even though it didn't save.
+      const key = Object.keys(patch)[0]
+      if (key && task[key] !== undefined) field({ [key]: key === 'tags' ? (task.tags ?? []).join(', ') : (task[key] ?? '') })
+      toast.error(e.response?.data?.message || 'Error')
+    },
   })
   const del = useMutation({
     mutationFn: () => tasksApi.remove(task.id),
@@ -76,8 +80,11 @@ export default function TaskDetailPanel({ task, userOptions, onClose, canDelete 
     onError: e => toast.error(e.response?.data?.message || 'Error'),
   })
 
+  // Sub-tasks are an always-visible checklist section inside Details (not a
+  // separate tab to click into) — fetched whenever a task is open, same as
+  // the rest of the Details fields.
   const { data: subtasksRes } = useQuery({
-    enabled: !!task && tab === 'subtasks',
+    enabled: !!task,
     queryKey: ['task-subtasks', task?.id],
     queryFn: () => tasksApi.listSubtasks(task.id),
   })
@@ -101,6 +108,7 @@ export default function TaskDetailPanel({ task, userOptions, onClose, canDelete 
   }
 
   const isPendingForMe = task.assignmentStatus === 'PENDING' && task.assigneeId === user?.id
+  const openSubtasks = subtasks.filter(st => st.status !== 'DONE').length
 
   return (
     <>
@@ -108,7 +116,7 @@ export default function TaskDetailPanel({ task, userOptions, onClose, canDelete 
       <div className={`fixed top-0 right-0 h-full w-full max-w-md bg-white shadow-modal z-50 flex flex-col animate-slide-in-right border-l-4 ${PRIORITY_CONFIG[task.priority].border}`}>
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 flex-shrink-0">
           <div className="flex gap-5">
-            {TABS.map(t => (
+            {['details', 'comments'].map(t => (
               <button
                 key={t}
                 onClick={() => setTab(t)}
@@ -117,8 +125,7 @@ export default function TaskDetailPanel({ task, userOptions, onClose, canDelete 
                 }`}
                 style={tab === t ? { borderColor: 'var(--brand)' } : undefined}
               >
-                {TAB_LABELS[t]}
-                {t === 'subtasks' && Number(task.subTaskCount) > 0 && <span className="ml-1 text-[11px] text-slate-400">{task.subTaskCount}</span>}
+                {t === 'details' ? 'Details' : 'Comments'}
               </button>
             ))}
           </div>
@@ -219,6 +226,12 @@ export default function TaskDetailPanel({ task, userOptions, onClose, canDelete 
               onBlur={() => commitField('description', form.description)}
             />
 
+            {openSubtasks > 0 && form.status !== 'DONE' && (
+              <p className="text-[11px] text-slate-400 -mt-2">
+                {openSubtasks} sub-task belum selesai — harus beres dulu sebelum task ini bisa ditutup.
+              </p>
+            )}
+
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="label">Status</label>
@@ -285,6 +298,40 @@ export default function TaskDetailPanel({ task, userOptions, onClose, canDelete 
               />
             </div>
 
+            {/* Sub-tasks — always visible here, directly under the fields
+                above, instead of behind a separate tab (matches San-Group's
+                task detail: everything relevant to the task on one scroll). */}
+            <div className="pt-2 border-t border-slate-100">
+              <label className="label mb-2">
+                Sub-tasks{subtasks.length > 0 && <span className="text-slate-400 font-normal"> ({subtasks.filter(st => st.status === 'DONE').length}/{subtasks.length})</span>}
+              </label>
+              <div className="space-y-1">
+                {subtasks.map(st => {
+                  const done = st.status === 'DONE'
+                  return (
+                    <div key={st.id} className="flex items-center gap-2.5 py-1">
+                      <button
+                        onClick={() => toggleSubtask.mutate({ id: st.id, status: done ? 'TODO' : 'DONE' })}
+                        className={`w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
+                          done ? 'bg-success border-success' : 'border-slate-300 hover:border-success'
+                        }`}
+                      >
+                        {done && <Check size={10} className="text-white" strokeWidth={3.5} />}
+                      </button>
+                      <span className={`text-sm flex-1 ${done ? 'text-slate-400 line-through' : 'text-slate-700'}`}>{st.title}</span>
+                    </div>
+                  )
+                })}
+              </div>
+              <form
+                onSubmit={e => { e.preventDefault(); if (subtaskTitle.trim()) addSubtask.mutate(subtaskTitle.trim()) }}
+                className="flex gap-2 mt-1.5"
+              >
+                <input className="input text-sm py-1.5 flex-1" value={subtaskTitle} onChange={e => setSubtaskTitle(e.target.value)} placeholder="Tambah sub-task…" />
+                <button type="submit" disabled={addSubtask.isPending} className="btn-secondary px-2.5"><Plus size={14} /></button>
+              </form>
+            </div>
+
             <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
               <span className={`w-5 h-5 rounded-full text-white text-[9px] font-bold flex items-center justify-center flex-shrink-0 ${avatarColor(task.createdBy)}`}>
                 {initials(task.creator?.name)}
@@ -300,36 +347,6 @@ export default function TaskDetailPanel({ task, userOptions, onClose, canDelete 
                 <Trash2 size={12} />Hapus task
               </button>
             )}
-          </div>
-        ) : tab === 'subtasks' ? (
-          <div className="flex-1 flex flex-col overflow-hidden">
-            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-1.5">
-              {!subtasks.length ? (
-                <p className="text-sm text-slate-400 text-center py-6">Belum ada sub-task</p>
-              ) : subtasks.map(st => {
-                const done = st.status === 'DONE'
-                return (
-                  <div key={st.id} className="flex items-center gap-2.5 px-1 py-1.5">
-                    <button
-                      onClick={() => toggleSubtask.mutate({ id: st.id, status: done ? 'TODO' : 'DONE' })}
-                      className={`w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
-                        done ? 'bg-success border-success' : 'border-slate-300 hover:border-success'
-                      }`}
-                    >
-                      {done && <Check size={10} className="text-white" strokeWidth={3.5} />}
-                    </button>
-                    <span className={`text-sm flex-1 ${done ? 'text-slate-400 line-through' : 'text-slate-700'}`}>{st.title}</span>
-                  </div>
-                )
-              })}
-            </div>
-            <form
-              onSubmit={e => { e.preventDefault(); if (subtaskTitle.trim()) addSubtask.mutate(subtaskTitle.trim()) }}
-              className="flex gap-2 px-5 py-3 border-t border-slate-100 flex-shrink-0"
-            >
-              <input className="input flex-1" value={subtaskTitle} onChange={e => setSubtaskTitle(e.target.value)} placeholder="Tambah sub-task…" />
-              <button type="submit" disabled={addSubtask.isPending} className="btn-primary px-3"><Plus size={14} /></button>
-            </form>
           </div>
         ) : (
           <div className="flex-1 flex flex-col overflow-hidden">
