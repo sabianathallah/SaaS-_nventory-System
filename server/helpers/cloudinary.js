@@ -20,10 +20,16 @@ const isConfigured = Boolean(
 function createUpload(folder) {
   const storage = new CloudinaryStorage({
     cloudinary,
-    params: {
-      folder,
-      allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
-      transformation: [{ width: 800, height: 800, crop: 'limit' }],
+    // HEIC/HEIF (foto default iPhone) diterima dan dikonversi ke JPG saat upload
+    // supaya bisa ditampilkan semua browser. Format lain disimpan apa adanya.
+    params: (req, file) => {
+      const isHeic = /heic|heif/i.test(file.mimetype || '') || /\.hei[cf]$/i.test(file.originalname || '');
+      return {
+        folder,
+        allowed_formats: ['jpg', 'jpeg', 'png', 'webp', 'heic', 'heif'],
+        ...(isHeic ? { format: 'jpg' } : {}),
+        transformation: [{ width: 800, height: 800, crop: 'limit' }],
+      };
     },
   });
 

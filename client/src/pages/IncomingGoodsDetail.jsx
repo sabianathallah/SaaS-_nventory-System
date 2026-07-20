@@ -657,7 +657,9 @@ export default function IncomingGoodsDetail() {
                   <img
                     src={p.type === 'existing' ? p.url : p.preview}
                     alt={`SJ ${idx + 1}`}
-                    className="w-24 h-24 object-cover rounded-xl border border-slate-200 select-none"
+                    title="Klik untuk buka ukuran penuh"
+                    onClick={() => window.open(p.type === 'existing' ? p.url : p.preview, '_blank', 'noopener')}
+                    className="w-24 h-24 object-cover rounded-xl border border-slate-200 select-none cursor-zoom-in"
                   />
                   <button
                     type="button" onClick={() => removePhoto(idx)}
