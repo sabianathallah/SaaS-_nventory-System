@@ -1,7 +1,7 @@
 'use strict';
 const cron = require('node-cron');
 const { Op } = require('sequelize');
-const { Attendance, Shift } = require('../models');
+const { Attendance, Shift, Task, Notification } = require('../models');
 const { todayDateOnly, addDaysStr, weekdayOf } = require('./timezone');
 const { backfillAbsentForDates } = require('./absentBackfill');
 
@@ -16,6 +16,10 @@ function setupCronJobs() {
     // manual lagi. Sabtu/Minggu di-skip, dan lintas semua company (system job,
     // bukan request-scoped) sekaligus.
     cron.schedule('10 0 * * *', autoMarkAbsentJob, { timezone: 'Asia/Jakarta' });
+
+    // Tiap menit: task dengan reminderAt yang sudah lewat tapi belum
+    // dinotifikasi (reminderSentAt IS NULL) — MS To Do-style "Remind me".
+    cron.schedule('* * * * *', taskReminderJob, { timezone: 'Asia/Jakarta' });
 }
 
 async function autoCheckOutJob() {
@@ -50,6 +54,30 @@ async function autoMarkAbsentJob() {
         if (result.created) console.log(`[cron] auto absen: ${result.created} record dibuat untuk ${yesterday}`);
     } catch (err) {
         console.error('[cron] auto absen gagal:', err.message);
+    }
+}
+
+async function taskReminderJob() {
+    try {
+        const due = await Task.findAll({
+            where: { reminderAt: { [Op.lte]: new Date() }, reminderSentAt: null },
+        });
+
+        for (const task of due) {
+            const recipientId = task.assigneeId || task.createdBy;
+            await Notification.create({
+                userId: recipientId,
+                type: 'TASK_REMINDER',
+                title: 'Pengingat task',
+                message: `Pengingat untuk task "${task.title}"`,
+                link: `/tasks?open=${task.id}`,
+                companyId: task.companyId,
+            });
+            await task.update({ reminderSentAt: new Date() });
+        }
+        if (due.length) console.log(`[cron] task reminder: ${due.length} notifikasi dikirim`);
+    } catch (err) {
+        console.error('[cron] task reminder gagal:', err.message);
     }
 }
 

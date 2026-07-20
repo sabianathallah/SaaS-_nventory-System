@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { tasksApi } from '../../api'
+import { tasksApi, taskListsApi } from '../../api'
 import { useAuth } from '../../context/AuthContext'
 import toast from 'react-hot-toast'
 import { X, Send, Star, Sun, Trash2, Check, Plus } from 'lucide-react'
-import { STATUS_CONFIG, PRIORITY_CONFIG, avatarColor, initials } from './taskConfig'
+import { STATUS_CONFIG, PRIORITY_CONFIG, RECURRENCE_CONFIG, avatarColor, initials } from './taskConfig'
+import DescriptionEditor from './DescriptionEditor'
 
 const TABS = ['details', 'subtasks', 'comments']
 const TAB_LABELS = { details: 'Details', subtasks: 'Sub-tasks', comments: 'Comments' }
@@ -31,10 +32,16 @@ export default function TaskDetailPanel({ task, userOptions, onClose, canDelete 
       priority: task.priority,
       dueDate: task.dueDate || '',
       assigneeId: task.assigneeId || '',
+      listId: task.listId || '',
+      tags: (task.tags ?? []).join(', '),
+      reminderAt: task.reminderAt ? task.reminderAt.slice(0, 16) : '',
+      recurrence: task.recurrence || 'NONE',
     })
     setTab('details')
     setRejectNote(null)
   }
+
+  const { data: lists } = useQuery({ queryKey: ['task-lists'], queryFn: taskListsApi.list })
 
   const save = useMutation({
     mutationFn: (patch) => tasksApi.update(task.id, patch),
@@ -206,12 +213,9 @@ export default function TaskDetailPanel({ task, userOptions, onClose, canDelete 
               </button>
             </div>
 
-            <textarea
-              className="input text-sm resize-none"
-              rows={3}
-              placeholder="Deskripsi (opsional)"
+            <DescriptionEditor
               value={form.description}
-              onChange={e => field({ description: e.target.value })}
+              onChange={(v) => field({ description: v })}
               onBlur={() => commitField('description', form.description)}
             />
 
@@ -242,6 +246,43 @@ export default function TaskDetailPanel({ task, userOptions, onClose, canDelete 
                   {userOptions.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
                 </select>
               </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="label">List</label>
+                <select className="select" value={form.listId} onChange={e => { field({ listId: e.target.value }); commitField('listId', e.target.value) }}>
+                  <option value="">Tanpa list</option>
+                  {(lists ?? []).map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="label">Ulangi</label>
+                <select className="select" value={form.recurrence} onChange={e => { field({ recurrence: e.target.value }); commitField('recurrence', e.target.value) }}>
+                  {Object.entries(RECURRENCE_CONFIG).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label className="label">Tags</label>
+              <input
+                className="input"
+                placeholder="pisahkan dengan koma"
+                value={form.tags}
+                onChange={e => field({ tags: e.target.value })}
+                onBlur={() => save.mutate({ tags: form.tags.split(',').map(t => t.trim()).filter(Boolean) })}
+              />
+            </div>
+
+            <div>
+              <label className="label">Reminder</label>
+              <input
+                type="datetime-local"
+                className="input"
+                value={form.reminderAt}
+                onChange={e => { field({ reminderAt: e.target.value }); commitField('reminderAt', e.target.value) }}
+              />
             </div>
 
             <div className="flex items-center gap-2 pt-2 border-t border-slate-100">

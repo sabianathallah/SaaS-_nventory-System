@@ -126,6 +126,7 @@ export const tasksApi = {
   accept:        (id) => api.post(`/tasks/${id}/accept`).then(r => r.data),
   reject:        (id, note) => api.post(`/tasks/${id}/reject`, { note }).then(r => r.data),
 }
+export const taskListsApi = crud('/task-lists')
 export const notificationsApi = {
   list:         (params) => api.get('/notifications', { params }).then(r => r.data),
   unreadCount:  () => api.get('/notifications/unread-count').then(r => r.data),

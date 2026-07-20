@@ -30,6 +30,13 @@ export const ASSIGNMENT_STATUS_CONFIG = {
   ACCEPTED: { label: 'Diterima',        cls: 'bg-success-light text-success border border-success-border' },
 }
 
+export const RECURRENCE_CONFIG = {
+  NONE:     { label: 'Tidak berulang' },
+  DAILY:    { label: 'Setiap hari' },
+  WEEKDAYS: { label: 'Hari kerja (Sen-Jum)' },
+  WEEKLY:   { label: 'Setiap minggu' },
+}
+
 export const BOARD_COLUMNS = ['TODO', 'IN_PROGRESS', 'DONE']
 
 // Sidebar views — mirrors the "view" query param handled server-side in taskController.list.
@@ -58,6 +65,27 @@ export function avatarColor(id) {
 export function initials(name) {
   if (!name) return '?'
   return name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()
+}
+
+// Markdown-lite: bold/italic/inline-code/checklist-line/http(s)-only links.
+// Escapes HTML first, then layers the allowlisted patterns on top — no raw
+// HTML or javascript:/data: URI schemes ever make it through.
+export function renderMarkdown(text) {
+  if (!text) return ''
+  const html = text
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/_(.+?)_/g, '<em>$1</em>')
+    .replace(/`(.+?)`/g, '<code style="background:#f1f5f9;padding:1px 4px;border-radius:3px;font-size:.9em">$1</code>')
+    .replace(/^- \[ \] (.+)$/gm, '<span style="display:flex;gap:6px;align-items:baseline"><span style="opacity:.4">☐</span>$1</span>')
+    .replace(/^- \[x\] (.+)$/gmi, '<span style="display:flex;gap:6px;align-items:baseline;opacity:.6"><span>☑</span><span style="text-decoration:line-through">$1</span></span>')
+    .replace(/^- (.+)$/gm, '<li style="margin-left:16px;list-style:disc">$1</li>')
+    .replace(/\[(.+?)\]\((.+?)\)/g, (_, label, url) =>
+      /^https?:\/\//i.test(url)
+        ? `<a href="${encodeURI(url)}" target="_blank" rel="noopener noreferrer" style="color:var(--brand);text-decoration:underline">${label}</a>`
+        : label)
+    .replace(/\n/g, '<br>')
+  return html
 }
 
 export function fmtDue(iso) {

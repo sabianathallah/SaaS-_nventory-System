@@ -1,22 +1,32 @@
 import { useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
-import { tasksApi, usersApi } from '../api'
+import { tasksApi, taskListsApi, usersApi } from '../api'
 import { useAuth } from '../context/AuthContext'
 import PageHeader from '../components/PageHeader'
 import SearchBar from '../components/SearchBar'
 import toast from 'react-hot-toast'
 import { exportExcel } from '../utils/exportExcel'
-import { Plus, LayoutList, Columns3, CalendarDays, FileSpreadsheet } from 'lucide-react'
+import { Plus, LayoutList, Columns3, CalendarDays, Table2, FileSpreadsheet } from 'lucide-react'
 import TasksSidebar from '../components/tasks/TasksSidebar'
 import ListView from '../components/tasks/ListView'
 import BoardView from '../components/tasks/BoardView'
 import CalendarView from '../components/tasks/CalendarView'
+import TableView from '../components/tasks/TableView'
 import TaskDetailPanel from '../components/tasks/TaskDetailPanel'
 import CreateTaskModal from '../components/tasks/CreateTaskModal'
 import { SIDEBAR_VIEWS, ALL_TASKS_VIEW, STATUS_CONFIG, PRIORITY_CONFIG } from '../components/tasks/taskConfig'
 
 const VIEW_LABELS = Object.fromEntries([...SIDEBAR_VIEWS, ALL_TASKS_VIEW].map(v => [v.id, v.label]))
+
+const GREETINGS = ['Selamat pagi', 'Selamat siang', 'Selamat sore', 'Selamat malam']
+function greeting() {
+  const h = new Date().getHours()
+  if (h < 11) return GREETINGS[0]
+  if (h < 15) return GREETINGS[1]
+  if (h < 19) return GREETINGS[2]
+  return GREETINGS[3]
+}
 
 export default function Tasks() {
   const qc = useQueryClient()
@@ -26,6 +36,8 @@ export default function Tasks() {
   const [sidebarView, setSidebarView] = useState('my_day')
   const [viewMode, setViewMode] = useState('list')
   const [search, setSearch] = useState('')
+  const [activeTag, setActiveTag] = useState('')
+  const [sortBy, setSortBy] = useState('created')
   const [showCreate, setShowCreate] = useState(false)
   const [selectedId, setSelectedId] = useState(null)
 
@@ -39,24 +51,44 @@ export default function Tasks() {
     setSelectedId(Number(openParam))
   }
 
+  // "Lists" are a separate filter dimension from the fixed sidebar views —
+  // encoded as `list:<id>` (same convention San-Group used) rather than a
+  // second piece of state, so there's still exactly one "active nav item".
+  const activeListId = sidebarView.startsWith('list:') ? sidebarView.slice(5) : null
+  const queryParams = activeListId
+    ? { listId: activeListId, sortBy, limit: 200 }
+    : { view: sidebarView, sortBy, limit: 200 }
+
   const { data, isLoading } = useQuery({
-    queryKey: ['tasks', { view: sidebarView }],
-    queryFn: () => tasksApi.list({ view: sidebarView, limit: 200 }),
+    queryKey: ['tasks', queryParams],
+    queryFn: () => tasksApi.list(queryParams),
   })
   const tasks = data?.data ?? []
 
+  const availableTags = useMemo(() => {
+    const set = new Set()
+    for (const t of (data?.data ?? [])) for (const tag of (t.tags ?? [])) set.add(tag)
+    return [...set].sort()
+  }, [data])
+
   const filteredTasks = useMemo(() => {
-    const list = data?.data ?? []
-    if (!search.trim()) return list
-    const q = search.trim().toLowerCase()
-    return list.filter(t => t.title.toLowerCase().includes(q))
-  }, [data, search])
+    let list = data?.data ?? []
+    if (search.trim()) {
+      const q = search.trim().toLowerCase()
+      list = list.filter(t => t.title.toLowerCase().includes(q))
+    }
+    if (activeTag) list = list.filter(t => (t.tags ?? []).includes(activeTag))
+    return list
+  }, [data, search, activeTag])
 
   const { data: usersRes } = useQuery({
     queryKey: ['users', 'for-tasks'],
     queryFn: () => usersApi.list({ limit: 500 }),
   })
   const userOptions = usersRes?.data ?? []
+
+  const { data: listsRes } = useQuery({ queryKey: ['task-lists'], queryFn: taskListsApi.list })
+  const activeList = activeListId ? (listsRes ?? []).find(l => String(l.id) === activeListId) : null
 
   const selectedTask = tasks.find(t => t.id === selectedId) || null
 
@@ -65,7 +97,7 @@ export default function Tasks() {
   const quickPatch = useMutation({
     mutationFn: ({ id, patch }) => tasksApi.update(id, patch),
     onMutate: async ({ id, patch }) => {
-      const key = ['tasks', { view: sidebarView }]
+      const key = ['tasks', queryParams]
       await qc.cancelQueries({ queryKey: key })
       const prev = qc.getQueryData(key)
       qc.setQueryData(key, (old) => old && {
@@ -75,7 +107,7 @@ export default function Tasks() {
       return { prev }
     },
     onError: (e, _vars, ctx) => {
-      if (ctx?.prev) qc.setQueryData(['tasks', { view: sidebarView }], ctx.prev)
+      if (ctx?.prev) qc.setQueryData(['tasks', queryParams], ctx.prev)
       toast.error(e.response?.data?.message || 'Error')
     },
     onSettled: () => qc.invalidateQueries({ queryKey: ['tasks'] }),
@@ -99,16 +131,19 @@ export default function Tasks() {
       t.dueDate || '—',
       t.creator?.name || '—',
     ])
-    exportExcel(`tasks-${VIEW_LABELS[sidebarView] ?? sidebarView}-${new Date().toISOString().slice(0, 10)}`, {
+    const viewLabel = activeList?.name ?? VIEW_LABELS[sidebarView] ?? sidebarView
+    exportExcel(`tasks-${viewLabel}-${new Date().toISOString().slice(0, 10)}`, {
       headers, rows, sheetName: 'Tasks',
     })
   }
+
+  const viewLabel = activeList?.name ?? VIEW_LABELS[sidebarView] ?? ''
 
   return (
     <div className="px-6 py-6">
       <PageHeader
         title="Tugas"
-        subtitle={`${filteredTasks.length} task — ${VIEW_LABELS[sidebarView] ?? ''}`}
+        subtitle={`${filteredTasks.length} task — ${viewLabel}`}
         action={
           <div className="flex items-center gap-2">
             <button onClick={handleExport} className="btn-secondary" title="Export ke Excel">
@@ -125,6 +160,13 @@ export default function Tasks() {
         <TasksSidebar active={sidebarView} onSelect={(v) => { setSidebarView(v); setSelectedId(null) }} />
 
         <div className="flex-1 min-w-0 flex flex-col">
+          {sidebarView === 'my_day' && (
+            <div className="px-4 pt-4 pb-1">
+              <p className="text-lg font-bold text-slate-800">{greeting()}</p>
+              <p className="text-xs text-slate-400">{new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long' })}</p>
+            </div>
+          )}
+
           <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/50 flex items-center gap-3">
             <SearchBar value={search} onChange={setSearch} placeholder="Cari task…" />
             <div className="ml-auto flex items-center gap-1 bg-white border border-slate-200 rounded-lg p-0.5">
@@ -149,8 +191,31 @@ export default function Tasks() {
               >
                 <CalendarDays size={14} />
               </button>
+              <button
+                onClick={() => setViewMode('table')}
+                className={`p-1.5 rounded-md transition-colors ${viewMode === 'table' ? 'nav-active' : 'text-slate-400 hover:text-slate-600'}`}
+                title="Table view"
+              >
+                <Table2 size={14} />
+              </button>
             </div>
           </div>
+
+          {availableTags.length > 0 && (
+            <div className="px-4 py-2 border-b border-slate-100 flex items-center gap-1.5 flex-wrap">
+              {availableTags.map(tag => (
+                <button
+                  key={tag}
+                  onClick={() => setActiveTag(t => t === tag ? '' : tag)}
+                  className={`text-[11px] font-medium px-2 py-0.5 rounded-full transition-colors ${
+                    activeTag === tag ? 'nav-active' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                  }`}
+                >
+                  #{tag}
+                </button>
+              ))}
+            </div>
+          )}
 
           <div className="flex-1 overflow-y-auto p-4">
             {isLoading ? (
@@ -164,11 +229,18 @@ export default function Tasks() {
                 onToggleDone={toggleDone}
                 onStatusChange={(id, status) => quickPatch.mutate({ id, patch: { status } })}
               />
-            ) : (
+            ) : viewMode === 'calendar' ? (
               <CalendarView
                 tasks={filteredTasks}
                 onOpen={(t) => setSelectedId(t.id)}
                 onReschedule={(id, dueDate) => quickPatch.mutate({ id, patch: { dueDate } })}
+              />
+            ) : (
+              <TableView
+                tasks={filteredTasks}
+                sortBy={sortBy}
+                onSortChange={setSortBy}
+                onOpen={(t) => setSelectedId(t.id)}
               />
             )}
           </div>

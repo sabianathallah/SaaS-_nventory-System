@@ -47,6 +47,7 @@ const requestsRouter           = require('./requests');
 const requestTypesRouter       = require('./request_types');
 const hrisRouter                = require('./hris');
 const taskRouter                = require('./task');
+const taskListRouter             = require('./task-list');
 const notificationRouter        = require('./notification');
 const { Role, RolePermission } = require('../models');
 const { Op } = require('sequelize');
@@ -117,6 +118,7 @@ router.use('/requests',      requestsRouter);
 router.use('/request-types', requestTypesRouter);
 router.use('/hris',          hrisRouter);
 router.use('/tasks',         taskRouter);
+router.use('/task-lists',    taskListRouter);
 router.use('/notifications', notificationRouter);
 
 // Admin only

@@ -33,6 +33,12 @@ module.exports = (sequelize, DataTypes) => {
         onDelete: 'CASCADE',
         onUpdate: 'CASCADE',
       });
+      Task.belongsTo(models.TaskList, {
+        foreignKey: { name: 'listId', allowNull: true },
+        as: 'list',
+        onDelete: 'SET NULL',
+        onUpdate: 'CASCADE',
+      });
     }
   }
   Task.init({
@@ -60,6 +66,15 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: true,
     },
     assignmentNote: { type: DataTypes.TEXT, allowNull: true },
+    listId:         { type: DataTypes.INTEGER, allowNull: true },
+    tags:           { type: DataTypes.JSON, allowNull: false, defaultValue: [] },
+    reminderAt:     { type: DataTypes.DATE, allowNull: true },
+    reminderSentAt: { type: DataTypes.DATE, allowNull: true },
+    recurrence: {
+      type: DataTypes.ENUM('NONE', 'DAILY', 'WEEKDAYS', 'WEEKLY'),
+      allowNull: false,
+      defaultValue: 'NONE',
+    },
   }, {
     sequelize,
     modelName: 'Task',

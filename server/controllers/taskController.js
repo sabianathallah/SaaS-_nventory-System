@@ -1,10 +1,37 @@
 'use strict';
-const { Task, TaskComment, Notification, User, sequelize } = require('../models');
+const { Task, TaskComment, TaskList, Notification, User, sequelize } = require('../models');
 const { companyFilter, companyId } = require('../helpers/tenancy');
 const { paginate, buildFilter, paginatedResponse } = require('../helpers/queryHelper');
 const { userHasPermission } = require('../helpers/permCheck');
+const { addDaysStr, weekdayOf } = require('../helpers/timezone');
 
 const USER_ATTRS = ['id', 'name', 'email', 'divisi'];
+const TASK_INCLUDE = [
+    { model: User, as: 'assignee', attributes: USER_ATTRS },
+    { model: User, as: 'creator', attributes: USER_ATTRS },
+    { model: TaskList, as: 'list', attributes: ['id', 'name', 'color', 'icon'] },
+];
+
+const SORT_MAP = {
+    title:    [['title', 'ASC']],
+    dueDate:  [['dueDate', 'ASC']],
+    priority: [[sequelize.literal(`CASE "Task"."priority" WHEN 'HIGH' THEN 0 WHEN 'MEDIUM' THEN 1 ELSE 2 END`), 'ASC']],
+    created:  [['createdAt', 'DESC']],
+};
+
+// Recurrence presets are fixed (no custom RRULE) — advances dueDate by the
+// rule's cadence, skipping weekends for WEEKDAYS.
+function nextDueDate(dueDate, recurrence) {
+    if (!dueDate) return null;
+    if (recurrence === 'DAILY') return addDaysStr(dueDate, 1);
+    if (recurrence === 'WEEKLY') return addDaysStr(dueDate, 7);
+    if (recurrence === 'WEEKDAYS') {
+        let next = addDaysStr(dueDate, 1);
+        while (weekdayOf(next) === 0 || weekdayOf(next) === 6) next = addDaysStr(next, 1);
+        return next;
+    }
+    return null;
+}
 
 async function notify(userId, { type, title, message, link, companyId: cid }) {
     if (!userId) return;
@@ -15,7 +42,7 @@ class TaskController {
     static async list(req, res, next) {
         try {
             const { page, limit, offset } = paginate(req.query);
-            const filter = buildFilter(req.query, { status: 'exact', priority: 'exact', assigneeId: 'exact' });
+            const filter = buildFilter(req.query, { status: 'exact', priority: 'exact', assigneeId: 'exact', listId: 'exact' });
             const { Op } = require('sequelize');
 
             const canViewAll = await userHasPermission(req, 'tasks.view');
@@ -64,11 +91,8 @@ class TaskController {
                         ],
                     ],
                 },
-                include: [
-                    { model: User, as: 'assignee', attributes: USER_ATTRS },
-                    { model: User, as: 'creator', attributes: USER_ATTRS },
-                ],
-                order: [['createdAt', 'DESC']],
+                include: TASK_INCLUDE,
+                order: SORT_MAP[req.query.sortBy] || [['createdAt', 'DESC']],
                 limit, offset,
                 distinct: true,
             });
@@ -78,7 +102,7 @@ class TaskController {
 
     static async create(req, res, next) {
         try {
-            const { title, description, status, priority, dueDate, assigneeId, isImportant, myDayDate, parentTaskId } = req.body;
+            const { title, description, status, priority, dueDate, assigneeId, isImportant, myDayDate, parentTaskId, listId, tags, reminderAt, recurrence } = req.body;
             if (!title) throw { name: 'BadRequest', message: 'title wajib diisi' };
 
             // Sub-tasks inherit the parent's companyId server-side — never trust
@@ -105,6 +129,10 @@ class TaskController {
                 myDayDate: myDayDate || null,
                 parentTaskId: parentTaskId || null,
                 assignmentStatus: isAssignedToOther ? 'PENDING' : null,
+                listId: listId || null,
+                tags: Array.isArray(tags) ? tags : [],
+                reminderAt: reminderAt || null,
+                recurrence: recurrence || 'NONE',
             });
 
             if (isAssignedToOther) {
@@ -117,12 +145,7 @@ class TaskController {
                 });
             }
 
-            const full = await Task.findByPk(task.id, {
-                include: [
-                    { model: User, as: 'assignee', attributes: USER_ATTRS },
-                    { model: User, as: 'creator', attributes: USER_ATTRS },
-                ],
-            });
+            const full = await Task.findByPk(task.id, { include: TASK_INCLUDE });
             res.status(201).json(full);
         } catch (err) { next(err); }
     }
@@ -136,9 +159,10 @@ class TaskController {
                 throw { name: 'Forbidden', message: 'Anda tidak punya akses untuk mengubah task ini' };
             }
 
-            const { title, description, status, priority, dueDate, assigneeId, isImportant, myDayDate, parentTaskId } = req.body;
+            const { title, description, status, priority, dueDate, assigneeId, isImportant, myDayDate, parentTaskId, listId, tags, reminderAt, recurrence } = req.body;
             const prevAssigneeId = task.assigneeId;
             const isReassignedToOther = assigneeId !== undefined && Number(assigneeId) !== prevAssigneeId && assigneeId && Number(assigneeId) !== req.user.id;
+            const isCompletingNow = status === 'DONE' && task.status !== 'DONE';
 
             await task.update({
                 title: title ?? task.title,
@@ -152,6 +176,10 @@ class TaskController {
                 parentTaskId: parentTaskId === undefined ? task.parentTaskId : (parentTaskId || null),
                 assignmentStatus: isReassignedToOther ? 'PENDING' : task.assignmentStatus,
                 assignmentNote: isReassignedToOther ? null : task.assignmentNote,
+                listId: listId === undefined ? task.listId : (listId || null),
+                tags: tags === undefined ? task.tags : (Array.isArray(tags) ? tags : []),
+                reminderAt: reminderAt === undefined ? task.reminderAt : (reminderAt || null),
+                recurrence: recurrence === undefined ? task.recurrence : (recurrence || 'NONE'),
             });
 
             if (isReassignedToOther) {
@@ -164,11 +192,29 @@ class TaskController {
                 });
             }
 
+            // Completing a recurring task spawns its next occurrence immediately
+            // (mirrors MS To Do: the repeating task "reappears" the moment you
+            // check it off, not on a schedule) — reuses this same TODO-status
+            // creation path, just skipping notification (not a delegation).
+            if (isCompletingNow && task.recurrence !== 'NONE' && task.dueDate) {
+                await Task.create({
+                    title: task.title,
+                    description: task.description,
+                    status: 'TODO',
+                    priority: task.priority,
+                    dueDate: nextDueDate(task.dueDate, task.recurrence),
+                    assigneeId: task.assigneeId,
+                    createdBy: task.createdBy,
+                    companyId: task.companyId,
+                    listId: task.listId,
+                    tags: task.tags,
+                    recurrence: task.recurrence,
+                    parentTaskId: task.parentTaskId,
+                });
+            }
+
             const full = await Task.findByPk(task.id, {
-                include: [
-                    { model: User, as: 'assignee', attributes: USER_ATTRS },
-                    { model: User, as: 'creator', attributes: USER_ATTRS },
-                ],
+                include: TASK_INCLUDE,
             });
             res.json(full);
         } catch (err) { next(err); }
@@ -208,12 +254,7 @@ class TaskController {
                 companyId: task.companyId,
             });
 
-            const full = await Task.findByPk(task.id, {
-                include: [
-                    { model: User, as: 'assignee', attributes: USER_ATTRS },
-                    { model: User, as: 'creator', attributes: USER_ATTRS },
-                ],
-            });
+            const full = await Task.findByPk(task.id, { include: TASK_INCLUDE });
             res.json(full);
         } catch (err) { next(err); }
     }
@@ -242,12 +283,7 @@ class TaskController {
                 companyId: task.companyId,
             });
 
-            const full = await Task.findByPk(task.id, {
-                include: [
-                    { model: User, as: 'assignee', attributes: USER_ATTRS },
-                    { model: User, as: 'creator', attributes: USER_ATTRS },
-                ],
-            });
+            const full = await Task.findByPk(task.id, { include: TASK_INCLUDE });
             res.json(full);
         } catch (err) { next(err); }
     }

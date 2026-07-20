@@ -67,6 +67,12 @@ module.exports = (sequelize, DataTypes) => {
         onDelete: 'CASCADE',
         onUpdate: 'CASCADE'
       });
+      User.hasMany(models.TaskList, {
+        foreignKey: { name: 'userId', allowNull: false },
+        as: 'taskLists',
+        onDelete: 'CASCADE',
+        onUpdate: 'CASCADE'
+      });
       User.hasMany(models.Notification, {
         foreignKey: { name: 'userId', allowNull: false },
         as: 'notifications',
