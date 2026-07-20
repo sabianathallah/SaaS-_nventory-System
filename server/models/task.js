@@ -21,6 +21,18 @@ module.exports = (sequelize, DataTypes) => {
         onDelete: 'CASCADE',
         onUpdate: 'CASCADE',
       });
+      Task.belongsTo(models.Task, {
+        foreignKey: { name: 'parentTaskId', allowNull: true },
+        as: 'parentTask',
+        onDelete: 'CASCADE',
+        onUpdate: 'CASCADE',
+      });
+      Task.hasMany(models.Task, {
+        foreignKey: { name: 'parentTaskId', allowNull: true },
+        as: 'subTasks',
+        onDelete: 'CASCADE',
+        onUpdate: 'CASCADE',
+      });
     }
   }
   Task.init({
@@ -42,6 +54,12 @@ module.exports = (sequelize, DataTypes) => {
     createdBy:  { type: DataTypes.INTEGER, allowNull: false },
     isImportant: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     myDayDate:   { type: DataTypes.DATEONLY, allowNull: true },
+    parentTaskId: { type: DataTypes.INTEGER, allowNull: true },
+    assignmentStatus: {
+      type: DataTypes.ENUM('PENDING', 'ACCEPTED', 'REJECTED'),
+      allowNull: true,
+    },
+    assignmentNote: { type: DataTypes.TEXT, allowNull: true },
   }, {
     sequelize,
     modelName: 'Task',

@@ -43,13 +43,26 @@ class TaskController {
                     [Op.or]: [{ assigneeId: req.user.id }, { createdBy: req.user.id }],
                 });
 
+            // Top-level views only ever show parent tasks — sub-tasks are fetched
+            // explicitly via ?parentTaskId=<id> (mirrors the listComments pattern
+            // rather than a dedicated route) from the detail panel's Sub-tasks tab.
+            const parentFilter = req.query.parentTaskId
+                ? { parentTaskId: req.query.parentTaskId }
+                : { parentTaskId: null };
+
             const { rows, count } = await Task.findAndCountAll({
-                where: { ...companyFilter(req), ...filter, ...viewFilter, ...ownFilter },
+                where: { ...companyFilter(req), ...filter, ...viewFilter, ...ownFilter, ...parentFilter },
                 attributes: {
-                    include: [[
-                        sequelize.literal('(SELECT COUNT(*) FROM "TaskComments" WHERE "TaskComments"."taskId" = "Task"."id")'),
-                        'commentCount',
-                    ]],
+                    include: [
+                        [
+                            sequelize.literal('(SELECT COUNT(*) FROM "TaskComments" WHERE "TaskComments"."taskId" = "Task"."id")'),
+                            'commentCount',
+                        ],
+                        [
+                            sequelize.literal('(SELECT COUNT(*) FROM "Tasks" AS "st" WHERE "st"."parentTaskId" = "Task"."id")'),
+                            'subTaskCount',
+                        ],
+                    ],
                 },
                 include: [
                     { model: User, as: 'assignee', attributes: USER_ATTRS },
@@ -65,8 +78,19 @@ class TaskController {
 
     static async create(req, res, next) {
         try {
-            const { title, description, status, priority, dueDate, assigneeId, isImportant, myDayDate } = req.body;
+            const { title, description, status, priority, dueDate, assigneeId, isImportant, myDayDate, parentTaskId } = req.body;
             if (!title) throw { name: 'BadRequest', message: 'title wajib diisi' };
+
+            // Sub-tasks inherit the parent's companyId server-side — never trust
+            // a client-supplied companyId for them.
+            let resolvedCompanyId = companyId(req) ?? req.user.companyId;
+            if (parentTaskId) {
+                const parent = await Task.findOne({ where: { id: parentTaskId, ...companyFilter(req) } });
+                if (!parent) throw { name: 'NotFound', message: 'Parent task tidak ditemukan' };
+                resolvedCompanyId = parent.companyId;
+            }
+
+            const isAssignedToOther = assigneeId && Number(assigneeId) !== req.user.id;
 
             const task = await Task.create({
                 title,
@@ -76,12 +100,14 @@ class TaskController {
                 dueDate: dueDate || null,
                 assigneeId: assigneeId || null,
                 createdBy: req.user.id,
-                companyId: companyId(req) ?? req.user.companyId,
+                companyId: resolvedCompanyId,
                 isImportant: !!isImportant,
                 myDayDate: myDayDate || null,
+                parentTaskId: parentTaskId || null,
+                assignmentStatus: isAssignedToOther ? 'PENDING' : null,
             });
 
-            if (assigneeId && Number(assigneeId) !== req.user.id) {
+            if (isAssignedToOther) {
                 await notify(assigneeId, {
                     type: 'TASK_ASSIGNED',
                     title: 'Task baru ditugaskan',
@@ -110,8 +136,9 @@ class TaskController {
                 throw { name: 'Forbidden', message: 'Anda tidak punya akses untuk mengubah task ini' };
             }
 
-            const { title, description, status, priority, dueDate, assigneeId, isImportant, myDayDate } = req.body;
+            const { title, description, status, priority, dueDate, assigneeId, isImportant, myDayDate, parentTaskId } = req.body;
             const prevAssigneeId = task.assigneeId;
+            const isReassignedToOther = assigneeId !== undefined && Number(assigneeId) !== prevAssigneeId && assigneeId && Number(assigneeId) !== req.user.id;
 
             await task.update({
                 title: title ?? task.title,
@@ -122,9 +149,12 @@ class TaskController {
                 assigneeId: assigneeId === undefined ? task.assigneeId : (assigneeId || null),
                 isImportant: isImportant === undefined ? task.isImportant : !!isImportant,
                 myDayDate: myDayDate === undefined ? task.myDayDate : myDayDate,
+                parentTaskId: parentTaskId === undefined ? task.parentTaskId : (parentTaskId || null),
+                assignmentStatus: isReassignedToOther ? 'PENDING' : task.assignmentStatus,
+                assignmentNote: isReassignedToOther ? null : task.assignmentNote,
             });
 
-            if (assigneeId !== undefined && Number(assigneeId) !== prevAssigneeId && assigneeId && Number(assigneeId) !== req.user.id) {
+            if (isReassignedToOther) {
                 await notify(assigneeId, {
                     type: 'TASK_ASSIGNED',
                     title: 'Task ditugaskan kepada Anda',
@@ -154,6 +184,71 @@ class TaskController {
             }
             await task.destroy();
             res.json({ message: 'Task dihapus' });
+        } catch (err) { next(err); }
+    }
+
+    static async accept(req, res, next) {
+        try {
+            const task = await Task.findOne({ where: { id: req.params.id, ...companyFilter(req) } });
+            if (!task) throw { name: 'NotFound', message: 'Task tidak ditemukan' };
+            if (task.assigneeId !== req.user.id) {
+                throw { name: 'Forbidden', message: 'Hanya assignee yang bisa menerima task ini' };
+            }
+            if (task.assignmentStatus !== 'PENDING') {
+                throw { name: 'BadRequest', message: 'Task ini sudah direspon' };
+            }
+
+            await task.update({ assignmentStatus: 'ACCEPTED', assignmentNote: null });
+
+            await notify(task.createdBy, {
+                type: 'TASK_ACCEPTED',
+                title: 'Task diterima',
+                message: `${req.user.name} menerima task "${task.title}"`,
+                link: `/tasks?open=${task.id}`,
+                companyId: task.companyId,
+            });
+
+            const full = await Task.findByPk(task.id, {
+                include: [
+                    { model: User, as: 'assignee', attributes: USER_ATTRS },
+                    { model: User, as: 'creator', attributes: USER_ATTRS },
+                ],
+            });
+            res.json(full);
+        } catch (err) { next(err); }
+    }
+
+    static async reject(req, res, next) {
+        try {
+            const { note } = req.body;
+            if (!note || !note.trim()) throw { name: 'BadRequest', message: 'Catatan penolakan wajib diisi' };
+
+            const task = await Task.findOne({ where: { id: req.params.id, ...companyFilter(req) } });
+            if (!task) throw { name: 'NotFound', message: 'Task tidak ditemukan' };
+            if (task.assigneeId !== req.user.id) {
+                throw { name: 'Forbidden', message: 'Hanya assignee yang bisa menolak task ini' };
+            }
+            if (task.assignmentStatus !== 'PENDING') {
+                throw { name: 'BadRequest', message: 'Task ini sudah direspon' };
+            }
+
+            await task.update({ assignmentStatus: 'REJECTED', assignmentNote: note.trim() });
+
+            await notify(task.createdBy, {
+                type: 'TASK_REJECTED',
+                title: 'Task ditolak',
+                message: `${req.user.name} menolak task "${task.title}": ${note.trim()}`,
+                link: `/tasks?open=${task.id}`,
+                companyId: task.companyId,
+            });
+
+            const full = await Task.findByPk(task.id, {
+                include: [
+                    { model: User, as: 'assignee', attributes: USER_ATTRS },
+                    { model: User, as: 'creator', attributes: USER_ATTRS },
+                ],
+            });
+            res.json(full);
         } catch (err) { next(err); }
     }
 

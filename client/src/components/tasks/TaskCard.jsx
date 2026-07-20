@@ -1,5 +1,5 @@
-import { MessageSquare, Calendar, Star, Check } from 'lucide-react'
-import { PRIORITY_CONFIG, avatarColor, initials, fmtDue } from './taskConfig'
+import { MessageSquare, Calendar, Star, Check, ListTree } from 'lucide-react'
+import { PRIORITY_CONFIG, ASSIGNMENT_STATUS_CONFIG, avatarColor, initials, fmtDue } from './taskConfig'
 
 export default function TaskCard({ task, onOpen, onToggleDone, dragHandleProps, dragging }) {
   const due = fmtDue(task.dueDate)
@@ -48,6 +48,16 @@ export default function TaskCard({ task, onOpen, onToggleDone, dragHandleProps, 
           {Number(task.commentCount) > 0 && (
             <span className="inline-flex items-center gap-1 text-[11px] text-slate-400">
               <MessageSquare size={10} />{task.commentCount}
+            </span>
+          )}
+          {Number(task.subTaskCount) > 0 && (
+            <span className="inline-flex items-center gap-1 text-[11px] text-slate-400">
+              <ListTree size={10} />{task.subTaskCount}
+            </span>
+          )}
+          {(task.assignmentStatus === 'PENDING' || task.assignmentStatus === 'REJECTED') && (
+            <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${ASSIGNMENT_STATUS_CONFIG[task.assignmentStatus].cls}`}>
+              {ASSIGNMENT_STATUS_CONFIG[task.assignmentStatus].label}
             </span>
           )}
         </div>

@@ -11,6 +11,8 @@ router.get('/',                ctrl.list);
 router.post('/',               ctrl.create);
 router.put('/:id',             ctrl.update);
 router.delete('/:id',          ctrl.destroy);
+router.post('/:id/accept',     ctrl.accept);
+router.post('/:id/reject',     ctrl.reject);
 router.get('/:id/comments',    ctrl.listComments);
 router.post('/:id/comments',   ctrl.addComment);
 

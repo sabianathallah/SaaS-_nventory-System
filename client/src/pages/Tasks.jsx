@@ -6,13 +6,15 @@ import { useAuth } from '../context/AuthContext'
 import PageHeader from '../components/PageHeader'
 import SearchBar from '../components/SearchBar'
 import toast from 'react-hot-toast'
-import { Plus, LayoutList, Columns3 } from 'lucide-react'
+import { exportExcel } from '../utils/exportExcel'
+import { Plus, LayoutList, Columns3, CalendarDays, FileSpreadsheet } from 'lucide-react'
 import TasksSidebar from '../components/tasks/TasksSidebar'
 import ListView from '../components/tasks/ListView'
 import BoardView from '../components/tasks/BoardView'
+import CalendarView from '../components/tasks/CalendarView'
 import TaskDetailPanel from '../components/tasks/TaskDetailPanel'
 import CreateTaskModal from '../components/tasks/CreateTaskModal'
-import { SIDEBAR_VIEWS, ALL_TASKS_VIEW } from '../components/tasks/taskConfig'
+import { SIDEBAR_VIEWS, ALL_TASKS_VIEW, STATUS_CONFIG, PRIORITY_CONFIG } from '../components/tasks/taskConfig'
 
 const VIEW_LABELS = Object.fromEntries([...SIDEBAR_VIEWS, ALL_TASKS_VIEW].map(v => [v.id, v.label]))
 
@@ -58,15 +60,17 @@ export default function Tasks() {
 
   const selectedTask = tasks.find(t => t.id === selectedId) || null
 
-  const quickStatus = useMutation({
-    mutationFn: ({ id, status }) => tasksApi.update(id, { status }),
-    onMutate: async ({ id, status }) => {
+  // Generic optimistic single-field patch — used by Board's status-drag and
+  // Calendar's date-drag alike, so both reuse the same cancel/rollback dance.
+  const quickPatch = useMutation({
+    mutationFn: ({ id, patch }) => tasksApi.update(id, patch),
+    onMutate: async ({ id, patch }) => {
       const key = ['tasks', { view: sidebarView }]
       await qc.cancelQueries({ queryKey: key })
       const prev = qc.getQueryData(key)
       qc.setQueryData(key, (old) => old && {
         ...old,
-        data: old.data.map(t => t.id === id ? { ...t, status } : t),
+        data: old.data.map(t => t.id === id ? { ...t, ...patch } : t),
       })
       return { prev }
     },
@@ -82,7 +86,22 @@ export default function Tasks() {
   )
 
   function toggleDone(task) {
-    quickStatus.mutate({ id: task.id, status: task.status === 'DONE' ? 'TODO' : 'DONE' })
+    quickPatch.mutate({ id: task.id, patch: { status: task.status === 'DONE' ? 'TODO' : 'DONE' } })
+  }
+
+  function handleExport() {
+    const headers = ['Judul', 'Status', 'Priority', 'Assignee', 'Due Date', 'Dibuat oleh']
+    const rows = filteredTasks.map(t => [
+      t.title,
+      STATUS_CONFIG[t.status]?.label ?? t.status,
+      PRIORITY_CONFIG[t.priority]?.label ?? t.priority,
+      t.assignee?.name || '—',
+      t.dueDate || '—',
+      t.creator?.name || '—',
+    ])
+    exportExcel(`tasks-${VIEW_LABELS[sidebarView] ?? sidebarView}-${new Date().toISOString().slice(0, 10)}`, {
+      headers, rows, sheetName: 'Tasks',
+    })
   }
 
   return (
@@ -91,9 +110,14 @@ export default function Tasks() {
         title="Tugas"
         subtitle={`${filteredTasks.length} task — ${VIEW_LABELS[sidebarView] ?? ''}`}
         action={
-          <button onClick={() => setShowCreate(true)} className="btn-primary">
-            <Plus size={14} />Task Baru
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={handleExport} className="btn-secondary" title="Export ke Excel">
+              <FileSpreadsheet size={14} />Export
+            </button>
+            <button onClick={() => setShowCreate(true)} className="btn-primary">
+              <Plus size={14} />Task Baru
+            </button>
+          </div>
         }
       />
 
@@ -118,6 +142,13 @@ export default function Tasks() {
               >
                 <Columns3 size={14} />
               </button>
+              <button
+                onClick={() => setViewMode('calendar')}
+                className={`p-1.5 rounded-md transition-colors ${viewMode === 'calendar' ? 'nav-active' : 'text-slate-400 hover:text-slate-600'}`}
+                title="Calendar view"
+              >
+                <CalendarDays size={14} />
+              </button>
             </div>
           </div>
 
@@ -126,12 +157,18 @@ export default function Tasks() {
               <p className="text-sm text-slate-400 text-center py-16">Memuat…</p>
             ) : viewMode === 'list' ? (
               <ListView tasks={filteredTasks} view={sidebarView} onOpen={(t) => setSelectedId(t.id)} onToggleDone={toggleDone} />
-            ) : (
+            ) : viewMode === 'board' ? (
               <BoardView
                 tasks={filteredTasks}
                 onOpen={(t) => setSelectedId(t.id)}
                 onToggleDone={toggleDone}
-                onStatusChange={(id, status) => quickStatus.mutate({ id, status })}
+                onStatusChange={(id, status) => quickPatch.mutate({ id, patch: { status } })}
+              />
+            ) : (
+              <CalendarView
+                tasks={filteredTasks}
+                onOpen={(t) => setSelectedId(t.id)}
+                onReschedule={(id, dueDate) => quickPatch.mutate({ id, patch: { dueDate } })}
               />
             )}
           </div>

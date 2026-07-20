@@ -21,6 +21,15 @@ export const PRIORITY_CONFIG = {
   HIGH:   { label: 'High',   cls: 'bg-danger-light text-danger border border-danger-border',    dot: 'bg-danger',     bar: 'bg-danger',    border: 'border-danger' },
 }
 
+// Assignment response pill shown on cards/panel while a delegated task awaits
+// (or was refused) the assignee's response — reuses the same semantic tokens
+// as STATUS_CONFIG/PRIORITY_CONFIG rather than introducing new ad-hoc colors.
+export const ASSIGNMENT_STATUS_CONFIG = {
+  PENDING:  { label: 'Menunggu respon', cls: 'bg-warning-light text-warning border border-warning-border' },
+  REJECTED: { label: 'Ditolak',         cls: 'bg-danger-light text-danger border border-danger-border' },
+  ACCEPTED: { label: 'Diterima',        cls: 'bg-success-light text-success border border-success-border' },
+}
+
 export const BOARD_COLUMNS = ['TODO', 'IN_PROGRESS', 'DONE']
 
 // Sidebar views — mirrors the "view" query param handled server-side in taskController.list.
