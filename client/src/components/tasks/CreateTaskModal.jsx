@@ -38,7 +38,7 @@ export default function CreateTaskModal({ open, onClose, userOptions, defaultVie
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="label">Priority</label>
-            <select className="input" value={form.priority} onChange={e => setForm(f => ({ ...f, priority: e.target.value }))}>
+            <select className="select" value={form.priority} onChange={e => setForm(f => ({ ...f, priority: e.target.value }))}>
               {Object.entries(PRIORITY_CONFIG).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
             </select>
           </div>
@@ -49,7 +49,7 @@ export default function CreateTaskModal({ open, onClose, userOptions, defaultVie
         </div>
         <div>
           <label className="label">Assignee</label>
-          <select className="input" value={form.assigneeId} onChange={e => setForm(f => ({ ...f, assigneeId: e.target.value }))}>
+          <select className="select" value={form.assigneeId} onChange={e => setForm(f => ({ ...f, assigneeId: e.target.value }))}>
             <option value="">Tidak ditugaskan</option>
             {userOptions.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
           </select>

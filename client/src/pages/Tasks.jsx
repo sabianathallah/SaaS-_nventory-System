@@ -81,6 +81,10 @@ export default function Tasks() {
     isSuperAdmin || isAdmin || hasPermission('tasks.delete') || hasPermission('tasks.manage') || selectedTask.createdBy === user?.id
   )
 
+  function toggleDone(task) {
+    quickStatus.mutate({ id: task.id, status: task.status === 'DONE' ? 'TODO' : 'DONE' })
+  }
+
   return (
     <div className="px-6 py-6">
       <PageHeader
@@ -102,14 +106,14 @@ export default function Tasks() {
             <div className="ml-auto flex items-center gap-1 bg-white border border-slate-200 rounded-lg p-0.5">
               <button
                 onClick={() => setViewMode('list')}
-                className={`p-1.5 rounded-md transition-colors ${viewMode === 'list' ? 'bg-slate-800 text-white' : 'text-slate-400 hover:text-slate-600'}`}
+                className={`p-1.5 rounded-md transition-colors ${viewMode === 'list' ? 'nav-active' : 'text-slate-400 hover:text-slate-600'}`}
                 title="List view"
               >
                 <LayoutList size={14} />
               </button>
               <button
                 onClick={() => setViewMode('board')}
-                className={`p-1.5 rounded-md transition-colors ${viewMode === 'board' ? 'bg-slate-800 text-white' : 'text-slate-400 hover:text-slate-600'}`}
+                className={`p-1.5 rounded-md transition-colors ${viewMode === 'board' ? 'nav-active' : 'text-slate-400 hover:text-slate-600'}`}
                 title="Board view"
               >
                 <Columns3 size={14} />
@@ -121,11 +125,12 @@ export default function Tasks() {
             {isLoading ? (
               <p className="text-sm text-slate-400 text-center py-16">Memuat…</p>
             ) : viewMode === 'list' ? (
-              <ListView tasks={filteredTasks} onOpen={(t) => setSelectedId(t.id)} />
+              <ListView tasks={filteredTasks} view={sidebarView} onOpen={(t) => setSelectedId(t.id)} onToggleDone={toggleDone} />
             ) : (
               <BoardView
                 tasks={filteredTasks}
                 onOpen={(t) => setSelectedId(t.id)}
+                onToggleDone={toggleDone}
                 onStatusChange={(id, status) => quickStatus.mutate({ id, status })}
               />
             )}
