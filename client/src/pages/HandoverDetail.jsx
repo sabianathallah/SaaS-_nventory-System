@@ -5,6 +5,7 @@ import { handoverApi } from '../api'
 import { useAuth } from '../context/AuthContext'
 import { useExternalScanner } from '../hooks/useExternalScanner'
 import QRScanner from '../components/QRScanner'
+import ImageLightbox from '../components/ImageLightbox'
 import toast from 'react-hot-toast'
 import {
   ArrowLeft, PackageCheck, ScanLine, Camera, Trash2, Printer,
@@ -44,6 +45,7 @@ export default function HandoverDetail() {
   const [scanInput, setScanInput]   = useState('')
   const [showCamera, setShowCamera] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(null)
+  const [lightboxPhoto, setLightboxPhoto] = useState(null)
   const [scannerConnected, setScannerConnected] = useState(false)
   const [confirmClose, setConfirmClose]   = useState(false)
   const [attachUrlInput, setAttachUrlInput] = useState('')
@@ -308,9 +310,15 @@ export default function HandoverDetail() {
 
   const items = handover.Handover_Items ?? []
 
+  // Lampiran berupa gambar langsung dibuka di lightbox (tab yang sama);
+  // link non-gambar (Google Drive, PDF, dll) tetap dibuka di tab baru.
+  const isImageUrl = (url) =>
+    /\.(jpe?g|png|webp|gif|heic|heif)(\?|$)/i.test(url || '') || /res\.cloudinary\.com\/.+\/image\/upload/i.test(url || '')
+
   // ── Detail / Scan view ─────────────────────────────────────────────────────
   return (
     <>
+      {lightboxPhoto && <ImageLightbox src={lightboxPhoto} alt="Dokumen Lampiran" onClose={() => setLightboxPhoto(null)} />}
       {showCamera && (
         <QRScanner
           onScan={handleCameraResult}
@@ -502,14 +510,24 @@ export default function HandoverDetail() {
                 </span>
               </div>
               <div className="flex items-center gap-2">
-                <a
-                  href={handover.attachment_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="btn-primary text-xs px-4 py-1.5 flex items-center gap-1.5"
-                >
-                  <ExternalLink size={12} /> Buka Dokumen
-                </a>
+                {isImageUrl(handover.attachment_url) ? (
+                  <button
+                    type="button"
+                    onClick={() => setLightboxPhoto(handover.attachment_url)}
+                    className="btn-primary text-xs px-4 py-1.5 flex items-center gap-1.5"
+                  >
+                    <ExternalLink size={12} /> Buka Dokumen
+                  </button>
+                ) : (
+                  <a
+                    href={handover.attachment_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn-primary text-xs px-4 py-1.5 flex items-center gap-1.5"
+                  >
+                    <ExternalLink size={12} /> Buka Dokumen
+                  </a>
+                )}
                 <button
                   type="button"
                   onClick={() => { setAttachUrlInput(handover.attachment_url); setShowAttachInput(true) }}
