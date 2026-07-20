@@ -1,4 +1,4 @@
-import { Sun, Star, ClipboardList, ListChecks, CheckCircle2, Globe } from 'lucide-react'
+import { Sun, Star, ClipboardList, ListChecks, CheckCircle2, Globe, LayoutDashboard } from 'lucide-react'
 
 // Same semantic color tokens as the rest of the app (tailwind.config.js:
 // success/warning/danger/info) instead of ad-hoc slate/blue/green — ties
@@ -41,6 +41,7 @@ export const BOARD_COLUMNS = ['TODO', 'IN_PROGRESS', 'DONE']
 
 // Sidebar views — mirrors the "view" query param handled server-side in taskController.list.
 export const SIDEBAR_VIEWS = [
+  { id: 'dashboard', label: 'Dashboard',       icon: LayoutDashboard },
   { id: 'my_day',    label: 'My Day',          icon: Sun,           empty: 'Belum ada task di My Day — tarik task ke sini lewat panel detail.' },
   { id: 'important', label: 'Important',       icon: Star,          empty: 'Belum ada task penting yang ditandai.' },
   { id: 'assigned',  label: 'Assigned to Me',  icon: ClipboardList, empty: 'Belum ada task yang ditugaskan ke kamu.' },

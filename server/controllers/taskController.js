@@ -288,6 +288,46 @@ class TaskController {
         } catch (err) { next(err); }
     }
 
+    static async stats(req, res, next) {
+        try {
+            const { Op } = require('sequelize');
+            const canViewAll = await userHasPermission(req, 'tasks.view');
+            const ownFilter = canViewAll ? {} : {
+                [Op.or]: [{ assigneeId: req.user.id }, { createdBy: req.user.id }],
+            };
+            const baseWhere = { ...companyFilter(req), ...ownFilter, parentTaskId: null };
+
+            const today = new Date().toISOString().slice(0, 10);
+            const weekAhead = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
+
+            const [statusRows, priorityRows, overdue, dueSoon, total, done, pendingAssignments, listRows, taskLists] = await Promise.all([
+                Task.count({ where: baseWhere, group: ['status'] }),
+                Task.count({ where: baseWhere, group: ['priority'] }),
+                Task.count({ where: { ...baseWhere, status: { [Op.ne]: 'DONE' }, dueDate: { [Op.lt]: today } } }),
+                Task.count({ where: { ...baseWhere, status: { [Op.ne]: 'DONE' }, dueDate: { [Op.between]: [today, weekAhead] } } }),
+                Task.count({ where: baseWhere }),
+                Task.count({ where: { ...baseWhere, status: 'DONE' } }),
+                Task.count({ where: { ...baseWhere, assignmentStatus: 'PENDING', assigneeId: req.user.id } }),
+                Task.count({ where: baseWhere, group: ['listId'] }),
+                TaskList.findAll({ where: { userId: req.user.id }, attributes: ['id', 'name', 'color'] }),
+            ]);
+
+            const toMap = (rows, key) => Object.fromEntries(rows.map(r => [r[key], r.count]));
+            const byListCounts = toMap(listRows, 'listId');
+
+            res.json({
+                byStatus: { TODO: 0, IN_PROGRESS: 0, DONE: 0, ...toMap(statusRows, 'status') },
+                byPriority: { LOW: 0, MEDIUM: 0, HIGH: 0, ...toMap(priorityRows, 'priority') },
+                overdue,
+                dueSoon,
+                completionRate: total > 0 ? Math.round((done / total) * 100) : 0,
+                pendingAssignments,
+                total,
+                byList: taskLists.map(l => ({ id: l.id, name: l.name, color: l.color, count: byListCounts[l.id] ?? 0 })),
+            });
+        } catch (err) { next(err); }
+    }
+
     static async listComments(req, res, next) {
         try {
             const task = await Task.findOne({ where: { id: req.params.id, ...companyFilter(req) } });

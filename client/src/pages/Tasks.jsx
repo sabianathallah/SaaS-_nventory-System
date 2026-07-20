@@ -13,6 +13,7 @@ import ListView from '../components/tasks/ListView'
 import BoardView from '../components/tasks/BoardView'
 import CalendarView from '../components/tasks/CalendarView'
 import TableView from '../components/tasks/TableView'
+import TaskDashboard from '../components/tasks/TaskDashboard'
 import TaskDetailPanel from '../components/tasks/TaskDetailPanel'
 import CreateTaskModal from '../components/tasks/CreateTaskModal'
 import { SIDEBAR_VIEWS, ALL_TASKS_VIEW, STATUS_CONFIG, PRIORITY_CONFIG } from '../components/tasks/taskConfig'
@@ -59,9 +60,12 @@ export default function Tasks() {
     ? { listId: activeListId, sortBy, limit: 200 }
     : { view: sidebarView, sortBy, limit: 200 }
 
+  const isDashboard = sidebarView === 'dashboard'
+
   const { data, isLoading } = useQuery({
     queryKey: ['tasks', queryParams],
     queryFn: () => tasksApi.list(queryParams),
+    enabled: !isDashboard,
   })
   const tasks = data?.data ?? []
 
@@ -143,12 +147,14 @@ export default function Tasks() {
     <div className="px-6 py-6">
       <PageHeader
         title="Tugas"
-        subtitle={`${filteredTasks.length} task — ${viewLabel}`}
+        subtitle={isDashboard ? 'Ringkasan seluruh task' : `${filteredTasks.length} task — ${viewLabel}`}
         action={
           <div className="flex items-center gap-2">
-            <button onClick={handleExport} className="btn-secondary" title="Export ke Excel">
-              <FileSpreadsheet size={14} />Export
-            </button>
+            {!isDashboard && (
+              <button onClick={handleExport} className="btn-secondary" title="Export ke Excel">
+                <FileSpreadsheet size={14} />Export
+              </button>
+            )}
             <button onClick={() => setShowCreate(true)} className="btn-primary">
               <Plus size={14} />Task Baru
             </button>
@@ -160,6 +166,12 @@ export default function Tasks() {
         <TasksSidebar active={sidebarView} onSelect={(v) => { setSidebarView(v); setSelectedId(null) }} />
 
         <div className="flex-1 min-w-0 flex flex-col">
+          {isDashboard ? (
+            <div className="flex-1 overflow-y-auto">
+              <TaskDashboard />
+            </div>
+          ) : (
+          <>
           {sidebarView === 'my_day' && (
             <div className="px-4 pt-4 pb-1">
               <p className="text-lg font-bold text-slate-800">{greeting()}</p>
@@ -244,6 +256,8 @@ export default function Tasks() {
               />
             )}
           </div>
+          </>
+          )}
         </div>
       </div>
 
