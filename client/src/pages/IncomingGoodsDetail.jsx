@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { vendorDeliveriesApi, vendorsApi, productsApi, productSkusApi } from '../api'
 import { useAuth } from '../context/AuthContext'
 import SearchableSelect from '../components/SearchableSelect'
+import ImageLightbox from '../components/ImageLightbox'
 import toast from 'react-hot-toast'
 import {
   ArrowLeft, Save, Plus, Trash2, Video,
@@ -347,6 +348,7 @@ export default function IncomingGoodsDetail() {
   }, [existing])
 
   const MAX_PHOTOS = 8
+  const [lightboxPhoto, setLightboxPhoto] = useState(null)
 
   function handlePhotoAdd(e) {
     const files = Array.from(e.target.files ?? [])
@@ -463,6 +465,7 @@ export default function IncomingGoodsDetail() {
 
   return (
     <>
+    {lightboxPhoto && <ImageLightbox src={lightboxPhoto} alt="Foto Surat Jalan" onClose={() => setLightboxPhoto(null)} />}
     <div className="px-6 py-6 max-w-5xl mx-auto space-y-6 no-print">
 
       {/* ── Page header ─────────────────────────────────────── */}
@@ -658,7 +661,7 @@ export default function IncomingGoodsDetail() {
                     src={p.type === 'existing' ? p.url : p.preview}
                     alt={`SJ ${idx + 1}`}
                     title="Klik untuk buka ukuran penuh"
-                    onClick={() => window.open(p.type === 'existing' ? p.url : p.preview, '_blank', 'noopener')}
+                    onClick={() => setLightboxPhoto(p.type === 'existing' ? p.url : p.preview)}
                     className="w-24 h-24 object-cover rounded-xl border border-slate-200 select-none cursor-zoom-in"
                   />
                   <button
@@ -691,9 +694,11 @@ export default function IncomingGoodsDetail() {
             <p className="text-xs font-semibold text-slate-600 mb-2">Foto Surat Jalan</p>
             <div className="flex flex-wrap gap-2">
               {photos.map((p, idx) => (
-                <a key={idx} href={p.url} target="_blank" rel="noopener noreferrer">
-                  <img src={p.url} alt={`SJ ${idx + 1}`} className="w-16 h-16 object-cover rounded-lg border border-slate-200 hover:opacity-80 transition-opacity" />
-                </a>
+                <img
+                  key={idx} src={p.url} alt={`SJ ${idx + 1}`}
+                  onClick={() => setLightboxPhoto(p.url)}
+                  className="w-16 h-16 object-cover rounded-lg border border-slate-200 hover:opacity-80 transition-opacity cursor-zoom-in"
+                />
               ))}
             </div>
           </div>

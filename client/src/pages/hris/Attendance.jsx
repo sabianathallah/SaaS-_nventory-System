@@ -7,6 +7,7 @@ import CameraCapture from '../../components/CameraCapture'
 import { useCompanyGuard } from '../../hooks/useCompanyGuard'
 import CompanyRequiredBanner from '../../components/CompanyRequiredBanner'
 import { LogOut, MapPin, Loader2, Camera, Building2, Laptop, Briefcase, X, Pencil, Plus, Trophy, AlarmClock as AlarmClockIcon, UserX, Thermometer, Timer, Medal } from 'lucide-react'
+import ImageLightbox from '../../components/ImageLightbox'
 import LeaderboardCard from '../../components/hris/LeaderboardCard'
 
 const avatarInitials = (name = '') => name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
@@ -155,6 +156,7 @@ export default function Attendance() {
   const [latePrompt, setLatePrompt] = useState(null) // { id, checkInAt } atau null
   const [lateReasonInput, setLateReasonInput] = useState('')
   const [lightboxUser, setLightboxUser] = useState(null) // { name, avatar } atau null
+  const [lightboxPhoto, setLightboxPhoto] = useState(null) // { src, alt } atau null — foto check-in/out
 
   const { data: today } = useQuery({ queryKey: ['hris-today'], queryFn: hrisApi.today })
   const { data: hrisSettings } = useQuery({ queryKey: ['hris-settings'], queryFn: hrisApi.hrisSettings })
@@ -471,6 +473,8 @@ export default function Attendance() {
         </div>
       )}
 
+      {lightboxPhoto && <ImageLightbox src={lightboxPhoto.src} alt={lightboxPhoto.alt} onClose={() => setLightboxPhoto(null)} />}
+
       {lightboxUser && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 px-4 animate-fade-in"
@@ -746,9 +750,11 @@ export default function Attendance() {
                   <td className="td">
                     <div className="flex items-center gap-2">
                       {r.checkInPhoto && (
-                        <a href={r.checkInPhoto} target="_blank" rel="noreferrer">
-                          <img src={r.checkInPhoto} alt="Foto check-in" className="w-7 h-7 rounded-full object-cover border border-slate-200" />
-                        </a>
+                        <img
+                          src={r.checkInPhoto} alt="Foto check-in"
+                          onClick={() => setLightboxPhoto({ src: r.checkInPhoto, alt: `Check-in · ${r.user?.name ?? ''} · ${fmtDate(r.date)}` })}
+                          className="w-7 h-7 rounded-full object-cover border border-slate-200 cursor-zoom-in hover:opacity-80 transition-opacity"
+                        />
                       )}
                       <div>
                         {fmtTime(r.checkInAt)}
@@ -759,9 +765,11 @@ export default function Attendance() {
                   <td className="td">
                     <div className="flex items-center gap-2">
                       {r.checkOutPhoto && (
-                        <a href={r.checkOutPhoto} target="_blank" rel="noreferrer">
-                          <img src={r.checkOutPhoto} alt="Foto check-out" className="w-7 h-7 rounded-full object-cover border border-slate-200" />
-                        </a>
+                        <img
+                          src={r.checkOutPhoto} alt="Foto check-out"
+                          onClick={() => setLightboxPhoto({ src: r.checkOutPhoto, alt: `Check-out · ${r.user?.name ?? ''} · ${fmtDate(r.date)}` })}
+                          className="w-7 h-7 rounded-full object-cover border border-slate-200 cursor-zoom-in hover:opacity-80 transition-opacity"
+                        />
                       )}
                       <div>
                         {fmtTime(r.checkOutAt)}
