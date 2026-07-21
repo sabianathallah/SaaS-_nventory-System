@@ -171,7 +171,7 @@ const ADMIN_NAV_GROUPS = [
 ]
 
 const PAGE_TITLES = {
-  '/home': 'Home', '/dashboard': 'Dashboard', '/sop': 'SOP Operasional', '/products': 'Produk', '/catalog': 'Data Master',
+  '/home': 'Beranda', '/dashboard': 'Dashboard', '/sop': 'SOP Operasional', '/products': 'Produk', '/catalog': 'Data Master',
   '/handbook': 'Company Handbook', '/handbook/kebijakan': 'Kebijakan Perusahaan', '/handbook/struktur': 'Struktur Organisasi',
   '/hris': 'HRIS', '/hris/attendance': 'Presensi', '/hris/leave': 'Cuti', '/hris/wfa': 'WFA', '/hris/late-excuse': 'Izin Telat', '/hris/pengajuan': 'Pengajuan',
   '/hris/admin/shifts': 'Kelola Shift', '/hris/admin/attendance-review': 'Persetujuan Presensi', '/hris/admin/locations': 'Kelola Lokasi Kantor', '/hris/reports': 'Laporan HRIS',
@@ -405,9 +405,12 @@ export default function Layout({ children }) {
         ].join(' ')}
         style={{ background: '#F5F3EF', borderRight: '1px solid #E0DDD7', boxShadow: '2px 0 8px rgba(0,0,0,0.04)' }}
       >
-        {/* ── Logo ── */}
-        <div
-          className="flex items-center h-14 flex-shrink-0 overflow-hidden"
+        {/* ── Logo — klik buat balik ke Personal Dashboard (/home) ── */}
+        <button
+          type="button"
+          onClick={() => navigate('/home')}
+          title="Beranda"
+          className="flex items-center h-14 flex-shrink-0 overflow-hidden hover:bg-slate-200/40 transition-colors"
           style={{ borderBottom: '1px solid #E0DDD7', padding: collapsed ? '0 12px' : '0 16px' }}
         >
           <img
@@ -416,7 +419,7 @@ export default function Layout({ children }) {
             className="w-7 h-7 rounded object-cover flex-shrink-0"
           />
           <div
-            className="ml-3 min-w-0 overflow-hidden transition-all duration-300"
+            className="ml-3 min-w-0 overflow-hidden transition-all duration-300 text-left"
             style={{ opacity: collapsed ? 0 : 1, width: collapsed ? 0 : 'auto', maxWidth: collapsed ? 0 : 200 }}
           >
             <p className="font-bold text-sm text-slate-800 leading-tight whitespace-nowrap">Preface</p>
@@ -424,7 +427,7 @@ export default function Layout({ children }) {
               {isHandbook ? 'Company Handbook' : isHRIS ? 'HRIS' : isTasksModule ? 'Task Management' : isAdminModule ? 'Administrasi' : 'Inventory System'}
             </p>
           </div>
-        </div>
+        </button>
 
         {/* ── Nav ── */}
         <ModuleSwitcher collapsed={collapsed} activeModule={activeModule} tasksBadge={taskStats?.pendingAssignments ?? 0} />

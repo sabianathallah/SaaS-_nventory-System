@@ -65,32 +65,6 @@ import Pengajuan from './pages/Pengajuan'
 import PengajuanBaru from './pages/PengajuanBaru'
 import PengajuanDetail from './pages/PengajuanDetail'
 
-// Permission yang menandakan user benar-benar memakai fitur Inventory (bukan
-// cuma akses default seperti Dashboard/SOP/Pengajuan yang terbuka untuk semua
-// user login). Dipakai untuk menentukan landing page setelah login.
-const INVENTORY_PERMISSIONS = [
-  'inventory.view', 'inventory.manage', 'inventory.product.create', 'inventory.product.edit',
-  'stock.in.view', 'stock.out.view', 'stock.view', 'stock.opname.view', 'stock.transfer.view',
-  'shipping.manual.view', 'shipping.manual.create', 'shipping.manual.edit',
-  'packing.manage', 'packing.incoming', 'packing.jobs', 'packing.view',
-  'handover.view', 'db_link.view', 'reports.manage',
-]
-
-// Module "utama" yang dihitung untuk landing decision. Handbook sengaja tidak
-// dihitung karena selalu terbuka untuk semua user — kalau ikut dihitung, semua
-// orang jadi punya >1 module dan selalu diarahkan ke Home, padahal tujuannya
-// user dengan 1 module kerja tetap langsung ke module itu.
-function getPrimaryModules({ isAdmin, hasPermission }) {
-  const modules = []
-  if (isAdmin || INVENTORY_PERMISSIONS.some((p) => hasPermission(p))) {
-    modules.push({ key: 'inventory', to: '/dashboard' })
-  }
-  if (isAdmin || hasPermission('hris.view')) {
-    modules.push({ key: 'hris', to: '/hris' })
-  }
-  return modules
-}
-
 function PrivateRoute({ children }) {
   const { user } = useAuth()
   return user ? children : <Navigate to="/login" replace />
@@ -101,13 +75,14 @@ function PublicRoute({ children }) {
   return !user ? children : <Navigate to="/" replace />
 }
 
+// Home ("/home") sekarang jadi Personal Dashboard universal — My Day,
+// quick access ke modul yang dipunya user, dan presensi. Semua user login
+// mendarat di sini dulu (bukan langsung ke /dashboard Inventory), supaya
+// dashboard inventory bisa tetap murni khusus data inventaris.
 function RootRoute() {
-  const { user, isAdmin, hasPermission } = useAuth()
+  const { user } = useAuth()
   if (!user) return <Landing />
-
-  const modules = getPrimaryModules({ isAdmin, hasPermission })
-  if (modules.length > 1) return <Navigate to="/home" replace />
-  return <Navigate to={modules[0]?.to ?? '/dashboard'} replace />
+  return <Navigate to="/home" replace />
 }
 
 // Shows NoPermission UI instead of redirecting — user can see they lack access
