@@ -16,7 +16,7 @@ import {
   PackageCheck, Link2, BarChart2, BookMarked, ChevronDown,
   SendHorizonal, FileText, PanelLeftClose, PanelLeftOpen, UserCog,
   Laptop, Wallet, CalendarClock, ShieldCheck, AlarmClock, Receipt, ListChecks,
-  Star, CheckCircle2,
+  Star, CheckCircle2, Home,
 } from 'lucide-react'
 import logoPreface from '../assets/logo-preface.jpeg'
 
@@ -79,6 +79,10 @@ const NAV_GROUPS = [
     ],
   },
 ]
+
+// Home (Personal Dashboard) — halaman tunggal tanpa sub-halaman, jadi tidak
+// butuh nav group apa pun di bawah ModuleSwitcher (lihat isHome di Layout).
+const HOME_NAV_GROUPS = []
 
 // Task Management module — halaman /tasks sudah punya sidebar internalnya
 // sendiri (view Important/Assigned/dst, lihat TasksSidebar.jsx), jadi nav
@@ -215,17 +219,20 @@ function NavTooltip({ label, children }) {
   )
 }
 
-// Module switcher — toggle antara Inventory System, Company Handbook, dan HRIS.
+// Module switcher — toggle antara Personal Dashboard, HRIS, Tugas, Inventory,
+// Handbook, dan Admin. Urutan kiri-ke-kanan/atas-ke-bawah sengaja mengikuti
+// frekuensi pakai harian (Beranda & HRIS dulu, baru Inventory/Admin).
 function ModuleSwitcher({ collapsed, activeModule, tasksBadge }) {
   const navigate = useNavigate()
   const { hasPermission, isSuperAdmin, isAdmin } = useAuth()
   const items = [
-    { key: 'inventory', label: 'Inventory', icon: Package,    to: '/dashboard', active: activeModule === 'inventory' },
-    { key: 'tasks',     label: 'Tugas',     icon: ListChecks, to: '/tasks',     active: activeModule === 'tasks', badge: tasksBadge },
-    { key: 'handbook',  label: 'Handbook',   icon: BookOpen, to: '/handbook',  active: activeModule === 'handbook' },
+    { key: 'home',      label: 'Beranda',  icon: Home,       to: '/home',      active: activeModule === 'home' },
     ...(isSuperAdmin || hasPermission('hris.view')
       ? [{ key: 'hris', label: 'HRIS', icon: UserCog, to: '/hris', active: activeModule === 'hris' }]
       : []),
+    { key: 'tasks',     label: 'Tugas',     icon: ListChecks, to: '/tasks',     active: activeModule === 'tasks', badge: tasksBadge },
+    { key: 'inventory', label: 'Inventory', icon: Package,    to: '/dashboard', active: activeModule === 'inventory' },
+    { key: 'handbook',  label: 'Handbook',   icon: BookOpen, to: '/handbook',  active: activeModule === 'handbook' },
     ...(isAdmin || hasPermission('admin.users')
       ? [{ key: 'admin', label: 'Admin', icon: ShieldCheck, to: '/users', active: activeModule === 'admin' }]
       : []),
@@ -260,7 +267,10 @@ function ModuleSwitcher({ collapsed, activeModule, tasksBadge }) {
 
   return (
     <div className="px-3 pt-3 pb-2 flex-shrink-0" style={{ borderBottom: '1px solid #E0DDD7' }}>
-      <div className="p-1 rounded-lg bg-slate-200/50 flex gap-1">
+      {/* grid (bukan flex 1-baris) — begitu item bertambah (mis. HRIS/Admin
+          aktif buat user itu), otomatis lanjut ke baris ke-2/3 alih-alih
+          jadi kepenyet berdempetan */}
+      <div className="p-1 rounded-lg bg-slate-200/50 grid grid-cols-3 gap-1">
         {items.map(item => {
           const Icon = item.icon
           return (
@@ -269,7 +279,7 @@ function ModuleSwitcher({ collapsed, activeModule, tasksBadge }) {
               type="button"
               onClick={() => navigate(item.to)}
               title={item.badge ? `${item.label} (${item.badge})` : item.label}
-              className={`relative flex-1 flex flex-col items-center justify-center gap-0.5 py-1.5 rounded-md text-[9px] font-semibold leading-none transition-colors ${
+              className={`relative flex flex-col items-center justify-center gap-0.5 py-1.5 rounded-md text-[9px] font-semibold leading-none transition-colors ${
                 item.active ? 'text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'
               }`}
               style={item.active ? { background: BRAND } : undefined}
@@ -309,15 +319,19 @@ export default function Layout({ children }) {
     refetchInterval: 60_000,
   })
 
-  // Handbook module — sidebar kiri di-swap total, lihat HANDBOOK_NAV_GROUPS di atas
+  // Home (Personal Dashboard) — halaman mandiri tanpa sub-nav sendiri, jadi
+  // sidebar di bawahnya sengaja kosong (lihat HOME_NAV_GROUPS) alih-alih
+  // "jatuh" ke NAV_GROUPS Inventory seperti sebelumnya, yang bikin pill
+  // Inventory ke-highlight padahal user lagi di halaman netral.
+  const isHome      = location.pathname === '/home'
   const isHandbook  = location.pathname.startsWith('/handbook')
   const isHRIS      = location.pathname.startsWith('/hris')
   const isTasksModule = location.pathname.startsWith('/tasks')
   const isAdminModule = ['/users', '/roles', '/companies', '/page-visibility'].some(
     (p) => location.pathname === p || location.pathname.startsWith(p + '/')
   )
-  const activeModule = isHandbook ? 'handbook' : isHRIS ? 'hris' : isTasksModule ? 'tasks' : isAdminModule ? 'admin' : 'inventory'
-  const activeGroups = isHandbook ? HANDBOOK_NAV_GROUPS : isHRIS ? HRIS_NAV_GROUPS : isTasksModule ? TASKS_NAV_GROUPS : isAdminModule ? ADMIN_NAV_GROUPS : NAV_GROUPS
+  const activeModule = isHome ? 'home' : isHandbook ? 'handbook' : isHRIS ? 'hris' : isTasksModule ? 'tasks' : isAdminModule ? 'admin' : 'inventory'
+  const activeGroups = isHome ? HOME_NAV_GROUPS : isHandbook ? HANDBOOK_NAV_GROUPS : isHRIS ? HRIS_NAV_GROUPS : isTasksModule ? TASKS_NAV_GROUPS : isAdminModule ? ADMIN_NAV_GROUPS : NAV_GROUPS
   // Path yang punya "anak" (mis. /hris punya /hris/attendance, dst) butuh `end`
   // di NavLink, kalau tidak dia akan tetap ke-highlight walau lagi di sub-route.
   const allNavPaths = activeGroups.flatMap(g => g.items.map(i => i.to))
@@ -335,7 +349,7 @@ export default function Layout({ children }) {
 
   // Accordion groups (hanya relevan saat expanded) — default: buka semua group
   const [openGroups, setOpenGroups] = useState(() =>
-    new Set([...NAV_GROUPS, ...HANDBOOK_NAV_GROUPS, ...HRIS_NAV_GROUPS, ...TASKS_NAV_GROUPS, ...ADMIN_NAV_GROUPS].map(g => g.label))
+    new Set([...NAV_GROUPS, ...HOME_NAV_GROUPS, ...HANDBOOK_NAV_GROUPS, ...HRIS_NAV_GROUPS, ...TASKS_NAV_GROUPS, ...ADMIN_NAV_GROUPS].map(g => g.label))
   )
 
   // Auto-open group saat navigasi
@@ -424,7 +438,7 @@ export default function Layout({ children }) {
           >
             <p className="font-bold text-sm text-slate-800 leading-tight whitespace-nowrap">Preface</p>
             <p className="text-[10px] text-slate-400 leading-tight whitespace-nowrap">
-              {isHandbook ? 'Company Handbook' : isHRIS ? 'HRIS' : isTasksModule ? 'Task Management' : isAdminModule ? 'Administrasi' : 'Inventory System'}
+              {isHome ? 'Personal Dashboard' : isHandbook ? 'Company Handbook' : isHRIS ? 'HRIS' : isTasksModule ? 'Task Management' : isAdminModule ? 'Administrasi' : 'Inventory System'}
             </p>
           </div>
         </button>
