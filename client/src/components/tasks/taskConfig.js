@@ -1,4 +1,4 @@
-import { Sun, Star, ClipboardList, ListChecks, CheckCircle2, Globe, LayoutDashboard } from 'lucide-react'
+import { Star, ClipboardList, ListChecks, CheckCircle2, Globe, LayoutDashboard } from 'lucide-react'
 
 // Same semantic color tokens as the rest of the app (tailwind.config.js:
 // success/warning/danger/info) instead of ad-hoc slate/blue/green — ties
@@ -40,9 +40,10 @@ export const RECURRENCE_CONFIG = {
 export const BOARD_COLUMNS = ['TODO', 'IN_PROGRESS', 'DONE']
 
 // Sidebar views — mirrors the "view" query param handled server-side in taskController.list.
+// My Day pindah ke Dashboard utama (lihat components/tasks/MyDayToday.jsx) —
+// modul Tugas ini murni untuk mengelola & meninjau seluruh task.
 export const SIDEBAR_VIEWS = [
   { id: 'dashboard', label: 'Dashboard',       icon: LayoutDashboard },
-  { id: 'my_day',    label: 'My Day',          icon: Sun,           empty: 'Belum ada task di My Day — tarik task ke sini lewat panel detail.' },
   { id: 'important', label: 'Important',       icon: Star,          empty: 'Belum ada task penting yang ditandai.' },
   { id: 'assigned',  label: 'Assigned to Me',  icon: ClipboardList, empty: 'Belum ada task yang ditugaskan ke kamu.' },
   { id: 'created',   label: 'My Tasks',        icon: ListChecks,    empty: 'Kamu belum membuat task apa pun.' },

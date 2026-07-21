@@ -19,22 +19,16 @@ import CreateTaskModal from '../components/tasks/CreateTaskModal'
 import { SIDEBAR_VIEWS, ALL_TASKS_VIEW, STATUS_CONFIG, PRIORITY_CONFIG } from '../components/tasks/taskConfig'
 
 const VIEW_LABELS = Object.fromEntries([...SIDEBAR_VIEWS, ALL_TASKS_VIEW].map(v => [v.id, v.label]))
-
-const GREETINGS = ['Selamat pagi', 'Selamat siang', 'Selamat sore', 'Selamat malam']
-function greeting() {
-  const h = new Date().getHours()
-  if (h < 11) return GREETINGS[0]
-  if (h < 15) return GREETINGS[1]
-  if (h < 19) return GREETINGS[2]
-  return GREETINGS[3]
-}
+const VALID_VIEW_IDS = new Set([...SIDEBAR_VIEWS, ALL_TASKS_VIEW].map(v => v.id))
 
 export default function Tasks() {
   const qc = useQueryClient()
   const { user, hasPermission, isSuperAdmin, isAdmin } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
 
-  const [sidebarView, setSidebarView] = useState('my_day')
+  // Landing view saat modul dibuka — My Day sudah pindah ke Dashboard utama,
+  // jadi di sini defaultnya "Dashboard" (ringkasan/statistik seluruh task).
+  const [sidebarView, setSidebarView] = useState('dashboard')
   const [viewMode, setViewMode] = useState('list')
   const [search, setSearch] = useState('')
   const [activeTag, setActiveTag] = useState('')
@@ -42,14 +36,22 @@ export default function Tasks() {
   const [showCreate, setShowCreate] = useState(false)
   const [selectedId, setSelectedId] = useState(null)
 
-  // Deep-link from notification bell: /tasks?open=<id> — consumed once during
-  // render (not an effect) so it doesn't cascade an extra render; guarded by
-  // `consumedOpenId` so it only fires the first time a given id shows up.
+  // Deep-link dari notification bell (?open=<id>) dan dari shortcut navbar
+  // utama (?view=<id>, mis. link "Penting"/"Ditugaskan" di Layout.jsx) —
+  // masing-masing dikonsumsi sekali saja lewat guard, sama pola dengan
+  // `consumedOpenId` di bawah supaya tidak cascade render tambahan.
   const [consumedOpenId, setConsumedOpenId] = useState(null)
   const openParam = searchParams.get('open')
   if (openParam && openParam !== consumedOpenId) {
     setConsumedOpenId(openParam)
     setSelectedId(Number(openParam))
+  }
+
+  const [consumedViewParam, setConsumedViewParam] = useState(null)
+  const viewParam = searchParams.get('view')
+  if (viewParam && viewParam !== consumedViewParam && VALID_VIEW_IDS.has(viewParam)) {
+    setConsumedViewParam(viewParam)
+    setSidebarView(viewParam)
   }
 
   // "Lists" are a separate filter dimension from the fixed sidebar views —
@@ -172,13 +174,6 @@ export default function Tasks() {
             </div>
           ) : (
           <>
-          {sidebarView === 'my_day' && (
-            <div className="px-4 pt-4 pb-1">
-              <p className="text-lg font-bold text-slate-800">{greeting()}</p>
-              <p className="text-xs text-slate-400">{new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long' })}</p>
-            </div>
-          )}
-
           <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/50 flex items-center gap-3">
             <SearchBar value={search} onChange={setSearch} placeholder="Cari task…" />
             <div className="ml-auto flex items-center gap-1 bg-white border border-slate-200 rounded-lg p-0.5">

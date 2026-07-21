@@ -64,8 +64,12 @@ class TaskController {
             }
             // 'all' (or unrecognized) leaves viewFilter empty — scope decided below.
 
+            // `mine=true` scopes strictly to the current user (assigned to them OR
+            // created by them) regardless of tasks.view — used by personal widgets
+            // like the Dashboard's My Day/Completed history, which must never leak
+            // company-wide data to an admin just because they hold that permission.
             const ownFilter = req.query.mine === 'true'
-                ? { assigneeId: req.user.id }
+                ? { [Op.or]: [{ assigneeId: req.user.id }, { createdBy: req.user.id }] }
                 : (canViewAll ? {} : {
                     [Op.or]: [{ assigneeId: req.user.id }, { createdBy: req.user.id }],
                 });
@@ -163,6 +167,10 @@ class TaskController {
             const prevAssigneeId = task.assigneeId;
             const isReassignedToOther = assigneeId !== undefined && Number(assigneeId) !== prevAssigneeId && assigneeId && Number(assigneeId) !== req.user.id;
             const isCompletingNow = status === 'DONE' && task.status !== 'DONE';
+            // Reopening a previously-done task (e.g. undo from the Dashboard
+            // checklist) clears completedAt so it drops back out of the
+            // week/month completed history until it's checked off again.
+            const isReopeningNow  = status !== undefined && status !== 'DONE' && task.status === 'DONE';
 
             // Can't finish a task while any of its sub-tasks are still open —
             // mirrors how MS To Do/San-Group treat steps as a completion gate.
@@ -191,6 +199,7 @@ class TaskController {
                 tags: tags === undefined ? task.tags : (Array.isArray(tags) ? tags : []),
                 reminderAt: reminderAt === undefined ? task.reminderAt : (reminderAt || null),
                 recurrence: recurrence === undefined ? task.recurrence : (recurrence || 'NONE'),
+                completedAt: isCompletingNow ? new Date() : (isReopeningNow ? null : task.completedAt),
             });
 
             if (isReassignedToOther) {

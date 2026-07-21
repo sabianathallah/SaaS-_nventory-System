@@ -26,7 +26,6 @@ export default function CreateTaskModal({ open, onClose, userOptions, defaultVie
       tags: d.tags ? d.tags.split(',').map(t => t.trim()).filter(Boolean) : [],
       reminderAt: d.reminderAt || null,
       isImportant: defaultView === 'important' || undefined,
-      myDayDate: defaultView === 'my_day' ? new Date().toISOString().slice(0, 10) : undefined,
     }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['tasks'] })

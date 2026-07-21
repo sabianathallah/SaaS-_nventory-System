@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import ProfileModal from './ProfileModal'
 import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
@@ -6,6 +7,7 @@ import { usePageVisibility } from '../context/PageVisibilityContext'
 import CompanySwitcher from './CompanySwitcher'
 import NotificationBell from './NotificationBell'
 import { useCompanyGuard } from '../hooks/useCompanyGuard'
+import { tasksApi } from '../api'
 import {
   LayoutDashboard, Package, Warehouse, Truck,
   ArrowDownToLine, ArrowUpFromLine, ArrowLeftRight, Repeat2,
@@ -14,6 +16,7 @@ import {
   PackageCheck, Link2, BarChart2, BookMarked, ChevronDown,
   SendHorizonal, FileText, PanelLeftClose, PanelLeftOpen, UserCog,
   Laptop, Wallet, CalendarClock, ShieldCheck, AlarmClock, Receipt, ListChecks,
+  Star, CheckCircle2,
 } from 'lucide-react'
 import logoPreface from '../assets/logo-preface.jpeg'
 
@@ -78,8 +81,12 @@ const NAV_GROUPS = [
 ]
 
 // Task Management module — halaman /tasks sudah punya sidebar internalnya
-// sendiri (view My Day/Important/dst), jadi nav group di sini cukup 1 entri
-// yang jadi pintu masuk ke module-nya (sama pola dengan Handbook).
+// sendiri (view Important/Assigned/dst, lihat TasksSidebar.jsx), jadi nav
+// group di sini cukup 1 entri yang jadi pintu masuk ke module-nya (sama pola
+// dengan Handbook). Quick-links langsung ke view spesifik ada di
+// TASKS_QUICK_LINKS di bawah — dirender terpisah (bukan NavLink) supaya
+// nav-active-path matching yang berbasis pathname tidak perlu tahu soal
+// query string ?view=.
 const TASKS_NAV_GROUPS = [
   {
     label: 'Task Management',
@@ -87,6 +94,16 @@ const TASKS_NAV_GROUPS = [
       { to: '/tasks', icon: ListChecks, label: 'Papan Tugas' },
     ],
   },
+]
+
+// Shortcut ke view spesifik dalam modul Tugas — diklik dari sidebar utama
+// tanpa harus masuk dulu ke /tasks lalu pilih dari sidebar internalnya.
+// `statKey` (opsional) menampilkan badge angka dari GET /tasks/stats.
+const TASKS_QUICK_LINKS = [
+  { view: 'important', icon: Star,           label: 'Penting' },
+  { view: 'assigned',  icon: ClipboardList,  label: 'Ditugaskan ke Saya', statKey: 'pendingAssignments' },
+  { view: 'created',   icon: ListChecks,     label: 'Dibuat Saya' },
+  { view: 'completed', icon: CheckCircle2,   label: 'Selesai' },
 ]
 
 // Handbook module — sidebar kiri di-swap total ke sini saat pathname mulai
@@ -199,12 +216,12 @@ function NavTooltip({ label, children }) {
 }
 
 // Module switcher — toggle antara Inventory System, Company Handbook, dan HRIS.
-function ModuleSwitcher({ collapsed, activeModule }) {
+function ModuleSwitcher({ collapsed, activeModule, tasksBadge }) {
   const navigate = useNavigate()
   const { hasPermission, isSuperAdmin, isAdmin } = useAuth()
   const items = [
     { key: 'inventory', label: 'Inventory', icon: Package,    to: '/dashboard', active: activeModule === 'inventory' },
-    { key: 'tasks',     label: 'Tugas',     icon: ListChecks, to: '/tasks',     active: activeModule === 'tasks' },
+    { key: 'tasks',     label: 'Tugas',     icon: ListChecks, to: '/tasks',     active: activeModule === 'tasks', badge: tasksBadge },
     { key: 'handbook',  label: 'Handbook',   icon: BookOpen, to: '/handbook',  active: activeModule === 'handbook' },
     ...(isSuperAdmin || hasPermission('hris.view')
       ? [{ key: 'hris', label: 'HRIS', icon: UserCog, to: '/hris', active: activeModule === 'hris' }]
@@ -220,16 +237,19 @@ function ModuleSwitcher({ collapsed, activeModule }) {
         {items.map(item => {
           const Icon = item.icon
           return (
-            <NavTooltip key={item.key} label={item.label}>
+            <NavTooltip key={item.key} label={item.badge ? `${item.label} (${item.badge})` : item.label}>
               <button
                 type="button"
                 onClick={() => navigate(item.to)}
-                className={`w-9 h-9 rounded-lg flex items-center justify-center transition-colors ${
+                className={`relative w-9 h-9 rounded-lg flex items-center justify-center transition-colors ${
                   item.active ? 'text-white' : 'text-slate-400 hover:text-slate-700 hover:bg-slate-200/60'
                 }`}
                 style={item.active ? { background: BRAND } : undefined}
               >
                 <Icon size={15} />
+                {!!item.badge && (
+                  <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-danger ring-2 ring-white" />
+                )}
               </button>
             </NavTooltip>
           )
@@ -248,13 +268,20 @@ function ModuleSwitcher({ collapsed, activeModule }) {
               key={item.key}
               type="button"
               onClick={() => navigate(item.to)}
-              title={item.label}
-              className={`flex-1 flex flex-col items-center justify-center gap-0.5 py-1.5 rounded-md text-[9px] font-semibold leading-none transition-colors ${
+              title={item.badge ? `${item.label} (${item.badge})` : item.label}
+              className={`relative flex-1 flex flex-col items-center justify-center gap-0.5 py-1.5 rounded-md text-[9px] font-semibold leading-none transition-colors ${
                 item.active ? 'text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'
               }`}
               style={item.active ? { background: BRAND } : undefined}
             >
-              <Icon size={14} />
+              <span className="relative">
+                <Icon size={14} />
+                {!!item.badge && (
+                  <span className="absolute -top-0.5 -right-1.5 min-w-[12px] h-[12px] px-0.5 rounded-full bg-danger text-white text-[8px] font-bold flex items-center justify-center leading-none">
+                    {item.badge > 9 ? '9+' : item.badge}
+                  </span>
+                )}
+              </span>
               <span className="truncate max-w-full">{item.label}</span>
             </button>
           )
@@ -270,6 +297,17 @@ export default function Layout({ children }) {
   const { isPageVisible } = usePageVisibility()
   const navigate  = useNavigate()
   const location  = useLocation()
+
+  // Ringan & jarang berubah — dipakai buat badge "Ditugaskan ke Saya" di quick
+  // links Tugas + titik merah di pill ModuleSwitcher, jadi kelihatan dari
+  // module manapun kalau ada assignment yang menunggu respon.
+  const { data: taskStats } = useQuery({
+    queryKey: ['tasks-stats-badge'],
+    queryFn: tasksApi.stats,
+    enabled: !!user,
+    staleTime: 60_000,
+    refetchInterval: 60_000,
+  })
 
   // Handbook module — sidebar kiri di-swap total, lihat HANDBOOK_NAV_GROUPS di atas
   const isHandbook  = location.pathname.startsWith('/handbook')
@@ -389,9 +427,43 @@ export default function Layout({ children }) {
         </div>
 
         {/* ── Nav ── */}
-        <ModuleSwitcher collapsed={collapsed} activeModule={activeModule} />
+        <ModuleSwitcher collapsed={collapsed} activeModule={activeModule} tasksBadge={taskStats?.pendingAssignments ?? 0} />
 
         <nav className="flex-1 overflow-y-auto overflow-x-hidden py-3" style={{ padding: collapsed ? '12px 8px' : '12px 12px' }}>
+          {/* Tugas: quick links langsung ke view spesifik + mini ringkasan —
+              biar nav-nya nggak cuma 1 baris kosong ("Papan Tugas") begitu
+              masuk ke module ini. Pakai onClick+navigate (bukan NavLink)
+              karena target-nya query string (?view=), bukan path baru. */}
+          {isTasksModule && !collapsed && (
+            <div className="mb-3 p-2.5 rounded-xl bg-white border border-slate-200/80 shadow-sm">
+              <p className="px-0.5 pb-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Akses Cepat</p>
+              <div className="space-y-0.5">
+                {TASKS_QUICK_LINKS.map(link => {
+                  const Icon = link.icon
+                  const badge = link.statKey ? taskStats?.[link.statKey] : null
+                  return (
+                    <button
+                      key={link.view}
+                      type="button"
+                      onClick={() => navigate(`/tasks?view=${link.view}`)}
+                      className="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-lg text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors"
+                    >
+                      <span className="w-6 h-6 rounded-md bg-slate-100 flex items-center justify-center flex-shrink-0">
+                        <Icon size={12} strokeWidth={2.2} />
+                      </span>
+                      <span className="flex-1 text-left text-[13px] font-medium truncate">{link.label}</span>
+                      {!!badge && (
+                        <span className="flex-shrink-0 text-[10px] font-bold text-white bg-danger px-1.5 py-0.5 rounded-full leading-none">
+                          {badge}
+                        </span>
+                      )}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
           {activeGroups.map((group) => {
             const navItems = group.items.reduce((acc, item) => {
               if (item.superOnly && !isSuperAdmin) return acc

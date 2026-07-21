@@ -2,6 +2,8 @@ import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { dashboardApi, movementsApi, warehousesApi, channelsApi, skuChannelStocksApi } from '../api'
 import { useAuth } from '../context/AuthContext'
+import MyDayToday from '../components/tasks/MyDayToday'
+import CompletedHistory from '../components/tasks/CompletedHistory'
 import {
   Package, BoxesIcon, Wallet, Warehouse,
   ChevronDown, ChevronRight, Tag, TrendingUp,
@@ -327,6 +329,12 @@ export default function Dashboard() {
             {new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
           </div>
         </div>
+      </div>
+
+      {/* ── My Day: to-do hari ini + riwayat selesai per minggu/bulan ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <MyDayToday />
+        <CompletedHistory />
       </div>
 
       {/* ── Top stats ───────────────────────────────────────── */}

@@ -27,7 +27,7 @@ export default function TasksSidebar({ active, onSelect }) {
     onSuccess: (_data, id) => {
       qc.invalidateQueries({ queryKey: ['task-lists'] })
       qc.invalidateQueries({ queryKey: ['tasks'] })
-      if (active === `list:${id}`) onSelect('my_day')
+      if (active === `list:${id}`) onSelect('dashboard')
     },
   })
 
