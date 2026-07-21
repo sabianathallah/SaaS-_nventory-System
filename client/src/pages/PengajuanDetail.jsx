@@ -8,17 +8,18 @@ import { useAuth } from '../context/AuthContext'
 import {
   ArrowLeft, Check, X, Send, RotateCcw, CheckCircle2,
   Pencil, Save, PackageCheck, Plus, Trash2, ChevronDown,
-  Clock, ThumbsUp, ThumbsDown, AlertTriangle, Truck, ExternalLink,
+  Clock, ThumbsUp, ThumbsDown, AlertTriangle, Truck, ExternalLink, Ban,
 } from 'lucide-react'
 
-const STATUS_LABEL = { DRAFT:'Draft', PENDING:'Menunggu', APPROVED:'Disetujui', REJECTED:'Ditolak', SENT:'Dikirim', DONE:'Selesai' }
+const STATUS_LABEL = { DRAFT:'Draft', PENDING:'Menunggu', APPROVED:'Disetujui', REJECTED:'Ditolak', CANCELLED:'Dibatalkan', SENT:'Dikirim', DONE:'Selesai' }
 const STATUS_COLOR = {
-  DRAFT:    'bg-slate-100 text-slate-500 border-slate-200',
-  PENDING:  'bg-amber-100 text-amber-700 border-amber-200',
-  APPROVED: 'bg-blue-100 text-blue-700 border-blue-200',
-  REJECTED: 'bg-red-100 text-red-700 border-red-200',
-  SENT:     'bg-purple-100 text-purple-700 border-purple-200',
-  DONE:     'bg-emerald-100 text-emerald-700 border-emerald-200',
+  DRAFT:     'bg-slate-100 text-slate-500 border-slate-200',
+  PENDING:   'bg-amber-100 text-amber-700 border-amber-200',
+  APPROVED:  'bg-blue-100 text-blue-700 border-blue-200',
+  REJECTED:  'bg-red-100 text-red-700 border-red-200',
+  CANCELLED: 'bg-slate-200 text-slate-600 border-slate-300',
+  SENT:      'bg-purple-100 text-purple-700 border-purple-200',
+  DONE:      'bg-emerald-100 text-emerald-700 border-emerald-200',
 }
 const STEPS_NORMAL   = ['PENDING','APPROVED','SENT','DONE']
 const STEPS_RETURN   = ['PENDING','APPROVED','SENT','RETURNED','DONE']
@@ -164,6 +165,47 @@ function RejectModal({ onConfirm, onClose }) {
   )
 }
 
+function CancelModal({ onConfirm, onClose, req, loading }) {
+  const [reason, setReason] = useState('')
+  const hasShipment = !!req?.manualShipmentId
+  const hasStockOutDraft = !!req?.stockOutDraftId
+
+  return (
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-xl shadow-xl p-5 w-full max-w-sm">
+        <div className="flex items-center gap-2 mb-3">
+          <span className="w-8 h-8 rounded-full bg-red-100 text-red-600 flex items-center justify-center flex-shrink-0">
+            <Ban size={15} />
+          </span>
+          <h3 className="font-semibold text-slate-800">Batalkan Pengajuan</h3>
+        </div>
+
+        {(hasShipment || hasStockOutDraft) && (
+          <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3 text-xs text-amber-700 leading-relaxed">
+            ⚠ {hasShipment && 'Draft shipping yang sudah dibuat akan ikut dibatalkan. '}
+            {hasStockOutDraft && 'Draft Stock Out yang belum diproses akan dihapus. '}
+            Tindakan ini tidak bisa dibatalkan.
+          </div>
+        )}
+
+        <label className="label mb-1">Alasan pembatalan</label>
+        <textarea value={reason} onChange={e => setReason(e.target.value)}
+          placeholder="Contoh: penerima batal, kebutuhan berubah, salah approve…"
+          rows={3} className="input w-full resize-none mb-3" autoFocus />
+        <div className="flex gap-2 justify-end">
+          <button onClick={onClose} className="btn-secondary text-sm">Tutup</button>
+          <button
+            onClick={() => { if (!reason.trim()) return toast.error('Isi alasan pembatalan'); onConfirm(reason) }}
+            disabled={loading}
+            className="btn-primary text-sm bg-red-600 border-red-600 hover:bg-red-700 disabled:opacity-60">
+            {loading ? 'Membatalkan…' : 'Ya, Batalkan'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function SentModal({ onConfirm, onClose, items }) {
   const today = new Date().toISOString().split('T')[0]
   const [sentAt, setSentAt]                 = useState(today)
@@ -277,6 +319,15 @@ function StatusStepper({ status, needsReturn, returnedAt, shipmentType }) {
     </div>
   )
 
+  if (status === 'CANCELLED') return (
+    <div className="flex items-center gap-2 p-3 bg-slate-100 border border-slate-200 rounded-xl">
+      <span className="w-6 h-6 rounded-full bg-slate-400 text-white flex items-center justify-center flex-shrink-0">
+        <Ban size={12} />
+      </span>
+      <span className="text-sm font-medium text-slate-600">Pengajuan Dibatalkan — sudah disetujui sebelumnya, batal dikirim</span>
+    </div>
+  )
+
   const isInternal = shipmentType === 'stock_out'
   const steps = isInternal ? STEPS_INTERNAL : needsReturn ? STEPS_RETURN : STEPS_NORMAL
   let currentIdx
@@ -325,7 +376,7 @@ function StatusStepper({ status, needsReturn, returnedAt, shipmentType }) {
 // ── Guided Next Action Card ───────────────────────────────────────────────────
 function NextActionCard({
   req, canProcess, resolvedShipmentType,
-  onApprove, onReject, onSent, onReturn, onShipRemaining, onDone, onProcessShipment, onDirectShipment, navigate,
+  onApprove, onReject, onCancel, onSent, onReturn, onShipRemaining, onDone, onProcessShipment, onDirectShipment, navigate,
   loadingApprove, loadingSent, loadingReturn, loadingShipRemaining, loadingDone, loadingProcessShipment, loadingDirectShipment,
 }) {
   if (!canProcess) return null
@@ -334,7 +385,7 @@ function NextActionCard({
   const returnSatisfied = !needsReturn || !!returnedAt
   const shipmentType = resolvedShipmentType
 
-  if (status === 'DONE' || status === 'REJECTED') return null
+  if (status === 'DONE' || status === 'REJECTED' || status === 'CANCELLED') return null
 
   const isAutoShipping = shipmentType === 'sales' || shipmentType === 'non_sales' || shipmentType === 'stock_out'
   // Escape hatch: barang harus dikirim sekarang tapi belum di-stock-in, jadi
@@ -344,6 +395,15 @@ function NextActionCard({
     <button onClick={onDirectShipment} disabled={loadingDirectShipment}
       className="btn-secondary text-sm flex items-center gap-2 justify-center w-full text-amber-600 border-amber-200 hover:bg-amber-50">
       <Truck size={14} /> {loadingDirectShipment ? 'Membuat…' : 'Langsung Shipping (Skip Stock Out)'}
+    </button>
+  ) : null
+
+  // Batalkan hanya relevan selama pengajuan masih APPROVED (belum SENT) —
+  // dipakai untuk kasus "sudah disetujui tapi ternyata batal dikirim".
+  const cancelBtn = status === 'APPROVED' ? (
+    <button onClick={onCancel}
+      className="btn-secondary text-sm flex items-center gap-2 justify-center w-full text-slate-500 border-slate-200 hover:bg-slate-50">
+      <Ban size={14} /> Batalkan Pengajuan
     </button>
   ) : null
 
@@ -384,10 +444,13 @@ function NextActionCard({
         ? 'Draft Stock Out sebelumnya sudah dibatalkan/hilang. Buat ulang untuk melanjutkan.'
         : 'Pengajuan sudah disetujui. Tandai barang ketika sudah dikirim ke penerima.',
       actions: isAutoShipping && req.manualShipmentId ? (
-        <button onClick={() => navigate(`/shipping-manual/${req.manualShipmentId}`)}
-          className="btn-primary text-sm flex items-center gap-2 justify-center w-full">
-          <Truck size={14} /> Lihat Draft Shipping
-        </button>
+        <div className="flex flex-col gap-2">
+          <button onClick={() => navigate(`/shipping-manual/${req.manualShipmentId}`)}
+            className="btn-primary text-sm flex items-center gap-2 justify-center w-full">
+            <Truck size={14} /> Lihat Draft Shipping
+          </button>
+          {cancelBtn}
+        </div>
       ) : isAutoShipping && req.stockOutDraftId ? (
         <div className="flex flex-col gap-2">
           <button onClick={() => navigate(`/stock-out/new?draftId=${req.stockOutDraftId}`)}
@@ -395,6 +458,7 @@ function NextActionCard({
             <PackageCheck size={14} /> Proses Stock Out
           </button>
           {skipStockOutBtn}
+          {cancelBtn}
         </div>
       ) : isAutoShipping ? (
         <div className="flex flex-col gap-2">
@@ -403,6 +467,7 @@ function NextActionCard({
             <PackageCheck size={14} /> {loadingProcessShipment ? 'Membuat…' : 'Buat Ulang Stock Out'}
           </button>
           {skipStockOutBtn}
+          {cancelBtn}
         </div>
       ) : (
         <div className="flex flex-col gap-2">
@@ -414,6 +479,7 @@ function NextActionCard({
             className="btn-secondary text-sm flex items-center gap-2 justify-center text-red-500 border-red-200 hover:bg-red-50">
             <ThumbsDown size={14} /> Tolak
           </button>
+          {cancelBtn}
         </div>
       ),
     },
@@ -486,6 +552,7 @@ export default function PengajuanDetail() {
   const { user, hasPermission } = useAuth()
 
   const [showReject,          setShowReject]          = useState(false)
+  const [showCancel,          setShowCancel]          = useState(false)
   const [showSent,            setShowSent]            = useState(false)
   const [showReturn,          setShowReturn]          = useState(false)
   const [editing,             setEditing]             = useState(false)
@@ -550,6 +617,11 @@ export default function PengajuanDetail() {
     approve.mutate({})
   }
   const reject           = useMutation({ mutationFn: (r) => requestApi.reject(id, r),           onSuccess: invalidate, onError: e => toast.error(e.response?.data?.message ?? 'Gagal') })
+  const cancel           = useMutation({
+    mutationFn: (r) => requestApi.cancel(id, r),
+    onSuccess: () => { invalidate(); setShowCancel(false); toast.success('Pengajuan dibatalkan') },
+    onError: e => toast.error(e.response?.data?.message ?? 'Gagal membatalkan'),
+  })
   const processShipment  = useMutation({
     mutationFn: () => requestApi.processShipment(id),
     onSuccess: (data) => { invalidate(); toast.success('Draft Stock Out berhasil dibuat!'); navigate(`/stock-out/new?draftId=${data.stockOutDraftId}`) },
@@ -616,6 +688,7 @@ export default function PengajuanDetail() {
     <div className="px-4 md:px-6 py-6 max-w-6xl mx-auto">
       {/* Modals */}
       {showReject           && <RejectModal           onClose={() => setShowReject(false)}           onConfirm={(r) => { reject.mutate(r); setShowReject(false) }} />}
+      {showCancel           && <CancelModal           onClose={() => setShowCancel(false)}           onConfirm={(r) => cancel.mutate(r)} req={req} loading={cancel.isPending} />}
       {showSent             && <SentModal             onClose={() => setShowSent(false)}             onConfirm={(d) => { markSent.mutate(d); setShowSent(false) }} items={req?.items ?? []} />}
       {showReturn           && <ReturnModal           onClose={() => setShowReturn(false)}           onConfirm={(d) => { markReturned.mutate(d); setShowReturn(false) }} />}
 
@@ -692,6 +765,14 @@ export default function PengajuanDetail() {
       {req.status === 'REJECTED' && req.rejectionReason && (
         <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 mb-5 text-sm text-red-700">
           <span className="font-medium">Alasan ditolak: </span>{req.rejectionReason}
+        </div>
+      )}
+
+      {/* Cancellation reason */}
+      {req.status === 'CANCELLED' && req.cancellationReason && (
+        <div className="bg-slate-100 border border-slate-200 rounded-lg px-4 py-3 mb-5 text-sm text-slate-600">
+          <span className="font-medium">Alasan dibatalkan: </span>{req.cancellationReason}
+          {req.cancelledAt && <span className="text-slate-400"> · {fmtDate(req.cancelledAt)}</span>}
         </div>
       )}
 
@@ -937,6 +1018,7 @@ export default function PengajuanDetail() {
             resolvedShipmentType={resolveShipmentType(req?.requestType ?? null)}
             onApprove={handleApprove}
             onReject={() => setShowReject(true)}
+            onCancel={() => setShowCancel(true)}
             onSent={() => setShowSent(true)}
             onReturn={() => setShowReturn(true)}
             onShipRemaining={() => { if (confirm('Tandai semua sisa item sebagai sudah dikirim?')) shipRemaining.mutate() }}

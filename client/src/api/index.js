@@ -276,6 +276,7 @@ export const requestApi = {
   submit:          (id)         => api.post(`/requests/${id}/submit`).then(r => r.data),
   approve:         (id, data)   => api.post(`/requests/${id}/approve`, data ?? {}).then(r => r.data),
   reject:          (id, reason) => api.post(`/requests/${id}/reject`, { reason }).then(r => r.data),
+  cancel:          (id, reason) => api.post(`/requests/${id}/cancel`, { reason }).then(r => r.data),
   processShipment: (id)         => api.post(`/requests/${id}/process-shipment`).then(r => r.data),
   directShipment:  (id)         => api.post(`/requests/${id}/direct-shipment`).then(r => r.data),
   markSent:        (id, data)   => api.patch(`/requests/${id}/sent`, data).then(r => r.data),

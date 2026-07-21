@@ -25,6 +25,7 @@ router.delete('/:id',canCreate, ctrl.destroy);
 router.post('/:id/submit',           canCreate,  ctrl.submit);
 router.post('/:id/approve',          canProcess, ctrl.approve);
 router.post('/:id/reject',           canProcess, ctrl.reject);
+router.post('/:id/cancel',           canProcess, ctrl.cancel);
 router.post('/:id/process-shipment', canProcess, ctrl.processShipment);
 router.post('/:id/direct-shipment',  canProcess, ctrl.directShipment);
 router.patch('/:id/sent',            canProcess, ctrl.markSent);

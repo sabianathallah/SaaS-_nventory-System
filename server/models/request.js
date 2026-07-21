@@ -22,7 +22,7 @@ module.exports = (sequelize, DataTypes) => {
     neededAt:         { type: DataTypes.DATEONLY, allowNull: true },
     note:             { type: DataTypes.TEXT, allowNull: true },
     status: {
-      type: DataTypes.ENUM('DRAFT','PENDING','APPROVED','REJECTED','SENT','DONE'),
+      type: DataTypes.ENUM('DRAFT','PENDING','APPROVED','REJECTED','CANCELLED','SENT','DONE'),
       allowNull: false,
       defaultValue: 'PENDING',
     },
@@ -34,6 +34,8 @@ module.exports = (sequelize, DataTypes) => {
     processedBy:      { type: DataTypes.INTEGER, allowNull: true },
     updatedBy:        { type: DataTypes.INTEGER, allowNull: true },
     rejectionReason:  { type: DataTypes.TEXT,    allowNull: true },
+    cancellationReason: { type: DataTypes.TEXT,     allowNull: true },
+    cancelledAt:        { type: DataTypes.DATEONLY, allowNull: true },
     manualShipmentId: { type: DataTypes.INTEGER, allowNull: true },
     stockOutDraftId:  { type: DataTypes.INTEGER, allowNull: true },
     companyId:        { type: DataTypes.INTEGER, allowNull: true },

@@ -9,30 +9,33 @@ import CompanyRequiredBanner from '../components/CompanyRequiredBanner'
 import { Plus, FileDown, Search, SlidersHorizontal, X, StickyNote } from 'lucide-react'
 
 const STATUS_LABEL = {
-  DRAFT:    'Draft',
-  PENDING:  'Menunggu',
-  APPROVED: 'Disetujui',
-  REJECTED: 'Ditolak',
-  SENT:     'Dikirim',
-  DONE:     'Selesai',
+  DRAFT:     'Draft',
+  PENDING:   'Menunggu',
+  APPROVED:  'Disetujui',
+  REJECTED:  'Ditolak',
+  CANCELLED: 'Dibatalkan',
+  SENT:      'Dikirim',
+  DONE:      'Selesai',
 }
 const STATUS_COLOR = {
-  DRAFT:    'bg-slate-100 text-slate-500',
-  PENDING:  'bg-amber-100 text-amber-700',
-  APPROVED: 'bg-blue-100 text-blue-700',
-  REJECTED: 'bg-red-100 text-red-700',
-  SENT:     'bg-purple-100 text-purple-700',
-  DONE:     'bg-emerald-100 text-emerald-700',
+  DRAFT:     'bg-slate-100 text-slate-500',
+  PENDING:   'bg-amber-100 text-amber-700',
+  APPROVED:  'bg-blue-100 text-blue-700',
+  REJECTED:  'bg-red-100 text-red-700',
+  CANCELLED: 'bg-slate-200 text-slate-600',
+  SENT:      'bg-purple-100 text-purple-700',
+  DONE:      'bg-emerald-100 text-emerald-700',
 }
 
 const STATUS_TABS = [
-  { value: '',         label: 'Semua',    countKey: 'ALL' },
-  { value: 'DRAFT',    label: 'Draft',    countKey: 'DRAFT' },
-  { value: 'PENDING',  label: 'Menunggu', countKey: 'PENDING' },
-  { value: 'APPROVED', label: 'Disetujui',countKey: 'APPROVED' },
-  { value: 'SENT',     label: 'Dikirim',  countKey: 'SENT' },
-  { value: 'DONE',     label: 'Selesai',  countKey: 'DONE' },
-  { value: 'REJECTED', label: 'Ditolak',  countKey: 'REJECTED' },
+  { value: '',          label: 'Semua',      countKey: 'ALL' },
+  { value: 'DRAFT',     label: 'Draft',      countKey: 'DRAFT' },
+  { value: 'PENDING',   label: 'Menunggu',   countKey: 'PENDING' },
+  { value: 'APPROVED',  label: 'Disetujui',  countKey: 'APPROVED' },
+  { value: 'SENT',      label: 'Dikirim',    countKey: 'SENT' },
+  { value: 'DONE',      label: 'Selesai',    countKey: 'DONE' },
+  { value: 'REJECTED',  label: 'Ditolak',    countKey: 'REJECTED' },
+  { value: 'CANCELLED', label: 'Dibatalkan', countKey: 'CANCELLED' },
 ]
 
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('id-ID', { day:'2-digit', month:'short', year:'numeric' }) : '—'

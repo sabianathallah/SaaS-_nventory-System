@@ -108,7 +108,7 @@ class RequestController {
         raw: true,
       });
 
-      const result = { DRAFT: 0, PENDING: 0, APPROVED: 0, SENT: 0, DONE: 0, REJECTED: 0 };
+      const result = { DRAFT: 0, PENDING: 0, APPROVED: 0, SENT: 0, DONE: 0, REJECTED: 0, CANCELLED: 0 };
       for (const row of rows) {
         if (row.status in result) result[row.status] = parseInt(row.count, 10);
       }
@@ -426,6 +426,68 @@ class RequestController {
       await request.update({ status: 'REJECTED', processedBy: req.user.id, updatedBy: req.user.id, rejectionReason: req.body.reason || null });
       res.json(request);
     } catch (err) { next(err); }
+  }
+
+  // POST /requests/:id/cancel — APPROVED → CANCELLED. Dipakai saat pengajuan
+  // sudah disetujui tapi batal dikirim (mis. kebutuhan berubah, salah approve).
+  // Melepas/menghapus draft Stock Out & Shipping Manual yang sudah kadung dibuat
+  // otomatis saat approve — asal belum berjalan (SENT ke atas berarti stok sudah
+  // keluar, tidak bisa dibatalkan dari sini).
+  static async cancel(req, res, next) {
+    const t = await sequelize.transaction();
+    try {
+      await attachPermissions(req);
+      if (!canProcess(req)) { await t.rollback(); return res.status(403).json({ message: 'Forbidden: butuh request.process' }); }
+
+      const request = await Request.findOne({
+        where: { id: req.params.id, ...companyFilter(req) },
+        transaction: t, lock: t.LOCK.UPDATE,
+      });
+      if (!request) { await t.rollback(); return res.status(404).json({ message: 'Pengajuan tidak ditemukan' }); }
+      if (request.status !== 'APPROVED') {
+        await t.rollback();
+        return res.status(400).json({ message: 'Hanya pengajuan berstatus Disetujui yang bisa dibatalkan' });
+      }
+
+      const reason = req.body.reason?.trim();
+      if (!reason) { await t.rollback(); return res.status(400).json({ message: 'Alasan pembatalan wajib diisi' }); }
+
+      if (request.manualShipmentId) {
+        const shipment = await ManualShipment.findByPk(request.manualShipmentId, { transaction: t });
+        if (shipment && ['shipped', 'completed'].includes(shipment.status)) {
+          await t.rollback();
+          return res.status(400).json({ message: 'Shipping sudah berjalan (dikirim/selesai) — tidak bisa dibatalkan dari pengajuan' });
+        }
+        if (shipment) {
+          await shipment.update({
+            status: 'cancelled',
+            cancelledReason: `Pengajuan #${request.id} dibatalkan: ${reason}`,
+            updatedBy: req.user.id,
+            sourceRequestId: null,
+          }, { transaction: t });
+        }
+      }
+
+      // Draft Stock Out belum disubmit di titik ini — stok belum terpotong, aman dihapus.
+      if (request.stockOutDraftId) {
+        await Stock_Out_Draft_Item.destroy({ where: { DraftId: request.stockOutDraftId }, transaction: t });
+        await Stock_Out_Draft.destroy({ where: { id: request.stockOutDraftId }, transaction: t });
+      }
+
+      await request.update({
+        status: 'CANCELLED',
+        cancellationReason: reason,
+        cancelledAt: new Date().toISOString().slice(0, 10),
+        manualShipmentId: null,
+        stockOutDraftId: null,
+        processedBy: req.user.id,
+        updatedBy: req.user.id,
+      }, { transaction: t });
+
+      await t.commit();
+      const full = await Request.findByPk(request.id, { include: [...BASE_INCLUDE, ITEM_INCLUDE] });
+      res.json(full);
+    } catch (err) { await t.rollback(); next(err); }
   }
 
   // PATCH /requests/:id/sent
