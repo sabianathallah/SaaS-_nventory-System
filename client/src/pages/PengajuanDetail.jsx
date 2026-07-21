@@ -182,9 +182,9 @@ function CancelModal({ onConfirm, onClose, req, loading }) {
 
         {(hasShipment || hasStockOutDraft) && (
           <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3 text-xs text-amber-700 leading-relaxed">
-            ⚠ {hasShipment && 'Draft shipping yang sudah dibuat akan ikut dibatalkan. '}
-            {hasStockOutDraft && 'Draft Stock Out yang belum diproses akan dihapus. '}
-            Tindakan ini tidak bisa dibatalkan.
+            ⚠ {hasShipment && 'Draft shipping yang sudah dibuat akan ikut ditandai batal (data tidak dihapus). '}
+            {hasStockOutDraft && 'Draft Stock Out yang belum diproses akan ditandai batal (data tidak dihapus). '}
+            Status pengajuan ini tidak bisa dikembalikan lagi.
           </div>
         )}
 

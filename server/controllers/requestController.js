@@ -430,9 +430,10 @@ class RequestController {
 
   // POST /requests/:id/cancel — APPROVED → CANCELLED. Dipakai saat pengajuan
   // sudah disetujui tapi batal dikirim (mis. kebutuhan berubah, salah approve).
-  // Melepas/menghapus draft Stock Out & Shipping Manual yang sudah kadung dibuat
-  // otomatis saat approve — asal belum berjalan (SENT ke atas berarti stok sudah
-  // keluar, tidak bisa dibatalkan dari sini).
+  // Melepas draft Stock Out & Shipping Manual yang sudah kadung dibuat otomatis
+  // saat approve — asal belum berjalan (SENT ke atas berarti stok sudah keluar,
+  // tidak bisa dibatalkan dari sini). TIDAK ADA DATA YANG DIHAPUS — draft/shipment
+  // hanya ditandai 'cancelled' dan dilepas linknya, tetap tersimpan sebagai riwayat.
   static async cancel(req, res, next) {
     const t = await sequelize.transaction();
     try {
@@ -468,10 +469,14 @@ class RequestController {
         }
       }
 
-      // Draft Stock Out belum disubmit di titik ini — stok belum terpotong, aman dihapus.
+      // Draft Stock Out belum disubmit di titik ini — cukup ditandai cancelled &
+      // dilepas linknya, TIDAK dihapus, supaya tetap ada sebagai riwayat.
       if (request.stockOutDraftId) {
-        await Stock_Out_Draft_Item.destroy({ where: { DraftId: request.stockOutDraftId }, transaction: t });
-        await Stock_Out_Draft.destroy({ where: { id: request.stockOutDraftId }, transaction: t });
+        await Stock_Out_Draft.update({
+          status: 'cancelled',
+          note: sequelize.literal(`COALESCE(note, '') || ' — dibatalkan: ${reason.replace(/'/g, "''")}'`),
+          sourceRequestId: null,
+        }, { where: { id: request.stockOutDraftId }, transaction: t });
       }
 
       await request.update({
