@@ -17,6 +17,25 @@ const fmtDate = (d) => d ? new Date(d).toLocaleDateString('id-ID', { day: '2-dig
 const fmtDateTime = (d) => d ? new Date(d).toLocaleString('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'
 
 // Badge khusus untuk aksi selisih — beda dari edit biasa
+// Render teks log dengan referensi "#123" otomatis jadi link ke dokumen itu
+function LogText({ text, navigate }) {
+  const parts = text.split(/(#\d+)/g)
+  return parts.map((part, i) => {
+    const m = part.match(/^#(\d+)$/)
+    if (!m) return <span key={i}>{part}</span>
+    return (
+      <button
+        key={i}
+        type="button"
+        onClick={(e) => { e.stopPropagation(); navigate(`/incoming-goods/${m[1]}`) }}
+        className="font-mono text-indigo-600 hover:underline"
+      >
+        {part}
+      </button>
+    )
+  })
+}
+
 const ACTIVITY_BADGE = {
   SELISIH_CLEAR:  { label: 'Selisih Selesai',  className: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
   SELISIH_REOPEN: { label: 'Selisih Dibuka',   className: 'bg-orange-50 text-orange-700 border-orange-200' },
@@ -850,7 +869,7 @@ export default function IncomingGoodsDetail() {
                     <p className="text-sm text-slate-700 truncate">
                       <span className="font-semibold">{log.User?.name ?? 'Sistem'}</span>
                       {' — '}
-                      <span className="text-slate-500">{log.description}</span>
+                      <span className="text-slate-500"><LogText text={log.description} navigate={navigate} /></span>
                     </p>
                     <p className="text-[11px] text-slate-400">{fmtDateTime(log.createdAt)}</p>
                   </div>
