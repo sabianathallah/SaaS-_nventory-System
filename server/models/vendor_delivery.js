@@ -7,6 +7,7 @@ module.exports = (sequelize, DataTypes) => {
       VendorDelivery.belongsTo(models.User,   { foreignKey: 'createdBy', as: 'Creator' });
       VendorDelivery.belongsTo(models.User,   { foreignKey: 'updatedBy', as: 'Updater' });
       VendorDelivery.hasMany(models.VendorDeliveryItem, { foreignKey: 'deliveryId', as: 'items', onDelete: 'CASCADE' });
+      VendorDelivery.hasMany(models.VendorDeliveryLog, { foreignKey: 'deliveryId', as: 'logs', onDelete: 'CASCADE' });
     }
   }
   VendorDelivery.init({

@@ -1,8 +1,21 @@
 'use strict';
-const { VendorDelivery, VendorDeliveryItem, Vendor, User, Product, ProductSKU, ProductVariantOption, ProductVariantType, sequelize } = require('../models');
+const { VendorDelivery, VendorDeliveryItem, VendorDeliveryLog, Vendor, User, Product, ProductSKU, ProductVariantOption, ProductVariantType, sequelize } = require('../models');
 const { Op, fn, col, literal } = require('sequelize');
 const { destroyByUrl } = require('../helpers/cloudinary');
 const { companyFilter, companyId: getCompanyId } = require('../helpers/tenancy');
+
+// Catat setiap aksi yang mengubah dokumen, agar semua orang yang pernah
+// mengerjakan transaksi ini tercatat (tidak cuma pembuat & pengubah terakhir).
+async function logActivity(deliveryId, userId, action, description) {
+  await VendorDeliveryLog.create({ deliveryId, userId, action, description }).catch(() => {});
+}
+
+const LOG_INCLUDE = {
+  model: VendorDeliveryLog, as: 'logs',
+  include: [{ model: User, as: 'User', attributes: ['id', 'name'] }],
+  separate: true,
+  order: [['createdAt', 'DESC']],
+};
 
 // Recompute selisihStatus on parent delivery after any item mutation.
 // Rule: no selisih left → null; has selisih + status was null → 'unclear';
@@ -94,6 +107,7 @@ exports.get = async (req, res, next) => {
       include: [
         ...HEADER_INCLUDE,
         { model: VendorDeliveryItem, as: 'items', include: ITEM_INCLUDE },
+        LOG_INCLUDE,
       ],
     });
     if (!row) return res.status(404).json({ message: 'Barang masuk tidak ditemukan' });
@@ -122,6 +136,7 @@ exports.create = async (req, res, next) => {
       createdBy: req.user.id,
       companyId: getCompanyId(req),
     });
+    await logActivity(row.id, req.user.id, 'CREATE', 'Membuat dokumen barang masuk');
     const result = await VendorDelivery.findByPk(row.id, { include: HEADER_INCLUDE });
     res.status(201).json({ data: result });
   } catch (err) { next(err); }
@@ -150,6 +165,7 @@ exports.update = async (req, res, next) => {
       videoLink: videoLink !== undefined ? (videoLink?.trim() || null) : row.videoLink,
       updatedBy: req.user.id,
     });
+    await logActivity(row.id, req.user.id, 'UPDATE_HEADER', 'Mengubah data barang masuk');
     const result = await VendorDelivery.findByPk(row.id, { include: HEADER_INCLUDE });
     res.json({ data: result });
   } catch (err) { next(err); }
@@ -183,6 +199,7 @@ exports.addItem = async (req, res, next) => {
       notes:        notes?.trim() || null,
     });
     await delivery.update({ updatedBy: req.user.id });
+    await logActivity(delivery.id, req.user.id, 'ADD_ITEM', 'Menambah item');
     await syncSelisihStatus(delivery.id);
     const result = await VendorDeliveryItem.findByPk(item.id, { include: ITEM_INCLUDE });
     res.status(201).json({ data: { ...result.toJSON(), selisih: result.qtySJ - result.qtyActual } });
@@ -204,6 +221,7 @@ exports.updateItem = async (req, res, next) => {
       notes:        notes     !== undefined ? (notes?.trim() || null) : item.notes,
     });
     await delivery?.update({ updatedBy: req.user.id });
+    await logActivity(item.deliveryId, req.user.id, 'UPDATE_ITEM', 'Mengubah item');
     await syncSelisihStatus(item.deliveryId);
     const result = await VendorDeliveryItem.findByPk(item.id, { include: ITEM_INCLUDE });
     res.json({ data: { ...result.toJSON(), selisih: result.qtySJ - result.qtyActual } });
@@ -219,6 +237,7 @@ exports.removeItem = async (req, res, next) => {
     const deliveryId = item.deliveryId;
     await item.destroy();
     await delivery?.update({ updatedBy: req.user.id });
+    await logActivity(deliveryId, req.user.id, 'REMOVE_ITEM', 'Menghapus item');
     await syncSelisihStatus(deliveryId);
     res.json({ message: 'Item dihapus' });
   } catch (err) { next(err); }
@@ -233,6 +252,11 @@ exports.patchSelisihStatus = async (req, res, next) => {
     const row = await VendorDelivery.findOne({ where: { id: req.params.id, ...companyFilter(req) } });
     if (!row) return res.status(404).json({ message: 'Barang masuk tidak ditemukan' });
     await row.update({ selisihStatus: status, updatedBy: req.user.id });
+    await logActivity(
+      row.id, req.user.id,
+      status === 'clear' ? 'SELISIH_CLEAR' : 'SELISIH_REOPEN',
+      status === 'clear' ? 'Menandai selisih selesai' : 'Membuka kembali selisih'
+    );
     res.json({ data: { selisihStatus: status } });
   } catch (err) { next(err); }
 };
@@ -255,7 +279,9 @@ exports.patchStatus = async (req, res, next) => {
       return res.status(400).json({ message: `Tidak bisa ubah status dari ${row.status} ke ${status}` });
     }
 
+    const prevStatus = row.status;
     await row.update({ status, updatedBy: req.user.id });
+    await logActivity(row.id, req.user.id, 'STATUS_CHANGE', `Mengubah status dari ${prevStatus} ke ${status}`);
     res.json({ data: { status } });
   } catch (err) { next(err); }
 };

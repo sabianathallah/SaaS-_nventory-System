@@ -8,11 +8,21 @@ import ImageLightbox from '../components/ImageLightbox'
 import toast from 'react-hot-toast'
 import {
   ArrowLeft, Save, Plus, Trash2, Video,
-  AlertTriangle, AlertCircle, Check, Upload, X, Printer, ChevronDown, TriangleAlert,
+  AlertTriangle, AlertCircle, Check, Upload, X, Printer, ChevronDown, TriangleAlert, History,
 } from 'lucide-react'
 import logoPreface from '../assets/logo-preface.jpeg'
 
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'
+const fmtDateTime = (d) => d ? new Date(d).toLocaleString('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'
+
+// Badge khusus untuk aksi selisih — beda dari edit biasa
+const ACTIVITY_BADGE = {
+  SELISIH_CLEAR:  { label: 'Selisih Selesai',  className: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  SELISIH_REOPEN: { label: 'Selisih Dibuka',   className: 'bg-orange-50 text-orange-700 border-orange-200' },
+  REMOVE_ITEM:    { label: 'Hapus',            className: 'bg-red-50 text-red-600 border-red-200' },
+  STATUS_CHANGE:  { label: 'Status',           className: 'bg-indigo-50 text-indigo-600 border-indigo-200' },
+  CREATE:         { label: 'Dibuat',           className: 'bg-slate-100 text-slate-600 border-slate-200' },
+}
 
 const skuLabel = (sku) => {
   if (!sku) return null
@@ -802,6 +812,39 @@ export default function IncomingGoodsDetail() {
           className="inline-flex items-center gap-2 text-sm text-brand hover:underline font-medium">
           <Video size={15} /> Buka Video Pengecekan
         </a>
+      )}
+
+      {/* ── Riwayat Aktivitas ────────────────────────────────── */}
+      {!isNew && delivery?.logs?.length > 0 && (
+        <div className="card overflow-hidden">
+          <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2">
+            <History size={14} className="text-slate-400" />
+            <p className="text-sm font-semibold text-slate-700">Riwayat Aktivitas</p>
+            <span className="text-xs font-normal text-slate-400">{delivery.logs.length} aktivitas</span>
+          </div>
+          <div className="divide-y divide-slate-100 max-h-80 overflow-y-auto">
+            {delivery.logs.map(log => {
+              const badge = ACTIVITY_BADGE[log.action]
+              return (
+                <div key={log.id} className="px-4 py-2.5 flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm text-slate-700 truncate">
+                      <span className="font-semibold">{log.User?.name ?? 'Sistem'}</span>
+                      {' — '}
+                      <span className="text-slate-500">{log.description}</span>
+                    </p>
+                    <p className="text-[11px] text-slate-400">{fmtDateTime(log.createdAt)}</p>
+                  </div>
+                  {badge && (
+                    <span className={`flex-shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-full border ${badge.className}`}>
+                      {badge.label}
+                    </span>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </div>
       )}
     </div>
 
