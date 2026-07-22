@@ -192,6 +192,8 @@ class StockInDraftController {
             const WarehouseId = req.body.WarehouseId || draft.WarehouseId;
             const date        = req.body.date        || draft.date;
             const note        = req.body.note        !== undefined ? req.body.note : draft.note;
+            const VendorId         = req.body.VendorId         || null;
+            const sourceDeliveryId = req.body.sourceDeliveryId || null;
 
             if (!WarehouseId) {
                 await t.rollback();
@@ -210,6 +212,8 @@ class StockInDraftController {
                 date: date || new Date(),
                 WarehouseId,
                 note: note || null,
+                VendorId,
+                sourceDeliveryId,
                 createdBy: req.user.id,
                 companyId: cid,
             }, { transaction: t });

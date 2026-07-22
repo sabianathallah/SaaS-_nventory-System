@@ -308,6 +308,8 @@ export default function StockInDetail() {
   const { needsCompany } = useCompanyGuard()
   const [urlParams]     = useSearchParams()
   const draftIdParam    = urlParams.get('draftId')
+  const vendorIdParam         = urlParams.get('vendorId')         || null
+  const sourceDeliveryIdParam = urlParams.get('sourceDeliveryId') || null
 
   // Granular permission flags
   const canManualInput = hasPermission('stock.in.manual_input') || hasPermission('stock.manage')
@@ -405,6 +407,8 @@ export default function StockInDetail() {
       date:        form.date,
       WarehouseId: Number(form.WarehouseId),
       note:        form.note || null,
+      VendorId:         vendorIdParam || null,
+      sourceDeliveryId: sourceDeliveryIdParam || null,
     }),
     onSuccess: (data) => {
       qc.removeQueries({ queryKey: ['stock-in-draft'] })
@@ -564,6 +568,23 @@ export default function StockInDetail() {
             <p className="label mb-1">Oleh</p>
             <p className="font-semibold text-slate-700">{detail.User?.name ?? '—'}</p>
           </div>
+          {detail.Vendor && (
+            <div>
+              <p className="label mb-1">Vendor</p>
+              <p className="font-semibold text-slate-700">{detail.Vendor.name}</p>
+            </div>
+          )}
+          {detail.sourceDelivery && (
+            <div>
+              <p className="label mb-1">Sumber</p>
+              <button
+                onClick={() => navigate(`/incoming-goods/${detail.sourceDelivery.id}`)}
+                className="text-indigo-600 hover:underline font-semibold text-sm"
+              >
+                Barang Masuk #{detail.sourceDelivery.id}
+              </button>
+            </div>
+          )}
         </div>
 
         <div className="card mb-4">
@@ -661,6 +682,13 @@ export default function StockInDetail() {
           }
         </button>
       </div>
+
+      {sourceDeliveryIdParam && (
+        <div className="mb-4 px-4 py-2.5 bg-indigo-50 border border-indigo-200 rounded-xl text-xs text-indigo-700 flex items-center gap-2">
+          <PackagePlus size={14} className="flex-shrink-0" />
+          Ditandai dari Barang Masuk #{sourceDeliveryIdParam} — akan tercatat sebagai penerimaan dari vendor terkait.
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} className="space-y-5">
         <div className="card p-5">

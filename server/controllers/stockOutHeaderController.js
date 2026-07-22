@@ -1,6 +1,6 @@
 'use strict';
 const { Op } = require('sequelize');
-const { sequelize, Stock_Out_Header, Stock_Movement, Stock, SkuWarehouseStock, User, Product, ProductSKU, ProductVariantOption, Warehouse } = require('../models');
+const { sequelize, Stock_Out_Header, Stock_Movement, Stock, SkuWarehouseStock, User, Product, ProductSKU, ProductVariantOption, Warehouse, Vendor, VendorDelivery } = require('../models');
 const { companyFilter, companyId } = require('../helpers/tenancy');
 const { upsertSkuWarehouseStock } = require('../helpers/skuStock');
 const { paginate, buildFilter, paginatedResponse } = require('../helpers/queryHelper');
@@ -77,6 +77,8 @@ class StockOutHeaderController {
                     { model: User, foreignKey: 'createdBy', attributes: ['id', 'name'] },
                     { model: User, foreignKey: 'updatedBy', as: 'updater', attributes: ['id', 'name'] },
                     { model: Warehouse, attributes: ['id', 'name'] },
+                    { model: Vendor, attributes: ['id', 'name'] },
+                    { model: VendorDelivery, as: 'sourceDelivery', attributes: ['id', 'date'] },
                 ]
             });
             if (!header) throw { name: 'NotFound', message: 'Stock out header not found' };
@@ -144,6 +146,8 @@ class StockOutHeaderController {
                     ...headerData,
                     WarehouseId: headerWhId,
                     date: headerData.date || new Date(),
+                    VendorId: headerData.VendorId || null,
+                    sourceDeliveryId: headerData.sourceDeliveryId || null,
                     createdBy: req.user.id,
                     companyId: cid,
                 },

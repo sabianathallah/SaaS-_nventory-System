@@ -296,6 +296,9 @@ export default function StockOutDetail() {
   const { needsCompany } = useCompanyGuard()
   const [urlParams] = useSearchParams()
   const draftIdParam = urlParams.get('draftId')
+  const vendorIdParam         = urlParams.get('vendorId')         || null
+  const sourceDeliveryIdParam = urlParams.get('sourceDeliveryId') || null
+  const purposeParam          = urlParams.get('purpose')          || null
 
   const canManualOutput = hasPermission('stock.out.manual_input') || hasPermission('stock.manage')
   const canScanOut      = hasPermission('stock.out.scan')         || hasPermission('stock.manage')
@@ -328,7 +331,7 @@ export default function StockOutDetail() {
       setForm(f => ({
         ...f,
         warehouseId: draft.WarehouseId ?? '',
-        purpose:     draft.purpose     ?? '',
+        purpose:     draft.purpose     || purposeParam || '',
         note:        draft.note        ?? '',
         date:        draft.date        ? fmtDate(draft.date) : fmtDate(),
       }))
@@ -419,6 +422,8 @@ export default function StockOutDetail() {
         purpose,
         date: form.date,
         note: form.note,
+        VendorId:         vendorIdParam || null,
+        sourceDeliveryId: sourceDeliveryIdParam || null,
       })
     },
     onSuccess: (data) => {
@@ -617,6 +622,23 @@ export default function StockOutDetail() {
             <p className="label mb-1">Oleh</p>
             <p className="font-semibold text-slate-700">{detail.User?.name ?? '—'}</p>
           </div>
+          {detail.Vendor && (
+            <div>
+              <p className="label mb-1">Vendor</p>
+              <p className="font-semibold text-slate-700">{detail.Vendor.name}</p>
+            </div>
+          )}
+          {detail.sourceDelivery && (
+            <div>
+              <p className="label mb-1">Sumber</p>
+              <button
+                onClick={() => navigate(`/incoming-goods/${detail.sourceDelivery.id}`)}
+                className="text-indigo-600 hover:underline font-semibold text-sm"
+              >
+                Barang Masuk #{detail.sourceDelivery.id}
+              </button>
+            </div>
+          )}
           {canViewValue && (
             <div>
               <p className="label mb-1">Grand Total</p>
@@ -799,6 +821,14 @@ export default function StockOutDetail() {
           >
             Lihat Pengajuan
           </button>
+        </div>
+      )}
+
+      {sourceDeliveryIdParam && (
+        <div className="card p-3 mb-5 border-l-4 border-indigo-400 bg-indigo-50 flex items-center gap-2">
+          <span className="text-sm text-indigo-700 font-medium">
+            ↩️ Ditandai dari Barang Masuk #{sourceDeliveryIdParam} — akan tercatat sebagai retur ke vendor terkait.
+          </span>
         </div>
       )}
 

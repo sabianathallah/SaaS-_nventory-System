@@ -3,6 +3,7 @@ const { Op } = require('sequelize');
 const {
   sequelize, Stock_In_Header, Stock_In_Item, Stock_Movement, Stock, SkuWarehouseStock,
   Supplier, Warehouse, User, ProductSKU, Product, ProductVariantOption, ProductVariantType,
+  Vendor, VendorDelivery,
 } = require('../models');
 const { upsertSkuWarehouseStock } = require('../helpers/skuStock');
 const { companyFilter, companyId } = require('../helpers/tenancy');
@@ -86,6 +87,8 @@ class StockInHeaderController {
           { model: Warehouse, attributes: ['id', 'name'] },
           { model: User, foreignKey: 'createdBy', attributes: ['id', 'name'] },
           { model: User, foreignKey: 'updatedBy', as: 'updater', attributes: ['id', 'name'] },
+          { model: Vendor, attributes: ['id', 'name'] },
+          { model: VendorDelivery, as: 'sourceDelivery', attributes: ['id', 'date'] },
           {
             model: Stock_In_Item,
             include: SKU_INCLUDE,
@@ -103,7 +106,7 @@ class StockInHeaderController {
   static async create(req, res, next) {
     const t = await sequelize.transaction();
     try {
-      const { items = [], date, SupplierId, WarehouseId, note } = req.body;
+      const { items = [], date, SupplierId, WarehouseId, note, VendorId, sourceDeliveryId } = req.body;
       const cid = companyId(req);
 
       if (!WarehouseId) {
@@ -116,6 +119,8 @@ class StockInHeaderController {
         SupplierId: SupplierId || null,
         WarehouseId,
         note: note || null,
+        VendorId: VendorId || null,
+        sourceDeliveryId: sourceDeliveryId || null,
         createdBy: req.user.id,
         companyId: cid,
       }, { transaction: t });

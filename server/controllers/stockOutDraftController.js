@@ -217,6 +217,8 @@ class StockOutDraftController {
             const date        = req.body.date        || draft.date;
             const purpose     = req.body.purpose     || draft.purpose;
             const note        = req.body.note        !== undefined ? req.body.note : draft.note;
+            const VendorId         = req.body.VendorId         || null;
+            const sourceDeliveryId = req.body.sourceDeliveryId || null;
 
             if (!WarehouseId) {
                 await t.rollback();
@@ -240,6 +242,8 @@ class StockOutDraftController {
                 date: date || new Date(),
                 purpose,
                 notes: note || null,
+                VendorId,
+                sourceDeliveryId,
                 createdBy: req.user.id,
                 companyId: cid,
             }, { transaction: t });

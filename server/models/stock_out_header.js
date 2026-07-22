@@ -26,11 +26,24 @@ module.exports = (sequelize, DataTypes) => {
         onDelete: 'SET NULL',
         onUpdate: 'CASCADE'
       });
+      Stock_Out_Header.belongsTo(models.Vendor, {
+        foreignKey: { name: 'VendorId', allowNull: true },
+        onDelete: 'SET NULL',
+        onUpdate: 'CASCADE'
+      });
+      Stock_Out_Header.belongsTo(models.VendorDelivery, {
+        foreignKey: { name: 'sourceDeliveryId', allowNull: true },
+        as: 'sourceDelivery',
+        onDelete: 'SET NULL',
+        onUpdate: 'CASCADE'
+      });
     }
   }
   Stock_Out_Header.init({
     destination: { type: DataTypes.STRING, allowNull: true },
     WarehouseId: { type: DataTypes.INTEGER, allowNull: true },
+    VendorId:         { type: DataTypes.INTEGER, allowNull: true },
+    sourceDeliveryId: { type: DataTypes.INTEGER, allowNull: true },
     date: {
       type: DataTypes.DATE,
       allowNull: false,

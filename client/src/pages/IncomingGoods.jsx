@@ -1,15 +1,15 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
-import { vendorDeliveriesApi, articlesApi, productsApi, productSkusApi } from '../api'
+import { vendorDeliveriesApi, articlesApi, productsApi, productSkusApi, vendorsApi } from '../api'
 import { useAuth } from '../context/AuthContext'
 import PageHeader from '../components/PageHeader'
 import SearchableSelect from '../components/SearchableSelect'
 import { Table, Pagination } from '../components/Table'
 import { useCompanyGuard } from '../hooks/useCompanyGuard'
 import CompanyRequiredBanner from '../components/CompanyRequiredBanner'
-import { Plus, Eye, Video, AlertCircle, TriangleAlert, BarChart2, List, Package, Truck } from 'lucide-react'
+import { Plus, Eye, Video, AlertCircle, TriangleAlert, BarChart2, List, Package, Truck, Warehouse as WarehouseIcon } from 'lucide-react'
 
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'
 const fmtShortDate = (d) => {
@@ -232,6 +232,118 @@ function AnalyticsPanel() {
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      <VendorBreakdownPanel />
+    </div>
+  )
+}
+
+// ── Breakdown stok per vendor & produk (sekarang ada di gudang mana) ──────────
+function VendorBreakdownPanel() {
+  const [vendorId, setVendorId]   = useState('')
+  const [productId, setProductId] = useState('')
+
+  const { data: vendors } = useQuery({
+    queryKey: ['vendors', { limit: 200 }],
+    queryFn:  () => vendorsApi.list({ limit: 200 }),
+  })
+  const { data: products } = useQuery({
+    queryKey: ['products', { limit: 200 }],
+    queryFn:  () => productsApi.list({ limit: 200 }),
+  })
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['vendor-stock-breakdown', vendorId, productId],
+    queryFn:  () => vendorDeliveriesApi.stockBreakdown({ vendorId, productId: productId || undefined }),
+    enabled:  !!vendorId,
+  })
+
+  const received  = data?.received  ?? []
+  const breakdown = data?.breakdown ?? []
+
+  // Susun tabel: baris per produk, kolom per gudang
+  const warehouseNames = useMemo(() => {
+    const set = new Set(breakdown.map(b => b.warehouseName))
+    return Array.from(set).sort()
+  }, [breakdown])
+
+  const rows = useMemo(() => {
+    const byProduct = {}
+    for (const r of received) {
+      byProduct[r.productId] = { productId: r.productId, productName: r.productName, totalReceived: r.totalReceived, byWarehouse: {} }
+    }
+    for (const b of breakdown) {
+      if (!byProduct[b.productId]) byProduct[b.productId] = { productId: b.productId, productName: b.productName, totalReceived: 0, byWarehouse: {} }
+      byProduct[b.productId].byWarehouse[b.warehouseName] = b.netQty
+    }
+    return Object.values(byProduct).sort((a, b) => a.productName.localeCompare(b.productName))
+  }, [received, breakdown])
+
+  return (
+    <div className="card p-5">
+      <div className="flex items-center gap-2 mb-4">
+        <WarehouseIcon size={15} className="text-slate-400" />
+        <h3 className="text-sm font-semibold text-slate-700">Stok per Vendor & Produk — Sekarang Ada di Gudang Mana</h3>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+        <div>
+          <label className="block text-[11px] font-medium text-slate-500 mb-1">Vendor <span className="text-danger">*</span></label>
+          <SearchableSelect
+            value={vendorId}
+            onChange={setVendorId}
+            options={[{ value: '', label: 'Pilih vendor…' }, ...(vendors?.data ?? []).map(v => ({ value: String(v.id), label: v.name }))]}
+            placeholder="Pilih vendor…"
+          />
+        </div>
+        <div>
+          <label className="block text-[11px] font-medium text-slate-500 mb-1">Produk (opsional)</label>
+          <SearchableSelect
+            value={productId}
+            onChange={setProductId}
+            options={[{ value: '', label: 'Semua produk' }, ...(products?.data ?? []).map(p => ({ value: String(p.id), label: p.name }))]}
+            placeholder="Semua produk"
+          />
+        </div>
+      </div>
+
+      {!vendorId ? (
+        <div className="py-8 text-center text-slate-400 text-sm">Pilih vendor untuk melihat breakdown stok</div>
+      ) : isLoading ? (
+        <div className="py-8 text-center text-slate-400 text-sm">Memuat…</div>
+      ) : rows.length === 0 ? (
+        <div className="py-8 text-center text-slate-400 text-sm">Belum ada data barang masuk dari vendor ini</div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[520px] text-sm">
+            <thead>
+              <tr className="border-b border-slate-100">
+                <th className="text-left py-2 px-2 text-[11px] font-bold text-slate-500 uppercase">Produk</th>
+                <th className="text-right py-2 px-2 text-[11px] font-bold text-slate-500 uppercase">Total Pernah Masuk</th>
+                {warehouseNames.map(wh => (
+                  <th key={wh} className="text-right py-2 px-2 text-[11px] font-bold text-slate-500 uppercase">{wh}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(r => (
+                <tr key={r.productId} className="border-b border-slate-50">
+                  <td className="py-2 px-2 font-medium text-slate-700">{r.productName}</td>
+                  <td className="py-2 px-2 text-right font-mono text-slate-600">{r.totalReceived.toLocaleString('id-ID')}</td>
+                  {warehouseNames.map(wh => (
+                    <td key={wh} className="py-2 px-2 text-right font-mono text-slate-700">
+                      {(r.byWarehouse[wh] ?? 0).toLocaleString('id-ID')}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="text-[11px] text-slate-400 mt-3">
+            "Total Pernah Masuk" dari histori Barang Masuk. Kolom gudang dihitung dari Stock In/Out yang ditandai vendor ini (via tombol "Buat Stock In" / "Retur ke Vendor").
+          </p>
         </div>
       )}
     </div>

@@ -9,6 +9,7 @@ import toast from 'react-hot-toast'
 import {
   ArrowLeft, Save, Plus, Trash2, Video,
   AlertTriangle, AlertCircle, Check, Upload, X, Printer, ChevronDown, TriangleAlert, History,
+  PackagePlus, Undo2,
 } from 'lucide-react'
 import logoPreface from '../assets/logo-preface.jpeg'
 
@@ -511,6 +512,24 @@ export default function IncomingGoodsDetail() {
               className="btn-secondary text-sm flex items-center gap-2"
             >
               <Printer size={14} /> Print
+            </button>
+          )}
+          {!isNew && delivery && canManage && (
+            <button
+              onClick={() => navigate(`/stock-in/new?vendorId=${delivery.Vendor?.id ?? ''}&sourceDeliveryId=${id}`)}
+              className="btn-secondary text-sm flex items-center gap-2"
+              title="Buat dokumen Stock In dengan vendor & referensi barang masuk ini sudah ter-tandai"
+            >
+              <PackagePlus size={14} /> Buat Stock In
+            </button>
+          )}
+          {!isNew && delivery && canManage && (
+            <button
+              onClick={() => navigate(`/stock-out/new?vendorId=${delivery.Vendor?.id ?? ''}&sourceDeliveryId=${id}&purpose=${encodeURIComponent('Retur Vendor')}`)}
+              className="btn-secondary text-sm flex items-center gap-2"
+              title="Buat Stock Out (Retur Vendor) dengan vendor & referensi barang masuk ini sudah ter-tandai"
+            >
+              <Undo2 size={14} /> Retur ke Vendor
             </button>
           )}
           {!isNew && delivery && isDraft && (

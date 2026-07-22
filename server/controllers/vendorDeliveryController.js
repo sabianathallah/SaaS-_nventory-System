@@ -286,6 +286,61 @@ exports.patchStatus = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+// Breakdown stok per vendor+produk: total pernah diterima (dari VendorDelivery)
+// vs sekarang tersebar di gudang mana saja (dari Stock In/Out yang ditandai VendorId).
+exports.stockBreakdown = async (req, res, next) => {
+  try {
+    const { vendorId, productId, dateFrom, dateTo } = req.query;
+    if (!vendorId) return res.status(400).json({ message: 'vendorId wajib diisi' });
+    const cf = companyFilter(req);
+
+    const receivedConditions = ['vd."vendorId" = :vendorId'];
+    const replacements = { vendorId };
+    if (cf.companyId) { receivedConditions.push('vd."companyId" = :companyId'); replacements.companyId = cf.companyId; }
+    if (productId)    { receivedConditions.push('vdi."productId" = :productId'); replacements.productId = productId; }
+    if (dateFrom)     { receivedConditions.push('vd.date >= :dateFrom'); replacements.dateFrom = dateFrom; }
+    if (dateTo)       { receivedConditions.push('vd.date <= :dateTo');   replacements.dateTo   = dateTo; }
+
+    const received = await sequelize.query(`
+      SELECT
+        p.id                                     AS "productId",
+        p.name                                   AS "productName",
+        COALESCE(SUM(vdi."qtyActual"), 0)::int    AS "totalReceived"
+      FROM "VendorDeliveries" vd
+      JOIN "VendorDeliveryItems" vdi ON vdi."deliveryId" = vd.id
+      JOIN "Products" p              ON p.id = vdi."productId"
+      WHERE ${receivedConditions.join(' AND ')}
+      GROUP BY p.id, p.name
+      ORDER BY p.name ASC
+    `, { replacements, type: sequelize.QueryTypes.SELECT });
+
+    const breakdownConditions = ['COALESCE(sih."VendorId", soh."VendorId") = :vendorId'];
+    if (cf.companyId) breakdownConditions.push('sm."companyId" = :companyId');
+    if (productId)    breakdownConditions.push('p.id = :productId');
+    if (dateFrom)     breakdownConditions.push('sm.date >= :dateFrom');
+    if (dateTo)       breakdownConditions.push('sm.date <= :dateTo');
+
+    const breakdown = await sequelize.query(`
+      SELECT
+        wh.id                                                            AS "warehouseId",
+        wh.name                                                          AS "warehouseName",
+        p.id                                                             AS "productId",
+        p.name                                                           AS "productName",
+        SUM(CASE WHEN sm.type = 'IN' THEN sm.quantity ELSE -sm.quantity END)::int AS "netQty"
+      FROM "Stock_Movements" sm
+      JOIN "Warehouses" wh ON wh.id = sm."WarehouseId"
+      JOIN "Products" p    ON p.id = sm."ProductId"
+      LEFT JOIN "Stock_In_Headers"  sih ON sm.source = 'STOCK_IN'  AND sm."ReferenceId" = sih.id
+      LEFT JOIN "Stock_Out_Headers" soh ON sm.source = 'STOCK_OUT' AND sm."ReferenceId" = soh.id
+      WHERE ${breakdownConditions.join(' AND ')}
+      GROUP BY wh.id, wh.name, p.id, p.name
+      ORDER BY p.name ASC, wh.name ASC
+    `, { replacements, type: sequelize.QueryTypes.SELECT });
+
+    res.json({ received, breakdown });
+  } catch (err) { next(err); }
+};
+
 exports.analytics = async (req, res, next) => {
   try {
     const { dateFrom, dateTo, articleId, productId, productSkuId } = req.query;
