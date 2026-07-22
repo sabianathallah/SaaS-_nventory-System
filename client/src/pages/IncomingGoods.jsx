@@ -352,7 +352,14 @@ export default function IncomingGoods() {
     },
     {
       key: 'by', label: 'Dibuat oleh', width: 130,
-      render: r => <span className="text-xs text-slate-500">{r.Creator?.name ?? '—'}</span>,
+      render: r => (
+        <div>
+          <div className="text-xs text-slate-500">{r.Creator?.name ?? '—'}</div>
+          {r.Updater && r.Updater.name !== r.Creator?.name && (
+            <div className="text-[10px] text-slate-400">Diedit: {r.Updater.name}</div>
+          )}
+        </div>
+      ),
     },
     {
       key: 'actions', label: '', width: 110,

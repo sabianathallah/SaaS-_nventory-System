@@ -478,7 +478,13 @@ export default function IncomingGoodsDetail() {
             {isNew ? 'Catat Barang Masuk' : `Barang Masuk #${id}`}
           </h1>
           {delivery && (
-            <p className="text-sm text-slate-400 truncate">{delivery.Vendor?.name} — {fmtDate(delivery.date)}</p>
+            <p className="text-sm text-slate-400 truncate">
+              {delivery.Vendor?.name} — {fmtDate(delivery.date)}
+              {delivery.Creator?.name && <> · Dibuat oleh {delivery.Creator.name}</>}
+              {delivery.Updater && delivery.Updater.name !== delivery.Creator?.name && (
+                <> · Diedit oleh {delivery.Updater.name}</>
+              )}
+            </p>
           )}
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">

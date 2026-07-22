@@ -36,6 +36,7 @@ const SKU_INCLUDE = {
 const HEADER_INCLUDE = [
   { model: Vendor, as: 'Vendor',   attributes: ['id', 'name'] },
   { model: User,   as: 'Creator',  attributes: ['id', 'name'] },
+  { model: User,   as: 'Updater',  attributes: ['id', 'name'] },
 ];
 
 const ITEM_INCLUDE = [
@@ -147,6 +148,7 @@ exports.update = async (req, res, next) => {
       sjNumber:  sjNumber  !== undefined ? (sjNumber?.trim()  || null) : row.sjNumber,
       sjPhotos:  sjPhotos.length > 0 ? sjPhotos : null,
       videoLink: videoLink !== undefined ? (videoLink?.trim() || null) : row.videoLink,
+      updatedBy: req.user.id,
     });
     const result = await VendorDelivery.findByPk(row.id, { include: HEADER_INCLUDE });
     res.json({ data: result });
@@ -180,6 +182,7 @@ exports.addItem = async (req, res, next) => {
       qtyActual:    Number(qtyActual) || 0,
       notes:        notes?.trim() || null,
     });
+    await delivery.update({ updatedBy: req.user.id });
     await syncSelisihStatus(delivery.id);
     const result = await VendorDeliveryItem.findByPk(item.id, { include: ITEM_INCLUDE });
     res.status(201).json({ data: { ...result.toJSON(), selisih: result.qtySJ - result.qtyActual } });
@@ -200,6 +203,7 @@ exports.updateItem = async (req, res, next) => {
       qtyActual:    qtyActual !== undefined ? Number(qtyActual) : item.qtyActual,
       notes:        notes     !== undefined ? (notes?.trim() || null) : item.notes,
     });
+    await delivery?.update({ updatedBy: req.user.id });
     await syncSelisihStatus(item.deliveryId);
     const result = await VendorDeliveryItem.findByPk(item.id, { include: ITEM_INCLUDE });
     res.json({ data: { ...result.toJSON(), selisih: result.qtySJ - result.qtyActual } });
@@ -214,6 +218,7 @@ exports.removeItem = async (req, res, next) => {
     if (delivery?.status === 'closed') return res.status(403).json({ message: 'Barang masuk sudah ditutup. Buka kembali untuk menghapus item.' });
     const deliveryId = item.deliveryId;
     await item.destroy();
+    await delivery?.update({ updatedBy: req.user.id });
     await syncSelisihStatus(deliveryId);
     res.json({ message: 'Item dihapus' });
   } catch (err) { next(err); }
@@ -227,7 +232,7 @@ exports.patchSelisihStatus = async (req, res, next) => {
     }
     const row = await VendorDelivery.findOne({ where: { id: req.params.id, ...companyFilter(req) } });
     if (!row) return res.status(404).json({ message: 'Barang masuk tidak ditemukan' });
-    await row.update({ selisihStatus: status });
+    await row.update({ selisihStatus: status, updatedBy: req.user.id });
     res.json({ data: { selisihStatus: status } });
   } catch (err) { next(err); }
 };
@@ -250,7 +255,7 @@ exports.patchStatus = async (req, res, next) => {
       return res.status(400).json({ message: `Tidak bisa ubah status dari ${row.status} ke ${status}` });
     }
 
-    await row.update({ status });
+    await row.update({ status, updatedBy: req.user.id });
     res.json({ data: { status } });
   } catch (err) { next(err); }
 };

@@ -5,6 +5,7 @@ module.exports = (sequelize, DataTypes) => {
     static associate(models) {
       VendorDelivery.belongsTo(models.Vendor, { foreignKey: 'vendorId', as: 'Vendor' });
       VendorDelivery.belongsTo(models.User,   { foreignKey: 'createdBy', as: 'Creator' });
+      VendorDelivery.belongsTo(models.User,   { foreignKey: 'updatedBy', as: 'Updater' });
       VendorDelivery.hasMany(models.VendorDeliveryItem, { foreignKey: 'deliveryId', as: 'items', onDelete: 'CASCADE' });
     }
   }
@@ -16,6 +17,7 @@ module.exports = (sequelize, DataTypes) => {
     videoLink: { type: DataTypes.TEXT, allowNull: true },
     notes:     { type: DataTypes.TEXT, allowNull: true },
     createdBy:     { type: DataTypes.INTEGER, allowNull: false },
+    updatedBy:     { type: DataTypes.INTEGER, allowNull: true },
     companyId:     { type: DataTypes.INTEGER, allowNull: true },
     selisihStatus: { type: DataTypes.STRING(20), allowNull: true,  defaultValue: null },
     status:        { type: DataTypes.STRING(20), allowNull: false, defaultValue: 'open' },
