@@ -362,6 +362,8 @@ export default function StockOutDetail() {
     enabled:  !isNew && !!id,
   })
 
+  const isOpenSession = !isNew && detail?.status === 'open'
+
   const { data: warehouses } = useQuery({
     queryKey: ['warehouses', { limit: 100 }],
     queryFn:  () => warehousesApi.list({ limit: 100 }),
@@ -378,7 +380,7 @@ export default function StockOutDetail() {
 
   // Ketika scanner aktif, jaga hidden input selalu terfokus.
   useEffect(() => {
-    if (!scannerConnected || !isNew) return
+    if (!scannerConnected || !(isNew || isOpenSession)) return
     const input = scanGrabRef.current
     if (!input) return
     input.focus()
@@ -389,7 +391,7 @@ export default function StockOutDetail() {
     })
     input.addEventListener('blur', onBlur)
     return () => input.removeEventListener('blur', onBlur)
-  }, [scannerConnected, isNew])
+  }, [scannerConnected, isNew, isOpenSession])
 
   const draftQueryKey = draftIdParam ? ['stock-out-draft', draftIdParam] : ['stock-out-draft']
 
@@ -489,8 +491,10 @@ export default function StockOutDetail() {
   }
 
   const handleScan = async (code) => {
-    if (!form.warehouseId) { toast.error('Pilih warehouse terlebih dahulu'); scanGrabRef.current?.focus(); return }
-    if (!draftId) { toast.error('Draft belum siap, coba lagi'); scanGrabRef.current?.focus(); return }
+    const warehouseId = isNew ? form.warehouseId : detail?.WarehouseId
+    if (!warehouseId) { toast.error('Pilih warehouse terlebih dahulu'); scanGrabRef.current?.focus(); return }
+    if (isNew && !draftId) { toast.error('Draft belum siap, coba lagi'); scanGrabRef.current?.focus(); return }
+    if (!isNew && !isOpenSession) { scanGrabRef.current?.focus(); return }
     let sku
     try {
       sku = await stockInApi.resolveSku(code)
@@ -502,22 +506,31 @@ export default function StockOutDetail() {
     // Close camera only after SKU resolved — failed scans keep camera open for retry
     setShowScanner(false)
     try {
-      await stockOutDraftApi.addItem(draftId, {
-        ProductSKUId: sku.id ? Number(sku.id) : undefined,
-        ProductId:    sku.ProductId ? Number(sku.ProductId) : (sku.Product?.id ? Number(sku.Product.id) : undefined),
-        quantity: 1,
-      })
+      if (isNew) {
+        await stockOutDraftApi.addItem(draftId, {
+          ProductSKUId: sku.id ? Number(sku.id) : undefined,
+          ProductId:    sku.ProductId ? Number(sku.ProductId) : (sku.Product?.id ? Number(sku.Product.id) : undefined),
+          quantity: 1,
+        })
+        qc.invalidateQueries({ queryKey: draftQueryKey })
+      } else {
+        await stockOutApi.addItem(id, {
+          ProductSKUId: sku.id ? Number(sku.id) : undefined,
+          ProductId:    sku.ProductId ? Number(sku.ProductId) : (sku.Product?.id ? Number(sku.Product.id) : undefined),
+          quantity: 1,
+        })
+        qc.invalidateQueries({ queryKey: ['stock-out', id] })
+      }
       const name  = sku.Product?.name ?? code
       const label = skuLabel(sku)
       toast.success(`${name}${label ? ` · ${label}` : ''} +1`)
-      qc.invalidateQueries({ queryKey: draftQueryKey })
     } catch (e) {
       toast.error(e.response?.data?.message || 'Gagal menambah item')
     }
     scanGrabRef.current?.focus()
   }
 
-  useExternalScanner(handleScan, isNew && scannerConnected && canScanOut)
+  useExternalScanner(handleScan, (isNew || isOpenSession) && scannerConnected && canScanOut)
 
   const handleSubmit = (e) => {
     e.preventDefault()
@@ -653,18 +666,64 @@ export default function StockOutDetail() {
               <PackageMinus size={13} className="text-danger" />
               <span className="text-xs font-bold text-slate-600 uppercase tracking-wide">Items ({items.length})</span>
             </div>
-            {isOpen && canManualOutput && (
-              <div className="p-4 border-b border-slate-100 bg-emerald-50/40">
-                <p className="text-xs font-bold text-emerald-700 uppercase tracking-wide mb-3">Tambah Item (sesi terbuka)</p>
-                <ProductSkuPicker
-                  warehouseId={detail.WarehouseId}
-                  stocks={viewWhStocks}
-                  onSelect={({ skuId, productId, quantity }) => addHeaderItemMutation.mutate({
-                    ProductSKUId: skuId ? Number(skuId) : undefined,
-                    ProductId:    productId ? Number(productId) : undefined,
-                    quantity,
-                  })}
-                />
+            {isOpen && (canManualOutput || canScanOut) && (
+              <div className="p-4 border-b border-slate-100 bg-emerald-50/40 space-y-3">
+                {scannerConnected && canScanOut && (
+                  <input
+                    ref={scanGrabRef}
+                    aria-hidden="true"
+                    tabIndex={-1}
+                    style={{ position: 'fixed', opacity: 0, width: 0, height: 0, top: 0, left: 0, pointerEvents: 'none' }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        const code = e.currentTarget.value.trim()
+                        e.currentTarget.value = ''
+                        if (code.length > 2) handleScan(code)
+                      }
+                    }}
+                    onChange={() => {}}
+                  />
+                )}
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-bold text-emerald-700 uppercase tracking-wide">Tambah Item (sesi terbuka)</p>
+                  {canScanOut && (
+                    <div className="flex items-center gap-2">
+                      <button type="button" onClick={() => setShowScanner(true)}
+                        className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-red-700 px-2.5 py-1 rounded hover:bg-red-50 border border-slate-200 hover:border-red-200 transition-colors">
+                        <ScanLine size={13} /> Scan QR
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setScannerConnected(v => !v)
+                          if (!scannerConnected) toast.success('Scanner eksternal terhubung', { icon: '🔌' })
+                          else toast('Scanner diputus', { icon: '🔌' })
+                        }}
+                        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-medium transition-colors ${
+                          scannerConnected
+                            ? 'bg-green-50 border-green-300 text-green-700 hover:bg-green-100'
+                            : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300 hover:text-slate-700'
+                        }`}
+                      >
+                        {scannerConnected
+                          ? <><span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" /> Connected</>
+                          : <><ScanBarcode size={13} /> Hubungkan Scanner</>
+                        }
+                      </button>
+                    </div>
+                  )}
+                </div>
+                {canManualOutput && (
+                  <ProductSkuPicker
+                    warehouseId={detail.WarehouseId}
+                    stocks={viewWhStocks}
+                    onSelect={({ skuId, productId, quantity }) => addHeaderItemMutation.mutate({
+                      ProductSKUId: skuId ? Number(skuId) : undefined,
+                      ProductId:    productId ? Number(productId) : undefined,
+                      quantity,
+                    })}
+                  />
+                )}
               </div>
             )}
             <div className="overflow-x-auto">
@@ -701,6 +760,15 @@ export default function StockOutDetail() {
               </div>
             )}
           </div>
+        )}
+
+        {showScanner && (
+          <QRScanner
+            onScan={handleScan}
+            onClose={() => setShowScanner(false)}
+            autoClose={false}
+            hint="Scan semua item lalu tutup"
+          />
         )}
       </div>
 

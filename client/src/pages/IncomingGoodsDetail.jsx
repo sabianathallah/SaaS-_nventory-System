@@ -379,6 +379,7 @@ export default function IncomingGoodsDetail() {
 
   const MAX_PHOTOS = 8
   const [lightboxPhoto, setLightboxPhoto] = useState(null)
+  const [showDelete, setShowDelete] = useState(false)
 
   function handlePhotoAdd(e) {
     const files = Array.from(e.target.files ?? [])
@@ -442,6 +443,12 @@ export default function IncomingGoodsDetail() {
     onError: e => toast.error(e.response?.data?.message || 'Error'),
   })
 
+  const deleteDelivery = useMutation({
+    mutationFn: () => vendorDeliveriesApi.remove(id),
+    onSuccess: () => { toast.success('Barang masuk dihapus'); navigate('/incoming-goods', { replace: true }) },
+    onError: e => toast.error(e.response?.data?.message || 'Gagal menghapus'),
+  })
+
   const patchSelisihStatus = useMutation({
     mutationFn: (status) => vendorDeliveriesApi.patchSelisihStatus(id, status),
     onSuccess: (_, status) => {
@@ -496,6 +503,20 @@ export default function IncomingGoodsDetail() {
   return (
     <>
     {lightboxPhoto && <ImageLightbox src={lightboxPhoto} alt="Foto Surat Jalan" onClose={() => setLightboxPhoto(null)} />}
+    {showDelete && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+        <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6 space-y-4">
+          <h3 className="font-semibold text-slate-800">Hapus Barang Masuk?</h3>
+          <p className="text-sm text-slate-500">Tindakan ini tidak bisa dibatalkan. Seluruh item dan riwayat aktivitas dokumen ini akan ikut terhapus.</p>
+          <div className="flex gap-2 justify-end">
+            <button onClick={() => setShowDelete(false)} className="btn-secondary">Batal</button>
+            <button onClick={() => deleteDelivery.mutate()} disabled={deleteDelivery.isPending} className="btn-danger">
+              {deleteDelivery.isPending ? 'Menghapus…' : 'Ya, Hapus'}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
     <div className="px-6 py-6 max-w-5xl mx-auto space-y-6 no-print">
 
       {/* ── Page header ─────────────────────────────────────── */}
@@ -589,6 +610,15 @@ export default function IncomingGoodsDetail() {
               className="btn-primary text-sm"
             >
               <Save size={14} /> Simpan Perubahan
+            </button>
+          )}
+          {!isNew && delivery && canManage && (
+            <button
+              onClick={() => setShowDelete(true)}
+              className="btn-secondary text-sm flex items-center gap-2 text-red-600 hover:bg-red-50"
+              title="Hapus barang masuk ini"
+            >
+              <Trash2 size={14} /> Hapus
             </button>
           )}
         </div>

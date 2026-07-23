@@ -205,7 +205,10 @@ function CancelModal({ onConfirm, onClose, loading }) {
 }
 
 // ── Print helpers ─────────────────────────────────────────────────────────────
-function printViaIframe(html) {
+// Browser "Save as PDF" pakai document.title tab utama sebagai nama file yang
+// disarankan, BUKAN <title> di dalam iframe — jadi judul harus di-set di sini juga
+// (konsisten dengan StockOutDetail/HandoverDetail/dst yang set document.title langsung).
+function printViaIframe(html, fileTitle) {
   const existing = document.getElementById('__pf_print_frame')
   if (existing) existing.remove()
   const iframe = document.createElement('iframe')
@@ -214,10 +217,15 @@ function printViaIframe(html) {
   document.body.appendChild(iframe)
   const doc = iframe.contentDocument || iframe.contentWindow.document
   doc.open(); doc.write(html); doc.close()
+  const prevTitle = document.title
+  if (fileTitle) document.title = fileTitle
   setTimeout(() => {
     iframe.contentWindow.focus()
     iframe.contentWindow.print()
-    setTimeout(() => iframe.remove(), 2000)
+    setTimeout(() => {
+      iframe.remove()
+      document.title = prevTitle
+    }, 2000)
   }, 400)
   return true
 }
@@ -239,7 +247,8 @@ function printResiSementara(shipment, showItems = true) {
   const toName    = shipment.recipientName    || shipment.buyerName    || shipment.recipientInfo || '-'
   const toPhone   = shipment.recipientPhone   || shipment.buyerPhone   || ''
   const toAddress = shipment.recipientAddress || shipment.buyerAddress || ''
-  return printViaIframe(`<!DOCTYPE html><html><head><title>${pdfFileTitle('Resi', shipment)}</title><style>
+  const fileTitle = pdfFileTitle('Resi', shipment)
+  return printViaIframe(`<!DOCTYPE html><html><head><title>${fileTitle}</title><style>
     @page{size:100mm 150mm;margin:5mm}
     *{margin:0;padding:0;box-sizing:border-box}
     body{font-family:Arial,sans-serif;color:#000;width:90mm}
@@ -284,7 +293,7 @@ function printResiSementara(shipment, showItems = true) {
       <span class="iname">${i.productName}${i.variantName ? ` — ${i.variantName}` : ''}</span>
       <span class="iqty">×${i.quantity}</span>
     </div>`).join('')}` : ''}
-  </body></html>`)
+  </body></html>`, fileTitle)
 }
 
 function printInvoice(shipment) {
@@ -292,7 +301,8 @@ function printInvoice(shipment) {
   const subtotal = Number(shipment.subtotal)
   const shipping = Number(shipment.shippingCost)
   const total    = Number(shipment.total)
-  return printViaIframe(`<!DOCTYPE html><html><head><title>${pdfFileTitle('Invoice', shipment)}</title><style>
+  const fileTitle = pdfFileTitle('Invoice', shipment)
+  return printViaIframe(`<!DOCTYPE html><html><head><title>${fileTitle}</title><style>
     *{margin:0;padding:0;box-sizing:border-box;font-family:'Segoe UI',sans-serif}
     body{padding:40px;font-size:13px;color:#1a1a1a;max-width:720px;margin:0 auto}
     .header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:32px}
@@ -379,7 +389,7 @@ function printInvoice(shipment) {
     <div style="font-size:12px;margin-top:2px">a/n Muhamad Akbar Fadillah</div>
     <div style="margin-top:12px;color:#bbb">Terima kasih atas kepercayaan Anda &nbsp;·&nbsp; Preface Wearhouse</div>
   </div>
-  </body></html>`)
+  </body></html>`, fileTitle)
 }
 
 // ── Main component ────────────────────────────────────────────────────────────

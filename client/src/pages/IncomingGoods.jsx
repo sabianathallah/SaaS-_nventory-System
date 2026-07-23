@@ -60,8 +60,8 @@ function AnalyticsPanel() {
   })
 
   const { data: products } = useQuery({
-    queryKey: ['products', { limit: 200 }],
-    queryFn:  () => productsApi.list({ limit: 200 }),
+    queryKey: ['products', { limit: 500 }],
+    queryFn:  () => productsApi.list({ limit: 500 }),
   })
 
   const { data: skus } = useQuery({
@@ -250,8 +250,8 @@ function VendorBreakdownPanel() {
     queryFn:  () => vendorsApi.list({ limit: 200 }),
   })
   const { data: products } = useQuery({
-    queryKey: ['products', { limit: 200 }],
-    queryFn:  () => productsApi.list({ limit: 200 }),
+    queryKey: ['products', { limit: 500 }],
+    queryFn:  () => productsApi.list({ limit: 500 }),
   })
 
   const { data, isLoading } = useQuery({
