@@ -197,6 +197,7 @@ export const vendorDeliveriesApi = {
   patchSelisihStatus:(id, status)       => api.patch(`/vendor-deliveries/${id}/selisih-status`, { status }).then(r => r.data),
   patchStatus:       (id, status)       => api.patch(`/vendor-deliveries/${id}/status`, { status }).then(r => r.data),
   analytics:         (params)           => api.get('/vendor-deliveries/analytics', { params }).then(r => r.data),
+  productTransactions: (params)         => api.get('/vendor-deliveries/analytics/transactions', { params }).then(r => r.data),
   stockBreakdown:    (params)           => api.get('/vendor-deliveries/stock-breakdown', { params }).then(r => r.data),
 }
 

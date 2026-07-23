@@ -3,6 +3,7 @@ const { VendorDelivery, VendorDeliveryItem, VendorDeliveryLog, Vendor, User, Pro
 const { Op, fn, col, literal } = require('sequelize');
 const { destroyByUrl } = require('../helpers/cloudinary');
 const { companyFilter, companyId: getCompanyId } = require('../helpers/tenancy');
+const { paginate, paginatedResponse } = require('../helpers/queryHelper');
 
 // Catat setiap aksi yang mengubah dokumen, agar semua orang yang pernah
 // mengerjakan transaksi ini tercatat (tidak cuma pembuat & pengubah terakhir).
@@ -394,5 +395,77 @@ exports.analytics = async (req, res, next) => {
     const totalDeliveries = chart.reduce((s, r) => s + r.deliveries, 0);
 
     res.json({ chart, topProducts, summary: { totalQty, totalDeliveries } });
+  } catch (err) { next(err); }
+};
+
+// Drill-down: daftar transaksi barang masuk untuk satu produk (tanggal, vendor, qty),
+// dipakai saat user klik produk di panel Analitik.
+//
+// Dua tahap (bukan satu findAndCountAll dengan include berlapis) karena
+// subquery-pagination Sequelize salah membangun JOIN saat include utama punya
+// `where` sendiri + ada include lain yang many-to-many (ProductVariantOptions) —
+// kolom FK yang dibutuhkan JOIN ikut terbuang di subquery-nya.
+exports.productTransactions = async (req, res, next) => {
+  try {
+    const { productId, productSkuId, dateFrom, dateTo, articleId } = req.query;
+    if (!productId) return res.status(400).json({ message: 'productId wajib diisi' });
+    const cf = companyFilter(req);
+    const { page, limit, offset } = paginate(req.query);
+
+    const deliveryWhere = { ...cf };
+    if (dateFrom || dateTo) {
+      deliveryWhere.date = {};
+      if (dateFrom) deliveryWhere.date[Op.gte] = dateFrom;
+      if (dateTo)   deliveryWhere.date[Op.lte] = dateTo;
+    }
+
+    const itemWhere = { productId };
+    if (productSkuId) itemWhere.productSkuId = productSkuId;
+
+    const idFilterInclude = [
+      { model: VendorDelivery, attributes: [], where: deliveryWhere },
+      ...(articleId ? [{ model: Product, as: 'Product', attributes: [], where: { ArticleId: articleId } }] : []),
+    ];
+
+    const count = await VendorDeliveryItem.count({ where: itemWhere, include: idFilterInclude, distinct: true });
+
+    const idRows = await VendorDeliveryItem.findAll({
+      where: itemWhere,
+      include: idFilterInclude,
+      attributes: ['id'],
+      order: [[VendorDelivery, 'date', 'DESC'], [VendorDelivery, 'id', 'DESC']],
+      limit,
+      offset,
+      subQuery: false,
+    });
+    const ids = idRows.map(r => r.id);
+
+    const rows = ids.length ? await VendorDeliveryItem.findAll({
+      where: { id: ids },
+      include: [
+        {
+          model: VendorDelivery,
+          attributes: ['id', 'date', 'sjNumber'],
+          include: [{ model: Vendor, as: 'Vendor', attributes: ['id', 'name'] }],
+        },
+        { model: Product, as: 'Product', attributes: ['id', 'name'] },
+        SKU_INCLUDE,
+      ],
+      order: [[VendorDelivery, 'date', 'DESC'], [VendorDelivery, 'id', 'DESC']],
+    }) : [];
+
+    const data = rows.map(r => ({
+      deliveryId:   r.VendorDelivery.id,
+      date:         r.VendorDelivery.date,
+      sjNumber:     r.VendorDelivery.sjNumber,
+      vendorName:   r.VendorDelivery.Vendor?.name ?? null,
+      productName:  r.Product?.name ?? null,
+      skuCode:      r.ProductSKU?.sku_code ?? null,
+      variant:      (r.ProductSKU?.ProductVariantOptions ?? []).map(o => o.value).join(' / ') || null,
+      qtySJ:        r.qtySJ,
+      qtyActual:    r.qtyActual,
+    }));
+
+    res.json(paginatedResponse(data, count, page, limit));
   } catch (err) { next(err); }
 };

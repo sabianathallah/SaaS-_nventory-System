@@ -213,13 +213,21 @@ function AnalyticsPanel() {
       {topProducts.length > 0 && (
         <div className="card p-5">
           <h3 className="text-sm font-semibold text-slate-700 mb-3">Produk Terbanyak Masuk</h3>
+          <p className="text-[11px] text-slate-400 -mt-2 mb-3">Klik produk untuk lihat riwayat transaksinya</p>
           <div className="space-y-2">
             {topProducts.map((p, i) => (
-              <div key={p.id} className="flex items-center gap-3">
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => sp({ prod: String(p.id), sku: '', view: 'analytics' })}
+                className={`w-full flex items-center gap-3 rounded-lg px-2 py-1.5 -mx-2 transition-colors text-left ${
+                  String(p.id) === productId ? 'bg-indigo-50' : 'hover:bg-slate-50'
+                }`}
+              >
                 <span className="text-[10px] font-bold text-slate-400 w-4">{i + 1}</span>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between mb-0.5">
-                    <span className="text-xs font-medium text-slate-700 truncate">{p.name}</span>
+                    <span className={`text-xs font-medium truncate ${String(p.id) === productId ? 'text-indigo-700' : 'text-slate-700'}`}>{p.name}</span>
                     <span className="text-xs font-bold text-indigo-600 ml-2 shrink-0">{p.qty.toLocaleString('id-ID')}</span>
                   </div>
                   <div className="w-full bg-slate-100 rounded-full h-1.5">
@@ -229,13 +237,107 @@ function AnalyticsPanel() {
                     />
                   </div>
                 </div>
-              </div>
+              </button>
             ))}
           </div>
         </div>
       )}
 
+      {/* Drill-down: riwayat transaksi produk terpilih */}
+      {productId && (
+        <ProductTransactionsPanel
+          productId={productId}
+          productSkuId={productSkuId}
+          dateFrom={dateFrom}
+          dateTo={dateTo}
+        />
+      )}
+
       <VendorBreakdownPanel />
+    </div>
+  )
+}
+
+// ── Drill-down: riwayat transaksi (tanggal, vendor, qty) untuk 1 produk ──────
+function ProductTransactionsPanel({ productId, productSkuId, dateFrom, dateTo }) {
+  const navigate = useNavigate()
+  const [page, setPage]   = useState(1)
+  const [limit, setLimit] = useState(10)
+
+  // Reset ke halaman 1 saat filter berubah — disesuaikan saat render, bukan di
+  // efek terpisah, supaya tidak ada render tambahan yang tidak perlu.
+  const filterKey = `${productId}|${productSkuId}|${dateFrom}|${dateTo}`
+  const [prevFilterKey, setPrevFilterKey] = useState(filterKey)
+  if (filterKey !== prevFilterKey) {
+    setPrevFilterKey(filterKey)
+    setPage(1)
+  }
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['vendor-delivery-product-transactions', productId, productSkuId, dateFrom, dateTo, page, limit],
+    queryFn:  () => vendorDeliveriesApi.productTransactions({ productId, productSkuId, dateFrom, dateTo, page, limit }),
+  })
+
+  const rows       = data?.data ?? []
+  const pagination = data?.pagination
+
+  const columns = [
+    { key: 'date',       label: 'Tanggal', render: r => fmtDate(r.date) },
+    { key: 'vendorName', label: 'Vendor',  render: r => r.vendorName ?? '—' },
+    { key: 'variant',    label: 'Size / Varian', render: r => r.variant || r.skuCode || '—' },
+    { key: 'qtyActual',  label: 'Qty', render: r => <span className="font-mono">{Number(r.qtyActual ?? 0).toLocaleString('id-ID')}</span> },
+    {
+      key: 'doc', label: '', width: 90,
+      render: r => (
+        <button
+          onClick={() => navigate(`/incoming-goods/${r.deliveryId}`)}
+          className="font-mono text-indigo-600 hover:underline text-xs"
+        >
+          #{r.deliveryId}
+        </button>
+      ),
+    },
+  ]
+
+  return (
+    <div className="card p-5">
+      <h3 className="text-sm font-semibold text-slate-700 mb-3">Riwayat Transaksi Produk Ini</h3>
+      <Table columns={columns} data={rows} loading={isLoading} emptyText="Belum ada transaksi barang masuk untuk produk ini" />
+      {pagination && pagination.total > 0 && (
+        <div className="flex items-center justify-between pt-3 text-xs text-slate-500 flex-wrap gap-2">
+          <div className="flex items-center gap-2">
+            <span>
+              Menampilkan <span className="font-semibold text-slate-700">{(page - 1) * limit + 1}–{Math.min(page * limit, pagination.total)}</span> dari <span className="font-semibold text-slate-700">{pagination.total}</span>
+            </span>
+            <select
+              value={limit}
+              onChange={e => { setLimit(Number(e.target.value)); setPage(1) }}
+              className="border border-slate-200 rounded px-1.5 py-0.5 bg-white focus:outline-none focus:border-slate-400"
+            >
+              {[10, 25, 50, 100].map(o => <option key={o} value={o}>{o} / hal</option>)}
+            </select>
+          </div>
+          {pagination.totalPages > 1 && (
+            <div className="flex items-center gap-1">
+              <button
+                disabled={page <= 1}
+                onClick={() => setPage(p => p - 1)}
+                className="px-2 py-1 rounded disabled:opacity-30 hover:bg-slate-100"
+              >
+                ‹
+              </button>
+              <span>{page} / {pagination.totalPages}</span>
+              <button
+                disabled={page >= pagination.totalPages}
+                onClick={() => setPage(p => p + 1)}
+                className="px-2 py-1 rounded disabled:opacity-30 hover:bg-slate-100"
+              >
+                ›
+              </button>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
