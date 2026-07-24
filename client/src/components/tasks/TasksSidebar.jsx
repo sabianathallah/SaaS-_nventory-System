@@ -1,5 +1,5 @@
 import { useAuth } from '../../context/AuthContext'
-import { SIDEBAR_VIEWS, ALL_TASKS_VIEW, FOLDERS_VIEW } from './taskConfig'
+import { SIDEBAR_VIEWS, ALL_TASKS_VIEW, FOLDERS_VIEW, ANALYTICS_VIEW } from './taskConfig'
 
 export default function TasksSidebar({ active, onSelect }) {
   const { hasPermission, isSuperAdmin, isAdmin } = useAuth()
@@ -39,6 +39,18 @@ export default function TasksSidebar({ active, onSelect }) {
           </button>
         )
       })}
+
+      {canSeeAll && (
+        <button
+          onClick={() => onSelect(ANALYTICS_VIEW.id)}
+          className={`flex items-center gap-2.5 w-full px-2.5 py-2 rounded-lg text-sm transition-colors mt-2 ${
+            active === ANALYTICS_VIEW.id ? 'nav-active font-semibold shadow-sm' : 'text-slate-600 hover:bg-white hover:text-slate-900'
+          }`}
+        >
+          <ANALYTICS_VIEW.icon size={14} className="flex-shrink-0" strokeWidth={active === ANALYTICS_VIEW.id ? 2.4 : 1.9} />
+          <span className="truncate flex-1 text-left">{ANALYTICS_VIEW.label}</span>
+        </button>
+      )}
     </div>
   )
 }

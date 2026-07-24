@@ -10,6 +10,7 @@ const { uploadSingle } = require('../helpers/cloudinary');
 // that reason — only comments piggyback on the same task-level check.
 router.get('/stats',           ctrl.stats);
 router.get('/divisions',       ctrl.listDivisions);
+router.get('/analytics',       rpAny('tasks.view', 'tasks.manage'), ctrl.analytics);
 router.get('/',                ctrl.list);
 router.post('/',               ctrl.create);
 router.put('/:id',             ctrl.update);

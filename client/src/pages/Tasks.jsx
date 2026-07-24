@@ -16,12 +16,13 @@ import BoardView from '../components/tasks/BoardView'
 import CalendarView from '../components/tasks/CalendarView'
 import TableView from '../components/tasks/TableView'
 import TaskDashboard from '../components/tasks/TaskDashboard'
+import TaskAnalytics from '../components/tasks/TaskAnalytics'
 import TaskDetailPanel from '../components/tasks/TaskDetailPanel'
 import CreateTaskModal from '../components/tasks/CreateTaskModal'
-import { SIDEBAR_VIEWS, ALL_TASKS_VIEW, FOLDERS_VIEW, STATUS_CONFIG, PRIORITY_CONFIG } from '../components/tasks/taskConfig'
+import { SIDEBAR_VIEWS, ALL_TASKS_VIEW, FOLDERS_VIEW, ANALYTICS_VIEW, STATUS_CONFIG, PRIORITY_CONFIG } from '../components/tasks/taskConfig'
 
-const VIEW_LABELS = Object.fromEntries([...SIDEBAR_VIEWS, ALL_TASKS_VIEW, FOLDERS_VIEW].map(v => [v.id, v.label]))
-const VALID_VIEW_IDS = new Set([...SIDEBAR_VIEWS, ALL_TASKS_VIEW, FOLDERS_VIEW].map(v => v.id))
+const VIEW_LABELS = Object.fromEntries([...SIDEBAR_VIEWS, ALL_TASKS_VIEW, FOLDERS_VIEW, ANALYTICS_VIEW].map(v => [v.id, v.label]))
+const VALID_VIEW_IDS = new Set([...SIDEBAR_VIEWS, ALL_TASKS_VIEW, FOLDERS_VIEW, ANALYTICS_VIEW].map(v => v.id))
 
 export default function Tasks() {
   const qc = useQueryClient()
@@ -75,11 +76,12 @@ export default function Tasks() {
 
   const isDashboard = sidebarView === 'dashboard'
   const isFolders = sidebarView === 'folders'
+  const isAnalytics = sidebarView === 'analytics'
 
   const { data, isLoading } = useQuery({
     queryKey: ['tasks', queryParams],
     queryFn: () => tasksApi.list(queryParams),
-    enabled: !isDashboard && !isFolders,
+    enabled: !isDashboard && !isFolders && !isAnalytics,
   })
   const tasks = data?.data ?? []
 
@@ -168,15 +170,15 @@ export default function Tasks() {
     <div className="px-6 py-6">
       <PageHeader
         title="Tugas"
-        subtitle={isDashboard ? 'Ringkasan seluruh task' : isFolders ? 'Pilih folder divisi' : `${filteredTasks.length} task — ${viewLabel}`}
+        subtitle={isDashboard ? 'Ringkasan seluruh task' : isFolders ? 'Pilih folder divisi' : isAnalytics ? 'Performa staff & divisi' : `${filteredTasks.length} task — ${viewLabel}`}
         action={
           <div className="flex items-center gap-2">
-            {!isDashboard && !isFolders && (
+            {!isDashboard && !isFolders && !isAnalytics && (
               <button onClick={handleExport} className="btn-secondary" title="Export ke Excel">
                 <FileSpreadsheet size={14} />Export
               </button>
             )}
-            {!isFolders && (
+            {!isFolders && !isAnalytics && (
               <button onClick={() => setShowCreate(true)} className="btn-primary">
                 <Plus size={14} />Task Baru
               </button>
@@ -196,6 +198,10 @@ export default function Tasks() {
           ) : isFolders ? (
             <div className="flex-1 overflow-y-auto">
               <DivisionFolders onSelect={(name) => { setSidebarView(`division:${name}`); setSelectedId(null) }} />
+            </div>
+          ) : isAnalytics ? (
+            <div className="flex-1 overflow-y-auto">
+              <TaskAnalytics />
             </div>
           ) : (
           <>

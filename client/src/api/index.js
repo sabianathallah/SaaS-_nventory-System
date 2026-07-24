@@ -127,6 +127,7 @@ export const tasksApi = {
   reject:        (id, note) => api.post(`/tasks/${id}/reject`, { note }).then(r => r.data),
   stats:         () => api.get('/tasks/stats').then(r => r.data),
   listDivisions: () => api.get('/tasks/divisions').then(r => r.data),
+  analytics:     (params) => api.get('/tasks/analytics', { params }).then(r => r.data),
   uploadAttachment: (id, file) => {
     const fd = new FormData()
     fd.append('image', file)

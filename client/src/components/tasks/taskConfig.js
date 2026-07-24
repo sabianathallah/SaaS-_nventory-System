@@ -1,4 +1,4 @@
-import { Star, ClipboardList, ListChecks, CheckCircle2, Globe, LayoutDashboard, FolderKanban } from 'lucide-react'
+import { Star, ClipboardList, ListChecks, CheckCircle2, Globe, LayoutDashboard, FolderKanban, BarChart2 } from 'lucide-react'
 
 // Same semantic color tokens as the rest of the app (tailwind.config.js:
 // success/warning/danger/info) instead of ad-hoc slate/blue/green — ties
@@ -54,6 +54,10 @@ export const ALL_TASKS_VIEW = { id: 'all', label: 'All Tasks', icon: Globe, empt
 
 // Landing page saat modul Tugas pertama dibuka — grid folder per divisi.
 export const FOLDERS_VIEW = { id: 'folders', label: 'Folders', icon: FolderKanban }
+
+// Admin/manager-only staff & divisi performance dashboard — only ever shown
+// in the sidebar when TasksSidebar's `canSeeAll` check passes.
+export const ANALYTICS_VIEW = { id: 'analytics', label: 'Analitik', icon: BarChart2 }
 
 // Deterministic per-user accent so avatars stay visually distinct without
 // being random on every render — cycles through the app's semantic palette

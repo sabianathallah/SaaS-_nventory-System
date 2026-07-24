@@ -468,6 +468,80 @@ class TaskController {
         } catch (err) { next(err); }
     }
 
+    // Admin-only staff/divisi performance dashboard — gated at the route level
+    // (rpAny('tasks.view','tasks.manage')), so unlike list()/stats() this never
+    // narrows to "my own tasks"; it always reports across the whole company.
+    static async analytics(req, res, next) {
+        try {
+            const { dateFrom, dateTo, divisi } = req.query;
+            const cf = companyFilter(req);
+
+            const conditions = ['t."parentTaskId" IS NULL'];
+            const replacements = {};
+            if (cf.companyId) { conditions.push('t."companyId" = :companyId'); replacements.companyId = cf.companyId; }
+            if (dateFrom) { conditions.push('t."createdAt" >= :dateFrom'); replacements.dateFrom = dateFrom; }
+            if (dateTo)   { conditions.push('t."createdAt" <= :dateTo');   replacements.dateTo = dateTo; }
+            if (divisi)   { conditions.push('t."divisi" = :divisi'); replacements.divisi = divisi; }
+            const where = conditions.join(' AND ');
+
+            const byStaff = await sequelize.query(`
+                SELECT
+                    u.id                                                                     AS "userId",
+                    u.name,
+                    u.divisi,
+                    COUNT(*) FILTER (WHERE t.status != 'DONE')::int                           AS active,
+                    COUNT(*) FILTER (WHERE t.status = 'DONE')::int                            AS completed,
+                    COUNT(*) FILTER (WHERE t.status != 'DONE' AND t."dueDate" < CURRENT_DATE)::int AS overdue,
+                    COUNT(*) FILTER (WHERE ta."assignmentStatus" = 'REJECTED')::int            AS rejected,
+                    ROUND(AVG(EXTRACT(EPOCH FROM (ta."updatedAt" - ta."createdAt")) / 3600)
+                        FILTER (WHERE ta."assignmentStatus" IN ('ACCEPTED', 'REJECTED')))::int AS "avgResponseHours"
+                FROM "TaskAssignees" ta
+                JOIN "Tasks" t ON t.id = ta."taskId"
+                JOIN "Users" u ON u.id = ta."userId"
+                WHERE ${where}
+                GROUP BY u.id, u.name, u.divisi
+                ORDER BY completed DESC
+            `, { replacements, type: sequelize.QueryTypes.SELECT });
+
+            const byDivisiRaw = await sequelize.query(`
+                SELECT
+                    t.divisi,
+                    COUNT(*)::int                                                             AS total,
+                    COUNT(*) FILTER (WHERE t.status = 'DONE')::int                             AS completed,
+                    COUNT(*) FILTER (WHERE t.status != 'DONE' AND t."dueDate" < CURRENT_DATE)::int AS overdue
+                FROM "Tasks" t
+                WHERE ${where} AND t.divisi IS NOT NULL
+                GROUP BY t.divisi
+                ORDER BY t.divisi ASC
+            `, { replacements, type: sequelize.QueryTypes.SELECT });
+            const byDivisi = byDivisiRaw.map(r => ({
+                ...r,
+                completionRate: r.total > 0 ? Math.round((r.completed / r.total) * 100) : 0,
+            }));
+
+            // Monthly completion trend runs on its own date axis (completedAt,
+            // not createdAt) — defaults to the last 6 months when no explicit
+            // range is given, independent of the byStaff/byDivisi filter above.
+            const trendConditions = ['t."completedAt" IS NOT NULL', 't."parentTaskId" IS NULL'];
+            const trendReplacements = {};
+            if (cf.companyId) { trendConditions.push('t."companyId" = :companyId'); trendReplacements.companyId = cf.companyId; }
+            if (divisi)   { trendConditions.push('t."divisi" = :divisi'); trendReplacements.divisi = divisi; }
+            if (dateFrom) { trendConditions.push('t."completedAt" >= :trendFrom'); trendReplacements.trendFrom = dateFrom; }
+            else          { trendConditions.push(`t."completedAt" >= (CURRENT_DATE - INTERVAL '6 months')`); }
+            if (dateTo)   { trendConditions.push('t."completedAt" <= :trendTo'); trendReplacements.trendTo = dateTo; }
+
+            const monthlyTrend = await sequelize.query(`
+                SELECT TO_CHAR(t."completedAt", 'YYYY-MM') AS month, COUNT(*)::int AS completed
+                FROM "Tasks" t
+                WHERE ${trendConditions.join(' AND ')}
+                GROUP BY month
+                ORDER BY month ASC
+            `, { replacements: trendReplacements, type: sequelize.QueryTypes.SELECT });
+
+            res.json({ byStaff, byDivisi, monthlyTrend });
+        } catch (err) { next(err); }
+    }
+
     static async listComments(req, res, next) {
         try {
             const task = await Task.findOne({ where: { id: req.params.id, ...companyFilter(req) } });
