@@ -4,8 +4,9 @@ import { tasksApi, taskListsApi } from '../../api'
 import { useAuth } from '../../context/AuthContext'
 import toast from 'react-hot-toast'
 import { X, Send, Star, Sun, Trash2, Check, Plus } from 'lucide-react'
-import { STATUS_CONFIG, PRIORITY_CONFIG, RECURRENCE_CONFIG, avatarColor, initials } from './taskConfig'
+import { STATUS_CONFIG, PRIORITY_CONFIG, RECURRENCE_CONFIG, ASSIGNMENT_STATUS_CONFIG, avatarColor, initials } from './taskConfig'
 import DescriptionEditor from './DescriptionEditor'
+import AssigneeMultiSelect from './AssigneeMultiSelect'
 
 export default function TaskDetailPanel({ task, userOptions, onClose, canDelete }) {
   const qc = useQueryClient()
@@ -28,7 +29,7 @@ export default function TaskDetailPanel({ task, userOptions, onClose, canDelete 
       status: task.status,
       priority: task.priority,
       dueDate: task.dueDate || '',
-      assigneeId: task.assigneeId || '',
+      assigneeIds: (task.assignees ?? []).map(a => a.id),
       listId: task.listId || '',
       tags: (task.tags ?? []).join(', '),
       reminderAt: task.reminderAt ? task.reminderAt.slice(0, 16) : '',
@@ -38,7 +39,11 @@ export default function TaskDetailPanel({ task, userOptions, onClose, canDelete 
     setRejectNote(null)
   }
 
-  const { data: lists } = useQuery({ queryKey: ['task-lists'], queryFn: taskListsApi.list })
+  const { data: lists } = useQuery({
+    queryKey: ['task-lists', task?.divisi],
+    queryFn: () => taskListsApi.list({ divisi: task.divisi }),
+    enabled: !!task?.divisi,
+  })
 
   const save = useMutation({
     mutationFn: (patch) => tasksApi.update(task.id, patch),
@@ -48,7 +53,8 @@ export default function TaskDetailPanel({ task, userOptions, onClose, canDelete 
       // otherwise e.g. a rejected "mark as DONE" (blocked by open sub-tasks)
       // leaves the <select> visually showing DONE even though it didn't save.
       const key = Object.keys(patch)[0]
-      if (key && task[key] !== undefined) field({ [key]: key === 'tags' ? (task.tags ?? []).join(', ') : (task[key] ?? '') })
+      if (key === 'assigneeIds') field({ assigneeIds: (task.assignees ?? []).map(a => a.id) })
+      else if (key && task[key] !== undefined) field({ [key]: key === 'tags' ? (task.tags ?? []).join(', ') : (task[key] ?? '') })
       toast.error(e.response?.data?.message || 'Error')
     },
   })
@@ -107,7 +113,10 @@ export default function TaskDetailPanel({ task, userOptions, onClose, canDelete 
     save.mutate({ [key]: value === '' ? null : value })
   }
 
-  const isPendingForMe = task.assignmentStatus === 'PENDING' && task.assigneeId === user?.id
+  const myAssignee = (task.assignees ?? []).find(a => a.id === user?.id)
+  const myAssignmentStatus = myAssignee?.TaskAssignee?.assignmentStatus
+  const isPendingForMe = myAssignmentStatus === 'PENDING'
+  const otherAssignees = (task.assignees ?? []).filter(a => a.id !== user?.id && a.TaskAssignee?.assignmentStatus)
   const openSubtasks = subtasks.filter(st => st.status !== 'DONE').length
 
   return (
@@ -180,16 +189,28 @@ export default function TaskDetailPanel({ task, userOptions, onClose, canDelete 
               </div>
             )}
 
-            {task.assignmentStatus && !isPendingForMe && (
+            {myAssignmentStatus && !isPendingForMe && (
               <div className={`rounded-lg p-3 text-xs ${
-                task.assignmentStatus === 'REJECTED' ? 'bg-danger-light text-danger' :
-                task.assignmentStatus === 'ACCEPTED' ? 'bg-success-light text-success' :
-                'bg-warning-light text-warning'
+                myAssignmentStatus === 'REJECTED' ? 'bg-danger-light text-danger' : 'bg-success-light text-success'
               }`}>
-                <p className="font-semibold">
-                  {task.assignmentStatus === 'REJECTED' ? 'Ditolak oleh assignee' : task.assignmentStatus === 'ACCEPTED' ? 'Diterima oleh assignee' : 'Menunggu respon assignee'}
-                </p>
-                {task.assignmentNote && <p className="mt-0.5 text-slate-600">"{task.assignmentNote}"</p>}
+                <p className="font-semibold">{myAssignmentStatus === 'REJECTED' ? 'Anda menolak task ini' : 'Anda menerima task ini'}</p>
+                {myAssignee?.TaskAssignee?.assignmentNote && <p className="mt-0.5 text-slate-600">"{myAssignee.TaskAssignee.assignmentNote}"</p>}
+              </div>
+            )}
+
+            {otherAssignees.length > 0 && (
+              <div className="space-y-1">
+                {otherAssignees.map(a => (
+                  <div key={a.id} className="flex items-center gap-2 text-xs bg-slate-50 rounded-lg px-2.5 py-1.5">
+                    <span className={`w-5 h-5 rounded-full text-white text-[9px] font-bold flex items-center justify-center flex-shrink-0 ${avatarColor(a.id)}`}>
+                      {initials(a.name)}
+                    </span>
+                    <span className="text-slate-600 flex-1 truncate">{a.name}</span>
+                    <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0 ${ASSIGNMENT_STATUS_CONFIG[a.TaskAssignee.assignmentStatus].cls}`}>
+                      {ASSIGNMENT_STATUS_CONFIG[a.TaskAssignee.assignmentStatus].label}
+                    </span>
+                  </div>
+                ))}
               </div>
             )}
 
@@ -254,10 +275,11 @@ export default function TaskDetailPanel({ task, userOptions, onClose, canDelete 
               </div>
               <div>
                 <label className="label">Assignee</label>
-                <select className="select" value={form.assigneeId} onChange={e => { field({ assigneeId: e.target.value }); commitField('assigneeId', e.target.value) }}>
-                  <option value="">Tidak ditugaskan</option>
-                  {userOptions.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-                </select>
+                <AssigneeMultiSelect
+                  value={form.assigneeIds}
+                  onChange={ids => { field({ assigneeIds: ids }); save.mutate({ assigneeIds: ids }) }}
+                  options={userOptions}
+                />
               </div>
             </div>
 

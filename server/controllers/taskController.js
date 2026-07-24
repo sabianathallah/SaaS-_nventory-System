@@ -1,14 +1,20 @@
 'use strict';
-const { Task, TaskComment, TaskList, Notification, User, sequelize } = require('../models');
+const { Task, TaskComment, TaskList, TaskAssignee, Notification, User, sequelize } = require('../models');
 const { Op } = require('sequelize');
 const { companyFilter, companyId } = require('../helpers/tenancy');
 const { paginate, buildFilter, paginatedResponse } = require('../helpers/queryHelper');
 const { userHasPermission } = require('../helpers/permCheck');
 const { addDaysStr, weekdayOf } = require('../helpers/timezone');
+const { canManageDivisi } = require('../helpers/divisiAccess');
 
 const USER_ATTRS = ['id', 'name', 'email', 'divisi'];
 const TASK_INCLUDE = [
-    { model: User, as: 'assignee', attributes: USER_ATTRS },
+    {
+        model: User,
+        as: 'assignees',
+        attributes: USER_ATTRS,
+        through: { attributes: ['assignmentStatus', 'assignmentNote'] },
+    },
     { model: User, as: 'creator', attributes: USER_ATTRS },
     { model: TaskList, as: 'list', attributes: ['id', 'name', 'color', 'icon'] },
 ];
@@ -19,6 +25,22 @@ const SORT_MAP = {
     priority: [[sequelize.literal(`CASE "Task"."priority" WHEN 'HIGH' THEN 0 WHEN 'MEDIUM' THEN 1 ELSE 2 END`), 'ASC']],
     created:  [['createdAt', 'DESC']],
 };
+
+// A task no longer has a single `assigneeId` column — "is this task assigned
+// to user X" is now an EXISTS check against the TaskAssignees join table.
+// Interpolated as a literal (not a bind param) because Sequelize `where`
+// fragments built this way can't easily thread through replacements; safe
+// because callers always pass a Number()-coerced, NaN-checked id.
+function assignedToUser(userId) {
+    return sequelize.literal(`EXISTS (SELECT 1 FROM "TaskAssignees" WHERE "TaskAssignees"."taskId" = "Task"."id" AND "TaskAssignees"."userId" = ${Number(userId)})`);
+}
+
+function toIdArray(value) {
+    if (value === undefined || value === null || value === '') return null;
+    const arr = Array.isArray(value) ? value : String(value).split(',');
+    const ids = arr.map(Number).filter(n => Number.isInteger(n));
+    return ids.length ? ids : [];
+}
 
 // Recurrence presets are fixed (no custom RRULE) — advances dueDate by the
 // rule's cadence, skipping weekends for WEEKDAYS.
@@ -39,11 +61,48 @@ async function notify(userId, { type, title, message, link, companyId: cid }) {
     await Notification.create({ userId, type, title, message, link: link || null, companyId: cid ?? null });
 }
 
+// Replaces a task's assignee set with `userIds`, keeping existing per-user
+// assignmentStatus/Note for anyone who stays assigned (so re-saving the same
+// set doesn't reset an already-accepted assignment) and starting anyone new
+// at PENDING (unless they're assigning themselves, which needs no response).
+async function syncAssignees(task, userIds, actingUserId) {
+    const existing = await TaskAssignee.findAll({ where: { taskId: task.id } });
+    const existingByUser = new Map(existing.map(a => [a.userId, a]));
+    const nextIds = new Set(userIds);
+
+    const toRemove = existing.filter(a => !nextIds.has(a.userId));
+    if (toRemove.length) await TaskAssignee.destroy({ where: { taskId: task.id, userId: toRemove.map(a => a.userId) } });
+
+    const newlyAdded = [];
+    for (const userId of nextIds) {
+        if (existingByUser.has(userId)) continue;
+        const isSelf = Number(userId) === Number(actingUserId);
+        await TaskAssignee.create({
+            taskId: task.id,
+            userId,
+            assignmentStatus: isSelf ? null : 'PENDING',
+            assignmentNote: null,
+        });
+        if (!isSelf) newlyAdded.push(userId);
+    }
+    return newlyAdded;
+}
+
 class TaskController {
     static async list(req, res, next) {
         try {
             const { page, limit, offset } = paginate(req.query);
-            const filter = buildFilter(req.query, { status: 'exact', priority: 'exact', assigneeId: 'exact', listId: 'exact' });
+            const filter = buildFilter(req.query, { status: 'exact', priority: 'exact', listId: 'exact', divisi: 'exact' });
+
+            // Collected separately (rather than spread alongside `filter`) because
+            // several of these conditions share the Op.or/Op.and symbol keys —
+            // spreading them into one object would silently drop all but the last.
+            const andConditions = [];
+
+            const assigneeIds = toIdArray(req.query.assigneeId);
+            if (assigneeIds && assigneeIds.length) {
+                andConditions.push({ [Op.or]: assigneeIds.map(assignedToUser) });
+            }
 
             const canViewAll = await userHasPermission(req, 'tasks.view');
 
@@ -56,7 +115,7 @@ class TaskController {
             } else if (view === 'important') {
                 viewFilter = { isImportant: true };
             } else if (view === 'assigned') {
-                viewFilter = { assigneeId: req.user.id };
+                andConditions.push(assignedToUser(req.user.id));
             } else if (view === 'created') {
                 viewFilter = { createdBy: req.user.id };
             } else if (view === 'completed') {
@@ -68,11 +127,9 @@ class TaskController {
             // created by them) regardless of tasks.view — used by personal widgets
             // like the Dashboard's My Day/Completed history, which must never leak
             // company-wide data to an admin just because they hold that permission.
-            const ownFilter = req.query.mine === 'true'
-                ? { [Op.or]: [{ assigneeId: req.user.id }, { createdBy: req.user.id }] }
-                : (canViewAll ? {} : {
-                    [Op.or]: [{ assigneeId: req.user.id }, { createdBy: req.user.id }],
-                });
+            if (req.query.mine === 'true' || !canViewAll) {
+                andConditions.push({ [Op.or]: [assignedToUser(req.user.id), { createdBy: req.user.id }] });
+            }
 
             // Top-level views only ever show parent tasks — sub-tasks are fetched
             // explicitly via ?parentTaskId=<id> (mirrors the listComments pattern
@@ -82,7 +139,10 @@ class TaskController {
                 : { parentTaskId: null };
 
             const { rows, count } = await Task.findAndCountAll({
-                where: { ...companyFilter(req), ...filter, ...viewFilter, ...ownFilter, ...parentFilter },
+                where: {
+                    ...companyFilter(req), ...filter, ...viewFilter, ...parentFilter,
+                    ...(andConditions.length ? { [Op.and]: andConditions } : {}),
+                },
                 attributes: {
                     include: [
                         [
@@ -106,7 +166,7 @@ class TaskController {
 
     static async create(req, res, next) {
         try {
-            const { title, description, status, priority, dueDate, assigneeId, isImportant, myDayDate, parentTaskId, listId, tags, reminderAt, recurrence } = req.body;
+            const { title, description, status, priority, dueDate, assigneeIds, isImportant, myDayDate, parentTaskId, listId, tags, reminderAt, recurrence, divisi } = req.body;
             if (!title) throw { name: 'BadRequest', message: 'title wajib diisi' };
 
             // Sub-tasks inherit the parent's companyId server-side — never trust
@@ -118,7 +178,19 @@ class TaskController {
                 resolvedCompanyId = parent.companyId;
             }
 
-            const isAssignedToOther = assigneeId && Number(assigneeId) !== req.user.id;
+            // A task belongs to its creator's divisi by default. Creating it
+            // from inside a specific folder can target that folder instead —
+            // but only if the caller is actually allowed to post there.
+            const resolvedDivisi = (divisi && await canManageDivisi(req, divisi)) ? divisi : (req.user.divisi || null);
+
+            const ids = (toIdArray(assigneeIds) || []).filter((v, i, a) => a.indexOf(v) === i);
+
+            // Daily/weekday recurring tasks are meant to be worked on every day
+            // they're active, so they default straight into My Day instead of
+            // requiring the assignee to manually drag them there each morning.
+            // Weekly recurrences are left alone — not a daily concern.
+            const rec = recurrence || 'NONE';
+            const defaultMyDayDate = (rec === 'DAILY' || rec === 'WEEKDAYS') ? (dueDate || null) : null;
 
             const task = await Task.create({
                 title,
@@ -126,21 +198,21 @@ class TaskController {
                 status: status || 'TODO',
                 priority: priority || 'MEDIUM',
                 dueDate: dueDate || null,
-                assigneeId: assigneeId || null,
                 createdBy: req.user.id,
                 companyId: resolvedCompanyId,
+                divisi: resolvedDivisi,
                 isImportant: !!isImportant,
-                myDayDate: myDayDate || null,
+                myDayDate: myDayDate !== undefined && myDayDate !== null && myDayDate !== '' ? myDayDate : defaultMyDayDate,
                 parentTaskId: parentTaskId || null,
-                assignmentStatus: isAssignedToOther ? 'PENDING' : null,
                 listId: listId || null,
                 tags: Array.isArray(tags) ? tags : [],
                 reminderAt: reminderAt || null,
-                recurrence: recurrence || 'NONE',
+                recurrence: rec,
             });
 
-            if (isAssignedToOther) {
-                await notify(assigneeId, {
+            const notifiedIds = await syncAssignees(task, ids, req.user.id);
+            for (const userId of notifiedIds) {
+                await notify(userId, {
                     type: 'TASK_ASSIGNED',
                     title: 'Task baru ditugaskan',
                     message: `${req.user.name} menugaskan task "${title}" kepada Anda`,
@@ -159,13 +231,14 @@ class TaskController {
             const canEditAll = await userHasPermission(req, 'tasks.edit');
             const task = await Task.findOne({ where: { id: req.params.id, ...companyFilter(req) } });
             if (!task) throw { name: 'NotFound', message: 'Task tidak ditemukan' };
-            if (!canEditAll && task.createdBy !== req.user.id && task.assigneeId !== req.user.id) {
+
+            const currentAssigneeLinks = await TaskAssignee.findAll({ where: { taskId: task.id } });
+            const isCurrentAssignee = currentAssigneeLinks.some(a => a.userId === req.user.id);
+            if (!canEditAll && task.createdBy !== req.user.id && !isCurrentAssignee) {
                 throw { name: 'Forbidden', message: 'Anda tidak punya akses untuk mengubah task ini' };
             }
 
-            const { title, description, status, priority, dueDate, assigneeId, isImportant, myDayDate, parentTaskId, listId, tags, reminderAt, recurrence } = req.body;
-            const prevAssigneeId = task.assigneeId;
-            const isReassignedToOther = assigneeId !== undefined && Number(assigneeId) !== prevAssigneeId && assigneeId && Number(assigneeId) !== req.user.id;
+            const { title, description, status, priority, dueDate, assigneeIds, isImportant, myDayDate, parentTaskId, listId, tags, reminderAt, recurrence } = req.body;
             const isCompletingNow = status === 'DONE' && task.status !== 'DONE';
             // Reopening a previously-done task (e.g. undo from the Dashboard
             // checklist) clears completedAt so it drops back out of the
@@ -189,12 +262,9 @@ class TaskController {
                 status: status ?? task.status,
                 priority: priority ?? task.priority,
                 dueDate: dueDate === undefined ? task.dueDate : dueDate,
-                assigneeId: assigneeId === undefined ? task.assigneeId : (assigneeId || null),
                 isImportant: isImportant === undefined ? task.isImportant : !!isImportant,
                 myDayDate: myDayDate === undefined ? task.myDayDate : myDayDate,
                 parentTaskId: parentTaskId === undefined ? task.parentTaskId : (parentTaskId || null),
-                assignmentStatus: isReassignedToOther ? 'PENDING' : task.assignmentStatus,
-                assignmentNote: isReassignedToOther ? null : task.assignmentNote,
                 listId: listId === undefined ? task.listId : (listId || null),
                 tags: tags === undefined ? task.tags : (Array.isArray(tags) ? tags : []),
                 reminderAt: reminderAt === undefined ? task.reminderAt : (reminderAt || null),
@@ -202,14 +272,18 @@ class TaskController {
                 completedAt: isCompletingNow ? new Date() : (isReopeningNow ? null : task.completedAt),
             });
 
-            if (isReassignedToOther) {
-                await notify(assigneeId, {
-                    type: 'TASK_ASSIGNED',
-                    title: 'Task ditugaskan kepada Anda',
-                    message: `${req.user.name} menugaskan task "${task.title}" kepada Anda`,
-                    link: `/tasks?open=${task.id}`,
-                    companyId: task.companyId,
-                });
+            if (assigneeIds !== undefined) {
+                const ids = (toIdArray(assigneeIds) || []).filter((v, i, a) => a.indexOf(v) === i);
+                const notifiedIds = await syncAssignees(task, ids, req.user.id);
+                for (const userId of notifiedIds) {
+                    await notify(userId, {
+                        type: 'TASK_ASSIGNED',
+                        title: 'Task ditugaskan kepada Anda',
+                        message: `${req.user.name} menugaskan task "${task.title}" kepada Anda`,
+                        link: `/tasks?open=${task.id}`,
+                        companyId: task.companyId,
+                    });
+                }
             }
 
             // Completing a recurring task spawns its next occurrence immediately
@@ -217,20 +291,34 @@ class TaskController {
             // check it off, not on a schedule) — reuses this same TODO-status
             // creation path, just skipping notification (not a delegation).
             if (isCompletingNow && task.recurrence !== 'NONE' && task.dueDate) {
-                await Task.create({
+                const nextDue = nextDueDate(task.dueDate, task.recurrence);
+                const nextTask = await Task.create({
                     title: task.title,
                     description: task.description,
                     status: 'TODO',
                     priority: task.priority,
-                    dueDate: nextDueDate(task.dueDate, task.recurrence),
-                    assigneeId: task.assigneeId,
+                    dueDate: nextDue,
+                    myDayDate: (task.recurrence === 'DAILY' || task.recurrence === 'WEEKDAYS') ? nextDue : null,
                     createdBy: task.createdBy,
                     companyId: task.companyId,
+                    divisi: task.divisi,
                     listId: task.listId,
                     tags: task.tags,
                     recurrence: task.recurrence,
                     parentTaskId: task.parentTaskId,
                 });
+                // Carry the assignment forward as-is (same commitment, not a new
+                // delegation) — an assignee who already ACCEPTED stays ACCEPTED
+                // without re-confirming every single occurrence, and no
+                // "task assigned to you" notification is sent for it.
+                if (currentAssigneeLinks.length) {
+                    await TaskAssignee.bulkCreate(currentAssigneeLinks.map(a => ({
+                        taskId: nextTask.id,
+                        userId: a.userId,
+                        assignmentStatus: a.assignmentStatus,
+                        assignmentNote: a.assignmentNote,
+                    })));
+                }
             }
 
             const full = await Task.findByPk(task.id, {
@@ -257,14 +345,12 @@ class TaskController {
         try {
             const task = await Task.findOne({ where: { id: req.params.id, ...companyFilter(req) } });
             if (!task) throw { name: 'NotFound', message: 'Task tidak ditemukan' };
-            if (task.assigneeId !== req.user.id) {
-                throw { name: 'Forbidden', message: 'Hanya assignee yang bisa menerima task ini' };
-            }
-            if (task.assignmentStatus !== 'PENDING') {
-                throw { name: 'BadRequest', message: 'Task ini sudah direspon' };
-            }
 
-            await task.update({ assignmentStatus: 'ACCEPTED', assignmentNote: null });
+            const link = await TaskAssignee.findOne({ where: { taskId: task.id, userId: req.user.id } });
+            if (!link) throw { name: 'Forbidden', message: 'Hanya assignee yang bisa menerima task ini' };
+            if (link.assignmentStatus !== 'PENDING') throw { name: 'BadRequest', message: 'Task ini sudah direspon' };
+
+            await link.update({ assignmentStatus: 'ACCEPTED', assignmentNote: null });
 
             await notify(task.createdBy, {
                 type: 'TASK_ACCEPTED',
@@ -286,14 +372,12 @@ class TaskController {
 
             const task = await Task.findOne({ where: { id: req.params.id, ...companyFilter(req) } });
             if (!task) throw { name: 'NotFound', message: 'Task tidak ditemukan' };
-            if (task.assigneeId !== req.user.id) {
-                throw { name: 'Forbidden', message: 'Hanya assignee yang bisa menolak task ini' };
-            }
-            if (task.assignmentStatus !== 'PENDING') {
-                throw { name: 'BadRequest', message: 'Task ini sudah direspon' };
-            }
 
-            await task.update({ assignmentStatus: 'REJECTED', assignmentNote: note.trim() });
+            const link = await TaskAssignee.findOne({ where: { taskId: task.id, userId: req.user.id } });
+            if (!link) throw { name: 'Forbidden', message: 'Hanya assignee yang bisa menolak task ini' };
+            if (link.assignmentStatus !== 'PENDING') throw { name: 'BadRequest', message: 'Task ini sudah direspon' };
+
+            await link.update({ assignmentStatus: 'REJECTED', assignmentNote: note.trim() });
 
             await notify(task.createdBy, {
                 type: 'TASK_REJECTED',
@@ -312,7 +396,7 @@ class TaskController {
         try {
             const canViewAll = await userHasPermission(req, 'tasks.view');
             const ownFilter = canViewAll ? {} : {
-                [Op.or]: [{ assigneeId: req.user.id }, { createdBy: req.user.id }],
+                [Op.or]: [assignedToUser(req.user.id), { createdBy: req.user.id }],
             };
             const baseWhere = { ...companyFilter(req), ...ownFilter, parentTaskId: null };
 
@@ -326,7 +410,7 @@ class TaskController {
                 Task.count({ where: { ...baseWhere, status: { [Op.ne]: 'DONE' }, dueDate: { [Op.between]: [today, weekAhead] } } }),
                 Task.count({ where: baseWhere }),
                 Task.count({ where: { ...baseWhere, status: 'DONE' } }),
-                Task.count({ where: { ...baseWhere, assignmentStatus: 'PENDING', assigneeId: req.user.id } }),
+                TaskAssignee.count({ where: { userId: req.user.id, assignmentStatus: 'PENDING' } }),
                 Task.count({ where: baseWhere, group: ['listId'] }),
                 TaskList.findAll({ where: { userId: req.user.id }, attributes: ['id', 'name', 'color'] }),
             ]);
@@ -344,6 +428,37 @@ class TaskController {
                 total,
                 byList: taskLists.map(l => ({ id: l.id, name: l.name, color: l.color, count: byListCounts[l.id] ?? 0 })),
             });
+        } catch (err) { next(err); }
+    }
+
+    // Folder grid on the Tasks landing page — one tile per divisi that exists
+    // among the company's users, with a task count scoped by the same
+    // visibility rules as list()/stats() (admins/tasks.view see everything,
+    // everyone else only their own created/assigned tasks).
+    static async listDivisions(req, res, next) {
+        try {
+            const divisiRows = await User.findAll({
+                where: { ...companyFilter(req), divisi: { [Op.ne]: null } },
+                attributes: [[sequelize.fn('DISTINCT', sequelize.col('divisi')), 'divisi']],
+                raw: true,
+            });
+            const divisions = divisiRows.map(r => r.divisi).filter(d => d && d.trim()).sort((a, b) => a.localeCompare(b));
+
+            const canViewAll = await userHasPermission(req, 'tasks.view');
+            const ownFilter = canViewAll ? {} : {
+                [Op.or]: [assignedToUser(req.user.id), { createdBy: req.user.id }],
+            };
+            const baseWhere = { ...companyFilter(req), ...ownFilter, parentTaskId: null };
+
+            const result = await Promise.all(divisions.map(async (divisi) => {
+                const [taskCount, openCount] = await Promise.all([
+                    Task.count({ where: { ...baseWhere, divisi } }),
+                    Task.count({ where: { ...baseWhere, divisi, status: { [Op.ne]: 'DONE' } } }),
+                ]);
+                return { divisi, taskCount, openCount };
+            }));
+
+            res.json(result);
         } catch (err) { next(err); }
     }
 
@@ -370,7 +485,8 @@ class TaskController {
 
             const comment = await TaskComment.create({ taskId: task.id, userId: req.user.id, content });
 
-            const recipients = new Set([task.assigneeId, task.createdBy].filter(Boolean));
+            const assigneeLinks = await TaskAssignee.findAll({ where: { taskId: task.id } });
+            const recipients = new Set([...assigneeLinks.map(a => a.userId), task.createdBy].filter(Boolean));
             recipients.delete(req.user.id);
             for (const recipientId of recipients) {
                 await notify(recipientId, {

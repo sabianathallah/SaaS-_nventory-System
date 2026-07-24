@@ -49,11 +49,11 @@ module.exports = (sequelize, DataTypes) => {
         onDelete: 'CASCADE',
         onUpdate: 'CASCADE'
       });
-      User.hasMany(models.Task, {
-        foreignKey: { name: 'assigneeId', allowNull: true },
+      User.belongsToMany(models.Task, {
+        through: models.TaskAssignee,
+        foreignKey: 'userId',
+        otherKey: 'taskId',
         as: 'assignedTasks',
-        onDelete: 'SET NULL',
-        onUpdate: 'CASCADE'
       });
       User.hasMany(models.Task, {
         foreignKey: { name: 'createdBy', allowNull: false },

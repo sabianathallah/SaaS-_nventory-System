@@ -126,6 +126,7 @@ export const tasksApi = {
   accept:        (id) => api.post(`/tasks/${id}/accept`).then(r => r.data),
   reject:        (id, note) => api.post(`/tasks/${id}/reject`, { note }).then(r => r.data),
   stats:         () => api.get('/tasks/stats').then(r => r.data),
+  listDivisions: () => api.get('/tasks/divisions').then(r => r.data),
 }
 export const taskListsApi = crud('/task-lists')
 export const notificationsApi = {

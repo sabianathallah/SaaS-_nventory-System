@@ -53,12 +53,16 @@ export default function TableView({ tasks, sortBy, onSortChange, onOpen }) {
                   <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${PRIORITY_CONFIG[task.priority].cls}`}>{PRIORITY_CONFIG[task.priority].label}</span>
                 </td>
                 <td className="px-3 py-2">
-                  {task.assignee ? (
-                    <span className="inline-flex items-center gap-1.5">
-                      <span className={`w-5 h-5 rounded-full text-white text-[9px] font-bold flex items-center justify-center ${avatarColor(task.assigneeId)}`}>
-                        {initials(task.assignee.name)}
-                      </span>
-                      <span className="text-slate-600 text-xs">{task.assignee.name}</span>
+                  {Array.isArray(task.assignees) && task.assignees.length > 0 ? (
+                    <span className="flex flex-wrap items-center gap-1.5">
+                      {task.assignees.map(a => (
+                        <span key={a.id} className="inline-flex items-center gap-1.5">
+                          <span className={`w-5 h-5 rounded-full text-white text-[9px] font-bold flex items-center justify-center ${avatarColor(a.id)}`}>
+                            {initials(a.name)}
+                          </span>
+                          <span className="text-slate-600 text-xs">{a.name}</span>
+                        </span>
+                      ))}
                     </span>
                   ) : <span className="text-slate-300">—</span>}
                 </td>

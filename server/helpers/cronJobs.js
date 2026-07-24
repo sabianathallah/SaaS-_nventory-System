@@ -1,7 +1,7 @@
 'use strict';
 const cron = require('node-cron');
 const { Op } = require('sequelize');
-const { Attendance, Shift, Task, Notification } = require('../models');
+const { Attendance, Shift, Task, TaskAssignee, Notification } = require('../models');
 const { todayDateOnly, addDaysStr, weekdayOf } = require('./timezone');
 const { backfillAbsentForDates } = require('./absentBackfill');
 
@@ -64,15 +64,18 @@ async function taskReminderJob() {
         });
 
         for (const task of due) {
-            const recipientId = task.assigneeId || task.createdBy;
-            await Notification.create({
-                userId: recipientId,
-                type: 'TASK_REMINDER',
-                title: 'Pengingat task',
-                message: `Pengingat untuk task "${task.title}"`,
-                link: `/tasks?open=${task.id}`,
-                companyId: task.companyId,
-            });
+            const assignees = await TaskAssignee.findAll({ where: { taskId: task.id } });
+            const recipientIds = assignees.length ? assignees.map(a => a.userId) : [task.createdBy];
+            for (const recipientId of recipientIds) {
+                await Notification.create({
+                    userId: recipientId,
+                    type: 'TASK_REMINDER',
+                    title: 'Pengingat task',
+                    message: `Pengingat untuk task "${task.title}"`,
+                    link: `/tasks?open=${task.id}`,
+                    companyId: task.companyId,
+                });
+            }
             await task.update({ reminderSentAt: new Date() });
         }
         if (due.length) console.log(`[cron] task reminder: ${due.length} notifikasi dikirim`);

@@ -20,6 +20,7 @@ module.exports = (sequelize, DataTypes) => {
   TaskList.init({
     companyId: { type: DataTypes.INTEGER, allowNull: true },
     userId:    { type: DataTypes.INTEGER, allowNull: false },
+    divisi:    { type: DataTypes.STRING(100), allowNull: true },
     name:      { type: DataTypes.STRING(100), allowNull: false },
     color:     { type: DataTypes.STRING(20), allowNull: false, defaultValue: '#C8102E' },
     icon:      { type: DataTypes.STRING(50), allowNull: true },

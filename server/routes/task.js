@@ -8,6 +8,7 @@ const { requireAnyPermission: rpAny } = require('../middlewares/requirePermissio
 // all company tasks. No route-level gate on list/create/update/destroy for
 // that reason — only comments piggyback on the same task-level check.
 router.get('/stats',           ctrl.stats);
+router.get('/divisions',       ctrl.listDivisions);
 router.get('/',                ctrl.list);
 router.post('/',               ctrl.create);
 router.put('/:id',             ctrl.update);

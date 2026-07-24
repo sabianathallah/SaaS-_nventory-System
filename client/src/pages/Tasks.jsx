@@ -9,6 +9,8 @@ import toast from 'react-hot-toast'
 import { exportExcel } from '../utils/exportExcel'
 import { Plus, LayoutList, Columns3, CalendarDays, Table2, FileSpreadsheet } from 'lucide-react'
 import TasksSidebar from '../components/tasks/TasksSidebar'
+import DivisionFolders from '../components/tasks/DivisionFolders'
+import DivisionWorkspaceBar from '../components/tasks/DivisionWorkspaceBar'
 import ListView from '../components/tasks/ListView'
 import BoardView from '../components/tasks/BoardView'
 import CalendarView from '../components/tasks/CalendarView'
@@ -16,19 +18,20 @@ import TableView from '../components/tasks/TableView'
 import TaskDashboard from '../components/tasks/TaskDashboard'
 import TaskDetailPanel from '../components/tasks/TaskDetailPanel'
 import CreateTaskModal from '../components/tasks/CreateTaskModal'
-import { SIDEBAR_VIEWS, ALL_TASKS_VIEW, STATUS_CONFIG, PRIORITY_CONFIG } from '../components/tasks/taskConfig'
+import { SIDEBAR_VIEWS, ALL_TASKS_VIEW, FOLDERS_VIEW, STATUS_CONFIG, PRIORITY_CONFIG } from '../components/tasks/taskConfig'
 
-const VIEW_LABELS = Object.fromEntries([...SIDEBAR_VIEWS, ALL_TASKS_VIEW].map(v => [v.id, v.label]))
-const VALID_VIEW_IDS = new Set([...SIDEBAR_VIEWS, ALL_TASKS_VIEW].map(v => v.id))
+const VIEW_LABELS = Object.fromEntries([...SIDEBAR_VIEWS, ALL_TASKS_VIEW, FOLDERS_VIEW].map(v => [v.id, v.label]))
+const VALID_VIEW_IDS = new Set([...SIDEBAR_VIEWS, ALL_TASKS_VIEW, FOLDERS_VIEW].map(v => v.id))
 
 export default function Tasks() {
   const qc = useQueryClient()
   const { user, hasPermission, isSuperAdmin, isAdmin } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
 
-  // Landing view saat modul dibuka — My Day sudah pindah ke Dashboard utama,
-  // jadi di sini defaultnya "Dashboard" (ringkasan/statistik seluruh task).
-  const [sidebarView, setSidebarView] = useState('dashboard')
+  // Landing view saat modul dibuka: grid folder per divisi (ala Notion) —
+  // dari situ user masuk ke workspace divisinya. Dashboard/My Day tetap ada,
+  // diakses lewat sidebar seperti biasa, lintas-divisi seperti sebelumnya.
+  const [sidebarView, setSidebarView] = useState('folders')
   const [viewMode, setViewMode] = useState('list')
   const [search, setSearch] = useState('')
   const [activeTag, setActiveTag] = useState('')
@@ -54,20 +57,29 @@ export default function Tasks() {
     setSidebarView(viewParam)
   }
 
-  // "Lists" are a separate filter dimension from the fixed sidebar views —
-  // encoded as `list:<id>` (same convention San-Group used) rather than a
-  // second piece of state, so there's still exactly one "active nav item".
-  const activeListId = sidebarView.startsWith('list:') ? sidebarView.slice(5) : null
+  // Folder workspaces are encoded the same way Lists used to be (`list:<id>`)
+  // — `division:<name>` for a divisi's full task set, `divlist:<name>:<id>`
+  // when narrowed to one of that divisi's Lists — so there's still exactly
+  // one "active nav item" driving everything.
+  const isDivisionRoot = sidebarView.startsWith('division:')
+  const isDivisionList = sidebarView.startsWith('divlist:')
+  const activeDivisi = isDivisionRoot ? sidebarView.slice('division:'.length)
+    : isDivisionList ? sidebarView.split(':')[1] : null
+  const activeListId = isDivisionList ? sidebarView.split(':')[2] : null
+
   const queryParams = activeListId
     ? { listId: activeListId, sortBy, limit: 200 }
+    : activeDivisi
+    ? { divisi: activeDivisi, sortBy, limit: 200 }
     : { view: sidebarView, sortBy, limit: 200 }
 
   const isDashboard = sidebarView === 'dashboard'
+  const isFolders = sidebarView === 'folders'
 
   const { data, isLoading } = useQuery({
     queryKey: ['tasks', queryParams],
     queryFn: () => tasksApi.list(queryParams),
-    enabled: !isDashboard,
+    enabled: !isDashboard && !isFolders,
   })
   const tasks = data?.data ?? []
 
@@ -93,8 +105,15 @@ export default function Tasks() {
   })
   const userOptions = usersRes?.data ?? []
 
-  const { data: listsRes } = useQuery({ queryKey: ['task-lists'], queryFn: taskListsApi.list })
+  const { data: listsRes } = useQuery({
+    queryKey: ['task-lists', activeDivisi],
+    queryFn: () => taskListsApi.list({ divisi: activeDivisi }),
+    enabled: !!activeDivisi,
+  })
   const activeList = activeListId ? (listsRes ?? []).find(l => String(l.id) === activeListId) : null
+  const canManageActiveDivisi = !!activeDivisi && (
+    isSuperAdmin || isAdmin || hasPermission('tasks.manage') || hasPermission('tasks.edit') || user?.divisi === activeDivisi
+  )
 
   const selectedTask = tasks.find(t => t.id === selectedId) || null
 
@@ -133,33 +152,35 @@ export default function Tasks() {
       t.title,
       STATUS_CONFIG[t.status]?.label ?? t.status,
       PRIORITY_CONFIG[t.priority]?.label ?? t.priority,
-      t.assignee?.name || '—',
+      (t.assignees ?? []).map(a => a.name).join(', ') || '—',
       t.dueDate || '—',
       t.creator?.name || '—',
     ])
-    const viewLabel = activeList?.name ?? VIEW_LABELS[sidebarView] ?? sidebarView
+    const viewLabel = activeList?.name ?? activeDivisi ?? VIEW_LABELS[sidebarView] ?? sidebarView
     exportExcel(`tasks-${viewLabel}-${new Date().toISOString().slice(0, 10)}`, {
       headers, rows, sheetName: 'Tasks',
     })
   }
 
-  const viewLabel = activeList?.name ?? VIEW_LABELS[sidebarView] ?? ''
+  const viewLabel = activeList?.name ?? activeDivisi ?? VIEW_LABELS[sidebarView] ?? ''
 
   return (
     <div className="px-6 py-6">
       <PageHeader
         title="Tugas"
-        subtitle={isDashboard ? 'Ringkasan seluruh task' : `${filteredTasks.length} task — ${viewLabel}`}
+        subtitle={isDashboard ? 'Ringkasan seluruh task' : isFolders ? 'Pilih folder divisi' : `${filteredTasks.length} task — ${viewLabel}`}
         action={
           <div className="flex items-center gap-2">
-            {!isDashboard && (
+            {!isDashboard && !isFolders && (
               <button onClick={handleExport} className="btn-secondary" title="Export ke Excel">
                 <FileSpreadsheet size={14} />Export
               </button>
             )}
-            <button onClick={() => setShowCreate(true)} className="btn-primary">
-              <Plus size={14} />Task Baru
-            </button>
+            {!isFolders && (
+              <button onClick={() => setShowCreate(true)} className="btn-primary">
+                <Plus size={14} />Task Baru
+              </button>
+            )}
           </div>
         }
       />
@@ -172,8 +193,22 @@ export default function Tasks() {
             <div className="flex-1 overflow-y-auto">
               <TaskDashboard />
             </div>
+          ) : isFolders ? (
+            <div className="flex-1 overflow-y-auto">
+              <DivisionFolders onSelect={(name) => { setSidebarView(`division:${name}`); setSelectedId(null) }} />
+            </div>
           ) : (
           <>
+          {activeDivisi && (
+            <DivisionWorkspaceBar
+              divisi={activeDivisi}
+              activeListId={activeListId}
+              canManage={canManageActiveDivisi}
+              onBack={() => { setSidebarView('folders'); setSelectedId(null) }}
+              onSelectRoot={() => { setSidebarView(`division:${activeDivisi}`); setSelectedId(null) }}
+              onSelectList={(listId) => { setSidebarView(`divlist:${activeDivisi}:${listId}`); setSelectedId(null) }}
+            />
+          )}
           <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/50 flex items-center gap-3">
             <SearchBar value={search} onChange={setSearch} placeholder="Cari task…" />
             <div className="ml-auto flex items-center gap-1 bg-white border border-slate-200 rounded-lg p-0.5">
@@ -271,6 +306,7 @@ export default function Tasks() {
         onClose={() => setShowCreate(false)}
         userOptions={userOptions}
         defaultView={sidebarView}
+        divisi={activeDivisi}
       />
     </div>
   )

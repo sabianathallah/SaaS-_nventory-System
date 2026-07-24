@@ -3,10 +3,16 @@ const { Model } = require('sequelize');
 module.exports = (sequelize, DataTypes) => {
   class Task extends Model {
     static associate(models) {
-      Task.belongsTo(models.User, {
-        foreignKey: { name: 'assigneeId', allowNull: true },
-        as: 'assignee',
-        onDelete: 'SET NULL',
+      Task.belongsToMany(models.User, {
+        through: models.TaskAssignee,
+        foreignKey: 'taskId',
+        otherKey: 'userId',
+        as: 'assignees',
+      });
+      Task.hasMany(models.TaskAssignee, {
+        foreignKey: { name: 'taskId', allowNull: false },
+        as: 'assigneeLinks',
+        onDelete: 'CASCADE',
         onUpdate: 'CASCADE',
       });
       Task.belongsTo(models.User, {
@@ -56,16 +62,11 @@ module.exports = (sequelize, DataTypes) => {
       defaultValue: 'MEDIUM',
     },
     dueDate:    { type: DataTypes.DATEONLY, allowNull: true },
-    assigneeId: { type: DataTypes.INTEGER, allowNull: true },
     createdBy:  { type: DataTypes.INTEGER, allowNull: false },
     isImportant: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     myDayDate:   { type: DataTypes.DATEONLY, allowNull: true },
     parentTaskId: { type: DataTypes.INTEGER, allowNull: true },
-    assignmentStatus: {
-      type: DataTypes.ENUM('PENDING', 'ACCEPTED', 'REJECTED'),
-      allowNull: true,
-    },
-    assignmentNote: { type: DataTypes.TEXT, allowNull: true },
+    divisi:         { type: DataTypes.STRING(100), allowNull: true },
     listId:         { type: DataTypes.INTEGER, allowNull: true },
     tags:           { type: DataTypes.JSON, allowNull: false, defaultValue: [] },
     reminderAt:     { type: DataTypes.DATE, allowNull: true },

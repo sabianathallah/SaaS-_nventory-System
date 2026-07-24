@@ -4,6 +4,10 @@ import { PRIORITY_CONFIG, ASSIGNMENT_STATUS_CONFIG, avatarColor, initials, fmtDu
 export default function TaskCard({ task, onOpen, onToggleDone, dragHandleProps, dragging }) {
   const due = fmtDue(task.dueDate)
   const done = task.status === 'DONE'
+  // A card shows the most urgent response state across all assignees —
+  // any rejection outranks a pending response, both outrank "all accepted".
+  const statuses = (task.assignees ?? []).map(a => a.TaskAssignee?.assignmentStatus).filter(Boolean)
+  const worstAssignmentStatus = statuses.includes('REJECTED') ? 'REJECTED' : statuses.includes('PENDING') ? 'PENDING' : null
 
   return (
     <div
@@ -40,12 +44,22 @@ export default function TaskCard({ task, onOpen, onToggleDone, dragHandleProps, 
           </div>
         )}
         <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-          {task.assignee && (
-            <span
-              className={`w-5 h-5 rounded-full text-white text-[9px] font-bold flex items-center justify-center flex-shrink-0 ring-2 ring-white ${avatarColor(task.assigneeId)}`}
-              title={task.assignee.name}
-            >
-              {initials(task.assignee.name)}
+          {Array.isArray(task.assignees) && task.assignees.length > 0 && (
+            <span className="flex items-center -space-x-1.5">
+              {task.assignees.slice(0, 3).map(a => (
+                <span
+                  key={a.id}
+                  className={`w-5 h-5 rounded-full text-white text-[9px] font-bold flex items-center justify-center flex-shrink-0 ring-2 ring-white ${avatarColor(a.id)}`}
+                  title={a.name}
+                >
+                  {initials(a.name)}
+                </span>
+              ))}
+              {task.assignees.length > 3 && (
+                <span className="w-5 h-5 rounded-full bg-slate-300 text-white text-[8px] font-bold flex items-center justify-center flex-shrink-0 ring-2 ring-white">
+                  +{task.assignees.length - 3}
+                </span>
+              )}
             </span>
           )}
           {due && (
@@ -65,9 +79,9 @@ export default function TaskCard({ task, onOpen, onToggleDone, dragHandleProps, 
               <ListTree size={10} />{task.subTaskCount}
             </span>
           )}
-          {(task.assignmentStatus === 'PENDING' || task.assignmentStatus === 'REJECTED') && (
-            <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${ASSIGNMENT_STATUS_CONFIG[task.assignmentStatus].cls}`}>
-              {ASSIGNMENT_STATUS_CONFIG[task.assignmentStatus].label}
+          {worstAssignmentStatus && (
+            <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${ASSIGNMENT_STATUS_CONFIG[worstAssignmentStatus].cls}`}>
+              {ASSIGNMENT_STATUS_CONFIG[worstAssignmentStatus].label}
             </span>
           )}
         </div>
