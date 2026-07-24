@@ -8,6 +8,9 @@ const { addDaysStr, weekdayOf } = require('../helpers/timezone');
 const { canManageDivisi } = require('../helpers/divisiAccess');
 
 const USER_ATTRS = ['id', 'name', 'email', 'divisi'];
+// Standing folder for tasks that apply to everyone (mandatory surveys,
+// company-wide announcements) rather than one division — see listDivisions().
+const GENERAL_DIVISI = 'Umum';
 const TASK_INCLUDE = [
     {
         model: User,
@@ -442,7 +445,12 @@ class TaskController {
                 attributes: [[sequelize.fn('DISTINCT', sequelize.col('divisi')), 'divisi']],
                 raw: true,
             });
-            const divisions = divisiRows.map(r => r.divisi).filter(d => d && d.trim()).sort((a, b) => a.localeCompare(b));
+            const fromUsers = divisiRows.map(r => r.divisi).filter(d => d && d.trim() && d !== GENERAL_DIVISI).sort((a, b) => a.localeCompare(b));
+            // "Umum" is a standing folder for company-wide tasks (e.g. mandatory
+            // surveys/announcements) that don't belong to one division — always
+            // shown first, regardless of whether any user's divisi literally
+            // matches it.
+            const divisions = [GENERAL_DIVISI, ...fromUsers];
 
             const canViewAll = await userHasPermission(req, 'tasks.view');
             const ownFilter = canViewAll ? {} : {
@@ -455,7 +463,7 @@ class TaskController {
                     Task.count({ where: { ...baseWhere, divisi } }),
                     Task.count({ where: { ...baseWhere, divisi, status: { [Op.ne]: 'DONE' } } }),
                 ]);
-                return { divisi, taskCount, openCount };
+                return { divisi, taskCount, openCount, general: divisi === GENERAL_DIVISI };
             }));
 
             res.json(result);

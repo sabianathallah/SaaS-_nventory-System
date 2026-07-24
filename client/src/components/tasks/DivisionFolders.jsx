@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { FolderKanban, ChevronRight } from 'lucide-react'
+import { FolderKanban, Megaphone, ChevronRight } from 'lucide-react'
 import { tasksApi } from '../../api'
 import { useAuth } from '../../context/AuthContext'
 
@@ -29,11 +29,6 @@ export default function DivisionFolders({ onSelect }) {
 
       {isLoading ? (
         <p className="text-sm text-slate-400 text-center py-16">Memuat…</p>
-      ) : divisions.length === 0 ? (
-        <div className="card p-8 text-center">
-          <FolderKanban size={28} className="mx-auto text-slate-300 mb-2" />
-          <p className="text-sm text-slate-400">Belum ada divisi yang terdaftar. Isi kolom Divisi di halaman User untuk membuat folder.</p>
-        </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {divisions.map(d => (
@@ -43,9 +38,13 @@ export default function DivisionFolders({ onSelect }) {
               onClick={() => onSelect(d.divisi)}
               className="card p-0 text-left overflow-hidden transition-all hover:shadow-card-md hover:-translate-y-0.5"
             >
-              <div className={`h-16 bg-gradient-to-br ${folderHue(d.divisi)} flex items-center justify-between px-4`}>
-                <FolderKanban size={22} className="text-white/90" />
-                {d.divisi === user?.divisi && (
+              <div className={`h-16 flex items-center justify-between px-4 ${
+                d.general ? 'bg-gradient-to-br from-slate-700 to-slate-900' : `bg-gradient-to-br ${folderHue(d.divisi)}`
+              }`}>
+                {d.general ? <Megaphone size={22} className="text-white/90" /> : <FolderKanban size={22} className="text-white/90" />}
+                {d.general ? (
+                  <span className="text-[10px] font-bold text-white/90 bg-white/20 px-2 py-0.5 rounded-full">Untuk Semua</span>
+                ) : d.divisi === user?.divisi && (
                   <span className="text-[10px] font-bold text-white/90 bg-white/20 px-2 py-0.5 rounded-full">Divisi Saya</span>
                 )}
               </div>
