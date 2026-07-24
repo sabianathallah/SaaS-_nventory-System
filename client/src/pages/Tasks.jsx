@@ -142,7 +142,25 @@ export default function Tasks() {
   })
 
   function toggleDone(task) {
-    quickPatch.mutate({ id: task.id, patch: { status: task.status === 'DONE' ? 'TODO' : 'DONE' } })
+    const nextStatus = task.status === 'DONE' ? 'TODO' : 'DONE'
+    quickPatch.mutate({ id: task.id, patch: { status: nextStatus } })
+    // Completing is optimistic (quickPatch already updates the cache before
+    // the server responds) and reversible for a few seconds via Undo instead
+    // of a blocking confirm dialog — checking off tasks happens too often to
+    // interrupt every single time.
+    if (nextStatus === 'DONE') {
+      toast((t) => (
+        <span className="flex items-center gap-2.5">
+          Task selesai
+          <button
+            onClick={() => { quickPatch.mutate({ id: task.id, patch: { status: 'TODO' } }); toast.dismiss(t.id) }}
+            className="font-semibold underline underline-offset-2"
+          >
+            Undo
+          </button>
+        </span>
+      ), { duration: 4000 })
+    }
   }
 
   function handleExport() {

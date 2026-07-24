@@ -39,9 +39,45 @@ export default function SubtaskTree({ parentId, onOpenTask, depth = 0 }) {
   })
   const toggleDone = useMutation({
     mutationFn: ({ id, status }) => tasksApi.update(id, { status }),
-    onSuccess: invalidate,
-    onError: e => toast.error(e.response?.data?.message || 'Error'),
+    // Optimistic so the checkbox/strike-through reacts instantly — completing
+    // a sub-task can also bump the parent to In Progress server-side, which
+    // only shows up after the invalidation below settles.
+    onMutate: async ({ id, status }) => {
+      const key = ['task-subtasks', parentId]
+      await qc.cancelQueries({ queryKey: key })
+      const prev = qc.getQueryData(key)
+      qc.setQueryData(key, (old) => old && {
+        ...old,
+        data: old.data.map(t => t.id === id ? { ...t, status } : t),
+      })
+      return { prev }
+    },
+    onError: (e, _vars, ctx) => {
+      if (ctx?.prev) qc.setQueryData(['task-subtasks', parentId], ctx.prev)
+      toast.error(e.response?.data?.message || 'Error')
+    },
+    onSettled: invalidate,
   })
+
+  function handleToggleDone(st) {
+    const nextStatus = st.status === 'DONE' ? 'TODO' : 'DONE'
+    toggleDone.mutate({ id: st.id, status: nextStatus })
+    // Reversible via a few-second Undo toast instead of a blocking confirm
+    // dialog — checking off sub-tasks happens too often to interrupt every time.
+    if (nextStatus === 'DONE') {
+      toast((t) => (
+        <span className="flex items-center gap-2.5">
+          Sub-task selesai
+          <button
+            onClick={() => { toggleDone.mutate({ id: st.id, status: 'TODO' }); toast.dismiss(t.id) }}
+            className="font-semibold underline underline-offset-2"
+          >
+            Undo
+          </button>
+        </span>
+      ), { duration: 4000 })
+    }
+  }
 
   function toggleExpand(id) {
     setExpandedIds(prev => {
@@ -77,7 +113,7 @@ export default function SubtaskTree({ parentId, onOpenTask, depth = 0 }) {
                     </button>
                   ) : <span className="w-4 flex-shrink-0" />}
                   <button
-                    onClick={() => toggleDone.mutate({ id: st.id, status: done ? 'TODO' : 'DONE' })}
+                    onClick={() => handleToggleDone(st)}
                     title={done ? 'Tandai belum selesai' : 'Tandai selesai'}
                     className={`w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
                       done ? 'bg-success border-success' : 'border-slate-300 hover:border-success'

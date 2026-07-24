@@ -50,11 +50,26 @@ function toIdArray(value) {
     return ids.length ? ids : [];
 }
 
+function isWeekend(dateStr) {
+    const day = new Date(`${dateStr}T00:00:00`).getDay(); // 0 = Sunday, 6 = Saturday
+    return day === 0 || day === 6;
+}
+
+// Rolls a date forward off Sat/Sun onto the following Monday — only DAILY
+// recurrence uses this (a "setiap hari" task means every workday, Sat/Sunday
+// are off; WEEKLY/MONTHLY keep whatever day the user actually picked, which
+// may deliberately be a weekend).
+function skipWeekend(dateStr) {
+    let d = dateStr;
+    while (isWeekend(d)) d = addDaysStr(d, 1);
+    return d;
+}
+
 // Recurrence presets are fixed (no custom RRULE) — advances dueDate by the
 // rule's cadence.
 function nextDueDate(dueDate, recurrence) {
     if (!dueDate) return null;
-    if (recurrence === 'DAILY') return addDaysStr(dueDate, 1);
+    if (recurrence === 'DAILY') return skipWeekend(addDaysStr(dueDate, 1));
     if (recurrence === 'WEEKLY') return addDaysStr(dueDate, 7);
     if (recurrence === 'MONTHLY') return addMonthsStr(dueDate, 1);
     return null;
@@ -183,6 +198,26 @@ class TaskController {
                 ? {}
                 : { parentTaskId: null };
 
+            // Once a new month starts, tasks completed in an earlier month are
+            // "archived" out of the regular Board/List/Table/Calendar views —
+            // otherwise DONE tasks pile up in those views forever. They're never
+            // deleted or actually hidden: the dedicated Completed tab (and the
+            // Home page's month/week-grouped Completed History) has no such
+            // cutoff and still shows the full history, organized by month.
+            const isArchiveExempt = view === 'completed' || !!req.query.parentTaskId || !!filter.status;
+            if (!isArchiveExempt) {
+                const startOfMonth = new Date();
+                startOfMonth.setDate(1);
+                const startOfMonthStr = startOfMonth.toISOString().slice(0, 10);
+                andConditions.push({
+                    [Op.or]: [
+                        { status: { [Op.ne]: 'DONE' } },
+                        { completedAt: { [Op.gte]: startOfMonthStr } },
+                        { completedAt: null },
+                    ],
+                });
+            }
+
             const { rows, count } = await Task.findAndCountAll({
                 where: {
                     ...companyFilter(req), ...filter, ...viewFilter, ...parentFilter,
@@ -233,9 +268,12 @@ class TaskController {
             // A recurring task needs a real dueDate for the engine to compute
             // the next occurrence on completion (see nextDueDate()) — default
             // it to today rather than silently leaving the recurrence
-            // non-functional whenever the due date picker is left blank.
+            // non-functional whenever the due date picker is left blank. Daily
+            // means every workday, so a Daily task created over the weekend
+            // defaults to the coming Monday instead of Sat/Sun.
             const rec = recurrence || 'NONE';
-            const resolvedDueDate = dueDate || (rec !== 'NONE' ? new Date().toISOString().slice(0, 10) : null);
+            const todayStr = new Date().toISOString().slice(0, 10);
+            const resolvedDueDate = dueDate || (rec === 'DAILY' ? skipWeekend(todayStr) : rec !== 'NONE' ? todayStr : null);
 
             // Daily recurring tasks are meant to be worked on every day they're
             // active, so they default straight into My Day instead of requiring
@@ -311,9 +349,11 @@ class TaskController {
             // Same reasoning as create(): switching a task to a recurrence
             // (e.g. via the "Ulangi" dropdown) needs a real dueDate for the
             // engine to compute the next occurrence — default to today rather
-            // than leaving it silently non-functional.
+            // than leaving it silently non-functional. Daily skips straight to
+            // Monday if today's a weekend, same as create().
             if (resolvedRecurrence !== 'NONE' && !resolvedDueDate) {
-                resolvedDueDate = new Date().toISOString().slice(0, 10);
+                const todayStr = new Date().toISOString().slice(0, 10);
+                resolvedDueDate = resolvedRecurrence === 'DAILY' ? skipWeekend(todayStr) : todayStr;
             }
             // Turning a task Daily (or it already being Daily) means it should
             // show up in "Tugas Hari Ini" right away, mirroring the same
@@ -352,6 +392,17 @@ class TaskController {
                         link: `/tasks?open=${task.id}`,
                         companyId: task.companyId,
                     });
+                }
+            }
+
+            // Checking off a sub-task means real work has actually started on
+            // the parent — bump it out of TODO into IN_PROGRESS so the board
+            // reflects that. One-way only (never auto-reverts if the sub-task
+            // gets un-checked again) and never overrides IN_PROGRESS/DONE.
+            if (isCompletingNow && task.parentTaskId) {
+                const parent = await Task.findOne({ where: { id: task.parentTaskId, ...companyFilter(req) } });
+                if (parent && parent.status === 'TODO') {
+                    await parent.update({ status: 'IN_PROGRESS' });
                 }
             }
 

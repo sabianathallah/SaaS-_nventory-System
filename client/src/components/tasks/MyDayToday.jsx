@@ -43,9 +43,44 @@ export default function MyDayToday() {
 
   const toggleDone = useMutation({
     mutationFn: ({ id, status }) => tasksApi.update(id, { status }),
-    onSuccess: invalidate,
-    onError: e => toast.error(e.response?.data?.message || 'Error'),
+    // Optimistic so the card disappears from "Tugas Hari Ini" the instant
+    // it's checked, instead of waiting on the round-trip.
+    onMutate: async ({ id, status }) => {
+      const key = ['tasks', params]
+      await qc.cancelQueries({ queryKey: key })
+      const prev = qc.getQueryData(key)
+      qc.setQueryData(key, (old) => old && {
+        ...old,
+        data: old.data.map(t => t.id === id ? { ...t, status } : t),
+      })
+      return { prev }
+    },
+    onError: (e, _vars, ctx) => {
+      if (ctx?.prev) qc.setQueryData(['tasks', params], ctx.prev)
+      toast.error(e.response?.data?.message || 'Error')
+    },
+    onSettled: invalidate,
   })
+
+  function handleToggleDone(task) {
+    const nextStatus = task.status === 'DONE' ? 'TODO' : 'DONE'
+    toggleDone.mutate({ id: task.id, status: nextStatus })
+    // Reversible via a few-second Undo toast instead of a blocking confirm
+    // dialog — this is clicked too often in a day to interrupt every time.
+    if (nextStatus === 'DONE') {
+      toast((t) => (
+        <span className="flex items-center gap-2.5">
+          Task selesai
+          <button
+            onClick={() => { toggleDone.mutate({ id: task.id, status: 'TODO' }); toast.dismiss(t.id) }}
+            className="font-semibold underline underline-offset-2"
+          >
+            Undo
+          </button>
+        </span>
+      ), { duration: 4000 })
+    }
+  }
 
   return (
     <div className="card p-5">
@@ -94,7 +129,7 @@ export default function MyDayToday() {
               key={task.id}
               task={task}
               onOpen={(t) => setSelectedId(t.id)}
-              onToggleDone={(t) => toggleDone.mutate({ id: t.id, status: t.status === 'DONE' ? 'TODO' : 'DONE' })}
+              onToggleDone={handleToggleDone}
             />
           ))}
         </div>
