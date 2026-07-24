@@ -152,4 +152,16 @@ async function destroyHandoverAttachment(url) {
   }
 }
 
-module.exports = { cloudinary, upload, uploadSingle, uploadArray, destroyByUrl, isConfigured, uploadHandoverAttachment, destroyHandoverAttachment };
+// Generic counterpart to destroyHandoverAttachment — works for any
+// uploadSingle()-produced url (Cloudinary secure_url or local /uploads/... path).
+async function destroyUpload(url) {
+  if (!url) return;
+  if (url.startsWith('http')) {
+    await destroyByUrl(url);
+  } else {
+    const filePath = path.join(__dirname, '..', url.replace(/^\//, ''));
+    try { fs.unlinkSync(filePath); } catch (_) {}
+  }
+}
+
+module.exports = { cloudinary, upload, uploadSingle, uploadArray, destroyByUrl, destroyUpload, isConfigured, uploadHandoverAttachment, destroyHandoverAttachment };

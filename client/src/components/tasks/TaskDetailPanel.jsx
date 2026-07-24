@@ -7,6 +7,7 @@ import { X, Send, Star, Sun, Trash2, Check, Plus } from 'lucide-react'
 import { STATUS_CONFIG, PRIORITY_CONFIG, RECURRENCE_CONFIG, ASSIGNMENT_STATUS_CONFIG, avatarColor, initials } from './taskConfig'
 import DescriptionEditor from './DescriptionEditor'
 import AssigneeMultiSelect from './AssigneeMultiSelect'
+import TaskAttachments from './TaskAttachments'
 
 export default function TaskDetailPanel({ task, userOptions, onClose, canDelete }) {
   const qc = useQueryClient()
@@ -353,6 +354,8 @@ export default function TaskDetailPanel({ task, userOptions, onClose, canDelete 
                 <button type="submit" disabled={addSubtask.isPending} className="btn-secondary px-2.5"><Plus size={14} /></button>
               </form>
             </div>
+
+            <TaskAttachments task={task} canDelete={canDelete} />
 
             <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
               <span className={`w-5 h-5 rounded-full text-white text-[9px] font-bold flex items-center justify-center flex-shrink-0 ${avatarColor(task.createdBy)}`}>

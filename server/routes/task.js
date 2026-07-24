@@ -2,6 +2,7 @@
 const router = require('express').Router();
 const ctrl   = require('../controllers/taskController');
 const { requireAnyPermission: rpAny } = require('../middlewares/requirePermission');
+const { uploadSingle } = require('../helpers/cloudinary');
 
 // Every authenticated user can view/manage tasks they created or are assigned
 // to (enforced inside the controller); tasks.view/edit/delete widen scope to
@@ -17,5 +18,7 @@ router.post('/:id/accept',     ctrl.accept);
 router.post('/:id/reject',     ctrl.reject);
 router.get('/:id/comments',    ctrl.listComments);
 router.post('/:id/comments',   ctrl.addComment);
+router.post('/:id/attachments',              uploadSingle('image', 'saas-inventory/tasks'), ctrl.addAttachment);
+router.delete('/:id/attachments/:attachmentId', ctrl.removeAttachment);
 
 module.exports = router;

@@ -27,6 +27,12 @@ module.exports = (sequelize, DataTypes) => {
         onDelete: 'CASCADE',
         onUpdate: 'CASCADE',
       });
+      Task.hasMany(models.TaskAttachment, {
+        foreignKey: { name: 'taskId', allowNull: false },
+        as: 'attachments',
+        onDelete: 'CASCADE',
+        onUpdate: 'CASCADE',
+      });
       Task.belongsTo(models.Task, {
         foreignKey: { name: 'parentTaskId', allowNull: true },
         as: 'parentTask',

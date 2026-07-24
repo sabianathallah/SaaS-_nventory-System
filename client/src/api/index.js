@@ -127,6 +127,13 @@ export const tasksApi = {
   reject:        (id, note) => api.post(`/tasks/${id}/reject`, { note }).then(r => r.data),
   stats:         () => api.get('/tasks/stats').then(r => r.data),
   listDivisions: () => api.get('/tasks/divisions').then(r => r.data),
+  uploadAttachment: (id, file) => {
+    const fd = new FormData()
+    fd.append('image', file)
+    return api.post(`/tasks/${id}/attachments`, fd).then(r => r.data)
+  },
+  addVideoLink:     (id, videoUrl) => api.post(`/tasks/${id}/attachments`, { videoUrl }).then(r => r.data),
+  removeAttachment: (id, attachmentId) => api.delete(`/tasks/${id}/attachments/${attachmentId}`).then(r => r.data),
 }
 export const taskListsApi = crud('/task-lists')
 export const notificationsApi = {

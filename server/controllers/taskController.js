@@ -1,11 +1,12 @@
 'use strict';
-const { Task, TaskComment, TaskList, TaskAssignee, Notification, User, sequelize } = require('../models');
+const { Task, TaskComment, TaskAttachment, TaskList, TaskAssignee, Notification, User, sequelize } = require('../models');
 const { Op } = require('sequelize');
 const { companyFilter, companyId } = require('../helpers/tenancy');
 const { paginate, buildFilter, paginatedResponse } = require('../helpers/queryHelper');
 const { userHasPermission } = require('../helpers/permCheck');
 const { addDaysStr, weekdayOf } = require('../helpers/timezone');
 const { canManageDivisi } = require('../helpers/divisiAccess');
+const { destroyUpload } = require('../helpers/cloudinary');
 
 const USER_ATTRS = ['id', 'name', 'email', 'divisi'];
 // Standing folder for tasks that apply to everyone (mandatory surveys,
@@ -20,6 +21,7 @@ const TASK_INCLUDE = [
     },
     { model: User, as: 'creator', attributes: USER_ATTRS },
     { model: TaskList, as: 'list', attributes: ['id', 'name', 'color', 'icon'] },
+    { model: TaskAttachment, as: 'attachments', include: [{ model: User, as: 'user', attributes: USER_ATTRS }] },
 ];
 
 const SORT_MAP = {
@@ -510,6 +512,62 @@ class TaskController {
                 include: [{ model: User, as: 'user', attributes: USER_ATTRS }],
             });
             res.status(201).json(full);
+        } catch (err) { next(err); }
+    }
+
+    // One endpoint for both kinds of attachment: a real image file goes
+    // through uploadSingle('image') (see routes/task.js) and lands in
+    // req.file; a video is never uploaded directly (storage cost) — the
+    // caller just pastes a link (YouTube/Drive/etc.) as `videoUrl`.
+    static async addAttachment(req, res, next) {
+        try {
+            const canEditAll = await userHasPermission(req, 'tasks.edit');
+            const task = await Task.findOne({ where: { id: req.params.id, ...companyFilter(req) } });
+            if (!task) throw { name: 'NotFound', message: 'Task tidak ditemukan' };
+
+            const isCurrentAssignee = await TaskAssignee.findOne({ where: { taskId: task.id, userId: req.user.id } });
+            if (!canEditAll && task.createdBy !== req.user.id && !isCurrentAssignee) {
+                throw { name: 'Forbidden', message: 'Anda tidak punya akses untuk menambah lampiran pada task ini' };
+            }
+
+            let attachment;
+            if (req.file?.path) {
+                attachment = await TaskAttachment.create({
+                    taskId: task.id, userId: req.user.id, type: 'IMAGE', url: req.file.path,
+                });
+            } else if (req.body.videoUrl && /^https?:\/\//i.test(req.body.videoUrl.trim())) {
+                attachment = await TaskAttachment.create({
+                    taskId: task.id, userId: req.user.id, type: 'VIDEO_LINK', url: req.body.videoUrl.trim(),
+                });
+            } else {
+                throw { name: 'BadRequest', message: 'Lampirkan foto atau tautan video (http/https) yang valid' };
+            }
+
+            const full = await TaskAttachment.findByPk(attachment.id, {
+                include: [{ model: User, as: 'user', attributes: USER_ATTRS }],
+            });
+            res.status(201).json(full);
+        } catch (err) {
+            if (req.file?.path) await destroyUpload(req.file.path);
+            next(err);
+        }
+    }
+
+    static async removeAttachment(req, res, next) {
+        try {
+            const canEditAll = await userHasPermission(req, 'tasks.edit');
+            const task = await Task.findOne({ where: { id: req.params.id, ...companyFilter(req) } });
+            if (!task) throw { name: 'NotFound', message: 'Task tidak ditemukan' };
+
+            const attachment = await TaskAttachment.findOne({ where: { id: req.params.attachmentId, taskId: task.id } });
+            if (!attachment) throw { name: 'NotFound', message: 'Lampiran tidak ditemukan' };
+            if (!canEditAll && task.createdBy !== req.user.id && attachment.userId !== req.user.id) {
+                throw { name: 'Forbidden', message: 'Anda tidak punya akses untuk menghapus lampiran ini' };
+            }
+
+            if (attachment.type === 'IMAGE') await destroyUpload(attachment.url);
+            await attachment.destroy();
+            res.json({ message: 'Lampiran dihapus' });
         } catch (err) { next(err); }
     }
 }
