@@ -65,6 +65,25 @@ async function notify(userId, { type, title, message, link, companyId: cid }) {
     await Notification.create({ userId, type, title, message, link: link || null, companyId: cid ?? null });
 }
 
+// A sub-task is usually created with no assignees of its own — it's just a
+// checklist step under a task someone's already been assigned to, and the
+// creator adding it never re-assigns each step individually. So edit access
+// walks up the parentTask chain (works for arbitrarily deep sub-sub-tasks
+// too) and grants access if the caller is creator/assignee of ANY ancestor,
+// not just the exact row being edited.
+async function hasTaskAccess(task, req, canEditAll) {
+    if (canEditAll) return true;
+    let current = task;
+    while (current) {
+        if (current.createdBy === req.user.id) return true;
+        const assignee = await TaskAssignee.findOne({ where: { taskId: current.id, userId: req.user.id } });
+        if (assignee) return true;
+        if (!current.parentTaskId) return false;
+        current = await Task.findOne({ where: { id: current.parentTaskId, ...companyFilter(req) } });
+    }
+    return false;
+}
+
 // Replaces a task's assignee set with `userIds`, keeping existing per-user
 // assignmentStatus/Note for anyone who stays assigned (so re-saving the same
 // set doesn't reset an already-accepted assignment) and starting anyone new
@@ -265,8 +284,7 @@ class TaskController {
             if (!task) throw { name: 'NotFound', message: 'Task tidak ditemukan' };
 
             const currentAssigneeLinks = await TaskAssignee.findAll({ where: { taskId: task.id } });
-            const isCurrentAssignee = currentAssigneeLinks.some(a => a.userId === req.user.id);
-            if (!canEditAll && task.createdBy !== req.user.id && !isCurrentAssignee) {
+            if (!(await hasTaskAccess(task, req, canEditAll))) {
                 throw { name: 'Forbidden', message: 'Anda tidak punya akses untuk mengubah task ini' };
             }
 
@@ -680,8 +698,7 @@ class TaskController {
             const task = await Task.findOne({ where: { id: req.params.id, ...companyFilter(req) } });
             if (!task) throw { name: 'NotFound', message: 'Task tidak ditemukan' };
 
-            const isCurrentAssignee = await TaskAssignee.findOne({ where: { taskId: task.id, userId: req.user.id } });
-            if (!canEditAll && task.createdBy !== req.user.id && !isCurrentAssignee) {
+            if (!(await hasTaskAccess(task, req, canEditAll))) {
                 throw { name: 'Forbidden', message: 'Anda tidak punya akses untuk menambah lampiran pada task ini' };
             }
 
