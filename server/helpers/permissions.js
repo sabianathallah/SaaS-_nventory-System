@@ -108,10 +108,10 @@ const ALL_PERMISSIONS = [
   { key: 'hris.salary.manage',        label: 'Kelola Profil Gaji',                         group: 'HRIS',                    parent: 'hris.manage',            desc: 'Pendataan gaji pokok & tunjangan karyawan (tanpa akses generate/publish slip)' },
 
   // ── Task Management ──────────────────────────────────────────────────────────
-  { key: 'tasks.manage', label: 'Akses Penuh Task Management', group: 'Task Management', isParent: true,  desc: 'Aktifkan semua fitur task management sekaligus' },
-  { key: 'tasks.view',   label: 'Lihat Semua Task',            group: 'Task Management', parent: 'tasks.manage', desc: 'Lihat seluruh task perusahaan, bukan hanya yang dibuat/ditugaskan ke diri sendiri' },
-  { key: 'tasks.create', label: 'Buat Task',                   group: 'Task Management', parent: 'tasks.manage', desc: 'Buat task baru & menugaskan ke pengguna lain' },
-  { key: 'tasks.edit',   label: 'Edit Semua Task',              group: 'Task Management', parent: 'tasks.manage', desc: 'Ubah task siapa pun, bukan hanya milik sendiri' },
+  { key: 'tasks.manage', label: 'Akses Penuh Task Management', group: 'Task Management', isParent: true,  desc: 'Aktifkan semua fitur task management sekaligus — termasuk folder divisi, lampiran, dan Analitik Task' },
+  { key: 'tasks.view',   label: 'Lihat Semua Task & Analitik',  group: 'Task Management', parent: 'tasks.manage', desc: 'Lihat seluruh task perusahaan lintas semua folder divisi (bukan hanya milik/ditugaskan ke diri sendiri), plus akses halaman Analitik Task (performa staff & divisi, tren bulanan)' },
+  { key: 'tasks.create', label: 'Buat Task',                   group: 'Task Management', parent: 'tasks.manage', desc: 'Buat task baru, assign ke satu atau banyak pengguna sekaligus, dan atur pengulangan (harian/mingguan/bulanan)' },
+  { key: 'tasks.edit',   label: 'Edit Semua Task & Kelola Folder', group: 'Task Management', parent: 'tasks.manage', desc: 'Ubah task siapa pun (assignee, lampiran foto/video), serta buat/edit/hapus List di folder divisi mana pun — bukan hanya divisi sendiri' },
   { key: 'tasks.delete', label: 'Hapus Semua Task',             group: 'Task Management', parent: 'tasks.manage', desc: 'Hapus task siapa pun, bukan hanya milik sendiri' },
 ];
 

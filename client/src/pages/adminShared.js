@@ -1,6 +1,6 @@
 import {
   LayoutDashboard, Package, Boxes, Truck, PackageCheck, ArrowLeftRight,
-  BarChart2, Link2, Settings, Send, ClipboardList, UserCog,
+  BarChart2, Link2, Settings, Send, ClipboardList, UserCog, ListChecks,
 } from 'lucide-react'
 
 // Helper bersama untuk halaman Pengguna (Users.jsx) dan Roles & Permission
@@ -21,6 +21,7 @@ export const GROUP_META = {
   'Database Links':        { icon: Link2,           color: '#64748B' },
   'Administrasi':          { icon: Settings,        color: '#EF4444' },
   'HRIS':                  { icon: UserCog,         color: '#0EA5E9' },
+  'Task Management':       { icon: ListChecks,      color: '#F43F5E' },
 }
 
 export const SYSTEM_ROLE_STYLE = {
