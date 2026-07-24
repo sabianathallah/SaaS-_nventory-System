@@ -79,9 +79,13 @@ export default function TaskDetailPanel({ task: rootTask, userOptions, onClose }
 
   const save = useMutation({
     mutationFn: (patch) => tasksApi.update(task.id, patch),
-    onSuccess: () => {
+    onSuccess: (updated) => {
       qc.invalidateQueries({ queryKey: ['tasks'] })
       qc.invalidateQueries({ queryKey: ['task-detail'] })
+      // Picking a recurrence can auto-default dueDate/myDayDate server-side
+      // (see taskController.update) — reflect that back into the form so the
+      // Due Date field doesn't look stale until the panel is reopened.
+      field({ dueDate: updated.dueDate || '', recurrence: updated.recurrence || 'NONE' })
       toast.success('Task diperbarui')
     },
     onError: (e, patch) => {

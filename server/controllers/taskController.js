@@ -186,19 +186,25 @@ class TaskController {
 
             const ids = (toIdArray(assigneeIds) || []).filter((v, i, a) => a.indexOf(v) === i);
 
+            // A recurring task needs a real dueDate for the engine to compute
+            // the next occurrence on completion (see nextDueDate()) — default
+            // it to today rather than silently leaving the recurrence
+            // non-functional whenever the due date picker is left blank.
+            const rec = recurrence || 'NONE';
+            const resolvedDueDate = dueDate || (rec !== 'NONE' ? new Date().toISOString().slice(0, 10) : null);
+
             // Daily recurring tasks are meant to be worked on every day they're
             // active, so they default straight into My Day instead of requiring
             // the assignee to manually drag them there each morning. Weekly/
             // monthly recurrences are left alone — not a daily concern.
-            const rec = recurrence || 'NONE';
-            const defaultMyDayDate = rec === 'DAILY' ? (dueDate || null) : null;
+            const defaultMyDayDate = rec === 'DAILY' ? resolvedDueDate : null;
 
             const task = await Task.create({
                 title,
                 description: description || null,
                 status: status || 'TODO',
                 priority: priority || 'MEDIUM',
-                dueDate: dueDate || null,
+                dueDate: resolvedDueDate,
                 createdBy: req.user.id,
                 companyId: resolvedCompanyId,
                 divisi: resolvedDivisi,
@@ -257,19 +263,38 @@ class TaskController {
                 }
             }
 
+            const resolvedRecurrence = recurrence === undefined ? task.recurrence : (recurrence || 'NONE');
+            let resolvedDueDate = dueDate === undefined ? task.dueDate : dueDate;
+            // Same reasoning as create(): switching a task to a recurrence
+            // (e.g. via the "Ulangi" dropdown) needs a real dueDate for the
+            // engine to compute the next occurrence — default to today rather
+            // than leaving it silently non-functional.
+            if (resolvedRecurrence !== 'NONE' && !resolvedDueDate) {
+                resolvedDueDate = new Date().toISOString().slice(0, 10);
+            }
+            // Turning a task Daily (or it already being Daily) means it should
+            // show up in "Tugas Hari Ini" right away, mirroring the same
+            // dueDate-as-myDayDate convention the recurrence spawner below
+            // already uses — but never override an explicit myDayDate the
+            // caller just sent (e.g. the Sun-icon toggle turning it off).
+            const shouldDefaultMyDay = myDayDate === undefined && resolvedRecurrence === 'DAILY' && !task.myDayDate;
+            const resolvedMyDayDate = myDayDate === undefined
+                ? (shouldDefaultMyDay ? resolvedDueDate : task.myDayDate)
+                : myDayDate;
+
             await task.update({
                 title: title ?? task.title,
                 description: description ?? task.description,
                 status: status ?? task.status,
                 priority: priority ?? task.priority,
-                dueDate: dueDate === undefined ? task.dueDate : dueDate,
+                dueDate: resolvedDueDate,
                 isImportant: isImportant === undefined ? task.isImportant : !!isImportant,
-                myDayDate: myDayDate === undefined ? task.myDayDate : myDayDate,
+                myDayDate: resolvedMyDayDate,
                 parentTaskId: parentTaskId === undefined ? task.parentTaskId : (parentTaskId || null),
                 listId: listId === undefined ? task.listId : (listId || null),
                 tags: tags === undefined ? task.tags : (Array.isArray(tags) ? tags : []),
                 reminderAt: reminderAt === undefined ? task.reminderAt : (reminderAt || null),
-                recurrence: recurrence === undefined ? task.recurrence : (recurrence || 'NONE'),
+                recurrence: resolvedRecurrence,
                 completedAt: isCompletingNow ? new Date() : (isReopeningNow ? null : task.completedAt),
             });
 
