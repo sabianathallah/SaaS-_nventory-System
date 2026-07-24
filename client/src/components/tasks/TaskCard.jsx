@@ -1,4 +1,4 @@
-import { MessageSquare, Calendar, Star, Check, ListTree, ChevronRight } from 'lucide-react'
+import { MessageSquare, Calendar, Star, Check, ListTree, ChevronRight, CornerDownRight } from 'lucide-react'
 import { PRIORITY_CONFIG, ASSIGNMENT_STATUS_CONFIG, avatarColor, initials, fmtDue } from './taskConfig'
 
 export default function TaskCard({ task, onOpen, onToggleDone, dragHandleProps, dragging, expandable, expanded, onToggleExpand }) {
@@ -47,6 +47,14 @@ export default function TaskCard({ task, onOpen, onToggleDone, dragHandleProps, 
           {task.list && <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: task.list.color }} title={task.list.name} />}
           <p className={`text-sm font-semibold truncate ${done ? 'text-slate-400 line-through' : 'text-slate-800'}`}>{task.title}</p>
         </div>
+        {/* Only set for sub-tasks — shows up when a flat list (My Day) surfaces
+            a sub-task alongside top-level tasks, so its context isn't lost. */}
+        {task.parentTask && (
+          <p className="flex items-center gap-1 text-[11px] text-slate-400 truncate mt-0.5">
+            <CornerDownRight size={10} className="flex-shrink-0" />
+            Sub-task dari: <span className="text-slate-500 truncate">{task.parentTask.title}</span>
+          </p>
+        )}
         {Array.isArray(task.tags) && task.tags.length > 0 && (
           <div className="flex items-center gap-1 mt-1 flex-wrap">
             {task.tags.map(tag => (

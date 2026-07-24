@@ -22,6 +22,9 @@ const TASK_INCLUDE = [
     { model: User, as: 'creator', attributes: USER_ATTRS },
     { model: TaskList, as: 'list', attributes: ['id', 'name', 'color', 'icon'] },
     { model: TaskAttachment, as: 'attachments', include: [{ model: User, as: 'user', attributes: USER_ATTRS }] },
+    // Only ever populated for sub-tasks — lets flat listings (like My Day,
+    // which surfaces sub-tasks alongside top-level ones) show "Sub-task dari: …".
+    { model: Task, as: 'parentTask', attributes: ['id', 'title'] },
 ];
 
 const SORT_MAP = {
@@ -135,8 +138,13 @@ class TaskController {
             // Top-level views only ever show parent tasks — sub-tasks are fetched
             // explicitly via ?parentTaskId=<id> (mirrors the listComments pattern
             // rather than a dedicated route) from the detail panel's Sub-tasks tab.
+            // My Day is the one exception: it's a flat "what's due today"
+            // checklist, so a sub-task due today needs to surface there too
+            // instead of staying hidden inside its parent's detail panel.
             const parentFilter = req.query.parentTaskId
                 ? { parentTaskId: req.query.parentTaskId }
+                : view === 'my_day'
+                ? {}
                 : { parentTaskId: null };
 
             const { rows, count } = await Task.findAndCountAll({
