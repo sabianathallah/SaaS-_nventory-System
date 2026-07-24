@@ -586,6 +586,27 @@ export default function ManualShipmentDetail() {
             />
           )}
 
+          {/* Shipping selesai, tapi pengajuan masih menunggu barang kembali */}
+          {s.status === 'completed' && s.sourceRequest?.needsReturn && !s.sourceRequest?.returnedAt && (
+            <div className="card p-4 border-l-4 border-l-amber-400 bg-amber-50/40">
+              <div className="flex items-center gap-2 mb-2">
+                <Clock size={16} className="text-amber-500" />
+                <span className="text-xs font-semibold text-amber-700 uppercase tracking-wide">Pengajuan Belum Selesai</span>
+              </div>
+              <p className="text-sm font-semibold text-slate-800 mb-1">Menunggu Barang Dikembalikan</p>
+              <p className="text-xs text-slate-500 mb-3 leading-relaxed">
+                Shipping ini sudah selesai (barang diterima), tapi Pengajuan #{s.sourceRequestId} butuh barang
+                dikembalikan dulu sebelum bisa ditandai selesai.
+              </p>
+              <button
+                onClick={() => navigate(`/pengajuan/${s.sourceRequestId}`)}
+                className="btn-secondary text-sm flex items-center gap-2 justify-center w-full"
+              >
+                Buka Pengajuan #{s.sourceRequestId} <ExternalLink size={12} />
+              </button>
+            </div>
+          )}
+
           {/* Payment proof (sales — view + re-upload) */}
           {s.type === 'sales' && (
             <div className="card p-4 space-y-3">

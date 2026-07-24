@@ -29,6 +29,7 @@ const HEADER_INCLUDE = [
   { model: User,             as: 'updater',         attributes: ['id', 'name'] },
   { model: User,             as: 'submitter',       attributes: ['id', 'name'] },
   { model: User,             as: 'paymentVerifier', attributes: ['id', 'name'] },
+  { model: Request,          as: 'sourceRequest',   attributes: ['id', 'status', 'needsReturn', 'returnedAt'], required: false },
 ];
 
 // ── Invoice number generator ──────────────────────────────────────────────────
@@ -358,7 +359,12 @@ exports.changeStatus = async (req, res, next) => {
       const linkedRequest = await Request.findByPk(shipment.sourceRequestId, { transaction: t });
       if (linkedRequest) {
         if (status === 'shipped')   await linkedRequest.update({ status: 'SENT', sentAt: new Date().toISOString().slice(0, 10), processedBy: req.user.id }, { transaction: t });
-        if (status === 'completed') await linkedRequest.update({ status: 'DONE', processedBy: req.user.id }, { transaction: t });
+        // Shipping selesai (barang diterima) TIDAK sama dengan Pengajuan selesai.
+        // Kalau pengajuan ini butuh barang dikembalikan, biarkan statusnya SENT sampai
+        // benar-benar ditandai dikembalikan (lewat markReturned) lalu diselesaikan manual (markDone).
+        if (status === 'completed' && !(linkedRequest.needsReturn && !linkedRequest.returnedAt)) {
+          await linkedRequest.update({ status: 'DONE', processedBy: req.user.id }, { transaction: t });
+        }
         if (status === 'cancelled') await linkedRequest.update({ status: 'APPROVED', manualShipmentId: null }, { transaction: t });
       }
       if (status === 'cancelled') await shipment.update({ sourceRequestId: null }, { transaction: t });
