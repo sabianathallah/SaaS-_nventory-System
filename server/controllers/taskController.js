@@ -127,11 +127,28 @@ class TaskController {
             }
             // 'all' (or unrecognized) leaves viewFilter empty — scope decided below.
 
-            // `mine=true` scopes strictly to the current user (assigned to them OR
-            // created by them) regardless of tasks.view — used by personal widgets
-            // like the Dashboard's My Day/Completed history, which must never leak
-            // company-wide data to an admin just because they hold that permission.
-            if (req.query.mine === 'true' || !canViewAll) {
+            // Fetching a specific task's sub-tasks (?parentTaskId=<id>, used by
+            // SubtaskTree/the detail panel) is gated on access to that PARENT
+            // task — not on whether the caller happens to be individually
+            // assigned to each sub-task row. Otherwise an assignee who accepted
+            // the parent task can't see sub-tasks the creator added without
+            // also re-assigning them one by one, which defeats the point of
+            // "assign the parent, break it into steps for that person".
+            if (req.query.parentTaskId) {
+                const parent = await Task.findOne({ where: { id: req.query.parentTaskId, ...companyFilter(req) } });
+                if (!parent) throw { name: 'NotFound', message: 'Task tidak ditemukan' };
+                if (!canViewAll) {
+                    const isParentAssignee = await TaskAssignee.findOne({ where: { taskId: parent.id, userId: req.user.id } });
+                    if (parent.createdBy !== req.user.id && !isParentAssignee) {
+                        throw { name: 'Forbidden', message: 'Anda tidak punya akses ke sub-task ini' };
+                    }
+                }
+            } else if (req.query.mine === 'true' || !canViewAll) {
+                // `mine=true` scopes strictly to the current user (assigned to them
+                // OR created by them) regardless of tasks.view — used by personal
+                // widgets like the Dashboard's My Day/Completed history, which must
+                // never leak company-wide data to an admin just because they hold
+                // that permission.
                 andConditions.push({ [Op.or]: [assignedToUser(req.user.id), { createdBy: req.user.id }] });
             }
 
