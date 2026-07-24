@@ -108,11 +108,11 @@ const ALL_PERMISSIONS = [
   { key: 'hris.salary.manage',        label: 'Kelola Profil Gaji',                         group: 'HRIS',                    parent: 'hris.manage',            desc: 'Pendataan gaji pokok & tunjangan karyawan (tanpa akses generate/publish slip)' },
 
   // ── Task Management ──────────────────────────────────────────────────────────
-  { key: 'tasks.manage', label: 'Akses Penuh Task Management', group: 'Task Management', isParent: true,  desc: 'Aktifkan semua fitur task management sekaligus — termasuk folder divisi, lampiran, dan Analitik Task' },
-  { key: 'tasks.view',   label: 'Lihat Semua Task & Analitik',  group: 'Task Management', parent: 'tasks.manage', desc: 'Lihat seluruh task perusahaan lintas semua folder divisi (bukan hanya milik/ditugaskan ke diri sendiri), plus akses halaman Analitik Task (performa staff & divisi, tren bulanan)' },
-  { key: 'tasks.create', label: 'Buat Task',                   group: 'Task Management', parent: 'tasks.manage', desc: 'Buat task baru, assign ke satu atau banyak pengguna sekaligus, dan atur pengulangan (harian/mingguan/bulanan)' },
-  { key: 'tasks.edit',   label: 'Edit Semua Task & Kelola Folder', group: 'Task Management', parent: 'tasks.manage', desc: 'Ubah task siapa pun (assignee, lampiran foto/video), serta buat/edit/hapus List di folder divisi mana pun — bukan hanya divisi sendiri' },
-  { key: 'tasks.delete', label: 'Hapus Semua Task',             group: 'Task Management', parent: 'tasks.manage', desc: 'Hapus task siapa pun, bukan hanya milik sendiri' },
+  { key: 'tasks.manage', label: 'Akses Penuh Task Management', group: 'Task Management', isParent: true,  desc: 'Aktifkan semua fitur task management sekaligus — termasuk folder divisi, sub-task, lampiran (foto/video/link dokumen), dan Analitik Task' },
+  { key: 'tasks.view',   label: 'Lihat Semua Task & Analitik',  group: 'Task Management', parent: 'tasks.manage', desc: 'Lihat seluruh task & sub-task perusahaan lintas semua folder divisi (bukan hanya milik/ditugaskan ke diri sendiri), plus akses halaman Analitik Task (performa staff & divisi, tren bulanan)' },
+  { key: 'tasks.create', label: 'Buat Task',                   group: 'Task Management', parent: 'tasks.manage', desc: 'Buat task/sub-task baru (sub-task bisa rekursif punya sub-task lagi), assign ke satu atau banyak pengguna sekaligus, dan atur pengulangan (harian/mingguan/bulanan)' },
+  { key: 'tasks.edit',   label: 'Edit Semua Task & Kelola Folder', group: 'Task Management', parent: 'tasks.manage', desc: 'Ubah task/sub-task siapa pun (assignee, lampiran foto/video/link dokumen), serta buat/edit/hapus List di folder divisi mana pun — bukan hanya divisi sendiri' },
+  { key: 'tasks.delete', label: 'Hapus Semua Task',             group: 'Task Management', parent: 'tasks.manage', desc: 'Hapus task/sub-task siapa pun, bukan hanya milik sendiri' },
 ];
 
 const ALL_KEYS = ALL_PERMISSIONS.map(p => p.key);
