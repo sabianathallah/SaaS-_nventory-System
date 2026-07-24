@@ -3,21 +3,52 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { tasksApi, taskListsApi } from '../../api'
 import { useAuth } from '../../context/AuthContext'
 import toast from 'react-hot-toast'
-import { X, Send, Star, Sun, Trash2, Check, Plus } from 'lucide-react'
+import { X, Send, Star, Sun, Trash2, ChevronLeft } from 'lucide-react'
 import { STATUS_CONFIG, PRIORITY_CONFIG, RECURRENCE_CONFIG, ASSIGNMENT_STATUS_CONFIG, avatarColor, initials } from './taskConfig'
 import DescriptionEditor from './DescriptionEditor'
 import AssigneeMultiSelect from './AssigneeMultiSelect'
 import TaskAttachments from './TaskAttachments'
+import SubtaskTree from './SubtaskTree'
 
-export default function TaskDetailPanel({ task, userOptions, onClose, canDelete }) {
+// `rootTask` is whatever the caller opened (a top-level task most of the
+// time). Clicking into a sub-task's own detail (a sub-task can have detail
+// "kembali", recursively) pushes onto `drillStack` instead of navigating
+// away — same panel, same close button, just a breadcrumb back to the parent.
+export default function TaskDetailPanel({ task: rootTask, userOptions, onClose }) {
   const qc = useQueryClient()
-  const { user } = useAuth()
+  const { user, hasPermission, isSuperAdmin, isAdmin } = useAuth()
   const [tab, setTab] = useState('details')
   const [form, setForm] = useState(null)
   const [commentText, setCommentText] = useState('')
-  const [subtaskTitle, setSubtaskTitle] = useState('')
   const [rejectNote, setRejectNote] = useState(null) // null = not composing, string = textarea open
   const [syncedId, setSyncedId] = useState(null)
+  const [syncedRootId, setSyncedRootId] = useState(null)
+  const [drillStack, setDrillStack] = useState([]) // [{ id, title }, …]
+
+  // A newly-opened root task always starts back at its own detail, not
+  // wherever the previous task's drill-down happened to leave off.
+  if (rootTask && rootTask.id !== syncedRootId) {
+    setSyncedRootId(rootTask.id)
+    setDrillStack([])
+  }
+
+  const currentId = drillStack.length ? drillStack[drillStack.length - 1].id : rootTask?.id
+
+  const { data: task } = useQuery({
+    queryKey: ['task-detail', currentId],
+    queryFn: () => tasksApi.get(currentId),
+    enabled: !!currentId,
+    initialData: () => (currentId === rootTask?.id ? rootTask : undefined),
+  })
+
+  function closePanel() {
+    setDrillStack([])
+    onClose()
+  }
+
+  function openSubtask(st) {
+    setDrillStack(s => [...s, { id: st.id, title: st.title }])
+  }
 
   // Re-derive local editable form state whenever a different task is opened —
   // done during render (not an effect) so switching tasks doesn't cascade an
@@ -48,7 +79,11 @@ export default function TaskDetailPanel({ task, userOptions, onClose, canDelete 
 
   const save = useMutation({
     mutationFn: (patch) => tasksApi.update(task.id, patch),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['tasks'] }); toast.success('Task diperbarui') },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['tasks'] })
+      qc.invalidateQueries({ queryKey: ['task-detail'] })
+      toast.success('Task diperbarui')
+    },
     onError: (e, patch) => {
       // Roll the local form field back to the task's last known-good value —
       // otherwise e.g. a rejected "mark as DONE" (blocked by open sub-tasks)
@@ -61,18 +96,25 @@ export default function TaskDetailPanel({ task, userOptions, onClose, canDelete 
   })
   const del = useMutation({
     mutationFn: () => tasksApi.remove(task.id),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['tasks'] }); toast.success('Task dihapus'); onClose() },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['tasks'] })
+      toast.success('Task dihapus')
+      // Deleting a sub-task pops back to its parent instead of closing the
+      // whole panel; deleting the root task closes it like before.
+      if (drillStack.length) setDrillStack(s => s.slice(0, -1))
+      else closePanel()
+    },
     onError: e => toast.error(e.response?.data?.message || 'Error'),
   })
 
   const accept = useMutation({
     mutationFn: () => tasksApi.accept(task.id),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['tasks'] }); toast.success('Task diterima') },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['tasks'] }); qc.invalidateQueries({ queryKey: ['task-detail'] }); toast.success('Task diterima') },
     onError: e => toast.error(e.response?.data?.message || 'Error'),
   })
   const reject = useMutation({
     mutationFn: (note) => tasksApi.reject(task.id, note),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['tasks'] }); toast.success('Task ditolak'); setRejectNote(null) },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['tasks'] }); qc.invalidateQueries({ queryKey: ['task-detail'] }); toast.success('Task ditolak'); setRejectNote(null) },
     onError: e => toast.error(e.response?.data?.message || 'Error'),
   })
 
@@ -87,43 +129,50 @@ export default function TaskDetailPanel({ task, userOptions, onClose, canDelete 
     onError: e => toast.error(e.response?.data?.message || 'Error'),
   })
 
-  // Sub-tasks are an always-visible checklist section inside Details (not a
-  // separate tab to click into) — fetched whenever a task is open, same as
-  // the rest of the Details fields.
+  // Only the direct-children count is needed here (for the "can't close while
+  // sub-tasks are open" hint) — the actual sub-task list/add/toggle UI lives
+  // in <SubtaskTree>, which shares this same query key so there's no extra request.
   const { data: subtasksRes } = useQuery({
     enabled: !!task,
     queryKey: ['task-subtasks', task?.id],
     queryFn: () => tasksApi.listSubtasks(task.id),
   })
   const subtasks = subtasksRes?.data ?? []
-  const addSubtask = useMutation({
-    mutationFn: (title) => tasksApi.create({ title, parentTaskId: task.id }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['task-subtasks', task.id] }); qc.invalidateQueries({ queryKey: ['tasks'] }); setSubtaskTitle('') },
-    onError: e => toast.error(e.response?.data?.message || 'Error'),
-  })
-  const toggleSubtask = useMutation({
-    mutationFn: ({ id, status }) => tasksApi.update(id, { status }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['task-subtasks', task.id] }); qc.invalidateQueries({ queryKey: ['tasks'] }) },
-    onError: e => toast.error(e.response?.data?.message || 'Error'),
-  })
 
-  if (!task || !form) return null
+  if (!rootTask) return null
 
   function field(patch) { setForm(f => ({ ...f, ...patch })) }
   function commitField(key, value) {
     save.mutate({ [key]: value === '' ? null : value })
   }
 
-  const myAssignee = (task.assignees ?? []).find(a => a.id === user?.id)
+  const loaded = task && form
+  const myAssignee = loaded ? (task.assignees ?? []).find(a => a.id === user?.id) : null
   const myAssignmentStatus = myAssignee?.TaskAssignee?.assignmentStatus
   const isPendingForMe = myAssignmentStatus === 'PENDING'
-  const otherAssignees = (task.assignees ?? []).filter(a => a.id !== user?.id && a.TaskAssignee?.assignmentStatus)
+  const otherAssignees = loaded ? (task.assignees ?? []).filter(a => a.id !== user?.id && a.TaskAssignee?.assignmentStatus) : []
   const openSubtasks = subtasks.filter(st => st.status !== 'DONE').length
+  const canDelete = loaded && (
+    isSuperAdmin || isAdmin || hasPermission('tasks.delete') || hasPermission('tasks.manage') || task.createdBy === user?.id
+  )
 
   return (
     <>
-      <div className="fixed inset-0 bg-slate-900/25 backdrop-blur-[1px] z-40 animate-fade-in" onClick={onClose} />
-      <div className={`fixed top-0 right-0 h-full w-full max-w-md bg-white shadow-modal z-50 flex flex-col animate-slide-in-right border-l-4 ${PRIORITY_CONFIG[task.priority].border}`}>
+      <div className="fixed inset-0 bg-slate-900/25 backdrop-blur-[1px] z-40 animate-fade-in" onClick={closePanel} />
+      <div className={`fixed top-0 right-0 h-full w-full max-w-md bg-white shadow-modal z-50 flex flex-col animate-slide-in-right border-l-4 ${loaded ? PRIORITY_CONFIG[task.priority].border : 'border-slate-200'}`}>
+        {drillStack.length > 0 && (
+          <div className="flex items-center gap-1.5 px-5 pt-3 flex-shrink-0 min-w-0">
+            <button
+              onClick={() => setDrillStack(s => s.slice(0, -1))}
+              className="flex items-center gap-0.5 text-xs font-semibold text-slate-500 hover:text-slate-700 flex-shrink-0"
+            >
+              <ChevronLeft size={13} />Kembali
+            </button>
+            <span className="text-xs text-slate-300 truncate">
+              {rootTask.title}{drillStack.slice(0, -1).map(d => ` › ${d.title}`).join('')}
+            </span>
+          </div>
+        )}
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 flex-shrink-0">
           <div className="flex gap-5">
             {['details', 'comments'].map(t => (
@@ -139,10 +188,15 @@ export default function TaskDetailPanel({ task, userOptions, onClose, canDelete 
               </button>
             ))}
           </div>
-          <button onClick={onClose} className="w-7 h-7 rounded-md flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"><X size={16} /></button>
+          <button onClick={closePanel} className="w-7 h-7 rounded-md flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"><X size={16} /></button>
         </div>
 
-        {tab === 'details' ? (
+        {!loaded ? (
+          <div className="flex-1 flex items-center justify-center">
+            <p className="text-sm text-slate-400">Memuat…</p>
+          </div>
+        ) : (
+        tab === 'details' ? (
           <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
             {isPendingForMe && (
               <div className="bg-warning-light border border-warning-border rounded-lg p-3 space-y-2">
@@ -323,36 +377,14 @@ export default function TaskDetailPanel({ task, userOptions, onClose, canDelete 
 
             {/* Sub-tasks — always visible here, directly under the fields
                 above, instead of behind a separate tab (matches San-Group's
-                task detail: everything relevant to the task on one scroll). */}
+                task detail: everything relevant to the task on one scroll).
+                Recursive: clicking a sub-task's title drills into its own
+                detail (title, status, its own sub-tasks, …) in this same panel. */}
             <div className="pt-2 border-t border-slate-100">
               <label className="label mb-2">
                 Sub-tasks{subtasks.length > 0 && <span className="text-slate-400 font-normal"> ({subtasks.filter(st => st.status === 'DONE').length}/{subtasks.length})</span>}
               </label>
-              <div className="space-y-1">
-                {subtasks.map(st => {
-                  const done = st.status === 'DONE'
-                  return (
-                    <div key={st.id} className="flex items-center gap-2.5 py-1">
-                      <button
-                        onClick={() => toggleSubtask.mutate({ id: st.id, status: done ? 'TODO' : 'DONE' })}
-                        className={`w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
-                          done ? 'bg-success border-success' : 'border-slate-300 hover:border-success'
-                        }`}
-                      >
-                        {done && <Check size={10} className="text-white" strokeWidth={3.5} />}
-                      </button>
-                      <span className={`text-sm flex-1 ${done ? 'text-slate-400 line-through' : 'text-slate-700'}`}>{st.title}</span>
-                    </div>
-                  )
-                })}
-              </div>
-              <form
-                onSubmit={e => { e.preventDefault(); if (subtaskTitle.trim()) addSubtask.mutate(subtaskTitle.trim()) }}
-                className="flex gap-2 mt-1.5"
-              >
-                <input className="input text-sm py-1.5 flex-1" value={subtaskTitle} onChange={e => setSubtaskTitle(e.target.value)} placeholder="Tambah sub-task…" />
-                <button type="submit" disabled={addSubtask.isPending} className="btn-secondary px-2.5"><Plus size={14} /></button>
-              </form>
+              <SubtaskTree parentId={task.id} onOpenTask={openSubtask} />
             </div>
 
             <TaskAttachments task={task} canDelete={canDelete} />
@@ -401,6 +433,7 @@ export default function TaskDetailPanel({ task, userOptions, onClose, canDelete 
               <button type="submit" disabled={addComment.isPending} className="btn-primary px-3"><Send size={14} /></button>
             </form>
           </div>
+        )
         )}
       </div>
     </>

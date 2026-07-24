@@ -134,6 +134,7 @@ export const tasksApi = {
     return api.post(`/tasks/${id}/attachments`, fd).then(r => r.data)
   },
   addVideoLink:     (id, videoUrl) => api.post(`/tasks/${id}/attachments`, { videoUrl }).then(r => r.data),
+  addDocumentLink:  (id, documentUrl) => api.post(`/tasks/${id}/attachments`, { documentUrl }).then(r => r.data),
   removeAttachment: (id, attachmentId) => api.delete(`/tasks/${id}/attachments/${attachmentId}`).then(r => r.data),
 }
 export const taskListsApi = crud('/task-lists')

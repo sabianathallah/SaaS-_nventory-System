@@ -1,7 +1,7 @@
-import { MessageSquare, Calendar, Star, Check, ListTree } from 'lucide-react'
+import { MessageSquare, Calendar, Star, Check, ListTree, ChevronRight } from 'lucide-react'
 import { PRIORITY_CONFIG, ASSIGNMENT_STATUS_CONFIG, avatarColor, initials, fmtDue } from './taskConfig'
 
-export default function TaskCard({ task, onOpen, onToggleDone, dragHandleProps, dragging }) {
+export default function TaskCard({ task, onOpen, onToggleDone, dragHandleProps, dragging, expandable, expanded, onToggleExpand }) {
   const due = fmtDue(task.dueDate)
   const done = task.status === 'DONE'
   // A card shows the most urgent response state across all assignees —
@@ -19,6 +19,17 @@ export default function TaskCard({ task, onOpen, onToggleDone, dragHandleProps, 
     >
       {/* Priority accent bar */}
       <span className={`absolute left-0 top-2 bottom-2 w-[3px] rounded-full ${PRIORITY_CONFIG[task.priority].bar}`} />
+
+      {/* Expand sub-tasks inline — same accordion pattern as Products→SKU rows */}
+      {expandable && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onToggleExpand?.(task.id) }}
+          title={expanded ? 'Tutup sub-task' : 'Lihat sub-task'}
+          className={`mt-0.5 w-4 h-4 flex items-center justify-center flex-shrink-0 text-slate-300 hover:text-slate-500 transition-transform ${expanded ? 'rotate-90' : ''}`}
+        >
+          <ChevronRight size={13} />
+        </button>
+      )}
 
       {/* Quick-complete toggle */}
       <button

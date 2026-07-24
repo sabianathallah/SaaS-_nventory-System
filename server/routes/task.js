@@ -12,6 +12,7 @@ router.get('/stats',           ctrl.stats);
 router.get('/divisions',       ctrl.listDivisions);
 router.get('/analytics',       rpAny('tasks.view', 'tasks.manage'), ctrl.analytics);
 router.get('/',                ctrl.list);
+router.get('/:id',             ctrl.show);
 router.post('/',               ctrl.create);
 router.put('/:id',             ctrl.update);
 router.delete('/:id',          ctrl.destroy);

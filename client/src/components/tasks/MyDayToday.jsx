@@ -3,7 +3,6 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { Plus, Sun, PartyPopper } from 'lucide-react'
 import { tasksApi, usersApi } from '../../api'
-import { useAuth } from '../../context/AuthContext'
 import TaskCard from './TaskCard'
 import TaskDetailPanel from './TaskDetailPanel'
 
@@ -14,7 +13,6 @@ const todayISO = () => new Date().toISOString().slice(0, 10)
 // otomatis "lulus" ke CompletedHistory di bawahnya (lihat Dashboard.jsx).
 export default function MyDayToday() {
   const qc = useQueryClient()
-  const { user, hasPermission, isSuperAdmin, isAdmin } = useAuth()
   const [quickTitle, setQuickTitle] = useState('')
   const [selectedId, setSelectedId] = useState(null)
 
@@ -34,9 +32,6 @@ export default function MyDayToday() {
   const userOptions = usersRes?.data ?? []
 
   const selectedTask = tasks.find(t => t.id === selectedId) || null
-  const canDeleteSelected = !!selectedTask && (
-    isSuperAdmin || isAdmin || hasPermission('tasks.delete') || hasPermission('tasks.manage') || selectedTask.createdBy === user?.id
-  )
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ['tasks'] })
 
@@ -109,7 +104,6 @@ export default function MyDayToday() {
         task={selectedTask}
         userOptions={userOptions}
         onClose={() => setSelectedId(null)}
-        canDelete={canDeleteSelected}
       />
     </div>
   )

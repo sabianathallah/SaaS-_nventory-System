@@ -19,7 +19,7 @@ module.exports = (sequelize, DataTypes) => {
   TaskAttachment.init({
     taskId:  { type: DataTypes.INTEGER, allowNull: false },
     userId:  { type: DataTypes.INTEGER, allowNull: false },
-    type:    { type: DataTypes.ENUM('IMAGE', 'VIDEO_LINK'), allowNull: false },
+    type:    { type: DataTypes.ENUM('IMAGE', 'VIDEO_LINK', 'DOCUMENT'), allowNull: false },
     url:     { type: DataTypes.TEXT, allowNull: false },
     caption: { type: DataTypes.STRING(255), allowNull: true },
   }, {

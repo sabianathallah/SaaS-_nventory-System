@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { Image as ImageIcon, Video, Link2, X, Trash2 } from 'lucide-react'
+import { Image as ImageIcon, Video, FileText, Link2, X, Trash2 } from 'lucide-react'
 import { tasksApi } from '../../api'
 import { useAuth } from '../../context/AuthContext'
 
@@ -11,8 +11,8 @@ export default function TaskAttachments({ task, canDelete }) {
   const qc = useQueryClient()
   const { user } = useAuth()
   const fileRef = useRef(null)
-  const [addingLink, setAddingLink] = useState(false)
-  const [videoUrl, setVideoUrl] = useState('')
+  const [addingLink, setAddingLink] = useState(null) // null = closed, 'VIDEO_LINK' | 'DOCUMENT' = which form is open
+  const [linkUrl, setLinkUrl] = useState('')
 
   const attachments = task.attachments ?? []
 
@@ -23,10 +23,15 @@ export default function TaskAttachments({ task, canDelete }) {
     onSuccess: invalidate,
     onError: e => toast.error(e.response?.data?.message || 'Gagal upload foto'),
   })
-  const addLink = useMutation({
+  const addVideoLink = useMutation({
     mutationFn: (url) => tasksApi.addVideoLink(task.id, url),
-    onSuccess: () => { invalidate(); setVideoUrl(''); setAddingLink(false) },
+    onSuccess: () => { invalidate(); setLinkUrl(''); setAddingLink(null) },
     onError: e => toast.error(e.response?.data?.message || 'Gagal menambah link video'),
+  })
+  const addDocumentLink = useMutation({
+    mutationFn: (url) => tasksApi.addDocumentLink(task.id, url),
+    onSuccess: () => { invalidate(); setLinkUrl(''); setAddingLink(null) },
+    onError: e => toast.error(e.response?.data?.message || 'Gagal menambah link dokumen'),
   })
   const remove = useMutation({
     mutationFn: (attachmentId) => tasksApi.removeAttachment(task.id, attachmentId),
@@ -54,6 +59,11 @@ export default function TaskAttachments({ task, canDelete }) {
               {a.type === 'IMAGE' ? (
                 <a href={a.url} target="_blank" rel="noopener noreferrer">
                   <img src={a.url} alt="" className="w-full h-full object-cover" />
+                </a>
+              ) : a.type === 'DOCUMENT' ? (
+                <a href={a.url} target="_blank" rel="noopener noreferrer" className="w-full h-full flex flex-col items-center justify-center gap-1 text-slate-400 hover:text-slate-600 transition-colors">
+                  <FileText size={18} />
+                  <span className="text-[9px] px-1 text-center truncate w-full">Dokumen</span>
                 </a>
               ) : (
                 <a href={a.url} target="_blank" rel="noopener noreferrer" className="w-full h-full flex flex-col items-center justify-center gap-1 text-slate-400 hover:text-slate-600 transition-colors">
@@ -86,24 +96,34 @@ export default function TaskAttachments({ task, canDelete }) {
           <ImageIcon size={12} />{uploadImage.isPending ? 'Mengunggah…' : 'Tambah Foto'}
         </button>
         {!addingLink ? (
-          <button type="button" onClick={() => setAddingLink(true)} className="btn-secondary py-1.5 px-2.5 text-xs">
-            <Link2 size={12} />Link Video
-          </button>
+          <>
+            <button type="button" onClick={() => setAddingLink('VIDEO_LINK')} className="btn-secondary py-1.5 px-2.5 text-xs">
+              <Link2 size={12} />Link Video
+            </button>
+            <button type="button" onClick={() => setAddingLink('DOCUMENT')} className="btn-secondary py-1.5 px-2.5 text-xs">
+              <FileText size={12} />Link Dokumen
+            </button>
+          </>
         ) : (
           <form
-            onSubmit={e => { e.preventDefault(); if (videoUrl.trim()) addLink.mutate(videoUrl.trim()) }}
+            onSubmit={e => {
+              e.preventDefault()
+              if (!linkUrl.trim()) return
+              if (addingLink === 'DOCUMENT') addDocumentLink.mutate(linkUrl.trim())
+              else addVideoLink.mutate(linkUrl.trim())
+            }}
             className="flex items-center gap-1.5 flex-1"
           >
             <input
               autoFocus
               type="url"
               className="input text-xs py-1.5 flex-1"
-              placeholder="https://…"
-              value={videoUrl}
-              onChange={e => setVideoUrl(e.target.value)}
+              placeholder={addingLink === 'DOCUMENT' ? 'https://drive.google.com/…' : 'https://…'}
+              value={linkUrl}
+              onChange={e => setLinkUrl(e.target.value)}
             />
-            <button type="submit" disabled={addLink.isPending} className="btn-primary py-1.5 px-2.5 text-xs">Simpan</button>
-            <button type="button" onClick={() => { setAddingLink(false); setVideoUrl('') }} className="text-slate-400 hover:text-slate-700"><X size={14} /></button>
+            <button type="submit" disabled={addVideoLink.isPending || addDocumentLink.isPending} className="btn-primary py-1.5 px-2.5 text-xs">Simpan</button>
+            <button type="button" onClick={() => { setAddingLink(null); setLinkUrl('') }} className="text-slate-400 hover:text-slate-700"><X size={14} /></button>
           </form>
         )}
       </div>

@@ -393,6 +393,40 @@ class TaskController {
         } catch (err) { next(err); }
     }
 
+    // Fetches one task with full associations — used both to open the detail
+    // panel on a top-level task and to drill into a sub-task's own detail
+    // (sub-tasks are just Tasks with a parentTaskId, so the same shape works).
+    static async show(req, res, next) {
+        try {
+            const canViewAll = await userHasPermission(req, 'tasks.view');
+            const task = await Task.findOne({
+                where: { id: req.params.id, ...companyFilter(req) },
+                attributes: {
+                    include: [
+                        [
+                            sequelize.literal('(SELECT COUNT(*) FROM "TaskComments" WHERE "TaskComments"."taskId" = "Task"."id")'),
+                            'commentCount',
+                        ],
+                        [
+                            sequelize.literal('(SELECT COUNT(*) FROM "Tasks" AS "st" WHERE "st"."parentTaskId" = "Task"."id")'),
+                            'subTaskCount',
+                        ],
+                    ],
+                },
+                include: TASK_INCLUDE,
+            });
+            if (!task) throw { name: 'NotFound', message: 'Task tidak ditemukan' };
+
+            if (!canViewAll) {
+                const isAssignee = (task.assignees ?? []).some(a => a.id === req.user.id);
+                if (task.createdBy !== req.user.id && !isAssignee) {
+                    throw { name: 'Forbidden', message: 'Anda tidak punya akses ke task ini' };
+                }
+            }
+            res.json(task);
+        } catch (err) { next(err); }
+    }
+
     static async stats(req, res, next) {
         try {
             const canViewAll = await userHasPermission(req, 'tasks.view');
@@ -585,10 +619,11 @@ class TaskController {
         } catch (err) { next(err); }
     }
 
-    // One endpoint for both kinds of attachment: a real image file goes
+    // One endpoint for all three kinds of attachment: a real image file goes
     // through uploadSingle('image') (see routes/task.js) and lands in
-    // req.file; a video is never uploaded directly (storage cost) — the
-    // caller just pastes a link (YouTube/Drive/etc.) as `videoUrl`.
+    // req.file; a video/document is never uploaded directly (storage cost) —
+    // the caller just pastes a link (YouTube/Drive/Docs/etc.) as `videoUrl`
+    // or `documentUrl`.
     static async addAttachment(req, res, next) {
         try {
             const canEditAll = await userHasPermission(req, 'tasks.edit');
@@ -609,8 +644,12 @@ class TaskController {
                 attachment = await TaskAttachment.create({
                     taskId: task.id, userId: req.user.id, type: 'VIDEO_LINK', url: req.body.videoUrl.trim(),
                 });
+            } else if (req.body.documentUrl && /^https?:\/\//i.test(req.body.documentUrl.trim())) {
+                attachment = await TaskAttachment.create({
+                    taskId: task.id, userId: req.user.id, type: 'DOCUMENT', url: req.body.documentUrl.trim(),
+                });
             } else {
-                throw { name: 'BadRequest', message: 'Lampirkan foto atau tautan video (http/https) yang valid' };
+                throw { name: 'BadRequest', message: 'Lampirkan foto, tautan video, atau tautan dokumen (http/https) yang valid' };
             }
 
             const full = await TaskAttachment.findByPk(attachment.id, {

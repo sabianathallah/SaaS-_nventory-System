@@ -31,11 +31,15 @@ export const ASSIGNMENT_STATUS_CONFIG = {
 }
 
 export const RECURRENCE_CONFIG = {
-  NONE:    { label: 'Tidak berulang' },
-  DAILY:   { label: 'Setiap hari' },
-  WEEKLY:  { label: 'Setiap minggu' },
-  MONTHLY: { label: 'Setiap bulan' },
+  NONE:    { label: 'Tidak berulang', dot: 'bg-slate-300' },
+  DAILY:   { label: 'Setiap hari',    dot: 'bg-info' },
+  WEEKLY:  { label: 'Setiap minggu',  dot: 'bg-purple-500' },
+  MONTHLY: { label: 'Setiap bulan',   dot: 'bg-teal-500' },
 }
+
+// Grouping order when List View is switched to "Kelompokkan: Pengulangan" —
+// most-frequent first, non-repeating tasks last.
+export const RECURRENCE_ORDER = ['DAILY', 'WEEKLY', 'MONTHLY', 'NONE']
 
 export const BOARD_COLUMNS = ['TODO', 'IN_PROGRESS', 'DONE']
 

@@ -34,6 +34,7 @@ export default function Tasks() {
   // diakses lewat sidebar seperti biasa, lintas-divisi seperti sebelumnya.
   const [sidebarView, setSidebarView] = useState('folders')
   const [viewMode, setViewMode] = useState('list')
+  const [groupBy, setGroupBy] = useState('status')
   const [search, setSearch] = useState('')
   const [activeTag, setActiveTag] = useState('')
   const [sortBy, setSortBy] = useState('created')
@@ -140,10 +141,6 @@ export default function Tasks() {
     onSettled: () => qc.invalidateQueries({ queryKey: ['tasks'] }),
   })
 
-  const canDeleteSelected = !!selectedTask && (
-    isSuperAdmin || isAdmin || hasPermission('tasks.delete') || hasPermission('tasks.manage') || selectedTask.createdBy === user?.id
-  )
-
   function toggleDone(task) {
     quickPatch.mutate({ id: task.id, patch: { status: task.status === 'DONE' ? 'TODO' : 'DONE' } })
   }
@@ -217,7 +214,23 @@ export default function Tasks() {
           )}
           <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/50 flex items-center gap-3">
             <SearchBar value={search} onChange={setSearch} placeholder="Cari task…" />
-            <div className="ml-auto flex items-center gap-1 bg-white border border-slate-200 rounded-lg p-0.5">
+            {viewMode === 'list' && (
+              <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-lg p-0.5 ml-auto">
+                <button
+                  onClick={() => setGroupBy('status')}
+                  className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${groupBy === 'status' ? 'nav-active' : 'text-slate-400 hover:text-slate-600'}`}
+                >
+                  Status
+                </button>
+                <button
+                  onClick={() => setGroupBy('recurrence')}
+                  className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${groupBy === 'recurrence' ? 'nav-active' : 'text-slate-400 hover:text-slate-600'}`}
+                >
+                  Pengulangan
+                </button>
+              </div>
+            )}
+            <div className={`flex items-center gap-1 bg-white border border-slate-200 rounded-lg p-0.5 ${viewMode === 'list' ? '' : 'ml-auto'}`}>
               <button
                 onClick={() => setViewMode('list')}
                 className={`p-1.5 rounded-md transition-colors ${viewMode === 'list' ? 'nav-active' : 'text-slate-400 hover:text-slate-600'}`}
@@ -269,7 +282,7 @@ export default function Tasks() {
             {isLoading ? (
               <p className="text-sm text-slate-400 text-center py-16">Memuat…</p>
             ) : viewMode === 'list' ? (
-              <ListView tasks={filteredTasks} view={sidebarView} onOpen={(t) => setSelectedId(t.id)} onToggleDone={toggleDone} />
+              <ListView tasks={filteredTasks} view={sidebarView} groupBy={groupBy} onOpen={(t) => setSelectedId(t.id)} onToggleDone={toggleDone} />
             ) : viewMode === 'board' ? (
               <BoardView
                 tasks={filteredTasks}
@@ -304,7 +317,6 @@ export default function Tasks() {
           setSelectedId(null)
           if (searchParams.get('open')) setSearchParams(prev => { prev.delete('open'); return prev }, { replace: true })
         }}
-        canDelete={canDeleteSelected}
       />
 
       <CreateTaskModal
