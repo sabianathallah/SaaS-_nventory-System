@@ -40,4 +40,15 @@ function weekdayOf(dateStr) {
     return new Date(Date.UTC(y, m - 1, d)).getUTCDay();
 }
 
-module.exports = { TZ, todayDateOnly, nowPartsInJakarta, partsInJakarta, addDaysStr, weekdayOf };
+/** Tambah/kurangi bulan dari string YYYY-MM-DD — hari di-clamp ke tanggal
+ *  terakhir bulan tujuan kalau tidak ada (mis. 31 Jan + 1 bulan -> 28/29 Feb,
+ *  bukan meluber ke Maret). */
+function addMonthsStr(dateStr, delta) {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    const dt = new Date(Date.UTC(y, m - 1 + delta, 1));
+    const lastDay = new Date(Date.UTC(dt.getUTCFullYear(), dt.getUTCMonth() + 1, 0)).getUTCDate();
+    dt.setUTCDate(Math.min(d, lastDay));
+    return dt.toISOString().slice(0, 10);
+}
+
+module.exports = { TZ, todayDateOnly, nowPartsInJakarta, partsInJakarta, addDaysStr, weekdayOf, addMonthsStr };

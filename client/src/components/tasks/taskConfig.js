@@ -31,10 +31,10 @@ export const ASSIGNMENT_STATUS_CONFIG = {
 }
 
 export const RECURRENCE_CONFIG = {
-  NONE:     { label: 'Tidak berulang' },
-  DAILY:    { label: 'Setiap hari' },
-  WEEKDAYS: { label: 'Hari kerja (Sen-Jum)' },
-  WEEKLY:   { label: 'Setiap minggu' },
+  NONE:    { label: 'Tidak berulang' },
+  DAILY:   { label: 'Setiap hari' },
+  WEEKLY:  { label: 'Setiap minggu' },
+  MONTHLY: { label: 'Setiap bulan' },
 }
 
 export const BOARD_COLUMNS = ['TODO', 'IN_PROGRESS', 'DONE']

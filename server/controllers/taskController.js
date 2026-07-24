@@ -4,7 +4,7 @@ const { Op } = require('sequelize');
 const { companyFilter, companyId } = require('../helpers/tenancy');
 const { paginate, buildFilter, paginatedResponse } = require('../helpers/queryHelper');
 const { userHasPermission } = require('../helpers/permCheck');
-const { addDaysStr, weekdayOf } = require('../helpers/timezone');
+const { addDaysStr, addMonthsStr } = require('../helpers/timezone');
 const { canManageDivisi } = require('../helpers/divisiAccess');
 const { destroyUpload } = require('../helpers/cloudinary');
 
@@ -48,16 +48,12 @@ function toIdArray(value) {
 }
 
 // Recurrence presets are fixed (no custom RRULE) — advances dueDate by the
-// rule's cadence, skipping weekends for WEEKDAYS.
+// rule's cadence.
 function nextDueDate(dueDate, recurrence) {
     if (!dueDate) return null;
     if (recurrence === 'DAILY') return addDaysStr(dueDate, 1);
     if (recurrence === 'WEEKLY') return addDaysStr(dueDate, 7);
-    if (recurrence === 'WEEKDAYS') {
-        let next = addDaysStr(dueDate, 1);
-        while (weekdayOf(next) === 0 || weekdayOf(next) === 6) next = addDaysStr(next, 1);
-        return next;
-    }
+    if (recurrence === 'MONTHLY') return addMonthsStr(dueDate, 1);
     return null;
 }
 
@@ -190,12 +186,12 @@ class TaskController {
 
             const ids = (toIdArray(assigneeIds) || []).filter((v, i, a) => a.indexOf(v) === i);
 
-            // Daily/weekday recurring tasks are meant to be worked on every day
-            // they're active, so they default straight into My Day instead of
-            // requiring the assignee to manually drag them there each morning.
-            // Weekly recurrences are left alone — not a daily concern.
+            // Daily recurring tasks are meant to be worked on every day they're
+            // active, so they default straight into My Day instead of requiring
+            // the assignee to manually drag them there each morning. Weekly/
+            // monthly recurrences are left alone — not a daily concern.
             const rec = recurrence || 'NONE';
-            const defaultMyDayDate = (rec === 'DAILY' || rec === 'WEEKDAYS') ? (dueDate || null) : null;
+            const defaultMyDayDate = rec === 'DAILY' ? (dueDate || null) : null;
 
             const task = await Task.create({
                 title,
@@ -303,7 +299,7 @@ class TaskController {
                     status: 'TODO',
                     priority: task.priority,
                     dueDate: nextDue,
-                    myDayDate: (task.recurrence === 'DAILY' || task.recurrence === 'WEEKDAYS') ? nextDue : null,
+                    myDayDate: task.recurrence === 'DAILY' ? nextDue : null,
                     createdBy: task.createdBy,
                     companyId: task.companyId,
                     divisi: task.divisi,

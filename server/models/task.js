@@ -79,7 +79,7 @@ module.exports = (sequelize, DataTypes) => {
     reminderSentAt: { type: DataTypes.DATE, allowNull: true },
     completedAt:    { type: DataTypes.DATE, allowNull: true },
     recurrence: {
-      type: DataTypes.ENUM('NONE', 'DAILY', 'WEEKDAYS', 'WEEKLY'),
+      type: DataTypes.ENUM('NONE', 'DAILY', 'WEEKLY', 'MONTHLY'),
       allowNull: false,
       defaultValue: 'NONE',
     },
