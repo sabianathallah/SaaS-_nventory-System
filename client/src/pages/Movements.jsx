@@ -83,13 +83,13 @@ export default function Movements() {
   })
 
   const { data: warehouses } = useQuery({
-    queryKey: ['warehouses', { limit: 100 }],
-    queryFn:  () => warehousesApi.list({ limit: 100 }),
+    queryKey: ['warehouses', { limit: 500 }],
+    queryFn:  () => warehousesApi.list({ limit: 500 }),
   })
 
   const { data: products } = useQuery({
-    queryKey: ['products', { limit: 200 }],
-    queryFn:  () => productsApi.list({ limit: 200 }),
+    queryKey: ['products', { limit: 500 }],
+    queryFn:  () => productsApi.list({ limit: 500 }),
   })
 
   const { data: productSkus } = useQuery({
@@ -99,13 +99,13 @@ export default function Movements() {
   })
 
   const { data: articles } = useQuery({
-    queryKey: ['articles', { limit: 200 }],
-    queryFn:  () => articlesApi.list({ limit: 200 }),
+    queryKey: ['articles', { limit: 500 }],
+    queryFn:  () => articlesApi.list({ limit: 500 }),
   })
 
   const { data: categories } = useQuery({
-    queryKey: ['categories', { limit: 200 }],
-    queryFn:  () => categoriesApi.list({ limit: 200 }),
+    queryKey: ['categories', { limit: 500 }],
+    queryFn:  () => categoriesApi.list({ limit: 500 }),
   })
 
   function resetFilters() {
