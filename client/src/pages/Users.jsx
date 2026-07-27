@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
-import { usersApi, companiesApi, rolesApi } from '../api'
+import { usersApi, companiesApi, rolesApi, tasksApi } from '../api'
 import SearchableSelect from '../components/SearchableSelect'
+import DivisiMultiSelect from '../components/DivisiMultiSelect'
 import { useAuth } from '../context/AuthContext'
 import { useSelectedCompany } from '../context/SelectedCompanyContext'
 import PageHeader from '../components/PageHeader'
@@ -44,7 +45,7 @@ export default function Users() {
   })
 
   const defaultRole = roles.find(r => r.name !== 'SUPER_ADMIN')?.name ?? ''
-  const [form, setForm] = useState({ name: '', email: '', password: '', role: defaultRole, companyId: '', divisis: '', nik: '' })
+  const [form, setForm] = useState({ name: '', email: '', password: '', role: defaultRole, companyId: '', divisis: [], nik: '' })
 
   const { data, isLoading } = useQuery({
     queryKey: ['users', { page, limit, name: search }],
@@ -58,15 +59,28 @@ export default function Users() {
   })
   const companies = companiesData?.data ?? []
 
+  // Dropdown-only divisi picker (no free-text typos) — sourced from every
+  // divisi already in use (incl. standing folders like Umum/HR), so admins
+  // pick from a real list instead of retyping department names by hand.
+  const { data: divisionsData } = useQuery({
+    queryKey: ['task-divisions'],
+    queryFn:  tasksApi.listDivisions,
+  })
+  const divisionOptions = (divisionsData ?? []).map(d => d.divisi).sort((a, b) => a.localeCompare(b))
+
   const save = useMutation({
     mutationFn: d => {
       const payload = { ...d }
       if (!payload.password) delete payload.password
       if (!payload.companyId) delete payload.companyId
-      payload.divisis = payload.divisis ? payload.divisis.split(',').map(s => s.trim()).filter(Boolean) : []
       return modal?.data ? usersApi.update(modal.data.id, payload) : usersApi.create(payload)
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['users'] }); toast.success(modal?.data ? 'User diperbarui' : 'User dibuat'); setModal(null) },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['users'] })
+      qc.invalidateQueries({ queryKey: ['task-divisions'] })
+      toast.success(modal?.data ? 'User diperbarui' : 'User dibuat')
+      setModal(null)
+    },
     onError: e => toast.error(e.response?.data?.message || 'Error'),
   })
 
@@ -76,8 +90,8 @@ export default function Users() {
     onError: e => toast.error(e.response?.data?.message || 'Error'),
   })
 
-  const openEdit   = (r) => { setForm({ name: r.name, email: r.email, password: '', role: r.role, companyId: r.companyId ?? '', divisis: (r.divisis?.length ? r.divisis : (r.divisi ? [r.divisi] : [])).join(', '), nik: r.nik ?? '' }); setModal({ mode: 'edit', data: r }) }
-  const openCreate = ()  => { setForm({ name: '', email: '', password: '', role: defaultRole, companyId: '', divisis: '', nik: '' }); setModal({ mode: 'create' }) }
+  const openEdit   = (r) => { setForm({ name: r.name, email: r.email, password: '', role: r.role, companyId: r.companyId ?? '', divisis: r.divisis?.length ? r.divisis : (r.divisi ? [r.divisi] : []), nik: r.nik ?? '' }); setModal({ mode: 'edit', data: r }) }
+  const openCreate = ()  => { setForm({ name: '', email: '', password: '', role: defaultRole, companyId: '', divisis: [], nik: '' }); setModal({ mode: 'create' }) }
   const set = f => e => setForm(v => ({ ...v, [f]: e.target.value }))
   const initials = (name = '') => name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
 
@@ -189,9 +203,14 @@ export default function Users() {
                 required
               />
             </div>
-            <div>
-              <label className="label">Divisi</label>
-              <input className="input" value={form.divisis} onChange={set('divisis')} placeholder="MARKETING, PRODUKSI, dll — pisahkan dengan koma untuk lebih dari satu" />
+            <div className="col-span-2">
+              <label className="label">Divisi <span className="text-slate-400 font-normal text-xs">(bisa lebih dari satu)</span></label>
+              <DivisiMultiSelect
+                value={form.divisis}
+                onChange={divisis => setForm(f => ({ ...f, divisis }))}
+                options={divisionOptions}
+                placeholder="Pilih divisi…"
+              />
             </div>
             <div>
               <label className="label">NIK</label>
