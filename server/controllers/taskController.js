@@ -439,6 +439,39 @@ class TaskController {
                         assignmentNote: a.assignmentNote,
                     })));
                 }
+
+                // Sub-tasks belong to the completed occurrence, not the new one —
+                // clone them onto nextTask reset to TODO so the next occurrence
+                // starts with the same checklist instead of an empty one.
+                const oldSubTasks = await Task.findAll({
+                    where: { parentTaskId: task.id },
+                    include: [{ model: TaskAssignee, as: 'assigneeLinks' }],
+                });
+                for (const sub of oldSubTasks) {
+                    const newSub = await Task.create({
+                        title: sub.title,
+                        description: sub.description,
+                        status: 'TODO',
+                        priority: sub.priority,
+                        dueDate: null,
+                        myDayDate: null,
+                        createdBy: sub.createdBy,
+                        companyId: sub.companyId,
+                        divisi: sub.divisi,
+                        listId: sub.listId,
+                        tags: sub.tags,
+                        recurrence: 'NONE',
+                        parentTaskId: nextTask.id,
+                    });
+                    if (sub.assigneeLinks && sub.assigneeLinks.length) {
+                        await TaskAssignee.bulkCreate(sub.assigneeLinks.map(a => ({
+                            taskId: newSub.id,
+                            userId: a.userId,
+                            assignmentStatus: a.assignmentStatus,
+                            assignmentNote: a.assignmentNote,
+                        })));
+                    }
+                }
             }
 
             const full = await Task.findByPk(task.id, {
