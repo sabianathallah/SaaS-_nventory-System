@@ -153,7 +153,12 @@ class TaskController {
             const view = req.query.view;
             let viewFilter = {};
             if (view === 'my_day') {
-                viewFilter = { myDayDate: new Date().toISOString().slice(0, 10) };
+                // Union of tasks explicitly pinned to today (myDayDate — manual
+                // add/toggle, or DAILY recurrence auto-sets it) AND ordinary
+                // tasks whose dueDate simply lands on today, so a task due
+                // today doesn't need a separate manual step to show up here.
+                const todayStr = new Date().toISOString().slice(0, 10);
+                viewFilter = { [Op.or]: [{ myDayDate: todayStr }, { dueDate: todayStr }] };
             } else if (view === 'important') {
                 viewFilter = { isImportant: true };
             } else if (view === 'assigned') {

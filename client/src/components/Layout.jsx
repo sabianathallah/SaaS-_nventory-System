@@ -660,7 +660,7 @@ export default function Layout({ children }) {
       </aside>
 
       {/* ── Main ─────────────────────────────────────────── */}
-      <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+      <div className="flex-1 flex flex-col overflow-hidden min-w-0 min-h-0">
         {/* Top bar */}
         <header className="h-14 bg-white border-b border-slate-200 flex items-center px-4 gap-3 flex-shrink-0 shadow-sm">
 
@@ -725,7 +725,7 @@ export default function Layout({ children }) {
         )}
 
         {/* Content */}
-        <main className="flex-1 overflow-y-auto">
+        <main className="flex-1 overflow-y-auto min-h-0">
           <div className="animate-fade-in">{children}</div>
         </main>
       </div>
