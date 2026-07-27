@@ -21,6 +21,7 @@ export function AuthProvider({ children }) {
           role: res.data.role ?? user.role,
           avatar: res.data.avatar ?? user.avatar ?? null,
           divisi: res.data.divisi ?? user.divisi ?? null,
+          divisis: res.data.divisis ?? user.divisis ?? [],
           permissions: res.data.permissions,
         }
         localStorage.setItem('user', JSON.stringify(updated))

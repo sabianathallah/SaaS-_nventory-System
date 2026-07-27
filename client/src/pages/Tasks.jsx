@@ -115,7 +115,7 @@ export default function Tasks() {
   })
   const activeList = activeListId ? (listsRes ?? []).find(l => String(l.id) === activeListId) : null
   const canManageActiveDivisi = !!activeDivisi && (
-    isSuperAdmin || isAdmin || hasPermission('tasks.manage') || hasPermission('tasks.edit') || user?.divisi === activeDivisi
+    isSuperAdmin || isAdmin || hasPermission('tasks.manage') || hasPermission('tasks.edit') || user?.divisi === activeDivisi || user?.divisis?.includes(activeDivisi)
   )
 
   const selectedTask = tasks.find(t => t.id === selectedId) || null

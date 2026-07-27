@@ -90,6 +90,7 @@ class LoginController {
                     companyId: user.companyId,
                     avatar: user.avatar ?? null,
                     divisi: user.divisi ?? null,
+                    divisis: user.divisis ?? [],
                     permissions,
                     company: user.company ? {
                         id: user.company.id,

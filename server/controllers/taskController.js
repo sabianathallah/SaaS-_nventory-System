@@ -12,6 +12,10 @@ const USER_ATTRS = ['id', 'name', 'email', 'divisi'];
 // Standing folder for tasks that apply to everyone (mandatory surveys,
 // company-wide announcements) rather than one division — see listDivisions().
 const GENERAL_DIVISI = 'Umum';
+// Standing folders that always show up in the Tasks landing grid regardless
+// of whether any user's divisi(s) already reference them — lets an admin
+// open/organize the folder before assigning anyone to that division.
+const STANDING_DIVISIONS = [GENERAL_DIVISI, 'HR'];
 const TASK_INCLUDE = [
     {
         model: User,
@@ -624,17 +628,23 @@ class TaskController {
     // everyone else only their own created/assigned tasks).
     static async listDivisions(req, res, next) {
         try {
-            const divisiRows = await User.findAll({
-                where: { ...companyFilter(req), divisi: { [Op.ne]: null } },
-                attributes: [[sequelize.fn('DISTINCT', sequelize.col('divisi')), 'divisi']],
+            // Users can belong to more than one divisi now (divisis JSON array) —
+            // flatten every element across all matching users, plus the legacy
+            // single `divisi` column for any row not yet carrying an array value.
+            const usersWithDivisi = await User.findAll({
+                where: companyFilter(req),
+                attributes: ['divisi', 'divisis'],
                 raw: true,
             });
-            const fromUsers = divisiRows.map(r => r.divisi).filter(d => d && d.trim() && d !== GENERAL_DIVISI).sort((a, b) => a.localeCompare(b));
-            // "Umum" is a standing folder for company-wide tasks (e.g. mandatory
-            // surveys/announcements) that don't belong to one division — always
-            // shown first, regardless of whether any user's divisi literally
-            // matches it.
-            const divisions = [GENERAL_DIVISI, ...fromUsers];
+            const seen = new Set();
+            for (const u of usersWithDivisi) {
+                if (u.divisi) seen.add(u.divisi);
+                for (const d of (Array.isArray(u.divisis) ? u.divisis : [])) seen.add(d);
+            }
+            const fromUsers = [...seen].filter(d => d && d.trim() && !STANDING_DIVISIONS.includes(d)).sort((a, b) => a.localeCompare(b));
+            // Standing folders (Umum, HR) are always shown first, regardless of
+            // whether any user's divisi(s) literally reference them.
+            const divisions = [...STANDING_DIVISIONS, ...fromUsers];
 
             const canViewAll = await userHasPermission(req, 'tasks.view');
             const ownFilter = canViewAll ? {} : {

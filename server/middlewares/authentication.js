@@ -23,7 +23,7 @@ const authentication = async (req, res, next) => {
 
         // Fetch fresh user data from database to get latest companyId
         const user = await User.findByPk(decoded.id || decoded.userId, {
-            attributes: ['id', 'email', 'role', 'companyId', 'name', 'isActive', 'avatar', 'divisi']
+            attributes: ['id', 'email', 'role', 'companyId', 'name', 'isActive', 'avatar', 'divisi', 'divisis']
         })
 
         if (!user) {
@@ -47,6 +47,7 @@ const authentication = async (req, res, next) => {
             name: user.name,
             avatar: user.avatar ?? null,
             divisi: user.divisi ?? null,
+            divisis: user.divisis ?? [],
         }
         next()
     } catch (err) {

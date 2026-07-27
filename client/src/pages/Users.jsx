@@ -44,7 +44,7 @@ export default function Users() {
   })
 
   const defaultRole = roles.find(r => r.name !== 'SUPER_ADMIN')?.name ?? ''
-  const [form, setForm] = useState({ name: '', email: '', password: '', role: defaultRole, companyId: '', divisi: '', nik: '' })
+  const [form, setForm] = useState({ name: '', email: '', password: '', role: defaultRole, companyId: '', divisis: '', nik: '' })
 
   const { data, isLoading } = useQuery({
     queryKey: ['users', { page, limit, name: search }],
@@ -63,6 +63,7 @@ export default function Users() {
       const payload = { ...d }
       if (!payload.password) delete payload.password
       if (!payload.companyId) delete payload.companyId
+      payload.divisis = payload.divisis ? payload.divisis.split(',').map(s => s.trim()).filter(Boolean) : []
       return modal?.data ? usersApi.update(modal.data.id, payload) : usersApi.create(payload)
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['users'] }); toast.success(modal?.data ? 'User diperbarui' : 'User dibuat'); setModal(null) },
@@ -75,8 +76,8 @@ export default function Users() {
     onError: e => toast.error(e.response?.data?.message || 'Error'),
   })
 
-  const openEdit   = (r) => { setForm({ name: r.name, email: r.email, password: '', role: r.role, companyId: r.companyId ?? '', divisi: r.divisi ?? '', nik: r.nik ?? '' }); setModal({ mode: 'edit', data: r }) }
-  const openCreate = ()  => { setForm({ name: '', email: '', password: '', role: defaultRole, companyId: '' }); setModal({ mode: 'create' }) }
+  const openEdit   = (r) => { setForm({ name: r.name, email: r.email, password: '', role: r.role, companyId: r.companyId ?? '', divisis: (r.divisis?.length ? r.divisis : (r.divisi ? [r.divisi] : [])).join(', '), nik: r.nik ?? '' }); setModal({ mode: 'edit', data: r }) }
+  const openCreate = ()  => { setForm({ name: '', email: '', password: '', role: defaultRole, companyId: '', divisis: '', nik: '' }); setModal({ mode: 'create' }) }
   const set = f => e => setForm(v => ({ ...v, [f]: e.target.value }))
   const initials = (name = '') => name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
 
@@ -108,7 +109,11 @@ export default function Users() {
         return (
           <div>
             <RoleBadge name={r.role} displayName={rd?.displayName ?? r.roleDisplayName ?? r.role} />
-            {r.divisi && <div className="text-[10px] text-slate-400 mt-0.5">{r.divisi}</div>}
+            {(r.divisis?.length ? r.divisis : (r.divisi ? [r.divisi] : [])).length > 0 && (
+              <div className="text-[10px] text-slate-400 mt-0.5">
+                {(r.divisis?.length ? r.divisis : [r.divisi]).join(', ')}
+              </div>
+            )}
           </div>
         )
       },
@@ -186,7 +191,7 @@ export default function Users() {
             </div>
             <div>
               <label className="label">Divisi</label>
-              <input className="input" value={form.divisi} onChange={set('divisi')} placeholder="MARKETING, PRODUKSI, dll (opsional)" />
+              <input className="input" value={form.divisis} onChange={set('divisis')} placeholder="MARKETING, PRODUKSI, dll — pisahkan dengan koma untuk lebih dari satu" />
             </div>
             <div>
               <label className="label">NIK</label>

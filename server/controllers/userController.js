@@ -6,6 +6,11 @@ const { paginate, buildFilter, paginatedResponse } = require('../helpers/queryHe
 const userCompanyFilter = (req) =>
     req.user?.role === 'SUPER_ADMIN' ? {} : { companyId: req.user?.companyId };
 
+const normalizeDivisis = (input) => {
+    const arr = Array.isArray(input) ? input : (input ? [input] : []);
+    return [...new Set(arr.map(d => String(d).trim()).filter(Boolean))];
+};
+
 const USER_INCLUDE = [
     { model: Company, as: 'company', attributes: ['id', 'name', 'logo'], required: false },
 ];
@@ -59,7 +64,13 @@ class UserController {
 
     static async create(req, res, next) {
         try {
-            const user = await User.create(req.body);
+            const payload = { ...req.body };
+            if (payload.divisis !== undefined) {
+                const divisis = normalizeDivisis(payload.divisis);
+                payload.divisis = divisis;
+                payload.divisi = divisis[0] || null;
+            }
+            const user = await User.create(payload);
             const { password, ...userWithoutPassword } = user.toJSON();
             res.status(201).json(userWithoutPassword);
         } catch (err) { next(err); }
@@ -75,7 +86,13 @@ class UserController {
             if (email     !== undefined) allowed.email  = email;
             if (role      !== undefined) allowed.role   = role;
             if (avatar    !== undefined) allowed.avatar = avatar;
-            if (req.body.divisi !== undefined) allowed.divisi = req.body.divisi?.trim() || null;
+            if (req.body.divisis !== undefined) {
+                const divisis = normalizeDivisis(req.body.divisis);
+                allowed.divisis = divisis;
+                allowed.divisi = divisis[0] || null;
+            } else if (req.body.divisi !== undefined) {
+                allowed.divisi = req.body.divisi?.trim() || null;
+            }
             if (req.body.nik    !== undefined) allowed.nik    = req.body.nik?.trim() || null;
             await user.update(allowed);
             const { password, ...userWithoutPassword } = user.toJSON();

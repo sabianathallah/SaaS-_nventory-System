@@ -182,6 +182,14 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.STRING(100),
       allowNull: true
     },
+    // Kept in sync as divisis[0] for old single-divisi code paths (reports,
+    // task/request defaulting) — divisis is the source of truth for access
+    // control, since a user can now belong to more than one.
+    divisis: {
+      type: DataTypes.JSON,
+      allowNull: false,
+      defaultValue: []
+    },
     isActive: {
       type: DataTypes.BOOLEAN,
       allowNull: false,

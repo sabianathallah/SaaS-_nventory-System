@@ -6,6 +6,7 @@ const { userHasPermission } = require('./permCheck');
 // company-wide task admin rights.
 async function canManageDivisi(req, divisi) {
     if (req.user.divisi && req.user.divisi === divisi) return true;
+    if (Array.isArray(req.user.divisis) && req.user.divisis.includes(divisi)) return true;
     if (req.user.role === 'SUPER_ADMIN' || req.user.role === 'COMPANY_ADMIN') return true;
     if (await userHasPermission(req, 'tasks.manage')) return true;
     if (await userHasPermission(req, 'tasks.edit')) return true;

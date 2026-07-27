@@ -44,7 +44,7 @@ export default function DivisionFolders({ onSelect }) {
                 {d.general ? <Megaphone size={22} className="text-white/90" /> : <FolderKanban size={22} className="text-white/90" />}
                 {d.general ? (
                   <span className="text-[10px] font-bold text-white/90 bg-white/20 px-2 py-0.5 rounded-full">Untuk Semua</span>
-                ) : d.divisi === user?.divisi && (
+                ) : (user?.divisis?.includes(d.divisi) || d.divisi === user?.divisi) && (
                   <span className="text-[10px] font-bold text-white/90 bg-white/20 px-2 py-0.5 rounded-full">Divisi Saya</span>
                 )}
               </div>
