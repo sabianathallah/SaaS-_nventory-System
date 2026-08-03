@@ -157,7 +157,7 @@ Segala biaya operasional yang berhubungan dengan kegiatan perusahaan akan digant
 **Prosedur Reimburse**
 1. Untuk pengeluaran dengan **nominal besar**, karyawan wajib mendapatkan **approval atasan** terlebih dahulu sebelum melakukan pembayaran.
 2. Karyawan melakukan pembayaran dan menyimpan semua bukti pembayaran (struk/invoice/nota) dengan jelas dan lengkap.
-3. Submit pengajuan reimburse melalui formulir per transaksi: https://forms.gle/wVu9M1Ra7yB1NZte9
+3. Submit pengajuan reimburse melalui formulir per transaksi: https://forms.gle/J4J5NZPtahCkP9JP8
 4. Batas waktu pengajuan maksimal **7 hari kerja** setelah tanggal transaksi.
 5. HR akan melakukan review dan verifikasi terhadap pengajuan.
 6. Setelah disetujui, proses pengiriman dana dilakukan maksimal 7-14 hari kerja.
