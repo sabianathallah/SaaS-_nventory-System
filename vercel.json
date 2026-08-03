@@ -1,0 +1,19 @@
+{
+  "buildCommand": "cd client && npm install && npm run build",
+  "outputDirectory": "client/dist",
+  "installCommand": "echo skip",
+  "headers": [
+    {
+      "source": "/assets/(.*)",
+      "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }]
+    },
+    {
+      "source": "/(.*)",
+      "headers": [{ "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }]
+    }
+  ],
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "https://backend-production-9be2.up.railway.app/$1" },
+    { "source": "/((?!api).*)", "destination": "/index.html" }
+  ]
+}

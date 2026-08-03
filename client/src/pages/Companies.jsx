@@ -1,15 +1,17 @@
 import { useEffect, useRef, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useSearchParams } from 'react-router-dom'
 import { companiesApi } from '../api'
 import PageHeader from '../components/PageHeader'
 import { Table, Pagination } from '../components/Table'
 import Modal from '../components/Modal'
 import SearchBar from '../components/SearchBar'
+import SearchableSelect from '../components/SearchableSelect'
 import toast from 'react-hot-toast'
 import { Plus, Pencil, Trash2, Building2, Upload, ImageIcon } from 'lucide-react'
 
 const MAX_LOGO_SIZE = 5 * 1024 * 1024
-const EMPTY = { name: '', slug: '', logo: null, logoPreview: '', status: 'active', subscriptionExpiresAt: '' }
+const EMPTY = { name: '', slug: '', logo: null, logoPreview: '', status: 'active', subscriptionExpiresAt: '', legalName: '', address: '', contactPhone: '', contactEmail: '' }
 
 const STATUS_BADGE = {
   active:    <span className="badge-green">Active</span>,
@@ -20,7 +22,10 @@ const STATUS_BADGE = {
 export default function Companies() {
   const qc = useQueryClient()
   const logoInputRef = useRef(null)
-  const [page, setPage]     = useState(1)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const page  = Number(searchParams.get('page')  || '1')
+  const limit = Number(searchParams.get('limit') || '10')
+  const setPage = (p) => setSearchParams(prev => { prev.set('page', String(p)); return prev }, { replace: true })
   const [search, setSearch] = useState('')
   const [modal, setModal]   = useState(null)
   const [form, setForm]     = useState(EMPTY)
@@ -32,24 +37,25 @@ export default function Companies() {
   }, [form.logoPreview])
 
   const { data, isLoading } = useQuery({
-    queryKey: ['companies', { page, name: search }],
-    queryFn:  () => companiesApi.list({ page, limit: 10, name: search }),
+    queryKey: ['companies', { page, limit, name: search }],
+    queryFn:  () => companiesApi.list({ page, limit, name: search }),
   })
 
   const save = useMutation({
     mutationFn: d => modal.data ? companiesApi.update(modal.data.id, d) : companiesApi.create(d),
-    onSuccess: () => { qc.invalidateQueries(['companies']); toast.success(modal.data ? 'Company updated' : 'Company created'); setModal(null) },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['companies'] }); toast.success(modal.data ? 'Company updated' : 'Company created'); setModal(null) },
     onError: e => toast.error(e.response?.data?.message || 'Error'),
   })
   const del = useMutation({
     mutationFn: id => companiesApi.remove(id),
-    onSuccess: () => { qc.invalidateQueries(['companies']); toast.success('Company deleted'); setModal(null) },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['companies'] }); toast.success('Company deleted'); setModal(null) },
     onError: e => toast.error(e.response?.data?.message || 'Error'),
   })
 
   const openEdit = (r) => {
     setForm({ name: r.name, slug: r.slug, logo: null, logoPreview: r.logo ?? '', status: r.status,
-      subscriptionExpiresAt: r.subscriptionExpiresAt ? r.subscriptionExpiresAt.slice(0, 10) : '' })
+      subscriptionExpiresAt: r.subscriptionExpiresAt ? r.subscriptionExpiresAt.slice(0, 10) : '',
+      legalName: r.legalName ?? '', address: r.address ?? '', contactPhone: r.contactPhone ?? '', contactEmail: r.contactEmail ?? '' })
     setModal({ mode: 'edit', data: r })
   }
 
@@ -79,8 +85,11 @@ export default function Companies() {
   const columns = [
     { key: 'name',    label: 'Perusahaan', render: r => (
       <div className="flex items-center gap-2.5">
-        <div className="w-8 h-8 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center flex-shrink-0">
-          <Building2 size={14} className="text-slate-400" />
+        <div className="w-10 h-10 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center flex-shrink-0 overflow-hidden">
+          {r.logo
+            ? <img src={r.logo} alt={r.name} className="w-full h-full object-contain p-1" />
+            : <Building2 size={14} className="text-slate-400" />
+          }
         </div>
         <div>
           <p className="font-semibold text-slate-800">{r.name}</p>
@@ -130,11 +139,16 @@ export default function Companies() {
             </div>
             <div>
               <label className="label">Status</label>
-              <select className="select" value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))}>
-                <option value="active">Active</option>
-                <option value="inactive">Inactive</option>
-                <option value="suspended">Suspended</option>
-              </select>
+              <SearchableSelect
+                value={form.status}
+                onChange={v => setForm(f => ({ ...f, status: v }))}
+                options={[
+                  { value: 'active', label: 'Active' },
+                  { value: 'inactive', label: 'Inactive' },
+                  { value: 'suspended', label: 'Suspended' },
+                ]}
+                placeholder="Pilih status…"
+              />
             </div>
             <div className="col-span-2">
               <label className="label">Logo</label>
@@ -159,6 +173,25 @@ export default function Companies() {
             <div className="col-span-2">
               <label className="label">Subscription Expires At</label>
               <input className="input" type="date" value={form.subscriptionExpiresAt} onChange={e => setForm(f => ({ ...f, subscriptionExpiresAt: e.target.value }))} />
+            </div>
+            <div className="col-span-2 pt-2 border-t border-slate-100">
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Data Badan Hukum (buat header Slip Gaji, dll)</p>
+            </div>
+            <div className="col-span-2">
+              <label className="label">Nama Badan Hukum</label>
+              <input className="input" value={form.legalName} onChange={e => setForm(f => ({ ...f, legalName: e.target.value }))} placeholder="CV Cipta Loka Indonesia" />
+            </div>
+            <div className="col-span-2">
+              <label className="label">Alamat</label>
+              <textarea className="input" rows={2} value={form.address} onChange={e => setForm(f => ({ ...f, address: e.target.value }))} placeholder="Jl. Sarikaso III No.5, Sarijadi, Kec. Sukasari, Kota Bandung, Jawa Barat 40151" />
+            </div>
+            <div>
+              <label className="label">Telepon</label>
+              <input className="input" value={form.contactPhone} onChange={e => setForm(f => ({ ...f, contactPhone: e.target.value }))} placeholder="085887799935" />
+            </div>
+            <div>
+              <label className="label">Email Kontak</label>
+              <input className="input" type="email" value={form.contactEmail} onChange={e => setForm(f => ({ ...f, contactEmail: e.target.value }))} placeholder="contact@prefacewearhouse.com" />
             </div>
           </div>
           <div className="flex gap-2 pt-2 border-t border-slate-100">

@@ -19,7 +19,7 @@ const isAdmin = async (req, res, next) => {
 
         // Case-insensitive role check - allow both SUPER_ADMIN and COMPANY_ADMIN
         const userRole = user.role.toUpperCase();
-        if (userRole !== 'SUPER_ADMIN' && userRole !== 'COMPANY_ADMIN' && userRole !== 'ADMIN') {
+        if (userRole !== 'SUPER_ADMIN' && userRole !== 'COMPANY_ADMIN') {
             return res.status(403).json({ 
                 message: 'Forbidden: Admin access required' 
             });

@@ -1,22 +1,19 @@
 'use strict';
 const express = require('express');
 const router  = express.Router();
-const IGController = require('../controllers/incomingGoodsController');
-const checkRoles   = require('../middlewares/checkRoles');
+const IGController      = require('../controllers/incomingGoodsController');
+const requirePermission = require('../middlewares/requirePermission');
+const requireCompany = require('../middlewares/requireCompany');
 
-const READ_ROLES   = checkRoles('OPERASIONAL','PRODUKSI','HEAD_PACKING','CEO','COMPANY_ADMIN','ADMIN');
-const OPS_ROLES    = checkRoles('OPERASIONAL','COMPANY_ADMIN','ADMIN');
+router.get('/',    requirePermission('packing.view'),     IGController.getAll);
+router.get('/:id', requirePermission('packing.view'),     IGController.getById);
+router.post('/',   requirePermission('packing.incoming'), requireCompany, IGController.create);
+router.put('/:id', requirePermission('packing.incoming'), IGController.update);
+router.delete('/:id', requirePermission('packing.incoming'), IGController.delete);
 
-router.get('/',    READ_ROLES, IGController.getAll);
-router.get('/:id', READ_ROLES, IGController.getById);
-router.post('/',   OPS_ROLES,  IGController.create);
-router.put('/:id', OPS_ROLES,  IGController.update);
-router.delete('/:id', OPS_ROLES, IGController.delete);
-
-router.put('/:id/items/:itemId', OPS_ROLES, IGController.updateItem);
-
-router.post('/:id/confirm-vendor',    OPS_ROLES, IGController.confirmVendor);
-router.post('/:id/notify-production', OPS_ROLES, IGController.notifyProduction);
-router.post('/:id/complete',          OPS_ROLES, IGController.complete);
+router.put('/:id/items/:itemId',      requirePermission('packing.incoming'), IGController.updateItem);
+router.post('/:id/confirm-vendor',    requirePermission('packing.incoming'), IGController.confirmVendor);
+router.post('/:id/notify-production', requirePermission('packing.incoming'), IGController.notifyProduction);
+router.post('/:id/complete',          requirePermission('packing.incoming'), IGController.complete);
 
 module.exports = router;

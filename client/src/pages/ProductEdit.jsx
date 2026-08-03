@@ -1,8 +1,8 @@
 import { useState, useRef, useEffect } from 'react'
-import { useNavigate, useParams, useSearchParams, Link } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
-  productsApi, categoriesApi, articlesApi,
+  productsApi, categoriesApi, articlesApi, subCategoriesApi,
   productVariantsApi, productSkusApi,
 } from '../api'
 import CreatableSelect from '../components/CreatableSelect'
@@ -11,13 +11,21 @@ import toast from 'react-hot-toast'
 import {
   ArrowLeft, Save, Trash2, Plus, X, ImageIcon, Upload,
   Loader2, RefreshCw, Hash, Layers, ChevronRight, Package,
-  AlertCircle, Check, SkipForward, QrCode, Pencil,
+  AlertCircle, Check, SkipForward, QrCode, Pencil, GripVertical,
 } from 'lucide-react'
+import {
+  DndContext, closestCenter, PointerSensor, useSensor, useSensors,
+} from '@dnd-kit/core'
+import {
+  SortableContext, horizontalListSortingStrategy, verticalListSortingStrategy,
+  useSortable, arrayMove,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 const MAX_IMAGE   = 5 * 1024 * 1024
-const EMPTY_FORM  = { name: '', unit: '', CategoryId: '', ArticleId: '', image: null, imageUrl: '' }
+const EMPTY_FORM  = { name: '', unit: '', CategoryId: '', ArticleId: '', SubCategoryId: '', image: null, imageUrl: '' }
 const DEFAULT_UNITS = ['pcs', 'unit'].map(u => ({ id: u, name: u }))
 
 function cartesian(types) {
@@ -96,28 +104,147 @@ function ImageUploader({ image, imageUrl, onChange, onClear }) {
 
 // ── Variant Builder ───────────────────────────────────────────────────────────
 
+function SortableOptionTag({ opt, typeId, onDelete, isDeleting }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: opt.id })
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    zIndex:  isDragging ? 50 : 'auto',
+  }
+  return (
+    <span
+      ref={setNodeRef}
+      style={style}
+      className="inline-flex items-center gap-1 pl-1.5 pr-1.5 py-1 rounded-full text-xs font-semibold bg-white border border-slate-200 text-slate-700 shadow-sm select-none"
+    >
+      <span
+        {...attributes}
+        {...listeners}
+        className="cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-400 px-0.5 touch-none"
+      >
+        <GripVertical size={10} />
+      </span>
+      {opt.value}
+      <button
+        type="button"
+        onClick={() => onDelete({ typeId, optionId: opt.id })}
+        disabled={isDeleting}
+        className="text-slate-300 hover:text-red-400 hover:bg-red-50 rounded-full p-0.5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+      >
+        {isDeleting ? <Loader2 size={9} className="animate-spin" /> : <X size={9} />}
+      </button>
+    </span>
+  )
+}
+
+function SortableTypeCard({ type, opts, addingOptFor, newOptValue, setAddingOptFor, setNewOptValue, createOption, deleteOption, deleteType, reorderOptions, sensors, deletingId }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: type.id })
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    zIndex:  isDragging ? 10 : 'auto',
+  }
+  return (
+    <div ref={setNodeRef} style={style} className="group flex items-start gap-2 p-4 rounded-xl border border-slate-100 bg-slate-50/60 hover:border-slate-200 transition-colors">
+      <span
+        {...attributes}
+        {...listeners}
+        className="cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-400 mt-0.5 pt-0.5 touch-none flex-shrink-0"
+      >
+        <GripVertical size={14} />
+      </span>
+      <div className="flex-1 min-w-0">
+        <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400 mb-2.5">{type.name}</p>
+        <div className="flex flex-wrap gap-1.5">
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={e => reorderOptions(type.id, e)}>
+            <SortableContext items={opts.map(o => o.id)} strategy={horizontalListSortingStrategy}>
+              {opts.map(opt => (
+                <SortableOptionTag key={opt.id} opt={opt} typeId={type.id} onDelete={deleteOption.mutate} isDeleting={deletingId === opt.id} />
+              ))}
+            </SortableContext>
+          </DndContext>
+
+          {addingOptFor === type.id ? (
+            <form className="inline-flex items-center gap-1.5" onSubmit={e => { e.preventDefault(); if (newOptValue.trim()) createOption.mutate({ typeId: type.id, value: newOptValue.trim() }) }}>
+              <input autoFocus value={newOptValue} onChange={e => setNewOptValue(e.target.value)} onKeyDown={e => { if (e.key === 'Escape') { setAddingOptFor(null); setNewOptValue('') } }} onBlur={() => { if (!newOptValue.trim()) setAddingOptFor(null) }} placeholder="Nama opsi…" className="px-2.5 py-1 text-xs rounded-full border border-brand/40 focus:outline-none focus:border-brand/70 bg-white w-28 shadow-sm" />
+              <button type="submit" disabled={!newOptValue.trim() || createOption.isPending} className="p-1.5 rounded-full bg-brand text-white disabled:opacity-40">{createOption.isPending ? <Loader2 size={10} className="animate-spin" /> : <Plus size={10} />}</button>
+              <button type="button" onClick={() => { setAddingOptFor(null); setNewOptValue('') }} className="p-1.5 rounded-full text-slate-300 hover:text-slate-500 hover:bg-slate-100"><X size={10} /></button>
+            </form>
+          ) : (
+            <button type="button" onClick={() => { setAddingOptFor(type.id); setNewOptValue('') }} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium text-slate-400 border border-dashed border-slate-300 hover:border-brand/50 hover:text-brand bg-transparent transition-colors">
+              <Plus size={10} /> tambah opsi
+            </button>
+          )}
+        </div>
+      </div>
+      <button type="button" onClick={() => { if (confirm(`Hapus tipe "${type.name}" beserta semua opsinya?`)) deleteType.mutate(type.id) }} className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-slate-300 hover:text-red-400 hover:bg-red-50 transition-all flex-shrink-0 mt-0.5"><Trash2 size={13} /></button>
+    </div>
+  )
+}
+
 function VariantBuilder({ productId }) {
   const qc = useQueryClient()
   const [addingType, setAddingType]     = useState(false)
   const [newTypeName, setNewTypeName]   = useState('')
   const [addingOptFor, setAddingOptFor] = useState(null)
   const [newOptValue, setNewOptValue]   = useState('')
+  const [localOptions, setLocalOptions] = useState({})
+  const [localTypes, setLocalTypes]     = useState([])
+  const [deletingId, setDeletingId]     = useState(null)
+
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
 
   const { data: types = [], isLoading } = useQuery({
     queryKey: ['variant-types', productId],
     queryFn:  () => productVariantsApi.getTypes(productId),
   })
 
-  const createType   = useMutation({ mutationFn: name => productVariantsApi.createType(productId, { name }), onSuccess: () => { qc.invalidateQueries(['variant-types', productId]); setAddingType(false); setNewTypeName('') }, onError: e => toast.error(e.response?.data?.message || 'Gagal') })
-  const deleteType   = useMutation({ mutationFn: tid  => productVariantsApi.deleteType(productId, tid), onSuccess: () => { qc.invalidateQueries(['variant-types', productId]); qc.invalidateQueries(['product-skus', productId]) }, onError: e => toast.error(e.response?.data?.message || 'Gagal') })
-  const createOption = useMutation({ mutationFn: ({ typeId, value }) => productVariantsApi.createOption(productId, typeId, { value }), onSuccess: () => { qc.invalidateQueries(['variant-types', productId]); setAddingOptFor(null); setNewOptValue('') }, onError: e => toast.error(e.response?.data?.message || 'Gagal') })
-  const deleteOption = useMutation({ mutationFn: ({ typeId, optionId }) => productVariantsApi.deleteOption(productId, typeId, optionId), onSuccess: () => { qc.invalidateQueries(['variant-types', productId]); qc.invalidateQueries(['product-skus', productId]) }, onError: e => toast.error(e.response?.data?.message || 'Gagal') })
+  useEffect(() => {
+    const map = {}
+    types.forEach(t => { map[t.id] = t.ProductVariantOptions ?? [] })
+    setLocalOptions(map)
+    setLocalTypes(types)
+  }, [types])
+
+  const createType    = useMutation({ mutationFn: name => productVariantsApi.createType(productId, { name }), onSuccess: () => { qc.invalidateQueries({ queryKey: ['variant-types', productId] }); setAddingType(false); setNewTypeName('') }, onError: e => toast.error(e.response?.data?.message || 'Gagal') })
+  const deleteType    = useMutation({ mutationFn: tid  => productVariantsApi.deleteType(productId, tid), onSuccess: () => { qc.invalidateQueries({ queryKey: ['variant-types', productId] }); qc.invalidateQueries({ queryKey: ['product-skus', productId] }) }, onError: e => toast.error(e.response?.data?.message || 'Gagal') })
+  const createOption  = useMutation({ mutationFn: ({ typeId, value }) => productVariantsApi.createOption(productId, typeId, { value }), onSuccess: () => { qc.invalidateQueries({ queryKey: ['variant-types', productId] }); setAddingOptFor(null); setNewOptValue('') }, onError: e => toast.error(e.response?.data?.message || 'Gagal') })
+  const deleteOption  = useMutation({ mutationFn: ({ typeId, optionId }) => { setDeletingId(optionId); return productVariantsApi.deleteOption(productId, typeId, optionId) }, onSuccess: () => { setDeletingId(null); qc.invalidateQueries({ queryKey: ['variant-types', productId] }); qc.invalidateQueries({ queryKey: ['product-skus', productId] }) }, onError: e => { setDeletingId(null); toast.error(e.response?.data?.message || 'Gagal') } })
+  const reorderOpts   = useMutation({ mutationFn: ({ typeId, order }) => productVariantsApi.reorderOptions(productId, typeId, order), onError: e => { toast.error('Gagal menyimpan urutan'); qc.invalidateQueries({ queryKey: ['variant-types', productId] }) } })
+  const reorderTypes  = useMutation({ mutationFn: order => productVariantsApi.reorderTypes(productId, order), onError: e => { toast.error('Gagal menyimpan urutan'); qc.invalidateQueries({ queryKey: ['variant-types', productId] }) } })
+
+  const handleOptionDragEnd = (typeId, event) => {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    setLocalOptions(prev => {
+      const opts      = prev[typeId] ?? []
+      const oldIdx    = opts.findIndex(o => o.id === active.id)
+      const newIdx    = opts.findIndex(o => o.id === over.id)
+      const reordered = arrayMove(opts, oldIdx, newIdx)
+      reorderOpts.mutate({ typeId, order: reordered.map(o => o.id) })
+      return { ...prev, [typeId]: reordered }
+    })
+  }
+
+  const handleTypeDragEnd = (event) => {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    setLocalTypes(prev => {
+      const oldIdx    = prev.findIndex(t => t.id === active.id)
+      const newIdx    = prev.findIndex(t => t.id === over.id)
+      const reordered = arrayMove(prev, oldIdx, newIdx)
+      reorderTypes.mutate(reordered.map(t => t.id))
+      return reordered
+    })
+  }
 
   if (isLoading) return <div className="flex items-center gap-2 text-sm text-slate-400 py-2"><Loader2 size={14} className="animate-spin" /> Memuat variant…</div>
 
   return (
     <div className="space-y-3">
-      {!types.length && !addingType && (
+      {!localTypes.length && !addingType && (
         <div className="text-center py-8 rounded-xl border-2 border-dashed border-slate-200">
           <Layers size={28} className="mx-auto text-slate-200 mb-2" />
           <p className="text-sm font-medium text-slate-400">Belum ada tipe variant</p>
@@ -125,33 +252,29 @@ function VariantBuilder({ productId }) {
         </div>
       )}
 
-      {types.map(type => (
-        <div key={type.id} className="group flex items-start gap-3 p-4 rounded-xl border border-slate-100 bg-slate-50/60 hover:border-slate-200 transition-colors">
-          <div className="flex-1 min-w-0">
-            <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400 mb-2.5">{type.name}</p>
-            <div className="flex flex-wrap gap-1.5">
-              {type.ProductVariantOptions?.map(opt => (
-                <span key={opt.id} className="inline-flex items-center gap-1 pl-3 pr-1.5 py-1 rounded-full text-xs font-semibold bg-white border border-slate-200 text-slate-700 shadow-sm">
-                  {opt.value}
-                  <button type="button" onClick={() => deleteOption.mutate({ typeId: type.id, optionId: opt.id })} className="text-slate-300 hover:text-red-400 hover:bg-red-50 rounded-full p-0.5 transition-colors"><X size={9} /></button>
-                </span>
-              ))}
-              {addingOptFor === type.id ? (
-                <form className="inline-flex items-center gap-1.5" onSubmit={e => { e.preventDefault(); if (newOptValue.trim()) createOption.mutate({ typeId: type.id, value: newOptValue.trim() }) }}>
-                  <input autoFocus value={newOptValue} onChange={e => setNewOptValue(e.target.value)} onKeyDown={e => { if (e.key === 'Escape') { setAddingOptFor(null); setNewOptValue('') } }} onBlur={() => { if (!newOptValue.trim()) setAddingOptFor(null) }} placeholder="Nama opsi…" className="px-2.5 py-1 text-xs rounded-full border border-brand/40 focus:outline-none focus:border-brand/70 bg-white w-28 shadow-sm" />
-                  <button type="submit" disabled={!newOptValue.trim() || createOption.isPending} className="p-1.5 rounded-full bg-brand text-white disabled:opacity-40">{createOption.isPending ? <Loader2 size={10} className="animate-spin" /> : <Plus size={10} />}</button>
-                  <button type="button" onClick={() => { setAddingOptFor(null); setNewOptValue('') }} className="p-1.5 rounded-full text-slate-300 hover:text-slate-500 hover:bg-slate-100"><X size={10} /></button>
-                </form>
-              ) : (
-                <button type="button" onClick={() => { setAddingOptFor(type.id); setNewOptValue('') }} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium text-slate-400 border border-dashed border-slate-300 hover:border-brand/50 hover:text-brand bg-transparent transition-colors">
-                  <Plus size={10} /> tambah opsi
-                </button>
-              )}
-            </div>
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleTypeDragEnd}>
+        <SortableContext items={localTypes.map(t => t.id)} strategy={verticalListSortingStrategy}>
+          <div className="space-y-2">
+            {localTypes.map(type => (
+              <SortableTypeCard
+                key={type.id}
+                type={type}
+                opts={localOptions[type.id] ?? type.ProductVariantOptions ?? []}
+                addingOptFor={addingOptFor}
+                newOptValue={newOptValue}
+                setAddingOptFor={setAddingOptFor}
+                setNewOptValue={setNewOptValue}
+                createOption={createOption}
+                deleteOption={deleteOption}
+                deleteType={deleteType}
+                reorderOptions={handleOptionDragEnd}
+                sensors={sensors}
+                deletingId={deletingId}
+              />
+            ))}
           </div>
-          <button type="button" onClick={() => { if (confirm(`Hapus tipe "${type.name}" beserta semua opsinya?`)) deleteType.mutate(type.id) }} className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-slate-300 hover:text-red-400 hover:bg-red-50 transition-all flex-shrink-0 mt-0.5"><Trash2 size={13} /></button>
-        </div>
-      ))}
+        </SortableContext>
+      </DndContext>
 
       {addingType ? (
         <form onSubmit={e => { e.preventDefault(); if (newTypeName.trim()) createType.mutate(newTypeName.trim()) }} className="flex items-center gap-2">
@@ -176,6 +299,31 @@ function VariantBuilder({ productId }) {
 
 const EMPTY_MANUAL = { sku_code: '', price: '', qty: '', variantOptionIds: [] }
 
+function SortableSkuRow({ sku, dirty, val, edit, saveRow, setQrSku, deleteSku, variantLabel }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: sku.id })
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    position: 'relative',
+    zIndex: isDragging ? 50 : 'auto',
+  }
+  return (
+    <tr ref={setNodeRef} style={style} className={`group transition-colors ${dirty(sku.id) ? 'bg-amber-50/50' : 'hover:bg-slate-50/60'} ${isDragging ? 'bg-white shadow-lg' : ''}`}>
+      <td className="td w-8">
+        <span {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-400 touch-none inline-flex pt-0.5">
+          <GripVertical size={13} />
+        </span>
+      </td>
+      <td className="td">{variantLabel(sku)}</td>
+      <td className="td"><input value={val(sku, 'sku_code')} onChange={e => edit(sku.id, 'sku_code', e.target.value)} onBlur={() => saveRow(sku)} className="font-mono text-xs w-full bg-transparent focus:bg-white border border-transparent focus:border-brand/30 rounded px-2 py-1 focus:outline-none transition-all hover:border-slate-200" /></td>
+      <td className="td"><input type="number" min="0" value={val(sku, 'price')} onChange={e => edit(sku.id, 'price', e.target.value)} onBlur={() => saveRow(sku)} className="w-full bg-transparent focus:bg-white border border-transparent focus:border-brand/30 rounded px-2 py-1 text-right tabular-nums focus:outline-none transition-all hover:border-slate-200" /></td>
+      <td className="td"><input type="number" min="0" value={val(sku, 'qty')} onChange={e => edit(sku.id, 'qty', e.target.value)} onBlur={() => saveRow(sku)} className="w-20 bg-transparent focus:bg-white border border-transparent focus:border-brand/30 rounded px-2 py-1 text-right tabular-nums focus:outline-none transition-all hover:border-slate-200 ml-auto block" /></td>
+      <td className="td"><div className="flex items-center justify-end gap-0.5 transition-opacity"><button type="button" onClick={() => setQrSku(sku)} className="p-1.5 rounded text-slate-400 hover:text-violet-500 hover:bg-violet-50 transition-all"><QrCode size={13} /></button><button type="button" onClick={() => { if (confirm('Hapus SKU ini?')) deleteSku.mutate(sku.id) }} className="opacity-0 group-hover:opacity-100 p-1.5 rounded text-slate-300 hover:text-red-400 hover:bg-red-50 transition-all"><Trash2 size={13} /></button></div></td>
+    </tr>
+  )
+}
+
 function SkuTable({ productId, productName }) {
   const qc = useQueryClient()
   const [edits, setEdits]           = useState({})
@@ -183,21 +331,42 @@ function SkuTable({ productId, productName }) {
   const [qrSku, setQrSku]           = useState(null)
   const [showManual, setShowManual] = useState(false)
   const [manual, setManual]         = useState(EMPTY_MANUAL)
+  const [localSkus, setLocalSkus]   = useState([])
+
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
 
   const { data: skus = [], isLoading } = useQuery({ queryKey: ['product-skus', productId], queryFn: () => productSkusApi.list(productId) })
   const { data: types = [] }           = useQuery({ queryKey: ['variant-types', productId], queryFn: () => productVariantsApi.getTypes(productId) })
 
+  useEffect(() => { setLocalSkus(skus) }, [skus])
+
   const updateSku = useMutation({
     mutationFn: ({ skuId, data }) => productSkusApi.update(productId, skuId, data),
-    onSuccess: (_, { skuId }) => { qc.invalidateQueries(['product-skus', productId]); setEdits(p => { const n = { ...p }; delete n[skuId]; return n }) },
+    onSuccess: (_, { skuId }) => { qc.invalidateQueries({ queryKey: ['product-skus', productId] }); setEdits(p => { const n = { ...p }; delete n[skuId]; return n }) },
     onError: e => toast.error(e.response?.data?.message || 'Gagal menyimpan SKU'),
   })
-  const deleteSku = useMutation({ mutationFn: sid => productSkusApi.delete(productId, sid), onSuccess: () => qc.invalidateQueries(['product-skus', productId]), onError: e => toast.error(e.response?.data?.message || 'Gagal') })
+  const deleteSku = useMutation({ mutationFn: sid => productSkusApi.delete(productId, sid), onSuccess: () => qc.invalidateQueries({ queryKey: ['product-skus', productId] }), onError: e => toast.error(e.response?.data?.message || 'Gagal') })
   const createSku = useMutation({
     mutationFn: data => productSkusApi.create(productId, data),
-    onSuccess: () => { qc.invalidateQueries(['product-skus', productId]); setShowManual(false); setManual(EMPTY_MANUAL); toast.success('SKU ditambahkan') },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['product-skus', productId] }); setShowManual(false); setManual(EMPTY_MANUAL); toast.success('SKU ditambahkan') },
     onError: e => toast.error(e.response?.data?.message || 'Gagal menambah SKU'),
   })
+  const reorderSkus = useMutation({
+    mutationFn: order => productSkusApi.reorder(productId, order),
+    onError: () => { toast.error('Gagal menyimpan urutan SKU'); qc.invalidateQueries({ queryKey: ['product-skus', productId] }) },
+  })
+
+  const handleSkuDragEnd = (event) => {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    setLocalSkus(prev => {
+      const oldIdx    = prev.findIndex(s => s.id === active.id)
+      const newIdx    = prev.findIndex(s => s.id === over.id)
+      const reordered = arrayMove(prev, oldIdx, newIdx)
+      reorderSkus.mutate(reordered.map(s => s.id))
+      return reordered
+    })
+  }
 
   const edit  = (sid, f, v) => setEdits(p => ({ ...p, [sid]: { ...p[sid], [f]: v } }))
   const dirty = (sid)       => !!(edits[sid] && Object.keys(edits[sid]).length)
@@ -213,7 +382,7 @@ function SkuTable({ productId, productName }) {
     if (!hasVariants) {
       if (skus.length > 0) { toast('SKU sudah ada', { icon: '✓' }); return }
       setGenerating(true)
-      try { await productSkusApi.create(productId, {}); qc.invalidateQueries(['product-skus', productId]); toast.success('SKU dibuat') }
+      try { await productSkusApi.create(productId, {}); qc.invalidateQueries({ queryKey: ['product-skus', productId] }); toast.success('SKU dibuat') }
       catch (e) { toast.error(e.response?.data?.message || 'Gagal') }
       finally { setGenerating(false) }
       return
@@ -222,7 +391,7 @@ function SkuTable({ productId, productName }) {
     const missing = combos.filter(c => !existingKeys.has(c.map(o => o.optionId).sort().join(',')))
     if (!missing.length) { toast('Semua kombinasi SKU sudah ada', { icon: '✓' }); return }
     setGenerating(true)
-    try { for (const c of missing) await productSkusApi.create(productId, { variantOptionIds: c.map(o => o.optionId) }); qc.invalidateQueries(['product-skus', productId]); toast.success(`${missing.length} SKU baru dibuat`) }
+    try { for (const c of missing) await productSkusApi.create(productId, { variantOptionIds: c.map(o => o.optionId) }); qc.invalidateQueries({ queryKey: ['product-skus', productId] }); toast.success(`${missing.length} SKU baru dibuat`) }
     catch (e) { toast.error(e.response?.data?.message || 'Gagal') }
     finally { setGenerating(false) }
   }
@@ -285,22 +454,20 @@ function SkuTable({ productId, productName }) {
       ) : skus.length > 0 ? (
         <div className="rounded-xl border border-slate-200 overflow-hidden">
           <table className="w-full text-sm">
-            <thead><tr><th className="th">Variant</th><th className="th">SKU Code</th><th className="th text-right">Harga (Rp)</th><th className="th text-right">Stok</th><th className="th w-20" /></tr></thead>
-            <tbody className="divide-y divide-slate-100">
-              {skus.map(sku => (
-                <tr key={sku.id} className={`group transition-colors ${dirty(sku.id) ? 'bg-amber-50/50' : 'hover:bg-slate-50/60'}`}>
-                  <td className="td">{variantLabel(sku)}</td>
-                  <td className="td"><input value={val(sku, 'sku_code')} onChange={e => edit(sku.id, 'sku_code', e.target.value)} onBlur={() => saveRow(sku)} className="font-mono text-xs w-full bg-transparent focus:bg-white border border-transparent focus:border-brand/30 rounded px-2 py-1 focus:outline-none transition-all hover:border-slate-200" /></td>
-                  <td className="td"><input type="number" min="0" value={val(sku, 'price')} onChange={e => edit(sku.id, 'price', e.target.value)} onBlur={() => saveRow(sku)} className="w-full bg-transparent focus:bg-white border border-transparent focus:border-brand/30 rounded px-2 py-1 text-right tabular-nums focus:outline-none transition-all hover:border-slate-200" /></td>
-                  <td className="td"><input type="number" min="0" value={val(sku, 'qty')} onChange={e => edit(sku.id, 'qty', e.target.value)} onBlur={() => saveRow(sku)} className="w-20 bg-transparent focus:bg-white border border-transparent focus:border-brand/30 rounded px-2 py-1 text-right tabular-nums focus:outline-none transition-all hover:border-slate-200 ml-auto block" /></td>
-                  <td className="td"><div className="flex items-center justify-end gap-0.5 transition-opacity"><button type="button" onClick={() => setQrSku(sku)} className="p-1.5 rounded text-slate-400 hover:text-violet-500 hover:bg-violet-50 transition-all"><QrCode size={13} /></button><button type="button" onClick={() => { if (confirm('Hapus SKU ini?')) deleteSku.mutate(sku.id) }} className="opacity-0 group-hover:opacity-100 p-1.5 rounded text-slate-300 hover:text-red-400 hover:bg-red-50 transition-all"><Trash2 size={13} /></button></div></td>
-                </tr>
-              ))}
-            </tbody>
+            <thead><tr><th className="th w-8" /><th className="th">Variant</th><th className="th">SKU Code</th><th className="th text-right">Harga (Rp)</th><th className="th text-right">Stok</th><th className="th w-20" /></tr></thead>
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleSkuDragEnd}>
+              <SortableContext items={localSkus.map(s => s.id)} strategy={verticalListSortingStrategy}>
+                <tbody className="divide-y divide-slate-100">
+                  {localSkus.map(sku => (
+                    <SortableSkuRow key={sku.id} sku={sku} dirty={dirty} val={val} edit={edit} saveRow={saveRow} setQrSku={setQrSku} deleteSku={deleteSku} variantLabel={variantLabel} />
+                  ))}
+                </tbody>
+              </SortableContext>
+            </DndContext>
             {skus.length > 1 && (
               <tfoot className="bg-slate-50/80 border-t border-slate-200">
                 <tr>
-                  <td colSpan={2} className="px-4 py-2.5 text-xs font-semibold text-slate-500">Total</td>
+                  <td colSpan={3} className="px-4 py-2.5 text-xs font-semibold text-slate-500">Total</td>
                   <td className="px-4 py-2.5 text-xs font-bold text-slate-700 text-right tabular-nums">Rp {skus.reduce((s, k) => s + Number(k.price || 0), 0).toLocaleString('id-ID')}</td>
                   <td className="px-4 py-2.5 text-xs font-bold text-slate-700 text-right tabular-nums">{totalQty.toLocaleString('id-ID')}</td>
                   <td />
@@ -343,24 +510,26 @@ export default function ProductEdit() {
   useEffect(() => {
     if (!product || isNew) return
     const unit = product.unit || ''
-    setForm({ name: product.name || '', unit, CategoryId: product.CategoryId ?? '', ArticleId: product.ArticleId ?? '', image: null, imageUrl: product.imageUrl || '' })
+    setForm({ name: product.name || '', unit, CategoryId: product.CategoryId ?? '', ArticleId: product.ArticleId ?? '', SubCategoryId: product.SubCategoryId ?? '', image: null, imageUrl: product.imageUrl || '' })
     if (unit && !DEFAULT_UNITS.some(u => u.id === unit)) setUnitOptions(prev => prev.some(u => u.id === unit) ? prev : [...prev, { id: unit, name: unit }])
   }, [product?.id])
 
   const { data: cats } = useQuery({ queryKey: ['categories', { limit: 200 }], queryFn: () => categoriesApi.list({ limit: 200 }) })
   const { data: arts } = useQuery({ queryKey: ['articles',   { limit: 200 }], queryFn: () => articlesApi.list({ limit: 200 }) })
-  const catOptions = cats?.data ?? []
-  const artOptions = arts?.data ?? []
+  const { data: subCats } = useQuery({ queryKey: ['sub-categories', { limit: 200 }], queryFn: () => subCategoriesApi.list({ limit: 200 }) })
+  const catOptions    = cats?.data ?? []
+  const artOptions    = arts?.data ?? []
+  const subCatOptions = subCats?.data ?? []
 
   const save = useMutation({
     mutationFn: (data) => isNew ? productsApi.create(data) : productsApi.update(id, data),
     onSuccess: (saved) => {
-      qc.invalidateQueries(['products'])
+      qc.invalidateQueries({ queryKey: ['products'] })
       if (isNew) {
         toast.success('Produk berhasil dibuat')
         navigate(`/products/${saved.id}/edit?setup=true`, { replace: true })
       } else {
-        qc.invalidateQueries(['product', id])
+        qc.invalidateQueries({ queryKey: ['product', id] })
         toast.success('Perubahan disimpan')
         navigate(`/products/${id}`)
       }
@@ -370,18 +539,23 @@ export default function ProductEdit() {
 
   const saveSimpleSku = useMutation({
     mutationFn: () => productSkusApi.create(id, { price: Number(simpleForm.price) || 0, qty: Number(simpleForm.qty) || 0 }),
-    onSuccess: () => { qc.invalidateQueries(['products']); toast.success('Produk berhasil disimpan'); navigate(`/products/${id}`) },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['products'] }); toast.success('Produk berhasil disimpan'); navigate(`/products/${id}`) },
     onError: e => toast.error(e.response?.data?.message || 'Gagal menyimpan harga'),
   })
 
   const createCategory = useMutation({
     mutationFn: name => categoriesApi.create({ name }),
-    onSuccess: (c) => { qc.invalidateQueries(['categories']); toast.success(`Kategori "${c.name}" ditambahkan`); return c },
+    onSuccess: (c) => { qc.invalidateQueries({ queryKey: ['categories'] }); toast.success(`Kategori "${c.name}" ditambahkan`); return c },
     onError: e => { toast.error(e.response?.data?.message || 'Gagal'); throw e },
   })
   const createArticle = useMutation({
     mutationFn: name => articlesApi.create({ name }),
-    onSuccess: (a) => { qc.invalidateQueries(['articles']); toast.success(`Artikel "${a.name}" ditambahkan`); return a },
+    onSuccess: (a) => { qc.invalidateQueries({ queryKey: ['articles'] }); toast.success(`Koleksi "${a.name}" ditambahkan`); return a },
+    onError: e => { toast.error(e.response?.data?.message || 'Gagal'); throw e },
+  })
+  const createSubCategory = useMutation({
+    mutationFn: name => subCategoriesApi.create({ name }),
+    onSuccess: (s) => { qc.invalidateQueries({ queryKey: ['sub-categories'] }); toast.success(`Sub kategori "${s.name}" ditambahkan`); return s },
     onError: e => { toast.error(e.response?.data?.message || 'Gagal'); throw e },
   })
 
@@ -393,6 +567,7 @@ export default function ProductEdit() {
     setCatError(false)
     const payload = { ...form }
     if (!payload.ArticleId) payload.ArticleId = null
+    if (!payload.SubCategoryId) payload.SubCategoryId = null
     if (!isNew && !payload.image && payload.imageUrl === (product?.imageUrl || '')) delete payload.imageUrl
     save.mutate(payload)
   }
@@ -407,9 +582,9 @@ export default function ProductEdit() {
       {/* ── Header ──────────────────────────────────────────────────── */}
       <div className="sticky top-0 z-20 bg-white border-b border-slate-200 shadow-sm">
         <div className="flex items-center gap-4 px-6 h-14">
-          <Link to={backPath} className="flex items-center gap-1.5 text-sm text-slate-400 hover:text-slate-700 transition-colors flex-shrink-0">
+          <button onClick={() => navigate(-1)} className="flex items-center gap-1.5 text-sm text-slate-400 hover:text-slate-700 transition-colors flex-shrink-0">
             <ArrowLeft size={15} /> {isNew ? 'Products' : 'Detail Produk'}
-          </Link>
+          </button>
           <ChevronRight size={14} className="text-slate-200" />
           <h1 className="text-sm font-bold text-slate-800 flex-1 truncate">{pageTitle}</h1>
 
@@ -487,7 +662,7 @@ export default function ProductEdit() {
         {/* Normal edit (not setup) */}
         {!isSetup && (
           <>
-            <Section icon={Package} title="Informasi Produk" subtitle="Nama, kategori, artikel, dan foto produk">
+            <Section icon={Package} title="Informasi Produk" subtitle="Nama, kategori, koleksi, dan foto produk">
               <form id="product-form" onSubmit={handleSubmit}>
                 <div className="grid grid-cols-3 gap-6">
                   <div className="col-span-1">
@@ -500,8 +675,9 @@ export default function ProductEdit() {
                       <input autoFocus={isNew} required className="input" placeholder="Masukkan nama produk" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
                     </div>
                     <CreatableSelect label="Unit / Satuan" required error={unitError} value={form.unit} onChange={val => { setForm(f => ({ ...f, unit: val })); setUnitError(false) }} options={unitOptions} placeholder="Pilih atau buat satuan…" createLabel="Satuan Baru" onCreateNew={async name => { const o = { id: name, name }; setUnitOptions(p => [...p, o]); return o }} />
-                    <CreatableSelect label="Kategori" required error={catError} value={form.CategoryId} onChange={val => { setForm(f => ({ ...f, CategoryId: val })); setCatError(false) }} options={catOptions} placeholder="Pilih atau buat kategori…" createLabel="Add New Category" onCreateNew={name => createCategory.mutateAsync(name)} />
-                    <CreatableSelect label="Artikel (opsional)" value={form.ArticleId} onChange={artId => setForm(f => ({ ...f, ArticleId: artId }))} options={artOptions} placeholder="Pilih atau buat artikel…" createLabel="Add New Article" onCreateNew={name => createArticle.mutateAsync(name)} />
+                    <CreatableSelect label="Kategori" required error={catError} value={form.CategoryId} onChange={val => { setForm(f => ({ ...f, CategoryId: val })); setCatError(false) }} options={catOptions} placeholder="Pilih atau buat kategori…" createLabel="Tambah Kategori" onCreateNew={name => createCategory.mutateAsync(name)} />
+                    <CreatableSelect label="Koleksi (opsional)" value={form.ArticleId} onChange={artId => setForm(f => ({ ...f, ArticleId: artId }))} options={artOptions} placeholder="Pilih atau buat koleksi…" createLabel="Add New Koleksi" onCreateNew={name => createArticle.mutateAsync(name)} />
+                    <CreatableSelect label="Sub Kategori (opsional)" value={form.SubCategoryId} onChange={val => setForm(f => ({ ...f, SubCategoryId: val }))} options={subCatOptions} placeholder="Pilih atau buat sub kategori…" createLabel="Tambah Sub Kategori" onCreateNew={name => createSubCategory.mutateAsync(name)} />
                   </div>
                 </div>
               </form>

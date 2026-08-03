@@ -1,12 +1,15 @@
 'use strict';
 const express = require('express');
-const router = express.Router();
-const CategoryController = require('../controllers/categoryController');
+const router  = express.Router();
+const C       = require('../controllers/categoryController');
+const rp             = require('../middlewares/requirePermission');
+const requireCompany = require('../middlewares/requireCompany');
 
-router.get('/', CategoryController.getAll);
-router.get('/:id', CategoryController.getById);
-router.post('/', CategoryController.create);
-router.put('/:id', CategoryController.update);
-router.delete('/:id', CategoryController.delete);
+// GET is open — categories are needed as dropdown options in product forms
+router.get('/',    C.getAll);
+router.get('/:id', C.getById);
+router.post('/',   rp('inventory.manage'), requireCompany, C.create);
+router.put('/:id', rp('inventory.manage'), C.update);
+router.delete('/:id', rp('inventory.manage'), C.delete);
 
 module.exports = router;

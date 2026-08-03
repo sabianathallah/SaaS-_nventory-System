@@ -1,11 +1,11 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { dashboardApi, movementsApi } from '../api'
+import { dashboardApi, movementsApi, warehousesApi, channelsApi, skuChannelStocksApi } from '../api'
 import { useAuth } from '../context/AuthContext'
 import {
   Package, BoxesIcon, Wallet, Warehouse,
   ChevronDown, ChevronRight, Tag, TrendingUp,
-  ArrowUpRight, ArrowDownRight, LayoutGrid, ChevronLeft,
+  ArrowUpRight, ArrowDownRight, LayoutGrid, ChevronLeft, Megaphone,
 } from 'lucide-react'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip,
@@ -116,7 +116,7 @@ function WarehouseArticleGroup({ warehouse, rows }) {
         <div className="flex items-center gap-2">
           <span className="text-sm font-bold tabular-nums text-slate-800">{fmtNum(warehouse.totalStock)}</span>
           <span className="text-xs text-slate-400">unit</span>
-          <span className="badge-muted text-[10px]">{articles.length} artikel</span>
+          <span className="badge-muted text-[10px]">{articles.length} koleksi</span>
         </div>
       </button>
 
@@ -219,20 +219,56 @@ const ART_PER_PAGE = 4
 const WH_PER_PAGE  = 2
 
 export default function Dashboard() {
-  const { user } = useAuth()
+  const { user, hasPermission } = useAuth()
   const [artPage, setArtPage] = useState(0)
   const [whPage,  setWhPage]  = useState(0)
+  const [selectedWh, setSelectedWh] = useState('')
+
+  const canViewStock     = hasPermission('dashboard.view_stock')
+  const canViewValue     = hasPermission('dashboard.view_value')
+  const canViewAnalytics = hasPermission('dashboard.view_analytics')
+  const canViewMovements = hasPermission('dashboard.view_movements')
+
+  const { data: warehouses } = useQuery({
+    queryKey: ['warehouses', { limit: 100 }],
+    queryFn:  () => warehousesApi.list({ limit: 100 }),
+  })
 
   const { data: stats, isLoading } = useQuery({
-    queryKey: ['dashboard-stats'],
-    queryFn:  dashboardApi.getStats,
+    queryKey: ['dashboard-stats', { warehouseId: selectedWh || undefined }],
+    queryFn:  () => dashboardApi.getStats(selectedWh ? { warehouseId: selectedWh } : undefined),
     staleTime: 30_000,
   })
 
   const { data: movements } = useQuery({
     queryKey: ['movements', { limit: 10 }],
     queryFn:  () => movementsApi.list({ limit: 10 }),
+    enabled:  canViewMovements,
   })
+
+  const { data: channels } = useQuery({
+    queryKey: ['channels', { limit: 200 }],
+    queryFn:  () => channelsApi.list({ limit: 200 }),
+    enabled:  canViewAnalytics,
+  })
+  const { data: allChannelStocks, isLoading: channelStocksLoading } = useQuery({
+    queryKey: ['sku-channel-stocks', 'all'],
+    queryFn:  () => skuChannelStocksApi.list({}),
+    enabled:  canViewAnalytics,
+  })
+
+  // Berapa artikel (produk unik) & SKU yang publish per channel — tanpa qty,
+  // cuma hitungan, dihitung dari SkuChannelStock yang isListed=true.
+  const publishByChannel = useMemo(() => {
+    const activeChannels = (channels?.data ?? []).filter(c => c.isActive)
+    const listedRows = (allChannelStocks ?? []).filter(s => s.isListed)
+    return activeChannels.map(c => {
+      const rows = listedRows.filter(s => s.ChannelId === c.id)
+      const skuIds     = new Set(rows.map(r => r.ProductSKUId))
+      const articleIds = new Set(rows.map(r => r.ProductSKU?.ProductId).filter(Boolean))
+      return { id: c.id, name: c.name, articleCount: articleIds.size, skuCount: skuIds.size }
+    })
+  }, [channels, allChannelStocks])
 
   const {
     totalProducts = 0,
@@ -269,53 +305,57 @@ export default function Dashboard() {
     <div className="px-6 py-6 max-w-screen-xl mx-auto space-y-6">
 
       {/* ── Welcome ─────────────────────────────────────────── */}
-      <div className="flex items-start justify-between">
+      <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
           <h2 className="text-xl font-bold text-slate-800">
             {greeting()}, {user?.name?.split(' ')[0]} 👋
           </h2>
           <p className="text-sm text-slate-400 mt-0.5">Ringkasan inventaris terkini</p>
         </div>
-        <div className="text-xs text-slate-400 font-mono bg-white border border-slate-200 px-3 py-1.5 rounded-lg flex-shrink-0">
-          {new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <select
+            value={selectedWh}
+            onChange={e => { setSelectedWh(e.target.value); setArtPage(0); setWhPage(0) }}
+            className="input text-sm w-44"
+          >
+            <option value="">Semua Gudang</option>
+            {(warehouses?.data ?? []).map(w => (
+              <option key={w.id} value={w.id}>{w.name}</option>
+            ))}
+          </select>
+          <div className="text-xs text-slate-400 font-mono bg-white border border-slate-200 px-3 py-1.5 rounded-lg">
+            {new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+          </div>
         </div>
       </div>
 
       {/* ── Top stats ───────────────────────────────────────── */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <StatCard
-          label="Total Produk"
-          value={fmtNum(totalProducts)}
-          icon={Package}
-          loading={isLoading}
-        />
-        <StatCard
-          label="Total Stock"
-          value={fmtNum(totalStock)}
-          sub="unit · dari semua SKU"
-          icon={BoxesIcon}
-          accent="#3B82F6"
-          loading={isLoading}
-        />
-        <StatCard
-          label="Total Nilai Inventaris"
-          value={fmtRp(totalValue)}
-          sub={isLoading ? '' : fmtRpFull(totalValue)}
-          icon={Wallet}
-          accent="#10B981"
-          loading={isLoading}
-        />
-      </div>
+      {(() => {
+        const count = 1 + (canViewStock ? 1 : 0) + (canViewValue ? 1 : 0)
+        const cols  = count === 3 ? 'sm:grid-cols-3' : count === 2 ? 'sm:grid-cols-2' : ''
+        return (
+          <div className={`grid grid-cols-1 gap-4 ${cols}`}>
+            <StatCard label="Total Produk" value={fmtNum(totalProducts)} icon={Package} loading={isLoading} />
+            {canViewStock && (
+              <StatCard label="Total Stock" value={fmtNum(totalStock)} sub={selectedWh ? `unit · ${warehouses?.data?.find(w => String(w.id) === String(selectedWh))?.name ?? ''}` : 'unit · semua gudang'} icon={BoxesIcon} accent="#3B82F6" loading={isLoading} />
+            )}
+            {canViewValue && (
+              <StatCard label="Nilai Inventaris" value={fmtRp(totalValue)} sub={isLoading ? '' : `${fmtRpFull(totalValue)} · berdasarkan harga SKU`} icon={Wallet} accent="#10B981" loading={isLoading} />
+            )}
+          </div>
+        )
+      })()}
+
 
       {/* ── Middle: Article breakdown + Warehouse chart ─────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      {canViewAnalytics && <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
 
-        {/* Stock & Value per Artikel */}
+        {/* Stock & Value per Koleksi */}
         <div className="card p-5">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <Tag size={14} className="text-slate-500" />
-              <h3 className="text-sm font-bold text-slate-800">Stock & Nilai per Artikel</h3>
+              <h3 className="text-sm font-bold text-slate-800">Stock & Nilai per Koleksi</h3>
             </div>
             {stockByArticle.length > 0 && (
               <span className="text-[10px] text-slate-400 tabular-nums">
@@ -329,7 +369,7 @@ export default function Dashboard() {
               {[1,2,3,4].map(i => <div key={i} className="h-10 bg-slate-100 rounded-lg animate-pulse" />)}
             </div>
           ) : stockByArticle.length === 0 ? (
-            <p className="text-sm text-slate-300 text-center py-8">Belum ada data artikel</p>
+            <p className="text-sm text-slate-300 text-center py-8">Belum ada data koleksi</p>
           ) : (
             <>
               <div className="divide-y divide-slate-50">
@@ -344,7 +384,7 @@ export default function Dashboard() {
                         </div>
                         <div className="text-right flex-shrink-0">
                           <p className="text-sm font-bold tabular-nums text-slate-800">{fmtNum(art.totalStock)} <span className="text-xs font-normal text-slate-400">unit</span></p>
-                          <p className="text-xs font-semibold text-emerald-600">{fmtRp(art.totalValue)}</p>
+                          {canViewValue && <p className="text-xs font-semibold text-emerald-600">{fmtRp(art.totalValue)}</p>}
                         </div>
                       </div>
                       <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
@@ -450,16 +490,49 @@ export default function Dashboard() {
             </>
           )}
         </div>
-      </div>
+      </div>}
+
+      {/* ── Publikasi per Channel ─────────────────────────────── */}
+      {canViewAnalytics && (
+        <div className="card p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <Megaphone size={14} className="text-slate-500" />
+            <h3 className="text-sm font-bold text-slate-800">Publikasi per Channel</h3>
+          </div>
+
+          {channelStocksLoading ? (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {[1, 2, 3].map(i => <div key={i} className="h-16 bg-slate-100 rounded-lg animate-pulse" />)}
+            </div>
+          ) : publishByChannel.length === 0 ? (
+            <p className="text-sm text-slate-300 text-center py-8">Belum ada channel aktif</p>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {publishByChannel.map((c, i) => (
+                <div key={c.id} className="flex items-center gap-3 p-3 rounded-lg border border-slate-100 bg-slate-50/50">
+                  <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: PALETTE[i % PALETTE.length] }} />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-slate-700 truncate mb-1">{c.name}</p>
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs text-slate-500"><span className="font-bold text-slate-800 tabular-nums">{fmtNum(c.articleCount)}</span> Artikel</span>
+                      <span className="text-xs text-slate-500"><span className="font-bold text-slate-800 tabular-nums">{fmtNum(c.skuCount)}</span> SKU</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ── Bottom: Warehouse × Article + Movements ─────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+      {(canViewAnalytics || canViewMovements) && <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
 
         {/* Warehouse × Article breakdown */}
-        <div className="lg:col-span-3 card p-5">
+        {canViewAnalytics && <div className="lg:col-span-3 card p-5">
           <div className="flex items-center gap-2 mb-4">
             <LayoutGrid size={14} className="text-slate-500" />
-            <h3 className="text-sm font-bold text-slate-800">Breakdown Stock per Gudang × Artikel</h3>
+            <h3 className="text-sm font-bold text-slate-800">Breakdown Stock per Gudang × Koleksi</h3>
           </div>
 
           {isLoading ? (
@@ -472,7 +545,7 @@ export default function Dashboard() {
             </div>
           ) : (
             <div>
-              <p className="text-xs text-slate-400 mb-3">Klik gudang untuk melihat breakdown per artikel</p>
+              <p className="text-xs text-slate-400 mb-3">Klik gudang untuk melihat breakdown per koleksi</p>
               {warehouseGroups.map(wh => (
                 <WarehouseArticleGroup
                   key={wh.warehouseId}
@@ -482,10 +555,10 @@ export default function Dashboard() {
               ))}
             </div>
           )}
-        </div>
+        </div>}
 
         {/* Recent movements */}
-        <div className="lg:col-span-2 card p-5">
+        {canViewMovements && <div className="lg:col-span-2 card p-5">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-sm font-bold text-slate-800">Pergerakan Terbaru</h3>
             <span className="badge-muted text-[10px]">{todayMovements} total pergerakan barang hari ini</span>
@@ -497,8 +570,8 @@ export default function Dashboard() {
               {(movements?.data ?? []).map(m => <MovementRow key={m.id} m={m} />)}
             </div>
           )}
-        </div>
-      </div>
+        </div>}
+      </div>}
 
     </div>
   )

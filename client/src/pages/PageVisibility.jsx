@@ -6,18 +6,24 @@ import { systemApi } from '../api'
 import {
   Package, BookOpen, Warehouse, Truck,
   ArrowDownToLine, ArrowUpFromLine, ArrowLeftRight,
-  ClipboardList, PackageOpen, FileText, Layers,
-  ClipboardCheck, Users, Building2, Eye, EyeOff, Save,
+  ClipboardList, PackageOpen, Layers,
+  ClipboardCheck, Users, Building2, Eye, EyeOff, Save, PackageCheck, Link2, BarChart2, UserCog,
 } from 'lucide-react'
 
 const PAGE_GROUPS = [
   {
+    label: 'Ringkasan',
+    items: [
+      { key: 'laporan', label: 'Laporan Bulanan', icon: BarChart2 },
+    ],
+  },
+  {
     label: 'Inventory',
     items: [
       { key: 'products',   label: 'Products',   icon: Package },
-      { key: 'catalog',    label: 'Katalog',    icon: BookOpen },
+      { key: 'catalog',    label: 'Data Master', icon: BookOpen },
       { key: 'warehouses', label: 'Warehouses', icon: Warehouse },
-      { key: 'suppliers',  label: 'Suppliers',  icon: Truck },
+      { key: 'suppliers',  label: 'Vendor',  icon: Truck },
     ],
   },
   {
@@ -27,6 +33,7 @@ const PAGE_GROUPS = [
       { key: 'stock-out',  label: 'Stock Out',      icon: ArrowUpFromLine },
       { key: 'movements',  label: 'Movements',      icon: ArrowLeftRight },
       { key: 'opname',     label: 'Stock Opname',   icon: ClipboardList },
+      { key: 'handover',   label: 'Handover',       icon: PackageCheck },
     ],
   },
   {
@@ -34,7 +41,6 @@ const PAGE_GROUPS = [
     items: [
       { key: 'vendors',        label: 'Vendors',      icon: Truck },
       { key: 'incoming-goods', label: 'Barang Masuk', icon: PackageOpen },
-      { key: 'surat-jalan',    label: 'Surat Jalan',  icon: FileText },
     ],
   },
   {
@@ -42,6 +48,18 @@ const PAGE_GROUPS = [
     items: [
       { key: 'packing-jobs',      label: 'Packing Jobs',      icon: Layers },
       { key: 'form-anak-packing', label: 'Form Anak Packing', icon: ClipboardCheck },
+    ],
+  },
+  {
+    label: 'Umum',
+    items: [
+      { key: 'database-links', label: 'Database Links', icon: Link2 },
+    ],
+  },
+  {
+    label: 'HRIS',
+    items: [
+      { key: 'hris', label: 'HRIS', icon: UserCog },
     ],
   },
   {

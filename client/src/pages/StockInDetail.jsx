@@ -1,16 +1,19 @@
-import { useState, useMemo, useRef } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useState, useMemo, useRef, useEffect } from 'react'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { stockInApi, warehousesApi, productsApi, productSkusApi } from '../api'
+import { stockInApi, stockInDraftApi, warehousesApi, productsApi, productSkusApi } from '../api'
 import { useAuth } from '../context/AuthContext'
 import QRScanner from '../components/QRScanner'
+import SearchableSelect from '../components/SearchableSelect'
 import { useExternalScanner } from '../hooks/useExternalScanner'
+import { useCompanyGuard } from '../hooks/useCompanyGuard'
+import CompanyRequiredBanner from '../components/CompanyRequiredBanner'
 import toast from 'react-hot-toast'
 import { exportExcel } from '../utils/exportExcel'
 import {
   ArrowLeft, PackagePlus, ScanLine, Plus, Trash2,
   Save, ChevronDown, Package, X, FileSpreadsheet,
-  ScanBarcode, Unplug,
+  ScanBarcode, Unplug, BookmarkCheck, Lock, LockOpen,
 } from 'lucide-react'
 
 const fmt     = (n) => Number(n ?? 0).toLocaleString('id-ID')
@@ -67,7 +70,7 @@ function ProductSkuPicker({ onSelect }) {
   const handleAdd = () => {
     if (!selSku) return toast.error('Pilih SKU produk terlebih dahulu')
     if (!qty || Number(qty) <= 0) return toast.error('Qty harus lebih dari 0')
-    onSelect({ sku: selSku, quantity: Number(qty), price: Number(price) || 0 })
+    onSelect({ sku: { ...selSku, Product: selProduct }, quantity: Number(qty), price: Number(price) || 0 })
     // Reset
     setSearch(''); setSelProduct(null); setSelSku(null); setQty(1); setPrice('')
   }
@@ -116,22 +119,19 @@ function ProductSkuPicker({ onSelect }) {
         {/* SKU dropdown */}
         <div>
           <label className="label mb-1">Varian / SKU</label>
-          <select
-            className="select"
+          <SearchableSelect
             value={selSku?.id ?? ''}
-            onChange={e => {
-              const found = (skus ?? []).find(s => String(s.id) === e.target.value)
+            onChange={v => {
+              const found = (skus ?? []).find(s => String(s.id) === String(v))
               if (found) selectSku(found)
             }}
+            options={[
+              { value: '', label: selProduct ? 'Pilih varian…' : '← Pilih produk dulu' },
+              ...(skus ?? []).map(s => ({ value: s.id, label: `${skuLabel(s) || s.sku_code} — Rp ${fmt(s.price)}` })),
+            ]}
+            placeholder={selProduct ? 'Pilih varian…' : '← Pilih produk dulu'}
             disabled={!selProduct || !skus}
-          >
-            <option value="">{selProduct ? 'Pilih varian…' : '← Pilih produk dulu'}</option>
-            {(skus ?? []).map(s => (
-              <option key={s.id} value={s.id}>
-                {skuLabel(s) || s.sku_code} — Rp {fmt(s.price)}
-              </option>
-            ))}
-          </select>
+          />
         </div>
       </div>
 
@@ -168,17 +168,31 @@ function ProductSkuPicker({ onSelect }) {
 }
 
 // ── Item row (view mode) ──────────────────────────────────────────────────────
-function ItemRow({ item, canDelete, headerId }) {
+function ItemRow({ item, canDelete, headerId, canViewValue, editable }) {
   const qc = useQueryClient()
   const sku   = item.ProductSKU
   const prod  = sku?.Product
   const total = Number(item.price) * item.quantity
+  const [qty, setQty] = useState(item.quantity)
+  useEffect(() => { setQty(item.quantity) }, [item.quantity])
 
   const removeMutation = useMutation({
     mutationFn: () => stockInApi.removeItem(headerId, item.id),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['stock-in', String(headerId)] }); toast.success('Item dihapus') },
     onError:   e => toast.error(e.response?.data?.message || 'Error'),
   })
+
+  const updateMutation = useMutation({
+    mutationFn: (quantity) => stockInApi.updateItem(headerId, item.id, { quantity }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['stock-in', String(headerId)] }); toast.success('Qty diperbarui — stok ikut dikoreksi') },
+    onError:   e => { setQty(item.quantity); toast.error(e.response?.data?.message || 'Error') },
+  })
+
+  const commitQty = () => {
+    const v = Number(qty)
+    if (!v || v <= 0) { setQty(item.quantity); return }
+    if (v !== item.quantity) updateMutation.mutate(v)
+  }
 
   return (
     <tr className="tr border-b border-slate-100 hover:bg-slate-50/50">
@@ -194,11 +208,23 @@ function ItemRow({ item, canDelete, headerId }) {
         <p className="text-[10px] font-mono text-slate-300 mt-0.5">{sku?.sku_code}</p>
       </td>
       <td className="td py-3 text-right">
-        <span className="font-bold text-slate-800">{item.quantity}</span>
+        {editable ? (
+          <input
+            type="number" min="1"
+            className="input w-20 text-right py-1 inline-block"
+            value={qty}
+            disabled={updateMutation.isPending}
+            onChange={e => setQty(e.target.value)}
+            onBlur={commitQty}
+            onKeyDown={e => e.key === 'Enter' && e.currentTarget.blur()}
+          />
+        ) : (
+          <span className="font-bold text-slate-800">{item.quantity}</span>
+        )}
         <span className="text-xs text-slate-400 ml-1">{prod?.unit}</span>
       </td>
-      <td className="td py-3 text-right font-mono text-sm text-slate-600">Rp {fmt(item.price)}</td>
-      <td className="td py-3 text-right font-mono font-semibold text-slate-800">Rp {fmt(total)}</td>
+      {canViewValue && <td className="td py-3 text-right font-mono text-sm text-slate-600">Rp {fmt(item.price)}</td>}
+      {canViewValue && <td className="td py-3 text-right font-mono font-semibold text-slate-800">Rp {fmt(total)}</td>}
       {canDelete && (
         <td className="td py-3 w-10">
           <button
@@ -215,8 +241,10 @@ function ItemRow({ item, canDelete, headerId }) {
 }
 
 // ── Items table ───────────────────────────────────────────────────────────────
-function ItemsTable({ items, canDelete, headerId, onRemovePending }) {
-  const cols = canDelete ? 6 : 5
+// draftMode=true  → items come from server draft (item.ProductSKU structure), onRemove(item.id)
+// draftMode=false → view mode, uses ItemRow
+function ItemsTable({ items, canDelete, headerId, onRemove, draftMode, removeLoading, canViewValue, editable }) {
+  const cols = 3 + (canViewValue ? 2 : 0) + (canDelete ? 1 : 0)
   return (
     <div className="overflow-x-auto">
     <table className="w-full min-w-[560px] text-sm">
@@ -225,8 +253,8 @@ function ItemsTable({ items, canDelete, headerId, onRemovePending }) {
           <th className="th py-2 w-14">Foto</th>
           <th className="th py-2 text-left">Nama SKU</th>
           <th className="th py-2 text-right w-24">Qty</th>
-          <th className="th py-2 text-right w-36">Harga</th>
-          <th className="th py-2 text-right w-36">Total</th>
+          {canViewValue && <th className="th py-2 text-right w-36">Harga</th>}
+          {canViewValue && <th className="th py-2 text-right w-36">Total</th>}
           {canDelete && <th className="th py-2 w-10"></th>}
         </tr>
       </thead>
@@ -235,10 +263,11 @@ function ItemsTable({ items, canDelete, headerId, onRemovePending }) {
           <tr><td colSpan={cols} className="td py-10 text-center text-slate-400">Belum ada item</td></tr>
         )}
         {items.map((item, idx) => {
-          if (item.id) return <ItemRow key={item.id} item={item} canDelete={canDelete} headerId={headerId} />
-          const prod = item.sku.Product
+          if (!draftMode) return <ItemRow key={item.id} item={item} canDelete={canDelete} headerId={headerId} canViewValue={canViewValue} editable={editable} />
+          const sku  = item.ProductSKU
+          const prod = sku?.Product
           return (
-            <tr key={idx} className="tr border-b border-slate-100 hover:bg-slate-50/50">
+            <tr key={item.id ?? idx} className="tr border-b border-slate-100 hover:bg-slate-50/50">
               <td className="td py-3">
                 {prod?.imageUrl
                   ? <img src={prod.imageUrl} className="w-10 h-10 rounded object-cover border border-slate-200" />
@@ -247,14 +276,15 @@ function ItemsTable({ items, canDelete, headerId, onRemovePending }) {
               </td>
               <td className="td py-3">
                 <p className="font-semibold text-slate-800 leading-tight">{prod?.name}</p>
-                <p className="text-xs text-slate-400">{skuLabel(item.sku)}</p>
+                <p className="text-xs text-slate-400">{skuLabel(sku)}</p>
               </td>
               <td className="td py-3 text-right font-bold text-slate-800">{item.quantity}</td>
-              <td className="td py-3 text-right font-mono text-slate-600">Rp {fmt(item.price)}</td>
-              <td className="td py-3 text-right font-mono font-semibold text-slate-800">Rp {fmt(item.price * item.quantity)}</td>
+              {canViewValue && <td className="td py-3 text-right font-mono text-slate-600">Rp {fmt(item.price)}</td>}
+              {canViewValue && <td className="td py-3 text-right font-mono font-semibold text-slate-800">Rp {fmt(Number(item.price) * item.quantity)}</td>}
               <td className="td py-3">
-                <button type="button" onClick={() => onRemovePending(idx)}
-                  className="p-1.5 rounded text-slate-300 hover:text-red-500 hover:bg-red-50 transition-colors">
+                <button type="button" onClick={() => onRemove(item.id)}
+                  disabled={removeLoading}
+                  className="p-1.5 rounded text-slate-300 hover:text-red-500 hover:bg-red-50 transition-colors disabled:opacity-40">
                   <Trash2 size={13} />
                 </button>
               </td>
@@ -275,13 +305,58 @@ export default function StockInDetail() {
   const qc              = useQueryClient()
   const { hasPermission } = useAuth()
   const isNew           = !id || id === 'new'
+  const { needsCompany } = useCompanyGuard()
+  const [urlParams]     = useSearchParams()
+  const draftIdParam    = urlParams.get('draftId')
+  const vendorIdParam         = urlParams.get('vendorId')         || null
+  const sourceDeliveryIdParam = urlParams.get('sourceDeliveryId') || null
 
   // Granular permission flags
-  const canManualInput = hasPermission('stock.in.manual_input')
-  const canDeleteItem  = hasPermission('stock.in.delete_item')
+  const canManualInput = hasPermission('stock.in.manual_input') || hasPermission('stock.manage')
+  const canDeleteItem  = hasPermission('stock.in.delete_item')  || hasPermission('stock.manage')
+  const canViewValue   = hasPermission('inventory.view_value')  || hasPermission('inventory.manage')
+  const canEditSession = hasPermission('stock.in.create')       || hasPermission('stock.manage')
 
-  const [form, setForm]             = useState({ date: fmtDate(), WarehouseId: '', note: '' })
-  const [pendingItems, setPending]  = useState([])
+  // ── Draft (server-side) ──────────────────────────────────────────────────────
+  const { data: draft, isLoading: draftLoading } = useQuery({
+    queryKey: draftIdParam ? ['stock-in-draft', draftIdParam] : ['stock-in-draft'],
+    queryFn:  draftIdParam
+      ? () => stockInDraftApi.get(draftIdParam)
+      : () => stockInDraftApi.ensure(),
+    enabled:          isNew,
+    staleTime:        Infinity,
+    structuralSharing: false, // selalu re-render saat setQueryData dipanggil
+  })
+  const draftId    = draft?.id
+  const draftItems = draft?.Stock_In_Draft_Items ?? []
+
+  // Local form, initialized from server draft once
+  const formInitialized = useRef(false)
+  const saveTimer       = useRef(null)
+  const pageRef         = useRef(null)
+  const scanGrabRef     = useRef(null) // hidden input untuk cegah DevTools capture scanner
+  const [form, setForm] = useState({ date: fmtDate(), WarehouseId: '', note: '' })
+
+  useEffect(() => {
+    if (draft && !formInitialized.current) {
+      formInitialized.current = true
+      setForm({
+        date:        draft.date        ? fmtDate(draft.date) : fmtDate(),
+        WarehouseId: draft.WarehouseId ?? '',
+        note:        draft.note        ?? '',
+      })
+    }
+  }, [draft])
+
+  const saveFormField = (field, value) => {
+    clearTimeout(saveTimer.current)
+    saveTimer.current = setTimeout(() => {
+      if (draftId) stockInDraftApi.update(draftId, { [field]: value }).catch(() => {})
+    }, 600)
+  }
+
+  const hasDraft = isNew && (draftItems.length > 0 || !!form.WarehouseId)
+
   const [showScanner, setShowScanner]           = useState(false)
   const [scannerConnected, setScannerConnected] = useState(false)
 
@@ -291,62 +366,135 @@ export default function StockInDetail() {
     enabled:  !isNew && !!id,
   })
 
+  const isOpenSession = !isNew && detail?.status === 'open'
+
   const { data: warehouses } = useQuery({
     queryKey: ['warehouses', { limit: 100 }],
     queryFn:  () => warehousesApi.list({ limit: 100 }),
   })
 
+  // Ketika scanner aktif, jaga hidden input selalu terfokus.
+  // Saat focus pergi ke DevTools, document.activeElement kembali ke <body> —
+  // kita deteksi ini dan langsung rebut focus kembali ke hidden input.
+  useEffect(() => {
+    if (!scannerConnected || !(isNew || isOpenSession)) return
+    const input = scanGrabRef.current
+    if (!input) return
+    input.focus()
+    const onBlur = () => requestAnimationFrame(() => {
+      if (!document.activeElement || document.activeElement === document.body) {
+        input.focus()
+      }
+    })
+    input.addEventListener('blur', onBlur)
+    return () => input.removeEventListener('blur', onBlur)
+  }, [scannerConnected, isNew, isOpenSession])
+
+  const draftQueryKey = draftIdParam ? ['stock-in-draft', draftIdParam] : ['stock-in-draft']
+
+  const addItemMutation = useMutation({
+    mutationFn: (data) => stockInDraftApi.addItem(draftId, data),
+    onSuccess:  ()     => qc.invalidateQueries({ queryKey: draftQueryKey }),
+    onError:    e      => toast.error(e.response?.data?.message || 'Error'),
+  })
+
+  const removeItemMutation = useMutation({
+    mutationFn: (itemId) => stockInDraftApi.removeItem(draftId, itemId),
+    onSuccess:  ()       => qc.invalidateQueries({ queryKey: ['stock-in-draft'] }),
+    onError:    e        => toast.error(e.response?.data?.message || 'Error'),
+  })
+
   const createMutation = useMutation({
-    mutationFn: (payload) => stockInApi.create(payload),
+    mutationFn: () => stockInDraftApi.submit(draftId, {
+      date:        form.date,
+      WarehouseId: Number(form.WarehouseId),
+      note:        form.note || null,
+      VendorId:         vendorIdParam || null,
+      sourceDeliveryId: sourceDeliveryIdParam || null,
+    }),
     onSuccess: (data) => {
+      qc.removeQueries({ queryKey: ['stock-in-draft'] })
+      qc.invalidateQueries({ queryKey: ['stock-in-draft-current'] })
       qc.invalidateQueries({ queryKey: ['stock-in'] })
       toast.success('Stock IN berhasil dibuat')
-      navigate(`/stock-in/${data.id}`)
+      navigate(`/stock-in/${data.id}`, { replace: true })
     },
     onError: e => toast.error(e.response?.data?.message || 'Error'),
   })
 
+  const cancelMutation = useMutation({
+    mutationFn: () => stockInDraftApi.cancel(draftId),
+    onSuccess: () => {
+      qc.removeQueries({ queryKey: ['stock-in-draft'] })
+      qc.invalidateQueries({ queryKey: ['stock-in-draft-current'] })
+      navigate('/stock-in')
+    },
+    onError: () => navigate('/stock-in'),
+  })
+
   const addItem = ({ sku, quantity, price }) => {
-    setPending(prev => {
-      const idx = prev.findIndex(p => p.sku.id === sku.id)
-      if (idx >= 0) {
-        const next = [...prev]
-        next[idx] = { ...next[idx], quantity: next[idx].quantity + quantity, price: price || next[idx].price }
-        return next
-      }
-      return [...prev, { sku, quantity, price }]
-    })
+    if (!draftId) return toast.error('Draft belum siap, coba lagi')
+    addItemMutation.mutate({ ProductSKUId: sku.id, quantity, price: price || 0 })
   }
 
-  // QR scan handler — both roles add directly (qty+1 jika SKU sudah ada)
-  // canManualInput (admin): scanner menutup setelah scan
-  // !canManualInput (staff): scanner tetap terbuka, bisa scan banyak sekaligus
+  // ── Sesi edit (view mode) ────────────────────────────────────────────────────
+  const toggleSessionMutation = useMutation({
+    mutationFn: (status) => stockInApi.setStatus(id, status),
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ['stock-in', id] })
+      toast.success(data.status === 'open' ? 'Sesi dibuka — item bisa diedit' : 'Sesi ditutup — dokumen terkunci')
+    },
+    onError: e => toast.error(e.response?.data?.message || 'Error'),
+  })
+
+  const addHeaderItemMutation = useMutation({
+    mutationFn: (data) => stockInApi.addItem(id, data),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['stock-in', id] }); toast.success('Item ditambahkan — stok ikut bertambah') },
+    onError: e => toast.error(e.response?.data?.message || 'Error'),
+  })
+
   const handleScan = async (code) => {
+    if (isNew && !draftId) { toast.error('Draft belum siap, coba lagi'); scanGrabRef.current?.focus(); return }
+    if (!isNew && !isOpenSession) { scanGrabRef.current?.focus(); return }
+    let sku
     try {
-      const sku = await stockInApi.resolveSku(code)
-      addItem({ sku, quantity: 1, price: Number(sku.price) || 0 })
-      if (canManualInput) {
-        setShowScanner(false)
-        toast.success(`Ditambahkan: ${sku.Product?.name} ${skuLabel(sku)}`)
-      }
-      // staff: scanner tetap terbuka, feedback ditampilkan oleh QRScanner
+      sku = await stockInApi.resolveSku(code)
     } catch {
       toast.error(`SKU "${code}" tidak ditemukan`)
+      scanGrabRef.current?.focus()
+      return
     }
+    try {
+      if (isNew) {
+        await stockInDraftApi.addItem(draftId, {
+          ProductSKUId: sku.id,
+          quantity: 1,
+          price: Number(sku.price) || 0,
+        })
+        qc.invalidateQueries({ queryKey: draftQueryKey })
+      } else {
+        await stockInApi.addItem(id, {
+          ProductSKUId: sku.id,
+          quantity: 1,
+          price: Number(sku.price) || 0,
+        })
+        qc.invalidateQueries({ queryKey: ['stock-in', id] })
+      }
+      const label = skuLabel(sku)
+      toast.success(`${sku.Product?.name ?? code}${label ? ` · ${label}` : ''} +1`)
+    } catch (e) {
+      toast.error(e.response?.data?.message || 'Gagal menambah item')
+    }
+    scanGrabRef.current?.focus()
   }
 
-  useExternalScanner(handleScan, isNew && scannerConnected)
+  useExternalScanner(handleScan, (isNew || isOpenSession) && scannerConnected)
 
   const handleSubmit = (e) => {
     e.preventDefault()
     if (!form.WarehouseId) return toast.error('Pilih warehouse')
-    if (!pendingItems.length) return toast.error('Tambahkan minimal 1 item')
-    createMutation.mutate({
-      date:        form.date,
-      WarehouseId: Number(form.WarehouseId),
-      note:        form.note || null,
-      items:       pendingItems.map(p => ({ ProductSKUId: p.sku.id, quantity: p.quantity, price: p.price })),
-    })
+    if (!draftItems.length) return toast.error('Tambahkan minimal 1 item')
+    createMutation.mutate()
   }
 
   // ── VIEW MODE ────────────────────────────────────────────────────────────────
@@ -356,6 +504,7 @@ export default function StockInDetail() {
 
     const items      = detail.Stock_In_Items ?? []
     const grandTotal = detail.grandTotal ?? items.reduce((s, i) => s + Number(i.price) * i.quantity, 0)
+    const isOpen     = detail.status === 'open'
 
     const handleExportExcel = () => {
       const headers = ['No', 'Produk', 'SKU', 'Varian', 'Qty', 'Unit', 'Harga Satuan (Rp)', 'Subtotal (Rp)']
@@ -376,15 +525,34 @@ export default function StockInDetail() {
     return (
       <div className="px-6 py-6 max-w-5xl">
         <div className="flex items-center gap-3 mb-6">
-          <button onClick={() => navigate('/stock-in')} className="p-1.5 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors">
+          <button onClick={() => navigate(-1)} className="p-1.5 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors">
             <ArrowLeft size={16} />
           </button>
           <div className="flex-1">
-            <h1 className="text-lg font-bold text-slate-800">Stock IN #{detail.id}</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-lg font-bold text-slate-800">Stock IN #{detail.id}</h1>
+              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold border ${
+                isOpen ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-500 border-slate-200'
+              }`}>
+                {isOpen ? <LockOpen size={10} /> : <Lock size={10} />} {isOpen ? 'Sesi Terbuka' : 'Closed'}
+              </span>
+            </div>
             <p className="text-xs text-slate-400">
               {new Date(detail.date).toLocaleDateString('id-ID', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}
             </p>
           </div>
+          {canEditSession && (
+            <button
+              onClick={() => {
+                if (isOpen) return toggleSessionMutation.mutate('closed')
+                if (confirm('Buka sesi edit? Perubahan item akan langsung mengoreksi stok gudang.')) toggleSessionMutation.mutate('open')
+              }}
+              disabled={toggleSessionMutation.isPending}
+              className={`text-sm flex items-center gap-1.5 ${isOpen ? 'btn-primary' : 'btn-secondary'}`}
+            >
+              {isOpen ? <><Lock size={14} /> Tutup Sesi</> : <><LockOpen size={14} /> Buka Sesi</>}
+            </button>
+          )}
           <button onClick={handleExportExcel} className="btn-secondary text-sm flex items-center gap-1.5">
             <FileSpreadsheet size={14} /> Export Excel
           </button>
@@ -394,6 +562,41 @@ export default function StockInDetail() {
           <div><p className="label mb-1">Warehouse</p><p className="font-semibold text-slate-700">{detail.Warehouse?.name ?? '—'}</p></div>
           <div><p className="label mb-1">Tanggal</p><p className="font-mono text-slate-600">{new Date(detail.date).toLocaleDateString('id-ID')}</p></div>
           <div><p className="label mb-1">Notes</p><p className="text-slate-500">{detail.note || '—'}</p></div>
+          <div>
+            <p className="label mb-1">Total Produk</p>
+            <p className="font-bold text-slate-800">{items.length} <span className="font-normal text-slate-400">item</span></p>
+          </div>
+          <div>
+            <p className="label mb-1">Total Qty</p>
+            <p className="font-bold text-slate-800">{fmt(items.reduce((s, i) => s + i.quantity, 0))} <span className="font-normal text-slate-400">unit</span></p>
+          </div>
+          {canViewValue && (
+            <div>
+              <p className="label mb-1">Grand Total</p>
+              <p className="font-bold text-slate-800 font-mono">Rp {fmt(grandTotal)}</p>
+            </div>
+          )}
+          <div>
+            <p className="label mb-1">Oleh</p>
+            <p className="font-semibold text-slate-700">{detail.User?.name ?? '—'}</p>
+          </div>
+          {detail.Vendor && (
+            <div>
+              <p className="label mb-1">Vendor</p>
+              <p className="font-semibold text-slate-700">{detail.Vendor.name}</p>
+            </div>
+          )}
+          {detail.sourceDelivery && (
+            <div>
+              <p className="label mb-1">Sumber</p>
+              <button
+                onClick={() => navigate(`/incoming-goods/${detail.sourceDelivery.id}`)}
+                className="text-indigo-600 hover:underline font-semibold text-sm"
+              >
+                Barang Masuk #{detail.sourceDelivery.id}
+              </button>
+            </div>
+          )}
         </div>
 
         <div className="card mb-4">
@@ -401,27 +604,122 @@ export default function StockInDetail() {
             <PackagePlus size={13} className="text-red-700" />
             <span className="text-xs font-bold text-slate-600 uppercase tracking-wide">Items ({items.length})</span>
           </div>
-          <ItemsTable items={items} canDelete={canDeleteItem} headerId={detail.id} />
-          <div className="px-5 py-4 bg-slate-50 border-t border-slate-200 flex justify-end items-center gap-3">
-            <span className="text-sm font-semibold text-slate-600">GRAND TOTAL</span>
-            <span className="text-xl font-bold text-slate-900 font-mono">Rp {fmt(grandTotal)}</span>
-          </div>
+          {isOpen && canManualInput && (
+            <div className="p-4 border-b border-slate-100 bg-emerald-50/40 space-y-3">
+              {scannerConnected && (
+                <input
+                  ref={scanGrabRef}
+                  aria-hidden="true"
+                  tabIndex={-1}
+                  style={{ position: 'fixed', opacity: 0, width: 0, height: 0, top: 0, left: 0, pointerEvents: 'none' }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      const code = e.currentTarget.value.trim()
+                      e.currentTarget.value = ''
+                      if (code.length > 2) handleScan(code)
+                    }
+                  }}
+                  onChange={() => {}}
+                />
+              )}
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-bold text-emerald-700 uppercase tracking-wide">Tambah Item (sesi terbuka)</p>
+                <div className="flex items-center gap-2">
+                  <button type="button" onClick={() => setShowScanner(true)}
+                    className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-red-700 px-2.5 py-1 rounded hover:bg-red-50 border border-slate-200 hover:border-red-200 transition-colors">
+                    <ScanLine size={13} /> Scan QR
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setScannerConnected(v => !v)
+                      if (!scannerConnected) toast.success('Scanner eksternal terhubung', { icon: '🔌' })
+                      else toast('Scanner diputus', { icon: '🔌' })
+                    }}
+                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-medium transition-colors ${
+                      scannerConnected
+                        ? 'bg-green-50 border-green-300 text-green-700 hover:bg-green-100'
+                        : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300 hover:text-slate-700'
+                    }`}
+                  >
+                    {scannerConnected
+                      ? <><span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" /> Connected</>
+                      : <><ScanBarcode size={13} /> Hubungkan Scanner</>
+                    }
+                  </button>
+                </div>
+              </div>
+              <ProductSkuPicker onSelect={({ sku, quantity, price }) => addHeaderItemMutation.mutate({ ProductSKUId: sku.id, quantity, price: price || 0 })} />
+            </div>
+          )}
+          <ItemsTable items={items} canDelete={canDeleteItem && isOpen} headerId={detail.id} draftMode={false} canViewValue={canViewValue} editable={isOpen && canEditSession} />
+          {canViewValue && (
+            <div className="px-5 py-4 bg-slate-50 border-t border-slate-200 flex justify-end items-center gap-3">
+              <span className="text-sm font-semibold text-slate-600">GRAND TOTAL</span>
+              <span className="text-xl font-bold text-slate-900 font-mono">Rp {fmt(grandTotal)}</span>
+            </div>
+          )}
         </div>
+
+        {showScanner && (
+          <QRScanner
+            onScan={handleScan}
+            onClose={() => setShowScanner(false)}
+            autoClose={false}
+            hint="Scan semua item lalu tutup"
+          />
+        )}
       </div>
     )
   }
 
   // ── CREATE MODE ───────────────────────────────────────────────────────────────
-  const grandTotal = pendingItems.reduce((s, p) => s + p.price * p.quantity, 0)
+  const grandTotal = draftItems.reduce((s, p) => s + Number(p.price) * p.quantity, 0)
+
+  if (needsCompany) return (
+    <div className="px-6 py-6 max-w-4xl space-y-4">
+      <div className="flex items-center gap-3">
+        <button onClick={() => navigate(-1)} className="p-1.5 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors">
+          <ArrowLeft size={16} />
+        </button>
+        <h1 className="text-lg font-bold text-slate-800">New Stock IN</h1>
+      </div>
+      <CompanyRequiredBanner action="membuat transaksi stock in" />
+    </div>
+  )
 
   return (
-    <div className="px-6 py-6 max-w-4xl">
+    <div className="px-6 py-6 max-w-4xl outline-none" ref={pageRef} tabIndex={-1}>
+      {/* Hidden input: merebut focus dari DevTools ketika scanner aktif */}
+      {scannerConnected && (
+        <input
+          ref={scanGrabRef}
+          aria-hidden="true"
+          tabIndex={-1}
+          style={{ position: 'fixed', opacity: 0, width: 0, height: 0, top: 0, left: 0, pointerEvents: 'none' }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              const code = e.currentTarget.value.trim()
+              e.currentTarget.value = ''
+              if (code.length > 2) handleScan(code)
+            }
+          }}
+          onChange={() => {}}
+        />
+      )}
       <div className="flex items-center gap-3 mb-6">
-        <button onClick={() => navigate('/stock-in')} className="p-1.5 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors">
+        <button onClick={() => navigate(-1)} className="p-1.5 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors">
           <ArrowLeft size={16} />
         </button>
         <div className="flex-1">
-          <h1 className="text-lg font-bold text-slate-800">New Stock IN</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-lg font-bold text-slate-800">New Stock IN</h1>
+            {hasDraft && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200">
+                📋 Draft aktif
+              </span>
+            )}
+          </div>
           {!canManualInput && (
             <p className="text-xs text-amber-600 mt-0.5 flex items-center gap-1">
               <ScanLine size={11} /> Mode barcode — gunakan scan untuk menambah item
@@ -448,6 +746,13 @@ export default function StockInDetail() {
         </button>
       </div>
 
+      {sourceDeliveryIdParam && (
+        <div className="mb-4 px-4 py-2.5 bg-indigo-50 border border-indigo-200 rounded-xl text-xs text-indigo-700 flex items-center gap-2">
+          <PackagePlus size={14} className="flex-shrink-0" />
+          Ditandai dari Barang Masuk #{sourceDeliveryIdParam} — akan tercatat sebagai penerimaan dari vendor terkait.
+        </div>
+      )}
+
       <form onSubmit={handleSubmit} className="space-y-5">
         <div className="card p-5">
           <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-4">Informasi Transaksi</p>
@@ -455,20 +760,22 @@ export default function StockInDetail() {
             <div>
               <label className="label">Tanggal <span className="text-red-500">*</span></label>
               <input type="date" className="input" value={form.date}
-                onChange={e => setForm(f => ({ ...f, date: e.target.value }))} required />
+                onChange={e => { setForm(f => ({ ...f, date: e.target.value })); saveFormField('date', e.target.value) }} required />
             </div>
             <div>
               <label className="label">Warehouse <span className="text-red-500">*</span></label>
-              <select className="select" value={form.WarehouseId}
-                onChange={e => setForm(f => ({ ...f, WarehouseId: e.target.value }))} required>
-                <option value="">Pilih warehouse…</option>
-                {warehouses?.data?.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
-              </select>
+              <SearchableSelect
+                value={form.WarehouseId}
+                onChange={v => { setForm(f => ({ ...f, WarehouseId: v })); saveFormField('WarehouseId', v) }}
+                options={[{ value: '', label: 'Pilih warehouse…' }, ...(warehouses?.data ?? []).map(w => ({ value: w.id, label: w.name }))]}
+                placeholder="Pilih warehouse…"
+                required
+              />
             </div>
             <div>
               <label className="label">Notes</label>
               <input className="input" placeholder="Catatan (opsional)…" value={form.note}
-                onChange={e => setForm(f => ({ ...f, note: e.target.value }))} />
+                onChange={e => { setForm(f => ({ ...f, note: e.target.value })); saveFormField('note', e.target.value) }} />
             </div>
           </div>
         </div>
@@ -504,13 +811,19 @@ export default function StockInDetail() {
             }
           </div>
 
-          <ItemsTable
-            items={pendingItems}
-            canDelete={true}
-            onRemovePending={idx => setPending(p => p.filter((_, i) => i !== idx))}
-          />
+          {draftLoading
+            ? <p className="text-center text-slate-400 text-sm py-10">Memuat draft…</p>
+            : <ItemsTable
+                items={draftItems}
+                canDelete={true}
+                draftMode={true}
+                onRemove={itemId => removeItemMutation.mutate(itemId)}
+                removeLoading={removeItemMutation.isPending}
+                canViewValue={canViewValue}
+              />
+          }
 
-          {pendingItems.length > 0 && (
+          {draftItems.length > 0 && canViewValue && (
             <div className="px-5 py-4 bg-slate-50 border-t border-slate-200 flex justify-end items-center gap-3">
               <span className="text-sm font-semibold text-slate-600">GRAND TOTAL</span>
               <span className="text-xl font-bold text-slate-900 font-mono">Rp {fmt(grandTotal)}</span>
@@ -519,8 +832,24 @@ export default function StockInDetail() {
         </div>
 
         <div className="flex gap-3">
-          <button type="button" onClick={() => navigate('/stock-in')} className="btn-secondary flex-1 justify-center">Batal</button>
-          <button type="submit" disabled={createMutation.isPending} className="btn-primary flex-1 justify-center">
+          <button type="button" onClick={() => cancelMutation.mutate()}
+            disabled={cancelMutation.isPending}
+            className="flex-1 justify-center flex items-center gap-2 px-4 py-2 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 text-sm font-medium transition-colors disabled:opacity-50">
+            <X size={14} /> Batalkan
+          </button>
+          <button type="button"
+            onClick={async () => {
+              if (draftId) {
+                clearTimeout(saveTimer.current)
+                await stockInDraftApi.update(draftId, { date: form.date, WarehouseId: form.WarehouseId || null, note: form.note || null }).catch(() => {})
+              }
+              qc.invalidateQueries({ queryKey: ['stock-in-draft-current'] })
+              navigate('/stock-in')
+            }}
+            className="flex-1 justify-center flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 text-sm font-medium transition-colors">
+            <BookmarkCheck size={14} /> Simpan Draft
+          </button>
+          <button type="submit" disabled={createMutation.isPending || draftLoading} className="btn-primary flex-1 justify-center">
             <Save size={14} />
             {createMutation.isPending ? 'Menyimpan…' : 'Simpan Stock IN'}
           </button>
@@ -531,10 +860,8 @@ export default function StockInDetail() {
         <QRScanner
           onScan={handleScan}
           onClose={() => setShowScanner(false)}
-          autoClose={canManualInput}
-          hint={canManualInput
-            ? 'Scan QR code SKU produk'
-            : 'Scan semua item lalu tutup & simpan'}
+          autoClose={false}
+          hint="Scan semua item lalu tutup & simpan"
         />
       )}
     </div>

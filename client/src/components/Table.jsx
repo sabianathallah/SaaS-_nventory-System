@@ -1,4 +1,5 @@
 import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react'
+import { useSearchParams } from 'react-router-dom'
 
 const BRAND = '#C8102E'
 
@@ -46,11 +47,26 @@ export function Table({ columns, data, loading, emptyText = 'No data found' }) {
   )
 }
 
+const LIMIT_OPTIONS = [10, 25, 50, 100]
+
 export function Pagination({ pagination, onPageChange }) {
+  const [searchParams, setSearchParams] = useSearchParams()
   if (!pagination || !pagination.total) return null
-  const { page = 1, totalPages = 1, total, limit = 10 } = pagination
+
+  const { page = 1, totalPages = 1, total, limit: apiLimit = 10 } = pagination
+  const urlLimit = Number(searchParams.get('limit')) || 0
+  const limit = urlLimit || apiLimit
+
   const from = (page - 1) * limit + 1
   const to   = Math.min(page * limit, total)
+
+  const handleLimitChange = (newLimit) => {
+    setSearchParams(prev => {
+      prev.set('limit', String(newLimit))
+      prev.set('page', '1')
+      return prev
+    }, { replace: true })
+  }
 
   const pages = []
   for (let i = 1; i <= totalPages; i++) {
@@ -60,9 +76,20 @@ export function Pagination({ pagination, onPageChange }) {
 
   return (
     <div className="flex items-center justify-between px-5 py-3 border-t border-slate-100 bg-slate-50/50">
-      <span className="text-xs text-slate-400 font-medium">
-        Showing <span className="text-slate-600 font-semibold">{from}–{to}</span> of <span className="text-slate-600 font-semibold">{total}</span> results
-      </span>
+      <div className="flex items-center gap-3">
+        <span className="text-xs text-slate-400 font-medium">
+          Showing <span className="text-slate-600 font-semibold">{from}–{to}</span> of <span className="text-slate-600 font-semibold">{total}</span>
+        </span>
+        <div className="flex items-center gap-1.5">
+          <select
+            value={limit}
+            onChange={e => handleLimitChange(Number(e.target.value))}
+            className="text-xs border border-slate-200 rounded px-1.5 py-0.5 text-slate-600 bg-white focus:outline-none focus:border-slate-400 cursor-pointer"
+          >
+            {LIMIT_OPTIONS.map(o => <option key={o} value={o}>{o} / hal</option>)}
+          </select>
+        </div>
+      </div>
       {totalPages > 1 && (
         <div className="flex items-center gap-1">
           <button

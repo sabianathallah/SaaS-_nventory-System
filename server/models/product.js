@@ -20,6 +20,11 @@ module.exports = (sequelize, DataTypes) => {
         onDelete: 'SET NULL',
         onUpdate: 'CASCADE'
       });
+      Product.belongsTo(models.SubCategory, {
+        foreignKey: { name: 'SubCategoryId', allowNull: true },
+        onDelete: 'SET NULL',
+        onUpdate: 'CASCADE'
+      });
       Product.hasMany(models.ProductVariantType, {
         foreignKey: { name: 'ProductId', allowNull: false },
         onDelete: 'CASCADE',
@@ -69,6 +74,10 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: true,
     },
     ArticleId: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
+    SubCategoryId: {
       type: DataTypes.INTEGER,
       allowNull: true,
     },

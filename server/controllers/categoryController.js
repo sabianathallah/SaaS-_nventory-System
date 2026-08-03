@@ -36,7 +36,8 @@ class CategoryController {
         try {
             const category = await Category.findOne({ where: { id: req.params.id, ...companyFilter(req) } });
             if (!category) throw { name: 'NotFound', message: 'Category not found' };
-            await category.update(req.body);
+            const { companyId: _c, ...safeBody } = req.body;
+            await category.update(safeBody);
             res.status(200).json(category);
         } catch (err) { next(err); }
     }

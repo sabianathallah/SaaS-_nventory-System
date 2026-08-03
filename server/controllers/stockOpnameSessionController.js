@@ -1,14 +1,15 @@
 'use strict';
-const { sequelize, Stock_Opname_Session, Stock_Opname_Item, Stock, Stock_Movement, Warehouse, User, Product } = require('../models');
+const { sequelize, Stock_Opname_Session, Stock_Opname_Item, Stock, Stock_Movement, SkuWarehouseStock, Warehouse, User, Product, ProductSKU, ProductVariantOption } = require('../models');
 const { companyFilter, companyId } = require('../helpers/tenancy');
 const { paginate, buildFilter, paginatedResponse } = require('../helpers/queryHelper');
+const { upsertSkuWarehouseStock } = require('../helpers/skuStock');
 
 class StockOpnameSessionController {
     static async getAll(req, res, next) {
         try {
             const { page, limit, offset } = paginate(req.query);
             const filter = buildFilter(req.query, {
-                status:      'exact',
+                status:      'in',   // supports comma-separated e.g. status=open,closed
                 warehouseId: 'exact',
                 dateFrom:    { field: 'started_at', type: 'gte' },
                 dateTo:      { field: 'started_at', type: 'lte' },
@@ -17,7 +18,9 @@ class StockOpnameSessionController {
                 where: { ...companyFilter(req), ...filter },
                 include: [
                     { model: Warehouse, attributes: ['id', 'name'] },
-                    { model: User, foreignKey: 'createdBy', attributes: ['id', 'name'] }
+                    { model: User, foreignKey: 'createdBy', attributes: ['id', 'name'] },
+                    { model: User, foreignKey: 'updatedBy', as: 'updater', attributes: ['id', 'name'] },
+                    { model: User, foreignKey: 'closedBy',  as: 'closer',  attributes: ['id', 'name'] },
                 ],
                 order: [['started_at', 'DESC']],
                 limit, offset,
@@ -34,7 +37,18 @@ class StockOpnameSessionController {
                 include: [
                     { model: Warehouse, attributes: ['id', 'name'] },
                     { model: User, foreignKey: 'createdBy', attributes: ['id', 'name'] },
-                    { model: Stock_Opname_Item, include: [{ model: Product, attributes: ['id', 'name', 'sku', 'unit'] }] }
+                    { model: User, foreignKey: 'updatedBy', as: 'updater', attributes: ['id', 'name'] },
+                    { model: User, foreignKey: 'closedBy',  as: 'closer',  attributes: ['id', 'name'] },
+                    {
+                        model: Stock_Opname_Item,
+                        include: [
+                            { model: Product, attributes: ['id', 'name', 'sku', 'unit'] },
+                            {
+                                model: ProductSKU, attributes: ['id', 'sku_code'], required: false,
+                                include: [{ model: ProductVariantOption, attributes: ['id', 'value'], through: { attributes: [] } }],
+                            },
+                        ],
+                    }
                 ]
             });
             if (!session) throw { name: 'NotFound', message: 'Stock opname session not found' };
@@ -69,10 +83,16 @@ class StockOpnameSessionController {
             });
             if (!session) { await t.rollback(); throw { name: 'NotFound', message: 'Stock opname session not found' }; }
 
+            if (session.status === 'closed' && req.body.status === 'open') {
+                await t.rollback();
+                return res.status(400).json({ message: 'Sesi opname yang sudah ditutup tidak dapat dibuka kembali' });
+            }
             const isClosing = req.body.status === 'closed' && session.status !== 'closed';
             await session.update({
                 ...req.body,
-                ...(isClosing && !req.body.finished_at ? { finished_at: new Date() } : {})
+                updatedBy: req.user.id,
+                ...(isClosing && !req.body.finished_at ? { finished_at: new Date() } : {}),
+                ...(isClosing ? { closedBy: req.user.id } : {}),
             }, { transaction: t });
 
             if (isClosing) {
@@ -80,14 +100,27 @@ class StockOpnameSessionController {
                 for (const item of items) {
                     const diff = item.difference ?? (item.scanned_qty - item.system_qty);
                     if (diff === 0) continue;
+                    // Apply diff as a delta so multiple SKUs of the same product
+                    // accumulate correctly (absolute override would overwrite siblings).
                     const stock = await Stock.findOne({ where: { ProductId: item.ProductId, WarehouseId: session.warehouseId }, transaction: t });
-                    if (stock) await stock.update({ quantity: Math.max(0, stock.quantity + diff) }, { transaction: t });
+                    if (stock) await stock.increment('quantity', { by: diff, transaction: t });
+
+                    if (item.ProductSKUId) {
+                        const sku = await ProductSKU.findByPk(item.ProductSKUId, { transaction: t });
+                        if (sku) await sku.increment('qty', { by: diff, transaction: t });
+                        await upsertSkuWarehouseStock(t, SkuWarehouseStock, { ProductSKUId: item.ProductSKUId, WarehouseId: session.warehouseId, delta: diff, companyId: session.companyId });
+                    }
                     await Stock_Movement.create({
-                        ProductId: item.ProductId, WarehouseId: session.warehouseId,
-                        type: 'ADJUSTMENT', quantity: Math.abs(diff),
-                        ReferenceId: session.id,
-                        note: `Opname koreksi: ${diff > 0 ? '+' : ''}${diff}`,
-                        companyId: session.companyId
+                        ProductId:    item.ProductId,
+                        WarehouseId:  session.warehouseId,
+                        ProductSKUId: item.ProductSKUId ?? null,
+                        type:         'ADJUSTMENT',
+                        quantity:     diff,
+                        ReferenceId:  session.id,
+                        source:       'OPNAME',
+                        note:         `Opname koreksi: ${diff > 0 ? '+' : ''}${diff}`,
+                        date:         session.finished_at || new Date(),
+                        companyId:    session.companyId
                     }, { transaction: t });
                 }
             }

@@ -1,5 +1,5 @@
 'use strict';
-const { Product, ProductSKU, ProductVariantOption, ProductVariantType, ProductSKUVariantOption } = require('../models');
+const { sequelize, Product, ProductSKU, ProductVariantOption, ProductVariantType, ProductSKUVariantOption } = require('../models');
 const { companyFilter, companyId } = require('../helpers/tenancy');
 
 function generateSkuCode(productName, options = []) {
@@ -21,16 +21,36 @@ class ProductSkuController {
       const product = await Product.findOne({ where: { id: req.params.productId, ...companyFilter(req) } });
       if (!product) throw { name: 'NotFound', message: 'Product not found' };
 
+      // qty here is replaced with the live sum from SkuWarehouseStocks, optionally
+      // scoped to a single warehouse — ProductSKU.qty is a legacy column stock
+      // movements no longer update.
+      const warehouseId = req.query.WarehouseId ? parseInt(req.query.WarehouseId) : null;
+      const qtySubquery = warehouseId
+        ? `(SELECT COALESCE(SUM(sws."qty"),0) FROM "SkuWarehouseStocks" sws WHERE sws."ProductSKUId" = "ProductSKU"."id" AND sws."WarehouseId" = ${warehouseId})`
+        : `(SELECT COALESCE(SUM(sws."qty"),0) FROM "SkuWarehouseStocks" sws WHERE sws."ProductSKUId" = "ProductSKU"."id")`;
+
       const skus = await ProductSKU.findAll({
         where: { ProductId: req.params.productId },
+        attributes: {
+          include: [[
+            sequelize.literal(qtySubquery),
+            'warehouseQty',
+          ]],
+        },
         include: [{
           model: ProductVariantOption,
           through: { attributes: [] },
           include: [{ model: ProductVariantType, attributes: ['id', 'name'] }],
         }],
-        order: [['createdAt', 'ASC']],
+        order: [['position', 'ASC'], ['createdAt', 'ASC'], ['id', 'ASC']],
       });
-      res.status(200).json(skus);
+
+      res.status(200).json(skus.map(s => {
+        const json = s.toJSON();
+        json.qty = Number(json.warehouseQty ?? 0);
+        delete json.warehouseQty;
+        return json;
+      }));
     } catch (err) { next(err); }
   }
 
@@ -55,12 +75,14 @@ class ProductSkuController {
 
       if (!sku_code) sku_code = generateSkuCode(product.name, options);
 
+      const maxPosition = await ProductSKU.max('position', { where: { ProductId: product.id } });
       const sku = await ProductSKU.create({
         ProductId: product.id,
         sku_code,
         price,
         qty,
         companyId: companyId(req),
+        position: (maxPosition ?? -1) + 1,
       });
 
       // Link to variant options
@@ -84,10 +106,37 @@ class ProductSkuController {
     } catch (err) { next(err); }
   }
 
+  // PATCH /products/:productId/skus/reorder
+  // body: { order: [skuId, skuId, ...] }
+  static async reorderSkus(req, res, next) {
+    try {
+      const product = await Product.findOne({ where: { id: req.params.productId, ...companyFilter(req) } });
+      if (!product) throw { name: 'NotFound', message: 'Product not found' };
+
+      const { order } = req.body;
+      if (!Array.isArray(order) || order.length === 0) {
+        throw { name: 'BadRequest', message: 'order must be a non-empty array of ids' };
+      }
+
+      await Promise.all(
+        order.map((id, index) =>
+          ProductSKU.update(
+            { position: index },
+            { where: { id, ProductId: product.id } }
+          )
+        )
+      );
+
+      res.status(200).json({ message: 'Reordered successfully' });
+    } catch (err) { next(err); }
+  }
+
   // PUT /products/:productId/skus/:skuId
   // body: { sku_code?, price?, qty? }
   static async updateSku(req, res, next) {
     try {
+      const product = await Product.findOne({ where: { id: req.params.productId, ...companyFilter(req) } });
+      if (!product) throw { name: 'NotFound', message: 'Product not found' };
       const sku = await ProductSKU.findOne({
         where: { id: req.params.skuId, ProductId: req.params.productId },
       });
@@ -115,6 +164,8 @@ class ProductSkuController {
   // DELETE /products/:productId/skus/:skuId
   static async deleteSku(req, res, next) {
     try {
+      const product = await Product.findOne({ where: { id: req.params.productId, ...companyFilter(req) } });
+      if (!product) throw { name: 'NotFound', message: 'Product not found' };
       const sku = await ProductSKU.findOne({
         where: { id: req.params.skuId, ProductId: req.params.productId },
       });

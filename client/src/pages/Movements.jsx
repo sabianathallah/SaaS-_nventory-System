@@ -1,11 +1,15 @@
 import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
-import { movementsApi, warehousesApi, productsApi } from '../api'
+import { movementsApi, warehousesApi, productsApi, productSkusApi, articlesApi, categoriesApi } from '../api'
 import PageHeader from '../components/PageHeader'
+import SearchableSelect from '../components/SearchableSelect'
 import { Table, Pagination } from '../components/Table'
 import { exportExcel } from '../utils/exportExcel'
 import toast from 'react-hot-toast'
+
+const PURPOSES = ['Penjualan','Endorse','Photoshoot','R&D','Pemakaian Internal','Hadiah / Gift','Sample','Retur Vendor','Lainnya']
 
 const TYPE_BADGE = {
   IN:         <span className="badge-green">▲ IN</span>,
@@ -20,24 +24,52 @@ function defaultDateFrom() {
 }
 
 export default function Movements() {
-  const [page, setPage]         = useState(1)
-  const [typeFilter, setType]   = useState('')
-  const [whFilter, setWh]       = useState('')
-  const [prodFilter, setProd]   = useState('')
-  const [dateFrom, setDateFrom] = useState(defaultDateFrom())
-  const [dateTo, setDateTo]     = useState(new Date().toISOString().slice(0, 10))
+  const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
+
+  const page          = Number(searchParams.get('page')  || '1')
+  const limit         = Number(searchParams.get('limit') || '15')
+  const typeFilter    = searchParams.get('type')    || ''
+  const whFilter      = searchParams.get('wh')      || ''
+  const prodFilter    = searchParams.get('prod')    || ''
+  const skuFilter     = searchParams.get('sku')     || ''
+  const articleFilter = searchParams.get('article') || ''
+  const catFilter     = searchParams.get('cat')     || ''
+  const purposeFilter = searchParams.get('purpose') || ''
+  const dateFrom      = searchParams.get('from')    || defaultDateFrom()
+  const dateTo        = searchParams.get('to')      || new Date().toISOString().slice(0, 10)
+
+  const sp = (updates) => setSearchParams(prev => {
+    Object.entries(updates).forEach(([k, v]) => v ? prev.set(k, v) : prev.delete(k))
+    return prev
+  }, { replace: true })
+
+  const setPage      = (p) => sp({ page: String(p) })
+  const setType      = (v) => sp({ type: v, page: '1' })
+  const setWh        = (v) => sp({ wh: v, page: '1' })
+  const setProd      = (v) => sp({ prod: v, sku: '', page: '1' })
+  const setSku       = (v) => sp({ sku: v, page: '1' })
+  const setArt       = (v) => sp({ article: v, page: '1' })
+  const setCat       = (v) => sp({ cat: v, page: '1' })
+  const setPurp      = (v) => sp({ purpose: v, page: '1' })
+  const setDateFrom  = (v) => sp({ from: v, page: '1' })
+  const setDateTo    = (v) => sp({ to: v, page: '1' })
 
   const filters = useMemo(() => ({
-    type:        typeFilter  || undefined,
-    WarehouseId: whFilter    || undefined,
-    ProductId:   prodFilter  || undefined,
-    dateFrom:    dateFrom    || undefined,
-    dateTo:      dateTo      || undefined,
-  }), [typeFilter, whFilter, prodFilter, dateFrom, dateTo])
+    type:          typeFilter      || undefined,
+    WarehouseId:   whFilter        || undefined,
+    ProductId:     prodFilter      || undefined,
+    ProductSKUId:  skuFilter       || undefined,
+    ArticleId:     articleFilter   || undefined,
+    CategoryId:    catFilter       || undefined,
+    purpose:       purposeFilter   || undefined,
+    dateFrom:      dateFrom        || undefined,
+    dateTo:        dateTo          || undefined,
+  }), [typeFilter, whFilter, prodFilter, skuFilter, articleFilter, catFilter, purposeFilter, dateFrom, dateTo])
 
   const { data, isLoading } = useQuery({
-    queryKey: ['movements', { page, ...filters }],
-    queryFn:  () => movementsApi.list({ page, limit: 15, ...filters }),
+    queryKey: ['movements', { page, limit, ...filters }],
+    queryFn:  () => movementsApi.list({ page, limit, ...filters }),
   })
 
   const { data: summary } = useQuery({
@@ -51,20 +83,39 @@ export default function Movements() {
   })
 
   const { data: warehouses } = useQuery({
-    queryKey: ['warehouses', { limit: 100 }],
-    queryFn:  () => warehousesApi.list({ limit: 100 }),
+    queryKey: ['warehouses', { limit: 500 }],
+    queryFn:  () => warehousesApi.list({ limit: 500 }),
   })
 
   const { data: products } = useQuery({
-    queryKey: ['products', { limit: 200 }],
-    queryFn:  () => productsApi.list({ limit: 200 }),
+    queryKey: ['products', { limit: 500 }],
+    queryFn:  () => productsApi.list({ limit: 500 }),
+  })
+
+  const { data: productSkus } = useQuery({
+    queryKey: ['product-skus', prodFilter],
+    queryFn:  () => productSkusApi.list(prodFilter),
+    enabled:  !!prodFilter,
+  })
+
+  const { data: articles } = useQuery({
+    queryKey: ['articles', { limit: 500 }],
+    queryFn:  () => articlesApi.list({ limit: 500 }),
+  })
+
+  const { data: categories } = useQuery({
+    queryKey: ['categories', { limit: 500 }],
+    queryFn:  () => categoriesApi.list({ limit: 500 }),
   })
 
   function resetFilters() {
-    setType(''); setWh(''); setProd('')
-    setDateFrom(defaultDateFrom())
-    setDateTo(new Date().toISOString().slice(0, 10))
-    setPage(1)
+    setSearchParams(prev => {
+      ['type','wh','prod','sku','article','cat','purpose'].forEach(k => prev.delete(k))
+      prev.set('from', defaultDateFrom())
+      prev.set('to', new Date().toISOString().slice(0, 10))
+      prev.set('page', '1')
+      return prev
+    }, { replace: true })
   }
 
   function handleExportCsv() {
@@ -83,16 +134,24 @@ export default function Movements() {
     setExporting(true)
     try {
       const result = await movementsApi.list({ ...filters, limit: 9999 })
-      const headers = ['No', 'Tanggal', 'Tipe', 'Produk', 'Warehouse', 'Qty', 'Ref #']
-      const rows = (result.data ?? []).map((m, i) => [
-        i + 1,
-        new Date(m.createdAt).toLocaleString('id-ID'),
-        m.type,
-        m.Product?.name ?? `#${m.ProductId}`,
-        m.Warehouse?.name ?? '—',
-        m.quantity,
-        m.ReferenceId ?? '—',
-      ])
+      const headers = ['No', 'Tanggal', 'Tipe', 'Tujuan', 'Produk', 'SKU Produk', 'Varian / SKU', 'Gudang', 'Qty', 'Keterangan', 'Ref #']
+      const rows = (result.data ?? []).map((m, i) => {
+        const opts    = m.ProductSKU?.ProductVariantOptions ?? []
+        const variant = opts.map(o => o.value).join(' / ') || m.ProductSKU?.sku_code || '—'
+        return [
+          i + 1,
+          new Date(m.date ?? m.createdAt).toLocaleString('id-ID'),
+          m.type,
+          m.type === 'OUT' ? (m.purpose ?? '—') : '—',
+          m.Product?.name ?? `#${m.ProductId}`,
+          m.Product?.sku ?? '—',
+          variant,
+          m.Warehouse?.name ?? '—',
+          m.quantity,
+          m.note ?? '—',
+          m.ReferenceId ?? '—',
+        ]
+      })
       exportExcel(`pergerakan-${dateFrom ?? 'all'}-to-${dateTo ?? 'all'}`, { headers, rows, sheetName: 'Pergerakan Stok' })
     } catch {
       toast.error('Gagal export Excel')
@@ -102,21 +161,81 @@ export default function Movements() {
   }
 
   const columns = [
-    { key: 'type',      label: 'Tipe',      width: 110, render: r => TYPE_BADGE[r.type] ?? <span className="badge-muted">{r.type}</span> },
-    { key: 'product',   label: 'Produk',   render: r => (
-      <div>
-        <p className="font-semibold text-slate-800">{r.Product?.name ?? `#${r.ProductId}`}</p>
-        <p className="text-xs font-mono text-slate-400">{r.Product?.sku}</p>
-      </div>
-    )},
-    { key: 'warehouse', label: 'Gudang', render: r => <span className="text-slate-500">{r.Warehouse?.name ?? '—'}</span> },
-    { key: 'quantity',  label: 'Qty',       width: 90,  render: r => (
-      <span className={`font-mono font-bold text-sm ${r.type === 'IN' ? 'text-success' : r.type === 'OUT' ? 'text-danger' : 'text-warning'}`}>
-        {r.type === 'OUT' ? '−' : '+'}{r.quantity}
-      </span>
-    )},
-    { key: 'ref',  label: 'Ref #', width: 80,  render: r => <span className="font-mono text-xs text-slate-400">#{r.ReferenceId ?? '—'}</span> },
-    { key: 'date', label: 'Tanggal',  width: 140, render: r => <span className="text-xs text-slate-400">{new Date(r.createdAt).toLocaleString()}</span> },
+    {
+      key: 'date', label: 'Tanggal', width: 130,
+      render: r => <span className="text-xs text-slate-400">{new Date(r.date ?? r.createdAt).toLocaleString('id-ID')}</span>,
+    },
+    {
+      key: 'type', label: 'Tipe', width: 100,
+      render: r => TYPE_BADGE[r.type] ?? <span className="badge-muted">{r.type}</span>,
+    },
+    {
+      key: 'product', label: 'Produk',
+      render: r => {
+        const opts    = r.ProductSKU?.ProductVariantOptions ?? []
+        const variant = opts.map(o => o.value).join(' / ') || r.ProductSKU?.sku_code
+        return (
+          <div>
+            <p className="font-semibold text-slate-800">{r.Product?.name ?? `#${r.ProductId}`}</p>
+            <p className="text-xs font-mono text-slate-400">{r.Product?.sku}</p>
+            {variant && <p className="text-xs text-slate-500 mt-0.5">{variant}</p>}
+          </div>
+        )
+      },
+    },
+    {
+      key: 'purpose', label: 'Tujuan', width: 130,
+      render: r => r.type === 'OUT' && r.purpose
+        ? <span className="inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-violet-50 text-violet-700 border border-violet-100 truncate max-w-[120px]">{r.purpose}</span>
+        : <span className="text-xs text-slate-300">—</span>,
+    },
+    {
+      key: 'warehouse', label: 'Gudang', width: 130,
+      render: r => <span className="text-slate-500 text-sm">{r.Warehouse?.name ?? '—'}</span>,
+    },
+    {
+      key: 'quantity', label: 'Qty', width: 80,
+      render: r => (
+        <span className={`font-mono font-bold text-sm ${r.type === 'IN' ? 'text-success' : r.type === 'OUT' ? 'text-danger' : 'text-warning'}`}>
+          {r.type === 'OUT' ? '−' : r.type === 'IN' ? '+' : ''}{Math.abs(r.quantity)}
+        </span>
+      ),
+    },
+    {
+      key: 'note', label: 'Keterangan',
+      render: r => <span className="text-xs text-slate-400 truncate max-w-[160px] block">{r.note || '—'}</span>,
+    },
+    {
+      key: 'ref', label: 'Transaksi', width: 180,
+      render: r => {
+        if (!r.ReferenceId) return <span className="text-xs text-slate-400">—</span>
+        let path, label
+        if (r.source === 'TRANSFER') {
+          path  = `/transfers/${r.ReferenceId}`
+          label = 'Transfer'
+        } else if (r.type === 'IN') {
+          path  = `/stock-in/${r.ReferenceId}`
+          label = 'Stock IN'
+        } else if (r.type === 'OUT') {
+          path  = `/stock-out/${r.ReferenceId}`
+          label = 'Stock OUT'
+        } else if (r.type === 'ADJUSTMENT') {
+          path  = `/opname/${r.ReferenceId}`
+          label = 'Opname'
+        }
+        if (!path) return <span className="font-mono text-xs text-slate-400">#{r.ReferenceId}</span>
+        return (
+          <button
+            onClick={() => navigate(path)}
+            className="btn-secondary text-[11px] px-2.5 py-1 flex items-center gap-1.5 rounded-lg whitespace-nowrap"
+          >
+            <span className="text-slate-400">Lihat detail</span>
+            <span className="font-semibold text-slate-600">{label}</span>
+            <span className="font-mono text-slate-400">#{r.ReferenceId}</span>
+          </button>
+        )
+      },
+    },
   ]
 
   const net      = summary?.net ?? 0
@@ -169,8 +288,8 @@ export default function Movements() {
       )}
 
       {/* Filters + Table */}
-      <div className="card overflow-hidden">
-        <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/50 flex flex-wrap items-center gap-3">
+      <div className="card">
+        <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/50 rounded-t-lg flex flex-wrap items-center gap-3">
           {/* Date range */}
           <div className="flex items-center gap-1.5">
             <label className="text-xs text-slate-500">From</label>
@@ -189,31 +308,77 @@ export default function Movements() {
             />
           </div>
 
-          {/* Type */}
-          <select className="select w-36 text-sm" value={typeFilter} onChange={e => { setType(e.target.value); setPage(1) }}>
-            <option value="">All types</option>
-            <option value="IN">IN</option>
-            <option value="OUT">OUT</option>
-            <option value="ADJUSTMENT">Adjustment</option>
-          </select>
-
-          {/* Warehouse */}
-          <select className="select w-44 text-sm" value={whFilter} onChange={e => { setWh(e.target.value); setPage(1) }}>
-            <option value="">All warehouses</option>
-            {warehouses?.data?.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
-          </select>
-
-          {/* Product */}
-          <select className="select w-48 text-sm" value={prodFilter} onChange={e => { setProd(e.target.value); setPage(1) }}>
-            <option value="">All products</option>
-            {products?.data?.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-          </select>
+          <SearchableSelect
+            value={typeFilter}
+            onChange={v => { setType(v); setPage(1) }}
+            options={[
+              { value: '', label: 'All types' },
+              { value: 'IN', label: 'IN' },
+              { value: 'OUT', label: 'OUT' },
+              { value: 'ADJUSTMENT', label: 'Adjustment' },
+            ]}
+            placeholder="All types"
+            className="w-36 text-sm"
+          />
+          <SearchableSelect
+            value={whFilter}
+            onChange={v => { setWh(v); setPage(1) }}
+            options={[{ value: '', label: 'All warehouses' }, ...(warehouses?.data ?? []).map(w => ({ value: w.id, label: w.name }))]}
+            placeholder="All warehouses"
+            className="w-44 text-sm"
+          />
+          <SearchableSelect
+            value={prodFilter}
+            onChange={v => { setProd(v); setSku(''); setPage(1) }}
+            options={[{ value: '', label: 'All products' }, ...(products?.data ?? []).map(p => ({ value: p.id, label: p.name }))]}
+            placeholder="All products"
+            className="w-48 text-sm"
+          />
+          {prodFilter && (
+            <SearchableSelect
+              value={skuFilter}
+              onChange={v => { setSku(v); setPage(1) }}
+              options={[
+                { value: '', label: 'Semua size' },
+                ...(productSkus ?? []).map(s => {
+                  const opts  = s.ProductVariantOptions ?? []
+                  const label = opts.length ? opts.map(o => o.value).join(' / ') : s.sku_code
+                  return { value: s.id, label }
+                }),
+              ]}
+              placeholder="Semua size"
+              className="w-36 text-sm"
+            />
+          )}
+          <SearchableSelect
+            value={articleFilter}
+            onChange={v => { setArt(v); setPage(1) }}
+            options={[{ value: '', label: 'All koleksi' }, ...(articles?.data ?? []).map(a => ({ value: a.id, label: a.name }))]}
+            placeholder="All koleksi"
+            className="w-40 text-sm"
+          />
+          <SearchableSelect
+            value={catFilter}
+            onChange={v => { setCat(v); setPage(1) }}
+            options={[{ value: '', label: 'All kategori' }, ...(categories?.data ?? []).map(c => ({ value: c.id, label: c.name }))]}
+            placeholder="All kategori"
+            className="w-40 text-sm"
+          />
+          <SearchableSelect
+            value={purposeFilter}
+            onChange={v => { setPurp(v); setPage(1) }}
+            options={[{ value: '', label: 'All tujuan' }, ...PURPOSES.map(p => ({ value: p, label: p }))]}
+            placeholder="All tujuan"
+            className="w-44 text-sm"
+          />
 
           <button onClick={resetFilters} className="text-xs text-slate-400 hover:text-slate-600 underline ml-auto">Reset</button>
         </div>
 
-        <Table columns={columns} data={data?.data} loading={isLoading} emptyText="No movements found" />
-        <Pagination pagination={data?.pagination} onPageChange={setPage} />
+        <div className="overflow-hidden rounded-b-lg">
+          <Table columns={columns} data={data?.data} loading={isLoading} emptyText="No movements found" />
+          <Pagination pagination={data?.pagination} onPageChange={setPage} />
+        </div>
       </div>
     </div>
   )

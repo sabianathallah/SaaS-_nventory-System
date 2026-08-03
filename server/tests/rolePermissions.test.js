@@ -3,171 +3,207 @@ process.env.NODE_ENV = 'test';
 
 const request = require('supertest');
 const app     = require('../app');
-const { initDb }        = require('./setup');
-const { RolePermission } = require('../models');
-const { DEFAULT_PERMISSIONS, EDITABLE_ROLES } = require('../helpers/permissions');
+const { initDb }          = require('./setup');
+const { Role, RolePermission } = require('../models');
 
 let state;
+let opsRoleId;
+let systemRoleId;
+let customRoleId;
 
-beforeAll(async () => { state = await initDb(); });
+beforeAll(async () => {
+  state = await initDb();
+
+  // OPERASIONAL role untuk test update permissions
+  const opsRole = await Role.create({
+    name: 'OPERASIONAL', displayName: 'Operasional',
+    companyId: state.company.id, isSystem: false,
+  });
+  opsRoleId = opsRole.id;
+  await RolePermission.bulkCreate(
+    ['stock.view', 'inventory.view'].map(k => ({ roleId: opsRoleId, permissionKey: k }))
+  );
+
+  // System role untuk test block edit/delete
+  const sysRole = await Role.create({
+    name: 'TEST_SYSTEM_ROLE', displayName: 'System Role',
+    companyId: state.company.id, isSystem: true,
+  });
+  systemRoleId = sysRole.id;
+});
 
 afterAll(async () => {
-  // Clean up any custom permission rows created during tests
-  await RolePermission.destroy({ where: { companyId: state.company.id } }).catch(() => {});
+  await RolePermission.destroy({ where: {} }).catch(() => {});
+  await Role.destroy({ where: { companyId: state.company.id } }).catch(() => {});
 });
 
 const auth      = () => ({ Authorization: `Bearer ${state.tokens.admin}` });
 const superAuth = () => ({ Authorization: `Bearer ${state.tokens.superAdmin}` });
 
-describe('GET /role-permissions', () => {
-  test('returns allPermissions list and permissions per role', async () => {
-    const res = await request(app).get('/role-permissions').set(auth());
+// ── GET /permissions ──────────────────────────────────────────────────────────
 
+describe('GET /permissions', () => {
+  test('returns permission list', async () => {
+    const res = await request(app).get('/permissions').set(auth());
     expect(res.status).toBe(200);
-    expect(res.body).toHaveProperty('allPermissions');
-    expect(res.body).toHaveProperty('permissions');
-    expect(Array.isArray(res.body.allPermissions)).toBe(true);
-    expect(res.body.allPermissions.length).toBeGreaterThan(0);
+    expect(Array.isArray(res.body)).toBe(true);
+    expect(res.body.length).toBeGreaterThan(0);
   });
 
-  test('allPermissions has key, label, and group for each entry', async () => {
-    const res = await request(app).get('/role-permissions').set(auth());
-    res.body.allPermissions.forEach(p => {
+  test('each entry has key, label, and group', async () => {
+    const res = await request(app).get('/permissions').set(auth());
+    res.body.forEach(p => {
       expect(p).toHaveProperty('key');
       expect(p).toHaveProperty('label');
       expect(p).toHaveProperty('group');
     });
   });
+});
 
-  test('permissions contains all editable roles', async () => {
-    const res = await request(app).get('/role-permissions').set(auth());
-    EDITABLE_ROLES.forEach(role => {
-      expect(res.body.permissions).toHaveProperty(role);
-      expect(Array.isArray(res.body.permissions[role])).toBe(true);
+// ── GET /roles ────────────────────────────────────────────────────────────────
+
+describe('GET /roles', () => {
+  test('returns array of roles with permissions', async () => {
+    const res = await request(app).get('/roles').set(auth());
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body)).toBe(true);
+    res.body.forEach(r => {
+      expect(r).toHaveProperty('id');
+      expect(r).toHaveProperty('name');
+      expect(r).toHaveProperty('permissions');
+      expect(Array.isArray(r.permissions)).toBe(true);
     });
   });
 
-  test('fresh roles default to DEFAULT_PERMISSIONS values', async () => {
-    const res = await request(app).get('/role-permissions').set(auth());
-    const opsPerms = res.body.permissions['OPERASIONAL'];
-    DEFAULT_PERMISSIONS['OPERASIONAL'].forEach(key => {
-      expect(opsPerms).toContain(key);
-    });
+  test('COMPANY_ADMIN sees company-scoped + global roles', async () => {
+    const res = await request(app).get('/roles').set(auth());
+    expect(res.status).toBe(200);
+    const names = res.body.map(r => r.name);
+    expect(names).toContain('COMPANY_ADMIN');
+    expect(names).toContain('OPERASIONAL');
+  });
+
+  test('SUPER_ADMIN can list roles', async () => {
+    const res = await request(app).get('/roles').set(superAuth());
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body)).toBe(true);
+  });
+
+  test('OPERASIONAL role has expected permissions', async () => {
+    const res = await request(app).get('/roles').set(auth());
+    const opsRole = res.body.find(r => r.name === 'OPERASIONAL');
+    expect(opsRole).toBeDefined();
+    expect(opsRole.permissions).toContain('stock.view');
+    expect(opsRole.permissions).toContain('inventory.view');
   });
 });
 
-describe('PUT /role-permissions/:role', () => {
-  test('saves custom permissions for OPERASIONAL', async () => {
-    const customPerms = ['inventory.view', 'stock.view'];
+// ── POST /roles ───────────────────────────────────────────────────────────────
+
+describe('POST /roles — create custom role', () => {
+  test('creates a new custom role with permissions', async () => {
     const res = await request(app)
-      .put('/role-permissions/OPERASIONAL')
+      .post('/roles')
       .set(auth())
-      .send({ permissions: customPerms });
+      .send({ name: 'CUSTOM_TEST_ROLE', displayName: 'Custom Role', permissions: ['inventory.view'] });
 
-    expect(res.status).toBe(200);
-    expect(res.body.role).toBe('OPERASIONAL');
-    expect(res.body.permissions).toEqual(customPerms);
-  });
-
-  test('GET reflects the saved custom permissions', async () => {
-    const res = await request(app).get('/role-permissions').set(auth());
-    expect(res.body.permissions['OPERASIONAL']).toEqual(['inventory.view', 'stock.view']);
-  });
-
-  test('invalid permission keys are silently filtered out', async () => {
-    const res = await request(app)
-      .put('/role-permissions/OPERASIONAL')
-      .set(auth())
-      .send({ permissions: ['inventory.view', 'not.a.real.key'] });
-
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(201);
+    expect(res.body.name).toBe('CUSTOM_TEST_ROLE');
     expect(res.body.permissions).toContain('inventory.view');
-    expect(res.body.permissions).not.toContain('not.a.real.key');
+    customRoleId = res.body.id;
   });
 
-  test('returns 400 for non-editable role (SUPER_ADMIN)', async () => {
+  test('returns 400 when name is missing', async () => {
     const res = await request(app)
-      .put('/role-permissions/SUPER_ADMIN')
+      .post('/roles')
       .set(auth())
-      .send({ permissions: ['inventory.view'] });
+      .send({ displayName: 'No Name' });
     expect(res.status).toBe(400);
   });
 
-  test('returns 400 for non-editable role (ADMIN)', async () => {
+  test('returns 409 on duplicate role name', async () => {
     const res = await request(app)
-      .put('/role-permissions/ADMIN')
+      .post('/roles')
       .set(auth())
-      .send({ permissions: ['inventory.view'] });
-    expect(res.status).toBe(400);
-  });
-
-  test('returns 400 when permissions is not an array', async () => {
-    const res = await request(app)
-      .put('/role-permissions/OPERASIONAL')
-      .set(auth())
-      .send({ permissions: 'inventory.view' });
-    expect(res.status).toBe(400);
-  });
-
-  test('SUPER_ADMIN can update permissions for another company', async () => {
-    const res = await request(app)
-      .put('/role-permissions/CEO')
-      .set(superAuth())
-      .send({ permissions: ['reports.dashboard'] });
-    expect(res.status).toBe(200);
-    expect(res.body.permissions).toContain('reports.dashboard');
+      .send({ name: 'CUSTOM_TEST_ROLE', displayName: 'Duplicate' });
+    expect(res.status).toBe(409);
   });
 });
 
-describe('DELETE /role-permissions/:role (reset to default)', () => {
-  test('resets OPERASIONAL permissions back to default', async () => {
-    // First set custom
-    await request(app)
-      .put('/role-permissions/OPERASIONAL')
-      .set(auth())
-      .send({ permissions: ['inventory.view'] });
+// ── PUT /roles/:id ────────────────────────────────────────────────────────────
 
-    // Then reset
+describe('PUT /roles/:id — update permissions', () => {
+  test('updates permissions for a custom role', async () => {
     const res = await request(app)
-      .delete('/role-permissions/OPERASIONAL')
-      .set(auth());
+      .put(`/roles/${customRoleId}`)
+      .set(auth())
+      .send({ permissions: ['stock.view', 'inventory.view'] });
 
     expect(res.status).toBe(200);
-    expect(res.body.role).toBe('OPERASIONAL');
-    // Should return the default permissions list
-    DEFAULT_PERMISSIONS['OPERASIONAL'].forEach(key => {
-      expect(res.body.permissions).toContain(key);
-    });
+    expect(res.body.permissions).toContain('stock.view');
+    expect(res.body.permissions).toContain('inventory.view');
   });
 
-  test('GET after reset shows default permissions', async () => {
-    const res = await request(app).get('/role-permissions').set(auth());
-    DEFAULT_PERMISSIONS['OPERASIONAL'].forEach(key => {
-      expect(res.body.permissions['OPERASIONAL']).toContain(key);
-    });
+  test('GET /roles reflects updated permissions', async () => {
+    const res = await request(app).get('/roles').set(auth());
+    const role = res.body.find(r => r.id === customRoleId);
+    expect(role).toBeDefined();
+    expect(role.permissions).toContain('stock.view');
   });
 
-  test('returns 400 when trying to reset non-editable role', async () => {
+  test('can update displayName only', async () => {
     const res = await request(app)
-      .delete('/role-permissions/SUPER_ADMIN')
-      .set(auth());
+      .put(`/roles/${customRoleId}`)
+      .set(auth())
+      .send({ displayName: 'Updated Display Name' });
+    expect(res.status).toBe(200);
+    expect(res.body.displayName).toBe('Updated Display Name');
+  });
+
+  test('returns 400 when editing a system role', async () => {
+    const res = await request(app)
+      .put(`/roles/${systemRoleId}`)
+      .set(auth())
+      .send({ permissions: ['inventory.view'] });
     expect(res.status).toBe(400);
+  });
+
+  test('returns 404 for non-existent role id', async () => {
+    const res = await request(app)
+      .put('/roles/999999')
+      .set(auth())
+      .send({ permissions: ['inventory.view'] });
+    expect(res.status).toBe(404);
   });
 });
 
-describe('Permission isolation by company', () => {
-  test('SUPER_ADMIN sees permissions for companyId=null (global)', async () => {
-    const res = await request(app).get('/role-permissions').set(superAuth());
+// ── DELETE /roles/:id ─────────────────────────────────────────────────────────
+
+describe('DELETE /roles/:id — delete custom role', () => {
+  test('deletes a custom role', async () => {
+    const res = await request(app)
+      .delete(`/roles/${customRoleId}`)
+      .set(auth());
     expect(res.status).toBe(200);
-    expect(res.body).toHaveProperty('permissions');
   });
 
-  test('COMPANY_ADMIN sees permissions scoped to their company', async () => {
-    const res = await request(app).get('/role-permissions').set(auth());
-    expect(res.status).toBe(200);
-    // All roles should be present
-    EDITABLE_ROLES.forEach(role => {
-      expect(res.body.permissions).toHaveProperty(role);
-    });
+  test('GET /roles no longer contains deleted role', async () => {
+    const res = await request(app).get('/roles').set(auth());
+    const names = res.body.map(r => r.name);
+    expect(names).not.toContain('CUSTOM_TEST_ROLE');
+  });
+
+  test('returns 400 when deleting a system role', async () => {
+    const res = await request(app)
+      .delete(`/roles/${systemRoleId}`)
+      .set(auth());
+    expect(res.status).toBe(400);
+  });
+
+  test('returns 404 for non-existent role id', async () => {
+    const res = await request(app)
+      .delete('/roles/999999')
+      .set(auth());
+    expect(res.status).toBe(404);
   });
 });

@@ -105,6 +105,7 @@ describe('Stock Out', () => {
       .set(auth())
       .send({
         WarehouseId: state.warehouse.id,
+        purpose: 'Lainnya',
         note: 'Test stock out',
         items: [{ ProductId: product.id, quantity: 3 }],
       });
@@ -120,18 +121,19 @@ describe('Stock Out', () => {
       .set(auth())
       .send({
         WarehouseId: state.warehouse.id,
+        purpose: 'Lainnya',
         items: [],
       });
     expect(res.status).toBe(400);
   });
 
-  test('POST /stock-out-headers — returns 400 when quantity exceeds stock', async () => {
+  test('POST /stock-out-headers — returns 400 when purpose is missing', async () => {
     const res = await request(app)
       .post('/stock-out-headers')
       .set(auth())
       .send({
         WarehouseId: state.warehouse.id,
-        items: [{ ProductId: product.id, quantity: 9999 }],
+        items: [{ ProductId: product.id, quantity: 1 }],
       });
     expect(res.status).toBe(400);
   });

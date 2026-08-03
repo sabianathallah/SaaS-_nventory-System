@@ -20,6 +20,11 @@ module.exports = (sequelize, DataTypes) => {
         onDelete: 'CASCADE',
         onUpdate: 'CASCADE'
       });
+      Stock_Movement.belongsTo(models.ProductSKU, {
+        foreignKey: { name: 'ProductSKUId', allowNull: true },
+        onDelete: 'SET NULL',
+        onUpdate: 'CASCADE'
+      });
     }
   }
   Stock_Movement.init({
@@ -50,10 +55,17 @@ module.exports = (sequelize, DataTypes) => {
     quantity: {
       type: DataTypes.INTEGER,
       allowNull: true,
-      validate: { min: 0 }
+      // Negative values allowed for ADJUSTMENT movements (opname shrinkage)
     },
+    ProductSKUId: { type: DataTypes.INTEGER, allowNull: true },
     ReferenceId: DataTypes.BIGINT,
+    source: { type: DataTypes.STRING(20), allowNull: true },
     note: DataTypes.TEXT,
+    date: {
+      type: DataTypes.DATE,
+      allowNull: false,
+      defaultValue: DataTypes.NOW,
+    },
     companyId: { type: DataTypes.INTEGER, allowNull: true }
   }, {
     sequelize,

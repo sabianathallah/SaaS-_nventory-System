@@ -1,5 +1,5 @@
 'use strict';
-const { Warehouse } = require('../models');
+const { Warehouse, sequelize } = require('../models');
 const { companyFilter, companyId } = require('../helpers/tenancy');
 const { paginate, buildFilter, paginatedResponse } = require('../helpers/queryHelper');
 
@@ -10,6 +10,12 @@ class WarehouseController {
             const filter = buildFilter(req.query, { name: 'like', location: 'like' });
             const { rows, count } = await Warehouse.findAndCountAll({
                 where: { ...companyFilter(req), ...filter },
+                attributes: {
+                    include: [
+                        [sequelize.literal(`(SELECT COUNT(DISTINCT "ProductId") FROM "Stocks" WHERE "WarehouseId" = "Warehouse"."id" AND quantity > 0)`), 'productCount'],
+                        [sequelize.literal(`(SELECT COALESCE(SUM(quantity), 0) FROM "Stocks" WHERE "WarehouseId" = "Warehouse"."id")`), 'totalStock'],
+                    ]
+                },
                 order: [['name', 'ASC']],
                 limit, offset
             });

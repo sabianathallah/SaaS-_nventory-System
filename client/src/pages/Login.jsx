@@ -1,16 +1,18 @@
 import { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import toast from 'react-hot-toast'
-import { Loader2, ArrowRight } from 'lucide-react'
+import { Loader2, ArrowRight, Eye, EyeOff, ArrowLeft } from 'lucide-react'
 import logoPreface from '../assets/logo-preface.jpeg'
 
-const RED = '#C8102E'
+const MAROON = '#A0141E'
 
-const DEMOS = [
-  { email: 'superadmin@inventory.local', role: 'Super Admin' },
-  { email: 'admin@inventory.local',      role: 'Admin' },
-  { email: 'staff@inventory.local',      role: 'Staff' },
+const modules = [
+  'Preface HRIS System',
+  'Preface Inventory System',
+  'Preface Task System',
+  'Preface Finance System',
+  'Vendor Portal System',
 ]
 
 export default function Login() {
@@ -18,6 +20,7 @@ export default function Login() {
   const navigate    = useNavigate()
   const [form, setForm]       = useState({ email: '', password: '' })
   const [loading, setLoading] = useState(false)
+  const [showPwd, setShowPwd] = useState(false)
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -33,165 +36,283 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen flex bg-canvas">
+    <div style={{ minHeight: '100vh', display: 'flex' }}>
 
-      {/* ── Left panel — broken white ─────────────────────────── */}
+      {/* ── Left panel ──────────────────────────────────────────── */}
       <div
-        className="hidden lg:flex w-[420px] flex-col justify-between p-10 flex-shrink-0"
-        style={{ background: '#F5F3EF', borderRight: '1px solid #E0DDD7' }}
+        className="hidden lg:flex"
+        style={{
+          width: 420,
+          flexShrink: 0,
+          flexDirection: 'column',
+          justifyContent: 'space-between',
+          padding: '40px 40px 36px',
+          background: '#F5F3EF',
+          borderRight: '1px solid #E0DDD7',
+        }}
       >
-        {/* Brand */}
-        <div className="flex items-center gap-3">
-          <img src={logoPreface} alt="Preface" className="w-9 h-9 rounded-md object-cover" />
+        {/* Brand header */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <img
+            src={logoPreface}
+            alt="Preface"
+            style={{ width: 36, height: 36, borderRadius: 6, objectFit: 'cover', flexShrink: 0 }}
+          />
           <div>
-            <p className="font-bold text-slate-800 text-base leading-tight">Preface</p>
-            <p className="text-[11px] text-slate-400 leading-tight">Inventory System</p>
+            <p style={{ fontWeight: 700, color: '#1a1714', fontSize: 14, lineHeight: 1.2, margin: 0 }}>
+              Preface
+            </p>
+            <p style={{
+              fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.12em',
+              color: '#9a9690', margin: 0, lineHeight: 1.4,
+            }}>
+              Internal Platform
+            </p>
           </div>
         </div>
 
-        {/* Copy */}
-        <div>
-          <div className="mb-6">
-            {/* Badge merah — inline style */}
-            <span
-              className="inline-block px-2.5 py-1 rounded-md text-xs font-bold text-white mb-4"
-              style={{ background: RED }}
-            >
-              Inventory Management
-            </span>
-            <h1 className="text-3xl font-bold text-slate-800 leading-snug">
-              Kelola inventori<br />lebih mudah &amp; cepat
+        {/* Center block */}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 20 }}>
+          {/* Badge */}
+          <span style={{
+            display: 'inline-block',
+            alignSelf: 'flex-start',
+            padding: '4px 10px',
+            background: 'rgba(160,20,30,0.08)',
+            border: '0.5px solid rgba(160,20,30,0.3)',
+            color: MAROON,
+            fontSize: 10,
+            textTransform: 'uppercase',
+            letterSpacing: '0.16em',
+            borderRadius: 3,
+          }}>
+            Restricted Access
+          </span>
+
+          {/* Headline */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <h1 style={{
+              fontSize: 20, fontWeight: 600, color: '#1a1714',
+              lineHeight: 1.25, margin: 0,
+            }}>
+              One system. Full control.
             </h1>
-            <p className="text-sm mt-3 leading-relaxed text-slate-500">
-              Pantau stok real-time, kelola multi-gudang, dan optimalkan rantai pasok dalam satu platform.
+            <p style={{ fontSize: 12, color: '#7a7672', lineHeight: 1.6, margin: 0 }}>
+              Authorized personnel only. All activity is monitored and logged.
             </p>
           </div>
 
-          <div className="space-y-3">
-            {[
-              'Real-time stock tracking',
-              'Multi-warehouse management',
-              'Stock IN / OUT transactions',
-              'Role-based access control',
-            ].map(f => (
-              <div key={f} className="flex items-center gap-2.5">
-                {/* Lingkaran checklist — inline style merah */}
-                <div
-                  className="w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0"
-                  style={{ background: RED }}
-                >
-                  <svg width="8" height="6" viewBox="0 0 8 6" fill="none">
-                    <path d="M1 3L3 5L7 1" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
-                </div>
-                <span className="text-sm text-slate-600">{f}</span>
+          {/* Module list */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 4 }}>
+            {modules.map(m => (
+              <div key={m} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{
+                  width: 5, height: 5, borderRadius: '50%',
+                  background: MAROON, flexShrink: 0,
+                }} />
+                <span style={{ fontSize: 12, color: '#5a5652' }}>{m}</span>
               </div>
             ))}
           </div>
         </div>
 
-        <p className="text-[11px] text-slate-400">© 2026 Preface. All rights reserved.</p>
+        {/* Footer */}
+        <p style={{ fontSize: 10, color: '#b0aca6', letterSpacing: '0.08em', margin: 0 }}>
+          © 2025 Preface System — Internal Use Only
+        </p>
       </div>
 
-      {/* ── Right panel — putih bersih ────────────────────────── */}
-      <div className="flex-1 flex items-center justify-center p-6 bg-white">
-        <div className="w-full max-w-sm animate-slide-up">
+      {/* ── Right panel ─────────────────────────────────────────── */}
+      <div style={{
+        flex: 1,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 24,
+        background: '#FFFFFF',
+        position: 'relative',
+      }}>
+        {/* Back to home */}
+        <Link
+          to="/"
+          style={{
+            position: 'absolute',
+            top: 20,
+            left: 20,
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 5,
+            fontSize: 11,
+            color: '#9a9690',
+            textDecoration: 'none',
+            letterSpacing: '0.04em',
+            transition: 'color 0.15s',
+          }}
+          onMouseEnter={e => e.currentTarget.style.color = MAROON}
+          onMouseLeave={e => e.currentTarget.style.color = '#9a9690'}
+        >
+          <ArrowLeft size={12} /> Back to home
+        </Link>
+        <div style={{ width: '100%', maxWidth: 360 }} className="animate-slide-up">
 
           {/* Mobile logo */}
-          <div className="flex items-center gap-3 mb-8 lg:hidden">
-            <img src={logoPreface} alt="Preface" className="w-8 h-8 rounded-md object-cover" />
+          <div className="lg:hidden" style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 32 }}>
+            <img
+              src={logoPreface}
+              alt="Preface"
+              style={{ width: 32, height: 32, borderRadius: 6, objectFit: 'cover' }}
+            />
             <div>
-              <p className="font-bold text-slate-800 text-sm leading-tight">Preface</p>
-              <p className="text-[11px] text-slate-400 leading-tight">Inventory System</p>
+              <p style={{ fontWeight: 700, color: '#1a1714', fontSize: 13, lineHeight: 1.2, margin: 0 }}>Preface</p>
+              <p style={{ fontSize: 10, color: '#9a9690', textTransform: 'uppercase', letterSpacing: '0.12em', margin: 0 }}>
+                Internal Platform
+              </p>
             </div>
           </div>
 
-          <div className="mb-7">
-            <h2 className="text-2xl font-bold text-slate-800">Selamat datang</h2>
-            <p className="text-sm text-slate-500 mt-1">Masuk ke akun Anda untuk melanjutkan</p>
+          {/* Header block */}
+          <div style={{ marginBottom: 32 }}>
+            <p style={{
+              fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.18em',
+              color: '#9a9690', margin: '0 0 8px',
+            }}>
+              Preface System
+            </p>
+            <h2 style={{ fontSize: 22, fontWeight: 700, color: '#1a1714', margin: '0 0 6px' }}>
+              Welcome back
+            </h2>
+            <p style={{ fontSize: 13, color: '#7a7672', margin: 0 }}>
+              Sign in to your account and keep it moving
+            </p>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="label">Email</label>
+          {/* Form */}
+          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+            {/* Email */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <label style={{
+                fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.14em', color: '#9a9690',
+              }}>
+                Email
+              </label>
               <input
                 type="email"
-                className="input"
-                placeholder="anda@perusahaan.com"
+                placeholder="name@prefacewearhouse.com"
                 value={form.email}
                 onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
                 required
                 autoFocus
-              />
-            </div>
-            <div>
-              <label className="label">Password</label>
-              <input
-                type="password"
-                className="input"
-                placeholder="Masukkan password"
-                value={form.password}
-                onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
-                required
+                style={{
+                  border: 'none',
+                  borderBottom: '1px solid #d4d0c8',
+                  outline: 'none',
+                  background: 'transparent',
+                  padding: '6px 0',
+                  fontSize: 14,
+                  color: '#1a1714',
+                }}
+                onFocus={e => e.target.style.borderBottomColor = MAROON}
+                onBlur={e => e.target.style.borderBottomColor = '#d4d0c8'}
               />
             </div>
 
-            {/* Tombol submit — inline style merah */}
+            {/* Password */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <label style={{
+                fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.14em', color: '#9a9690',
+              }}>
+                Password
+              </label>
+              <div style={{ position: 'relative' }}>
+                <input
+                  type={showPwd ? 'text' : 'password'}
+                  placeholder="drop your password here"
+                  value={form.password}
+                  onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
+                  required
+                  style={{
+                    width: '100%',
+                    border: 'none',
+                    borderBottom: '1px solid #d4d0c8',
+                    outline: 'none',
+                    background: 'transparent',
+                    padding: '6px 28px 6px 0',
+                    fontSize: 14,
+                    color: '#1a1714',
+                    boxSizing: 'border-box',
+                  }}
+                  onFocus={e => e.target.style.borderBottomColor = MAROON}
+                  onBlur={e => e.target.style.borderBottomColor = '#d4d0c8'}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPwd(v => !v)}
+                  tabIndex={-1}
+                  style={{
+                    position: 'absolute',
+                    right: 0,
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    background: 'none',
+                    border: 'none',
+                    padding: 0,
+                    cursor: 'pointer',
+                    color: '#9a9690',
+                    display: 'flex',
+                    alignItems: 'center',
+                  }}
+                >
+                  {showPwd ? <EyeOff size={15} /> : <Eye size={15} />}
+                </button>
+              </div>
+            </div>
+
+            {/* Submit */}
             <button
               type="submit"
               disabled={loading}
-              className="w-full inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 mt-1 text-sm font-semibold rounded text-white shadow-sm transition-all active:scale-[0.98] disabled:opacity-50"
-              style={{ background: loading ? '#A00D26' : RED }}
-              onMouseEnter={e => { if (!loading) e.currentTarget.style.background = '#D93248' }}
-              onMouseLeave={e => { if (!loading) e.currentTarget.style.background = RED }}
+              style={{
+                width: '100%',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 6,
+                padding: '11px 16px',
+                background: loading ? '#8a1019' : MAROON,
+                color: '#ffffff',
+                border: 'none',
+                borderRadius: 3,
+                fontSize: 13,
+                fontWeight: 600,
+                letterSpacing: '0.04em',
+                cursor: loading ? 'not-allowed' : 'pointer',
+                opacity: loading ? 0.75 : 1,
+                transition: 'background 0.15s',
+                marginTop: 4,
+              }}
+              onMouseEnter={e => { if (!loading) e.currentTarget.style.background = '#c01925' }}
+              onMouseLeave={e => { if (!loading) e.currentTarget.style.background = MAROON }}
             >
               {loading
-                ? <><Loader2 size={14} className="animate-spin" /> Masuk…</>
-                : <><span>Masuk</span><ArrowRight size={14} /></>
+                ? <><Loader2 size={14} className="animate-spin" /> Signing in…</>
+                : <><span>Let's go</span><ArrowRight size={14} /></>
               }
             </button>
           </form>
 
-          {/* Demo accounts */}
-          <div className="mt-7 pt-6 border-t border-slate-100">
-            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-3">Akun Demo</p>
-            <div className="space-y-2">
-              {DEMOS.map(({ email, role }) => (
-                <button
-                  key={email}
-                  type="button"
-                  onClick={() => setForm({ email, password: 'password123' })}
-                  className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-lg bg-slate-50 border border-slate-200 text-left transition-all group"
-                  onMouseEnter={e => {
-                    e.currentTarget.style.borderColor = `${RED}66`
-                    e.currentTarget.style.background = '#FFF1F1'
-                  }}
-                  onMouseLeave={e => {
-                    e.currentTarget.style.borderColor = ''
-                    e.currentTarget.style.background = ''
-                  }}
-                >
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-semibold text-slate-700 truncate">{email}</p>
-                    <p className="text-[10px] text-slate-400 mt-0.5">Password: password123</p>
-                  </div>
-                  {/* Role badge — inline style */}
-                  <span
-                    className="inline-flex px-2 py-0.5 rounded text-[10px] font-bold border flex-shrink-0"
-                    style={
-                      role === 'Super Admin'
-                        ? { background: '#FFF1F1', color: RED, borderColor: '#FECACA' }
-                        : role === 'Admin'
-                        ? { background: '#DBEAFE', color: '#2563EB', borderColor: '#BFDBFE' }
-                        : { background: '#F1F5F9', color: '#64748B', borderColor: '#E2E8F0' }
-                    }
-                  >
-                    {role}
-                  </span>
-                </button>
-              ))}
-            </div>
+          {/* Footer */}
+          <div style={{ marginTop: 28, borderTop: '0.5px solid #e8e4dc', paddingTop: 18, textAlign: 'center' }}>
+            <p style={{ fontSize: 11, color: '#9a9690', margin: 0 }}>
+              No access yet? Hit up{' '}
+              <a
+                href="mailto:admin@prefacewearhouse.com"
+                style={{ color: MAROON, textDecoration: 'none' }}
+              >
+                admin@prefacewearhouse.com
+              </a>
+            </p>
           </div>
+
         </div>
       </div>
     </div>

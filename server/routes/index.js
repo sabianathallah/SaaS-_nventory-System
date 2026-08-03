@@ -6,30 +6,51 @@ const authentication = require('../middlewares/authentication');
 const isAdmin = require('../middlewares/authorization');
 const LoginController = require('../controllers/loginController');
 
-const dashboardRouter      = require('./dashboard');
-const companyRouter        = require('./company');
-const categoryRouter       = require('./category');
-const articleRouter        = require('./article');
-const productRouter        = require('./product');
-const productVariantRouter = require('./product_variant');
-const productSkuRouter     = require('./product_sku');
-const warehouseRouter = require('./warehouse');
-const stockRouter = require('./stock');
-const supplierRouter = require('./supplier');
-const stockInHeaderRouter = require('./stock_in_header');
-const stockOutHeaderRouter = require('./stock_out_header');
-const stockMovementRouter = require('./stock_movement');
+const dashboardRouter          = require('./dashboard');
+const companyRouter            = require('./company');
+const categoryRouter           = require('./category');
+const subCategoryRouter        = require('./sub_category');
+const articleRouter            = require('./article');
+const productRouter            = require('./product');
+const productVariantRouter     = require('./product_variant');
+const productSkuRouter         = require('./product_sku');
+const warehouseRouter          = require('./warehouse');
+const stockRouter              = require('./stock');
+const supplierRouter           = require('./supplier');
+const stockInHeaderRouter      = require('./stock_in_header');
+const stockOutHeaderRouter     = require('./stock_out_header');
+const stockMovementRouter      = require('./stock_movement');
 const stockOpnameSessionRouter = require('./stock_opname_session');
-const stockOpnameItemRouter = require('./stock_opname_item');
-const userRouter = require('./user');
-
-const vendorRouter          = require('./vendor');
-const incomingGoodsRouter   = require('./incoming_goods');
-const suratJalanRouter      = require('./surat_jalan');
-const packingJobRouter      = require('./packing_job');
+const stockOpnameItemRouter    = require('./stock_opname_item');
+const stockInDraftRouter       = require('./stock_in_draft');
+const stockOutDraftRouter      = require('./stock_out_draft');
+const stockTransferRouter      = require('./stock_transfer');
+const shipmentCategoryRouter   = require('./shipment_category');
+const manualShipmentRouter     = require('./manual_shipment');
+const handoverRouter           = require('./handover');
+const dbLinkRouter             = require('./db_link');
+const vendorDeliveryRouter     = require('./vendor_delivery');
+const userRouter               = require('./user');
+const vendorRouter             = require('./vendor');
+const incomingGoodsRouter      = require('./incoming_goods');
+const packingJobRouter         = require('./packing_job');
 const formAnakPackingRouter    = require('./form_anak_packing');
-const rolePermissionRouter     = require('./role_permission')
+const roleRouter               = require('./role');
+const permissionRouter         = require('./permission');
 const systemSettingRouter      = require('./system_setting');
+const reportRouter             = require('./report');
+const skuWarehouseStockRouter  = require('./sku_warehouse_stock');
+const channelRouter            = require('./channel');
+const skuChannelStockRouter    = require('./sku_channel_stock');
+const profileRouter            = require('./profile');
+const requestsRouter           = require('./requests');
+const requestTypesRouter       = require('./request_types');
+const hrisRouter                = require('./hris');
+const taskRouter                = require('./task');
+const taskListRouter             = require('./task-list');
+const notificationRouter        = require('./notification');
+const { Role, RolePermission } = require('../models');
+const { Op } = require('sequelize');
 
 // Public routes
 router.post('/login', LoginController.login);
@@ -38,33 +59,70 @@ router.post('/refresh-token', LoginController.refreshToken);
 // Protected routes
 router.use(authentication);
 
+// Refresh permissions without re-login
+router.get('/me/permissions', async (req, res, next) => {
+  try {
+    const { role, companyId } = req.user;
+    const roleRow = await Role.findOne({
+      where: { name: role, [Op.or]: [{ companyId }, { companyId: null }] },
+      order: [['companyId', 'DESC NULLS LAST']],
+    });
+    const rpRows = roleRow
+      ? await RolePermission.findAll({ where: { roleId: roleRow.id } })
+      : [];
+    res.json({ role, permissions: rpRows.map(r => r.permissionKey), avatar: req.user.avatar ?? null, divisi: req.user.divisi ?? null, divisis: req.user.divisis ?? [] });
+  } catch (err) { next(err); }
+});
+
 router.use('/dashboard',  dashboardRouter);
 router.use('/categories', categoryRouter);
+router.use('/sub-categories', subCategoryRouter);
 router.use('/articles',   articleRouter);
 router.use('/products',   productRouter);
 router.use('/products/:productId/variant-types', productVariantRouter);
 router.use('/products/:productId/skus',          productSkuRouter);
 router.use('/warehouses', warehouseRouter);
-router.use('/stocks', stockRouter);
-router.use('/suppliers', supplierRouter);
-router.use('/stock-in-headers', stockInHeaderRouter);
-router.use('/stock-out-headers', stockOutHeaderRouter);
-router.use('/stock-movements', stockMovementRouter);
+router.use('/stocks',     stockRouter);
+router.use('/suppliers',  supplierRouter);
+router.use('/stock-in-headers',      stockInHeaderRouter);
+router.use('/stock-out-headers',     stockOutHeaderRouter);
+router.use('/stock-movements',       stockMovementRouter);
 router.use('/stock-opname-sessions', stockOpnameSessionRouter);
-router.use('/stock-opname-items', stockOpnameItemRouter);
+router.use('/stock-opname-items',    stockOpnameItemRouter);
+router.use('/stock-in-drafts',       stockInDraftRouter);
+router.use('/stock-out-drafts',      stockOutDraftRouter);
+router.use('/stock-transfers',       stockTransferRouter);
+router.use('/shipment-categories',   shipmentCategoryRouter);
+router.use('/manual-shipments',      manualShipmentRouter);
+router.use('/handovers',             handoverRouter);
+router.use('/db-folders',            dbLinkRouter);
+router.use('/vendor-deliveries',     vendorDeliveryRouter);
 
-// Packing module routes
-router.use('/vendors',            vendorRouter);
-router.use('/incoming-goods',     incomingGoodsRouter);
-router.use('/surat-jalan',        suratJalanRouter);
-router.use('/packing-jobs',       packingJobRouter);
-router.use('/form-anak-packing',  formAnakPackingRouter);
+// Packing
+router.use('/vendors',           vendorRouter);
+router.use('/incoming-goods',    incomingGoodsRouter);
+router.use('/packing-jobs',      packingJobRouter);
+router.use('/form-anak-packing', formAnakPackingRouter);
 
-router.use('/role-permissions', rolePermissionRouter)
-router.use('/system',          systemSettingRouter);
+// Roles & Permissions (new)
+router.use('/roles',       roleRouter);
+router.use('/permissions', permissionRouter);
 
-// Admin only routes
-router.use('/users', isAdmin, userRouter);
+router.use('/me',       profileRouter);
+router.use('/system',   systemSettingRouter);
+router.use('/reports',              reportRouter);
+router.use('/sku-warehouse-stocks', skuWarehouseStockRouter);
+router.use('/channels', channelRouter);
+router.use('/sku-channel-stocks', skuChannelStockRouter);
+router.use('/requests',      requestsRouter);
+router.use('/request-types', requestTypesRouter);
+router.use('/hris',          hrisRouter);
+router.use('/tasks',         taskRouter);
+router.use('/task-lists',    taskListRouter);
+router.use('/notifications', notificationRouter);
+
+// Admin only
+router.use('/users',     isAdmin, userRouter);
 router.use('/companies', isAdmin, companyRouter);
 
 module.exports = router;

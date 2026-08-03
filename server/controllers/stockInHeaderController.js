@@ -1,8 +1,11 @@
 'use strict';
+const { Op } = require('sequelize');
 const {
-  sequelize, Stock_In_Header, Stock_In_Item, Stock_Movement, Stock,
-  Supplier, Warehouse, ProductSKU, Product, ProductVariantOption, ProductVariantType,
+  sequelize, Stock_In_Header, Stock_In_Item, Stock_Movement, Stock, SkuWarehouseStock,
+  Supplier, Warehouse, User, ProductSKU, Product, ProductVariantOption, ProductVariantType,
+  Vendor, VendorDelivery,
 } = require('../models');
+const { upsertSkuWarehouseStock } = require('../helpers/skuStock');
 const { companyFilter, companyId } = require('../helpers/tenancy');
 const { paginate, buildFilter, paginatedResponse } = require('../helpers/queryHelper');
 
@@ -28,18 +31,37 @@ class StockInHeaderController {
     try {
       const { page, limit, offset } = paginate(req.query);
       const filter = buildFilter(req.query, {
-        SupplierId: 'exact',
-        dateFrom:   { field: 'date', type: 'gte' },
-        dateTo:     { field: 'date', type: 'lte' },
+        SupplierId:  'exact',
+        WarehouseId: 'exact',
+        dateFrom:    { field: 'date', type: 'gte' },
+        dateTo:      { field: 'date', type: 'lte' },
       });
+      // Search umum: nama supplier + nama produk di dalam item.
+      // Search catatan terpisah (item stock in tidak punya kolom catatan).
+      const extra = [];
+      if (req.query.search) {
+        const term = sequelize.escape(`%${req.query.search}%`);
+        extra.push({
+          [Op.or]: [
+            sequelize.literal(`"Stock_In_Header"."SupplierId" IN (SELECT id FROM "Suppliers" WHERE "name" ILIKE ${term})`),
+            sequelize.literal(`"Stock_In_Header"."id" IN (SELECT sii."StockInHeaderId" FROM "Stock_In_Items" sii JOIN "ProductSKUs" ps ON sii."ProductSKUId" = ps.id JOIN "Products" p ON ps."ProductId" = p.id WHERE p."name" ILIKE ${term})`),
+          ],
+        });
+      }
+      if (req.query.noteSearch) {
+        extra.push({ note: { [Op.iLike]: `%${req.query.noteSearch}%` } });
+      }
+
       const { rows, count } = await Stock_In_Header.findAndCountAll({
-        where: { ...companyFilter(req), ...filter },
+        where: { ...companyFilter(req), ...filter, ...(extra.length && { [Op.and]: extra }) },
         include: [
           { model: Supplier,  attributes: ['id', 'name'] },
           { model: Warehouse, attributes: ['id', 'name'] },
+          { model: User,      foreignKey: 'createdBy', attributes: ['id', 'name'] },
+          { model: User,      foreignKey: 'updatedBy', as: 'updater', attributes: ['id', 'name'] },
           { model: Stock_In_Item, attributes: ['id', 'quantity', 'price'] },
         ],
-        order: [['date', 'DESC']],
+        order: [['date', 'DESC'], ['id', 'DESC']],
         limit, offset,
         distinct: true,
       });
@@ -47,8 +69,9 @@ class StockInHeaderController {
       const enriched = rows.map(r => {
         const plain = r.toJSON();
         const itemCount  = plain.Stock_In_Items?.length ?? 0;
+        const totalQty   = (plain.Stock_In_Items ?? []).reduce((s, i) => s + i.quantity, 0);
         const grandTotal = (plain.Stock_In_Items ?? []).reduce((s, i) => s + Number(i.price) * i.quantity, 0);
-        return { ...plain, itemCount, grandTotal };
+        return { ...plain, itemCount, totalQty, grandTotal };
       });
 
       res.status(200).json(paginatedResponse(enriched, count, page, limit));
@@ -62,6 +85,10 @@ class StockInHeaderController {
         include: [
           { model: Supplier,  attributes: ['id', 'name'] },
           { model: Warehouse, attributes: ['id', 'name'] },
+          { model: User, foreignKey: 'createdBy', attributes: ['id', 'name'] },
+          { model: User, foreignKey: 'updatedBy', as: 'updater', attributes: ['id', 'name'] },
+          { model: Vendor, attributes: ['id', 'name'] },
+          { model: VendorDelivery, as: 'sourceDelivery', attributes: ['id', 'date'] },
           {
             model: Stock_In_Item,
             include: SKU_INCLUDE,
@@ -79,7 +106,7 @@ class StockInHeaderController {
   static async create(req, res, next) {
     const t = await sequelize.transaction();
     try {
-      const { items = [], date, SupplierId, WarehouseId, note } = req.body;
+      const { items = [], date, SupplierId, WarehouseId, note, VendorId, sourceDeliveryId } = req.body;
       const cid = companyId(req);
 
       if (!WarehouseId) {
@@ -92,6 +119,9 @@ class StockInHeaderController {
         SupplierId: SupplierId || null,
         WarehouseId,
         note: note || null,
+        VendorId: VendorId || null,
+        sourceDeliveryId: sourceDeliveryId || null,
+        createdBy: req.user.id,
         companyId: cid,
       }, { transaction: t });
 
@@ -119,11 +149,15 @@ class StockInHeaderController {
             transaction: t,
           });
           await stock.increment('quantity', { by: Number(quantity), transaction: t });
+          await sku.increment('qty', { by: Number(quantity), transaction: t });
+          await upsertSkuWarehouseStock(t, SkuWarehouseStock, { ProductSKUId: Number(ProductSKUId), WarehouseId, delta: Number(quantity), companyId: cid });
 
           await Stock_Movement.create({
-            ProductId: sku.ProductId, WarehouseId,
+            ProductId: sku.ProductId, ProductSKUId: Number(ProductSKUId), WarehouseId,
             type: 'IN', quantity: Number(quantity),
-            ReferenceId: header.id, note: note || null, companyId: cid,
+            ReferenceId: header.id, source: 'STOCK_IN', note: note || null,
+            date: header.date || new Date(),
+            companyId: cid,
           }, { transaction: t });
         }
       }
@@ -146,19 +180,60 @@ class StockInHeaderController {
     try {
       const header = await Stock_In_Header.findOne({ where: { id: req.params.id, ...companyFilter(req) } });
       if (!header) throw { name: 'NotFound', message: 'Stock in not found' };
-      const { date, SupplierId, WarehouseId, note } = req.body;
-      await header.update({ date, SupplierId, WarehouseId, note });
+      if (header.status !== 'open') {
+        return res.status(400).json({ message: 'Sesi masih terkunci. Buka sesi dulu untuk mengedit.' });
+      }
+      // WarehouseId changes are blocked — moving stock requires delete + recreate
+      if (req.body.WarehouseId && Number(req.body.WarehouseId) !== header.WarehouseId) {
+        return res.status(400).json({ message: 'Gudang tidak dapat diubah. Hapus dan buat ulang dokumen untuk mengganti gudang.' });
+      }
+      const { date, SupplierId, note } = req.body;
+      await header.update({ date, SupplierId, note, updatedBy: req.user.id });
+      res.status(200).json(header);
+    } catch (err) { next(err); }
+  }
+
+  // PATCH /:id/status — buka/tutup sesi edit
+  static async setStatus(req, res, next) {
+    try {
+      const header = await Stock_In_Header.findOne({ where: { id: req.params.id, ...companyFilter(req) } });
+      if (!header) throw { name: 'NotFound', message: 'Stock in not found' };
+      const { status } = req.body;
+      if (!['open', 'closed'].includes(status)) {
+        return res.status(400).json({ message: "status harus 'open' atau 'closed'" });
+      }
+      await header.update({ status, updatedBy: req.user.id });
       res.status(200).json(header);
     } catch (err) { next(err); }
   }
 
   static async delete(req, res, next) {
+    const t = await sequelize.transaction();
     try {
-      const header = await Stock_In_Header.findOne({ where: { id: req.params.id, ...companyFilter(req) } });
-      if (!header) throw { name: 'NotFound', message: 'Stock in not found' };
-      await header.destroy();
+      const header = await Stock_In_Header.findOne({
+        where: { id: req.params.id, ...companyFilter(req) },
+        include: [{ model: Stock_In_Item }],
+        transaction: t,
+      });
+      if (!header) { await t.rollback(); throw { name: 'NotFound', message: 'Stock in not found' }; }
+
+      for (const item of (header.Stock_In_Items || [])) {
+        const sku = await ProductSKU.findByPk(item.ProductSKUId, { transaction: t });
+        if (sku) {
+          const stock = await Stock.findOne({
+            where: { ProductId: sku.ProductId, WarehouseId: header.WarehouseId },
+            transaction: t,
+          });
+          if (stock) await stock.decrement('quantity', { by: item.quantity, transaction: t });
+          await sku.decrement('qty', { by: item.quantity, transaction: t });
+          await upsertSkuWarehouseStock(t, SkuWarehouseStock, { ProductSKUId: item.ProductSKUId, WarehouseId: header.WarehouseId, delta: -item.quantity, companyId: sku.companyId });
+        }
+      }
+      await Stock_Movement.destroy({ where: { ReferenceId: header.id }, transaction: t });
+      await header.destroy({ transaction: t });
+      await t.commit();
       res.status(200).json({ message: 'Deleted' });
-    } catch (err) { next(err); }
+    } catch (err) { await t.rollback(); next(err); }
   }
 
   // ── Item sub-routes ──────────────────────────────────────────────────────────
@@ -168,6 +243,10 @@ class StockInHeaderController {
     try {
       const header = await Stock_In_Header.findOne({ where: { id: req.params.id, ...companyFilter(req) } });
       if (!header) throw { name: 'NotFound', message: 'Stock in not found' };
+      if (header.status !== 'open') {
+        await t.rollback();
+        return res.status(400).json({ message: 'Sesi masih terkunci. Buka sesi dulu untuk menambah item.' });
+      }
 
       const { ProductSKUId, quantity, price } = req.body;
       if (!ProductSKUId || !quantity || quantity <= 0) {
@@ -192,13 +271,18 @@ class StockInHeaderController {
           transaction: t,
         });
         await stock.increment('quantity', { by: Number(quantity), transaction: t });
+        await sku.increment('qty', { by: Number(quantity), transaction: t });
+        await upsertSkuWarehouseStock(t, SkuWarehouseStock, { ProductSKUId: Number(ProductSKUId), WarehouseId: header.WarehouseId, delta: Number(quantity), companyId: cid });
         await Stock_Movement.create({
-          ProductId: sku.ProductId, WarehouseId: header.WarehouseId,
+          ProductId: sku.ProductId, ProductSKUId: Number(ProductSKUId), WarehouseId: header.WarehouseId,
           type: 'IN', quantity: Number(quantity),
-          ReferenceId: header.id, companyId: cid,
+          ReferenceId: header.id, source: 'STOCK_IN',
+          date: header.date || new Date(),
+          companyId: cid,
         }, { transaction: t });
       }
 
+      await header.update({ updatedBy: req.user.id }, { transaction: t });
       await t.commit();
       const full = await Stock_In_Item.findByPk(item.id, { include: SKU_INCLUDE });
       res.status(201).json(full);
@@ -215,6 +299,10 @@ class StockInHeaderController {
       if (!item) { await t.rollback(); throw { name: 'NotFound', message: 'Item not found' }; }
 
       const header = await Stock_In_Header.findByPk(req.params.id, { transaction: t });
+      if (header?.status !== 'open') {
+        await t.rollback();
+        return res.status(400).json({ message: 'Sesi masih terkunci. Buka sesi dulu untuk mengedit item.' });
+      }
 
       const newQty   = req.body.quantity != null ? Number(req.body.quantity) : item.quantity;
       const newPrice = req.body.price    != null ? Number(req.body.price)    : item.price;
@@ -231,10 +319,14 @@ class StockInHeaderController {
             transaction: t,
           });
           await stock.increment('quantity', { by: delta, transaction: t });
+          await sku.increment('qty', { by: delta, transaction: t });
+          await upsertSkuWarehouseStock(t, SkuWarehouseStock, { ProductSKUId: item.ProductSKUId, WarehouseId: header.WarehouseId, delta, companyId: companyId(req) });
           await Stock_Movement.create({
-            ProductId: sku.ProductId, WarehouseId: header.WarehouseId,
+            ProductId: sku.ProductId, ProductSKUId: item.ProductSKUId, WarehouseId: header.WarehouseId,
             type: delta > 0 ? 'IN' : 'OUT', quantity: Math.abs(delta),
-            ReferenceId: header.id, companyId: companyId(req),
+            ReferenceId: header.id, source: 'STOCK_IN',
+            date: header.date || new Date(),
+            companyId: companyId(req),
           }, { transaction: t });
         }
       }
@@ -255,6 +347,10 @@ class StockInHeaderController {
       if (!item) { await t.rollback(); throw { name: 'NotFound', message: 'Item not found' }; }
 
       const header = await Stock_In_Header.findByPk(req.params.id, { transaction: t });
+      if (header?.status !== 'open') {
+        await t.rollback();
+        return res.status(400).json({ message: 'Sesi masih terkunci. Buka sesi dulu untuk menghapus item.' });
+      }
       if (header) {
         const sku = await ProductSKU.findByPk(item.ProductSKUId, { transaction: t });
         if (sku) {
@@ -265,15 +361,21 @@ class StockInHeaderController {
           if (stock) {
             await stock.decrement('quantity', { by: item.quantity, transaction: t });
           }
+          await sku.decrement('qty', { by: item.quantity, transaction: t });
+          await upsertSkuWarehouseStock(t, SkuWarehouseStock, { ProductSKUId: item.ProductSKUId, WarehouseId: header.WarehouseId, delta: -item.quantity, companyId: sku.companyId });
           await Stock_Movement.create({
-            ProductId: sku.ProductId, WarehouseId: header.WarehouseId,
+            ProductId: sku.ProductId, ProductSKUId: item.ProductSKUId, WarehouseId: header.WarehouseId,
             type: 'OUT', quantity: item.quantity,
-            ReferenceId: header.id, companyId: companyId(req),
+            ReferenceId: header.id, source: 'STOCK_IN',
+            note: `Koreksi: item dihapus dari Stock IN #${header.id}`,
+            date: header.date || new Date(),
+            companyId: companyId(req),
           }, { transaction: t });
         }
       }
 
       await item.destroy({ transaction: t });
+      if (header) await header.update({ updatedBy: req.user.id }, { transaction: t });
       await t.commit();
       res.status(200).json({ message: 'Item removed' });
     } catch (err) { await t.rollback(); next(err); }
@@ -284,8 +386,9 @@ class StockInHeaderController {
     try {
       const { code } = req.query;
       if (!code) return res.status(400).json({ message: 'code query param required' });
+      const cid = req.user.role === 'SUPER_ADMIN' ? undefined : req.user.companyId;
       const sku = await ProductSKU.findOne({
-        where: { sku_code: code },
+        where: { sku_code: code, ...(cid != null ? { companyId: cid } : {}) },
         include: [
           { model: Product, attributes: ['id', 'name', 'imageUrl', 'unit'] },
           {

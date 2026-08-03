@@ -1,437 +1,697 @@
-import { useState } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { incomingGoodsApi, vendorsApi, productsApi } from '../api'
+import { useMemo, useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import { vendorDeliveriesApi, articlesApi, productsApi, productSkusApi, vendorsApi } from '../api'
 import { useAuth } from '../context/AuthContext'
 import PageHeader from '../components/PageHeader'
+import SearchableSelect from '../components/SearchableSelect'
 import { Table, Pagination } from '../components/Table'
-import Modal from '../components/Modal'
-import toast from 'react-hot-toast'
-import QRScanner from '../components/QRScanner'
-import {
-  Plus, Eye, CheckCircle, BellRing, PackageCheck,
-  Trash2, ChevronDown, X, ScanLine,
-} from 'lucide-react'
+import { useCompanyGuard } from '../hooks/useCompanyGuard'
+import CompanyRequiredBanner from '../components/CompanyRequiredBanner'
+import { Plus, Eye, Video, AlertCircle, TriangleAlert, BarChart2, List, Package, Truck, Warehouse as WarehouseIcon } from 'lucide-react'
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-const STATUS_LABEL = {
-  DRAFT:                'Draft',
-  VENDOR_CONFIRMED:     'Vendor Confirmed',
-  PRODUCTION_NOTIFIED:  'Produksi Notified',
-  PACKING_IN_PROGRESS:  'Packing In Progress',
-  COMPLETED:            'Completed',
-}
-const STATUS_BADGE = {
-  DRAFT:                'badge-muted',
-  VENDOR_CONFIRMED:     'badge-teal',
-  PRODUCTION_NOTIFIED:  'badge-amber',
-  PACKING_IN_PROGRESS:  'badge-brand',
-  COMPLETED:            'badge-green',
+const fmtDate = (d) => d ? new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'
+const fmtShortDate = (d) => {
+  if (!d) return ''
+  const [, m, day] = d.split('-')
+  return `${day}/${m}`
 }
 
-const fmt = (d) => d ? new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'
+function defaultFrom() {
+  const d = new Date()
+  d.setDate(d.getDate() - 29)
+  return d.toISOString().slice(0, 10)
+}
 
-const EMPTY_FORM = { VendorId: '', receivedDate: '', vendorDeliveryNote: '', notes: '' }
-const EMPTY_ITEM = { ProductId: '', qtyOrdered: '', qtyReceived: '', unit: 'pcs', notes: '' }
+const hasSJ = (r) => !!r.sjNumber || (Array.isArray(r.sjPhotos) ? r.sjPhotos.length > 0 : !!r.sjPhotos)
 
-// ── Component ─────────────────────────────────────────────────────────────────
+// ── Analytics panel ─────────────────────────────────────────────────────────
+function AnalyticsPanel() {
+  const [searchParams, setSearchParams] = useSearchParams()
 
-export default function IncomingGoods() {
-  const qc = useQueryClient()
-  const { isOperasional } = useAuth()
-  const [page, setPage]       = useState(1)
-  const [statusFilter, setStatusFilter] = useState('')
-  const [modal, setModal]       = useState(null)
-  const [form, setForm]         = useState(EMPTY_FORM)
-  const [items, setItems]       = useState([])
-  const [newItem, setNewItem]   = useState(EMPTY_ITEM)
-  const [actionNote, setActionNote] = useState('')
-  const [showScanner, setShowScanner] = useState(false)
+  const dateFrom     = searchParams.get('from')    || defaultFrom()
+  const dateTo       = searchParams.get('to')      || new Date().toISOString().slice(0, 10)
+  const articleId    = searchParams.get('article') || ''
+  const productId    = searchParams.get('prod')    || ''
+  const productSkuId = searchParams.get('sku')     || ''
+
+  const sp = (updates) => setSearchParams(prev => {
+    Object.entries(updates).forEach(([k, v]) => v ? prev.set(k, v) : prev.delete(k))
+    return prev
+  }, { replace: true })
+
+  const filters = useMemo(() => ({
+    dateFrom,
+    dateTo,
+    articleId:    articleId    || undefined,
+    productId:    productId    || undefined,
+    productSkuId: productSkuId || undefined,
+  }), [dateFrom, dateTo, articleId, productId, productSkuId])
 
   const { data, isLoading } = useQuery({
-    queryKey: ['incoming-goods', { page, status: statusFilter }],
-    queryFn:  () => incomingGoodsApi.list({ page, limit: 15, status: statusFilter || undefined }),
+    queryKey: ['vendor-deliveries-analytics', filters],
+    queryFn:  () => vendorDeliveriesApi.analytics(filters),
   })
 
-  const { data: vendors }  = useQuery({ queryKey: ['vendors-all'],  queryFn: () => vendorsApi.list({ limit: 200 }) })
-  const { data: products } = useQuery({ queryKey: ['products-all'], queryFn: () => productsApi.list({ limit: 500 }) })
+  const { data: articles } = useQuery({
+    queryKey: ['articles', { limit: 200 }],
+    queryFn:  () => articlesApi.list({ limit: 200 }),
+  })
 
-  const invalidate = () => qc.invalidateQueries({ queryKey: ['incoming-goods'] })
+  const { data: products } = useQuery({
+    queryKey: ['products', { limit: 500 }],
+    queryFn:  () => productsApi.list({ limit: 500 }),
+  })
 
-  const createMut = useMutation({
-    mutationFn: incomingGoodsApi.create,
-    onSuccess: () => { invalidate(); toast.success('Dokumen berhasil dibuat'); closeModal() },
-    onError:   e => toast.error(e.response?.data?.message || 'Error'),
+  const { data: skus } = useQuery({
+    queryKey: ['product-skus', productId],
+    queryFn:  () => productSkusApi.list(productId),
+    enabled:  !!productId,
   })
-  const confirmMut = useMutation({
-    mutationFn: ({ id, notes }) => incomingGoodsApi.confirmVendor(id, { notes }),
-    onSuccess: () => { invalidate(); toast.success('Vendor dikonfirmasi — Surat Jalan digenerate'); closeModal() },
-    onError:   e => toast.error(e.response?.data?.message || 'Error'),
+
+  const chart       = data?.chart       ?? []
+  const topProducts = data?.topProducts ?? []
+  const summary     = data?.summary     ?? { totalQty: 0, totalDeliveries: 0 }
+
+  const maxQty = Math.max(...chart.map(r => r.qty), 1)
+
+  function resetFilters() {
+    setSearchParams(prev => {
+      ['article', 'prod', 'sku'].forEach(k => prev.delete(k))
+      prev.set('from', defaultFrom())
+      prev.set('to', new Date().toISOString().slice(0, 10))
+      return prev
+    }, { replace: true })
+  }
+
+  const hasFilter = articleId || productId || productSkuId
+
+  return (
+    <div className="space-y-5">
+      {/* Filter panel */}
+      <div className="card p-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 items-end">
+          <div>
+            <label className="block text-[11px] font-medium text-slate-500 mb-1">Dari Tanggal</label>
+            <input
+              type="date"
+              value={dateFrom}
+              onChange={e => sp({ from: e.target.value, view: 'analytics' })}
+              className="input text-xs w-full"
+            />
+          </div>
+          <div>
+            <label className="block text-[11px] font-medium text-slate-500 mb-1">Sampai Tanggal</label>
+            <input
+              type="date"
+              value={dateTo}
+              onChange={e => sp({ to: e.target.value, view: 'analytics' })}
+              className="input text-xs w-full"
+            />
+          </div>
+          <div>
+            <label className="block text-[11px] font-medium text-slate-500 mb-1">Koleksi</label>
+            <SearchableSelect
+              value={articleId}
+              onChange={v => sp({ article: v, view: 'analytics' })}
+              options={[{ value: '', label: 'Semua koleksi' }, ...(articles?.data ?? []).map(a => ({ value: String(a.id), label: a.name }))]}
+              placeholder="Semua koleksi"
+            />
+          </div>
+          <div>
+            <label className="block text-[11px] font-medium text-slate-500 mb-1">Produk</label>
+            <SearchableSelect
+              value={productId}
+              onChange={v => sp({ prod: v, sku: '', view: 'analytics' })}
+              options={[{ value: '', label: 'Semua produk' }, ...(products?.data ?? []).map(p => ({ value: String(p.id), label: p.name }))]}
+              placeholder="Semua produk"
+            />
+          </div>
+          <div>
+            <label className="block text-[11px] font-medium text-slate-500 mb-1">Size / Varian</label>
+            <SearchableSelect
+              value={productSkuId}
+              onChange={v => sp({ sku: v, view: 'analytics' })}
+              options={[
+                { value: '', label: productId ? 'Semua size' : 'Pilih produk dulu' },
+                ...(skus ?? []).map(s => ({ value: String(s.id), label: s.sku_code })),
+              ]}
+              placeholder="Semua size"
+              disabled={!productId}
+            />
+          </div>
+        </div>
+        {hasFilter && (
+          <button
+            onClick={resetFilters}
+            className="mt-3 text-xs text-slate-500 hover:text-slate-800 underline"
+          >
+            Reset filter
+          </button>
+        )}
+      </div>
+
+      {/* Summary cards */}
+      <div className="grid grid-cols-2 gap-4">
+        <div className="card p-5 flex items-center gap-4">
+          <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center">
+            <Package size={20} className="text-indigo-500" />
+          </div>
+          <div>
+            <p className="text-[11px] text-slate-500 font-medium">Total Qty Masuk</p>
+            <p className="text-2xl font-bold text-slate-800">{summary.totalQty.toLocaleString('id-ID')}</p>
+          </div>
+        </div>
+        <div className="card p-5 flex items-center gap-4">
+          <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center">
+            <Truck size={20} className="text-emerald-500" />
+          </div>
+          <div>
+            <p className="text-[11px] text-slate-500 font-medium">Total Pengiriman</p>
+            <p className="text-2xl font-bold text-slate-800">{summary.totalDeliveries.toLocaleString('id-ID')}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Chart */}
+      <div className="card p-5">
+        <h3 className="text-sm font-semibold text-slate-700 mb-4">Qty Masuk per Hari</h3>
+        {isLoading ? (
+          <div className="h-48 flex items-center justify-center text-slate-400 text-sm">Memuat data…</div>
+        ) : chart.length === 0 ? (
+          <div className="h-48 flex items-center justify-center text-slate-400 text-sm">Tidak ada data di rentang ini</div>
+        ) : (
+          <ResponsiveContainer width="100%" height={240}>
+            <BarChart data={chart} margin={{ top: 4, right: 8, left: -16, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+              <XAxis
+                dataKey="date"
+                tickFormatter={fmtShortDate}
+                tick={{ fontSize: 10, fill: '#94a3b8' }}
+                axisLine={false}
+                tickLine={false}
+              />
+              <YAxis
+                tick={{ fontSize: 10, fill: '#94a3b8' }}
+                axisLine={false}
+                tickLine={false}
+                allowDecimals={false}
+              />
+              <Tooltip
+                formatter={(v) => [v.toLocaleString('id-ID'), 'Qty']}
+                labelFormatter={(l) => fmtDate(l)}
+                contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e2e8f0' }}
+              />
+              <Bar dataKey="qty" fill="#6366f1" radius={[3, 3, 0, 0]} maxBarSize={40} />
+            </BarChart>
+          </ResponsiveContainer>
+        )}
+      </div>
+
+      {/* Top products */}
+      {topProducts.length > 0 && (
+        <div className="card p-5">
+          <h3 className="text-sm font-semibold text-slate-700 mb-3">Produk Terbanyak Masuk</h3>
+          <p className="text-[11px] text-slate-400 -mt-2 mb-3">Klik produk untuk lihat riwayat transaksinya</p>
+          <div className="space-y-2">
+            {topProducts.map((p, i) => (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => sp({ prod: String(p.id), sku: '', view: 'analytics' })}
+                className={`w-full flex items-center gap-3 rounded-lg px-2 py-1.5 -mx-2 transition-colors text-left ${
+                  String(p.id) === productId ? 'bg-indigo-50' : 'hover:bg-slate-50'
+                }`}
+              >
+                <span className="text-[10px] font-bold text-slate-400 w-4">{i + 1}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between mb-0.5">
+                    <span className={`text-xs font-medium truncate ${String(p.id) === productId ? 'text-indigo-700' : 'text-slate-700'}`}>{p.name}</span>
+                    <span className="text-xs font-bold text-indigo-600 ml-2 shrink-0">{p.qty.toLocaleString('id-ID')}</span>
+                  </div>
+                  <div className="w-full bg-slate-100 rounded-full h-1.5">
+                    <div
+                      className="bg-indigo-400 h-1.5 rounded-full transition-all"
+                      style={{ width: `${Math.round((p.qty / topProducts[0].qty) * 100)}%` }}
+                    />
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Drill-down: riwayat transaksi produk terpilih */}
+      {productId && (
+        <ProductTransactionsPanel
+          productId={productId}
+          productSkuId={productSkuId}
+          dateFrom={dateFrom}
+          dateTo={dateTo}
+        />
+      )}
+
+      <VendorBreakdownPanel />
+    </div>
+  )
+}
+
+// ── Drill-down: riwayat transaksi (tanggal, vendor, qty) untuk 1 produk ──────
+function ProductTransactionsPanel({ productId, productSkuId, dateFrom, dateTo }) {
+  const navigate = useNavigate()
+  const [page, setPage]   = useState(1)
+  const [limit, setLimit] = useState(10)
+
+  // Reset ke halaman 1 saat filter berubah — disesuaikan saat render, bukan di
+  // efek terpisah, supaya tidak ada render tambahan yang tidak perlu.
+  const filterKey = `${productId}|${productSkuId}|${dateFrom}|${dateTo}`
+  const [prevFilterKey, setPrevFilterKey] = useState(filterKey)
+  if (filterKey !== prevFilterKey) {
+    setPrevFilterKey(filterKey)
+    setPage(1)
+  }
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['vendor-delivery-product-transactions', productId, productSkuId, dateFrom, dateTo, page, limit],
+    queryFn:  () => vendorDeliveriesApi.productTransactions({ productId, productSkuId, dateFrom, dateTo, page, limit }),
   })
-  const notifyMut = useMutation({
-    mutationFn: (id) => incomingGoodsApi.notifyProduction(id, {}),
-    onSuccess: () => { invalidate(); toast.success('Notifikasi ke Produksi berhasil dikirim'); closeModal() },
-    onError:   e => toast.error(e.response?.data?.message || 'Error'),
-  })
-  const completeMut = useMutation({
-    mutationFn: incomingGoodsApi.complete,
-    onSuccess: (res) => {
-      invalidate()
-      const s = res.summary
-      toast.success(`Selesai — Ready: ${s.totalReady}, Reject: ${s.totalReject}`)
-      closeModal()
+
+  const rows       = data?.data ?? []
+  const pagination = data?.pagination
+
+  const columns = [
+    { key: 'date',       label: 'Tanggal', render: r => fmtDate(r.date) },
+    { key: 'vendorName', label: 'Vendor',  render: r => r.vendorName ?? '—' },
+    { key: 'variant',    label: 'Size / Varian', render: r => r.variant || r.skuCode || '—' },
+    { key: 'qtyActual',  label: 'Qty', render: r => <span className="font-mono">{Number(r.qtyActual ?? 0).toLocaleString('id-ID')}</span> },
+    {
+      key: 'doc', label: '', width: 90,
+      render: r => (
+        <button
+          onClick={() => navigate(`/incoming-goods/${r.deliveryId}`)}
+          className="font-mono text-indigo-600 hover:underline text-xs"
+        >
+          #{r.deliveryId}
+        </button>
+      ),
     },
-    onError: e => toast.error(e.response?.data?.message || 'Error'),
+  ]
+
+  return (
+    <div className="card p-5">
+      <h3 className="text-sm font-semibold text-slate-700 mb-3">Riwayat Transaksi Produk Ini</h3>
+      <Table columns={columns} data={rows} loading={isLoading} emptyText="Belum ada transaksi barang masuk untuk produk ini" />
+      {pagination && pagination.total > 0 && (
+        <div className="flex items-center justify-between pt-3 text-xs text-slate-500 flex-wrap gap-2">
+          <div className="flex items-center gap-2">
+            <span>
+              Menampilkan <span className="font-semibold text-slate-700">{(page - 1) * limit + 1}–{Math.min(page * limit, pagination.total)}</span> dari <span className="font-semibold text-slate-700">{pagination.total}</span>
+            </span>
+            <select
+              value={limit}
+              onChange={e => { setLimit(Number(e.target.value)); setPage(1) }}
+              className="border border-slate-200 rounded px-1.5 py-0.5 bg-white focus:outline-none focus:border-slate-400"
+            >
+              {[10, 25, 50, 100].map(o => <option key={o} value={o}>{o} / hal</option>)}
+            </select>
+          </div>
+          {pagination.totalPages > 1 && (
+            <div className="flex items-center gap-1">
+              <button
+                disabled={page <= 1}
+                onClick={() => setPage(p => p - 1)}
+                className="px-2 py-1 rounded disabled:opacity-30 hover:bg-slate-100"
+              >
+                ‹
+              </button>
+              <span>{page} / {pagination.totalPages}</span>
+              <button
+                disabled={page >= pagination.totalPages}
+                onClick={() => setPage(p => p + 1)}
+                className="px-2 py-1 rounded disabled:opacity-30 hover:bg-slate-100"
+              >
+                ›
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Breakdown stok per vendor & produk (sekarang ada di gudang mana) ──────────
+function VendorBreakdownPanel() {
+  const [vendorId, setVendorId]   = useState('')
+  const [productId, setProductId] = useState('')
+
+  const { data: vendors } = useQuery({
+    queryKey: ['vendors', { limit: 200 }],
+    queryFn:  () => vendorsApi.list({ limit: 200 }),
   })
-  const deleteMut = useMutation({
-    mutationFn: incomingGoodsApi.remove,
-    onSuccess: () => { invalidate(); toast.success('Dokumen dihapus') },
-    onError:   e => toast.error(e.response?.data?.message || 'Error'),
+  const { data: products } = useQuery({
+    queryKey: ['products', { limit: 500 }],
+    queryFn:  () => productsApi.list({ limit: 500 }),
   })
 
-  const closeModal = () => { setModal(null); setForm(EMPTY_FORM); setItems([]); setNewItem(EMPTY_ITEM); setActionNote('') }
+  const { data, isLoading } = useQuery({
+    queryKey: ['vendor-stock-breakdown', vendorId, productId],
+    queryFn:  () => vendorDeliveriesApi.stockBreakdown({ vendorId, productId: productId || undefined }),
+    enabled:  !!vendorId,
+  })
 
-  const handleProductScan = (code) => {
-    const prod = products?.data?.find(p => p.sku === code || String(p.id) === code)
-    if (!prod) return toast.error(`Produk dengan kode "${code}" tidak ditemukan`)
-    setNewItem(prev => ({ ...prev, ProductId: String(prod.id) }))
-    toast.success(`Produk dipilih: ${prod.name}`)
-  }
+  const received  = data?.received  ?? []
+  const breakdown = data?.breakdown ?? []
 
-  const setF = (f) => (e) => setForm(prev => ({ ...prev, [f]: e.target.value }))
-  const setNI = (f) => (e) => setNewItem(prev => ({ ...prev, [f]: e.target.value }))
+  // Susun tabel: baris per produk, kolom per gudang
+  const warehouseNames = useMemo(() => {
+    const set = new Set(breakdown.map(b => b.warehouseName))
+    return Array.from(set).sort()
+  }, [breakdown])
 
-  const addItem = () => {
-    if (!newItem.ProductId || !newItem.qtyOrdered) return toast.error('Pilih produk dan isi qty ordered')
-    const prod = products?.data?.find(p => String(p.id) === String(newItem.ProductId))
-    setItems(prev => [...prev, {
-      ...newItem,
-      qtyOrdered:  Number(newItem.qtyOrdered),
-      qtyReceived: Number(newItem.qtyReceived) || 0,
-      productName: prod?.name,
-    }])
-    setNewItem(EMPTY_ITEM)
-  }
+  const rows = useMemo(() => {
+    const byProduct = {}
+    for (const r of received) {
+      byProduct[r.productId] = { productId: r.productId, productName: r.productName, totalReceived: r.totalReceived, byWarehouse: {} }
+    }
+    for (const b of breakdown) {
+      if (!byProduct[b.productId]) byProduct[b.productId] = { productId: b.productId, productName: b.productName, totalReceived: 0, byWarehouse: {} }
+      byProduct[b.productId].byWarehouse[b.warehouseName] = b.netQty
+    }
+    return Object.values(byProduct).sort((a, b) => a.productName.localeCompare(b.productName))
+  }, [received, breakdown])
 
-  const handleCreate = (e) => {
-    e.preventDefault()
-    if (!items.length) return toast.error('Tambahkan minimal 1 item')
-    createMut.mutate({ ...form, items: items.map(i => ({
-      ProductId:   Number(i.ProductId),
-      qtyOrdered:  i.qtyOrdered,
-      qtyReceived: i.qtyReceived,
-      unit:        i.unit,
-      notes:       i.notes || undefined,
-    }))})
-  }
+  return (
+    <div className="card p-5">
+      <div className="flex items-center gap-2 mb-4">
+        <WarehouseIcon size={15} className="text-slate-400" />
+        <h3 className="text-sm font-semibold text-slate-700">Stok per Vendor & Produk — Sekarang Ada di Gudang Mana</h3>
+      </div>
 
-  const openDetail = async (row) => {
-    const detail = await incomingGoodsApi.get(row.id)
-    setModal({ mode: 'view', data: detail })
-  }
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+        <div>
+          <label className="block text-[11px] font-medium text-slate-500 mb-1">Vendor <span className="text-danger">*</span></label>
+          <SearchableSelect
+            value={vendorId}
+            onChange={setVendorId}
+            options={[{ value: '', label: 'Pilih vendor…' }, ...(vendors?.data ?? []).map(v => ({ value: String(v.id), label: v.name }))]}
+            placeholder="Pilih vendor…"
+          />
+        </div>
+        <div>
+          <label className="block text-[11px] font-medium text-slate-500 mb-1">Produk (opsional)</label>
+          <SearchableSelect
+            value={productId}
+            onChange={setProductId}
+            options={[{ value: '', label: 'Semua produk' }, ...(products?.data ?? []).map(p => ({ value: String(p.id), label: p.name }))]}
+            placeholder="Semua produk"
+          />
+        </div>
+      </div>
+
+      {!vendorId ? (
+        <div className="py-8 text-center text-slate-400 text-sm">Pilih vendor untuk melihat breakdown stok</div>
+      ) : isLoading ? (
+        <div className="py-8 text-center text-slate-400 text-sm">Memuat…</div>
+      ) : rows.length === 0 ? (
+        <div className="py-8 text-center text-slate-400 text-sm">Belum ada data barang masuk dari vendor ini</div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[520px] text-sm">
+            <thead>
+              <tr className="border-b border-slate-100">
+                <th className="text-left py-2 px-2 text-[11px] font-bold text-slate-500 uppercase">Produk</th>
+                <th className="text-right py-2 px-2 text-[11px] font-bold text-slate-500 uppercase">Total Pernah Masuk</th>
+                {warehouseNames.map(wh => (
+                  <th key={wh} className="text-right py-2 px-2 text-[11px] font-bold text-slate-500 uppercase">{wh}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(r => (
+                <tr key={r.productId} className="border-b border-slate-50">
+                  <td className="py-2 px-2 font-medium text-slate-700">{r.productName}</td>
+                  <td className="py-2 px-2 text-right font-mono text-slate-600">{r.totalReceived.toLocaleString('id-ID')}</td>
+                  {warehouseNames.map(wh => (
+                    <td key={wh} className="py-2 px-2 text-right font-mono text-slate-700">
+                      {(r.byWarehouse[wh] ?? 0).toLocaleString('id-ID')}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="text-[11px] text-slate-400 mt-3">
+            "Total Pernah Masuk" dari histori Barang Masuk. Kolom gudang dihitung dari Stock In/Out yang ditandai vendor ini (via tombol "Buat Stock In" / "Retur ke Vendor").
+          </p>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Main page ────────────────────────────────────────────────────────────────
+export default function IncomingGoods() {
+  const navigate = useNavigate()
+  const { hasPermission } = useAuth()
+  const canManage = hasPermission('packing.manage') || hasPermission('packing.incoming')
+  const { needsCompany } = useCompanyGuard()
+
+  const [searchParams, setSearchParams] = useSearchParams()
+  const view          = searchParams.get('view')    || 'list'
+  const page          = Number(searchParams.get('page')   || '1')
+  const limit         = Number(searchParams.get('limit')  || '15')
+  const sjFilter      = searchParams.get('sj')      || 'all'
+  const statusFilter  = searchParams.get('status')  || 'all'
+  const selisihFilter = searchParams.get('selisih') || 'all'
+
+  const setView = (v) => setSearchParams(prev => {
+    prev.set('view', v)
+    // clear analytics-only params when switching to list
+    if (v === 'list') {
+      ['from', 'to', 'article', 'prod', 'sku'].forEach(k => prev.delete(k))
+    }
+    return prev
+  }, { replace: true })
+
+  const setPage = (p) => setSearchParams(prev => { prev.set('page', String(p)); return prev }, { replace: true })
+
+  const applyFilter = (type, value) => setSearchParams(prev => {
+    prev.set('sj',      type === 'sj'      ? value : 'all')
+    prev.set('selisih', type === 'selisih' ? value : 'all')
+    prev.set('status',  type === 'status'  ? value : 'all')
+    prev.set('page', '1')
+    return prev
+  }, { replace: true })
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['vendor-deliveries', { page, limit, sjFilter, selisihFilter, statusFilter }],
+    queryFn:  () => vendorDeliveriesApi.list({
+      page, limit,
+      ...(sjFilter === 'missing' ? { sjMissing: true } : {}),
+      ...(selisihFilter === 'unclear' ? { selisihFilter: 'unclear' } : {}),
+      ...(statusFilter !== 'all' ? { status: statusFilter } : {}),
+    }),
+    enabled: view === 'list',
+  })
 
   const columns = [
     {
-      key: 'docNumber', label: 'No. Dokumen', width: 160,
-      render: r => <span className="font-mono text-xs font-semibold text-slate-700">{r.docNumber}</span>,
+      key: 'id', label: '#', width: 60,
+      render: r => <span className="font-mono text-xs text-slate-400">#{r.id}</span>,
+    },
+    {
+      key: 'date', label: 'Tanggal', width: 120,
+      render: r => <span className="text-xs font-mono text-slate-500">{fmtDate(r.date)}</span>,
     },
     {
       key: 'vendor', label: 'Vendor',
       render: r => <span className="font-semibold text-slate-800">{r.Vendor?.name ?? '—'}</span>,
     },
     {
-      key: 'receivedDate', label: 'Tgl Terima', width: 120,
-      render: r => <span className="text-xs text-slate-500">{fmt(r.receivedDate)}</span>,
+      key: 'status', label: 'Status', width: 90,
+      render: r => {
+        if (r.status === 'draft')  return <span className="badge-muted text-[11px]">Draft</span>
+        if (r.status === 'closed') return <span className="badge-green text-[11px]">Closed</span>
+        return <span className="badge-indigo text-[11px]">Open</span>
+      },
     },
     {
-      key: 'totalQty', label: 'Total Qty', width: 90,
-      render: r => <span className="font-mono font-semibold text-slate-700">{r.totalQty}</span>,
+      key: 'sj', label: 'Surat Jalan', width: 200,
+      render: r => {
+        if (!hasSJ(r)) return (
+          <span className="inline-flex items-center gap-1 text-[10px] font-medium text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
+            <AlertCircle size={10} /> SJ Belum Dilampirkan
+          </span>
+        )
+        return (
+          <div className="flex flex-col gap-0.5">
+            {r.sjNumber
+              ? <span className="text-xs font-mono text-slate-600">{r.sjNumber}</span>
+              : <span className="text-xs text-slate-300">—</span>
+            }
+            {Array.isArray(r.sjPhotos) && r.sjPhotos.length > 0 && (
+              <span className="text-[10px] text-slate-400">{r.sjPhotos.length} foto</span>
+            )}
+          </div>
+        )
+      },
     },
     {
-      key: 'status', label: 'Status', width: 170,
-      render: r => <span className={STATUS_BADGE[r.status]}>{STATUS_LABEL[r.status]}</span>,
-    },
-    {
-      key: 'actions', label: '', width: 130,
+      key: 'items', label: 'Item', width: 100,
       render: r => (
-        <div className="flex items-center gap-1">
-          <button onClick={() => openDetail(r)} className="btn-edit" title="Lihat detail"><Eye size={13} /></button>
-          {isOperasional && r.status === 'DRAFT' && (
-            <button onClick={() => { setModal({ mode: 'confirm', data: r }); setActionNote('') }} className="p-1.5 rounded text-teal-500 hover:bg-teal-50 transition-colors" title="Konfirmasi Vendor">
-              <CheckCircle size={13} />
-            </button>
-          )}
-          {isOperasional && r.status === 'VENDOR_CONFIRMED' && (
-            <button onClick={() => notifyMut.mutate(r.id)} className="p-1.5 rounded text-amber-500 hover:bg-amber-50 transition-colors" title="Notifikasi Produksi">
-              <BellRing size={13} />
-            </button>
-          )}
-          {isOperasional && r.status === 'PACKING_IN_PROGRESS' && (
-            <button onClick={() => setModal({ mode: 'complete', data: r })} className="p-1.5 rounded text-green-600 hover:bg-green-50 transition-colors" title="Rekap & Selesaikan">
-              <PackageCheck size={13} />
-            </button>
-          )}
-          {isOperasional && r.status === 'DRAFT' && (
-            <button onClick={() => { if (confirm('Hapus dokumen ini?')) deleteMut.mutate(r.id) }} className="p-1.5 rounded text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors">
-              <Trash2 size={13} />
-            </button>
+        <div className="flex flex-col gap-0.5">
+          <span className="font-semibold text-slate-700">{r.itemCount ?? 0} item</span>
+          {r.selisihCount > 0 && (
+            <span className={`inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full w-fit ${
+              r.selisihStatus === 'clear'
+                ? 'text-emerald-600 bg-emerald-50 border border-emerald-200'
+                : 'text-orange-600 bg-orange-50 border border-orange-200'
+            }`}>
+              <TriangleAlert size={9} />
+              {r.selisihCount} selisih
+              {r.selisihStatus === 'clear' ? ' · clear' : ''}
+            </span>
           )}
         </div>
       ),
     },
+    {
+      key: 'video', label: 'Video', width: 70,
+      render: r => r.videoLink
+        ? <a href={r.videoLink} target="_blank" rel="noopener noreferrer" className="text-brand hover:underline flex items-center gap-1 text-xs"><Video size={12} /> Link</a>
+        : <span className="text-xs text-slate-300">—</span>,
+    },
+    {
+      key: 'by', label: 'Dibuat oleh', width: 130,
+      render: r => (
+        <div>
+          <div className="text-xs text-slate-500">{r.Creator?.name ?? '—'}</div>
+          {r.Updater && r.Updater.name !== r.Creator?.name && (
+            <div className="text-[10px] text-slate-400">Diedit: {r.Updater.name}</div>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: 'actions', label: '', width: 110,
+      render: r => (
+        <button onClick={() => navigate(`/incoming-goods/${r.id}`)} className="btn-secondary text-[10px] px-2 py-0.5 flex items-center gap-1 rounded">
+          <Eye size={10} /> Lihat Detail
+        </button>
+      ),
+    },
   ]
+
+  // Counter global dari backend (seluruh data, bukan cuma halaman aktif);
+  // fallback ke hitungan halaman kalau backend lama belum mengirim counts.
+  const missingCount  = data?.counts?.sjMissing      ?? (data?.data ?? []).filter(r => !hasSJ(r)).length
+  const unclearCount  = data?.counts?.selisihUnclear ?? (data?.data ?? []).filter(r => r.selisihStatus === 'unclear').length
+  const activeFilter  = selisihFilter === 'unclear' ? 'selisih' : sjFilter !== 'all' ? 'sj' : statusFilter !== 'all' ? 'status' : 'all'
 
   return (
     <div className="px-6 py-6">
+      {needsCompany && <div className="mb-4"><CompanyRequiredBanner action="mencatat barang masuk" /></div>}
       <PageHeader
         title="Barang Masuk"
-        subtitle={`${data?.pagination?.total ?? 0} dokumen`}
-        action={
-          <div className="flex items-center gap-2">
-            <select className="select w-48" value={statusFilter} onChange={e => { setStatusFilter(e.target.value); setPage(1) }}>
-              <option value="">Semua Status</option>
-              {Object.entries(STATUS_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-            </select>
-            {isOperasional && (
-              <button onClick={() => { setForm(EMPTY_FORM); setItems([]); setModal('create') }} className="btn-primary">
-                <Plus size={14} /> Baru
-              </button>
-            )}
-          </div>
-        }
+        subtitle={view === 'list' ? `${data?.pagination?.total ?? 0} transaksi` : 'Analitik'}
+        action={canManage && view === 'list' && (
+          <button onClick={() => navigate('/incoming-goods/new')} className="btn-primary">
+            <Plus size={14} /> Catat Barang Masuk
+          </button>
+        )}
       />
 
-      <div className="card overflow-hidden">
-        <Table columns={columns} data={data?.data} loading={isLoading} emptyText="Belum ada data barang masuk" />
-        <Pagination pagination={data?.pagination} onPageChange={setPage} />
+      {/* Main view tabs */}
+      <div className="flex items-center gap-1 mb-4 border-b border-slate-100 pb-0">
+        <button
+          onClick={() => setView('list')}
+          className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium border-b-2 transition-colors -mb-px ${
+            view === 'list'
+              ? 'border-slate-800 text-slate-800'
+              : 'border-transparent text-slate-400 hover:text-slate-600'
+          }`}
+        >
+          <List size={13} /> Daftar
+        </button>
+        <button
+          onClick={() => setView('analytics')}
+          className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium border-b-2 transition-colors -mb-px ${
+            view === 'analytics'
+              ? 'border-indigo-500 text-indigo-600'
+              : 'border-transparent text-slate-400 hover:text-slate-600'
+          }`}
+        >
+          <BarChart2 size={13} /> Analitik
+        </button>
       </div>
 
-      {/* ── Create Modal ──────────────────────────────────────────────────────── */}
-      <Modal open={modal === 'create'} onClose={closeModal} title="Input Barang Masuk" size="xl">
-        <form onSubmit={handleCreate} className="space-y-5">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="label">Vendor <span className="text-danger">*</span></label>
-              <select className="select" value={form.VendorId} onChange={setF('VendorId')} required>
-                <option value="">Pilih vendor…</option>
-                {vendors?.data?.map(v => <option key={v.id} value={v.id}>{v.name} ({v.vendorCode})</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="label">Tanggal Terima <span className="text-danger">*</span></label>
-              <input className="input" type="date" value={form.receivedDate} onChange={setF('receivedDate')} required />
-            </div>
-            <div>
-              <label className="label">No. Surat Jalan Vendor</label>
-              <input className="input" value={form.vendorDeliveryNote} onChange={setF('vendorDeliveryNote')} placeholder="SJ-EXT-0001" />
-            </div>
-            <div>
-              <label className="label">Catatan</label>
-              <input className="input" value={form.notes} onChange={setF('notes')} placeholder="Opsional…" />
-            </div>
-          </div>
-
-          {/* Items */}
-          <div className="border border-slate-200 rounded-lg overflow-hidden">
-            <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-200 flex items-center gap-2">
-              <Plus size={13} className="text-red-700" />
-              <span className="text-xs font-bold text-slate-600 uppercase tracking-wide">Item Barang</span>
-            </div>
-            <div className="p-3 bg-white flex flex-wrap gap-2 border-b border-slate-100">
-              <div className="flex gap-1.5 flex-1 min-w-[180px]">
-                <select className="select flex-1" value={newItem.ProductId} onChange={setNI('ProductId')}>
-                  <option value="">Pilih produk…</option>
-                  {products?.data?.map(p => <option key={p.id} value={p.id}>{p.name} ({p.sku})</option>)}
-                </select>
-                <button
-                  type="button"
-                  onClick={() => setShowScanner(true)}
-                  className="px-2.5 rounded-lg border border-slate-200 text-slate-400 hover:text-brand hover:border-brand/40 hover:bg-brand/5 transition-colors flex-shrink-0"
-                  title="Scan barcode produk"
-                >
-                  <ScanLine size={15} />
-                </button>
-              </div>
-              <input className="input w-24" type="number" min="1" placeholder="Qty Order" value={newItem.qtyOrdered} onChange={setNI('qtyOrdered')} />
-              <input className="input w-24" type="number" min="0" placeholder="Qty Terima" value={newItem.qtyReceived} onChange={setNI('qtyReceived')} />
-              <input className="input w-20" placeholder="Satuan" value={newItem.unit} onChange={setNI('unit')} />
-              <button type="button" onClick={addItem} className="btn-primary px-3"><Plus size={14} /></button>
-            </div>
-            {!items.length ? (
-              <p className="text-center text-slate-400 text-sm py-5 bg-white">Belum ada item</p>
-            ) : (
-              <table className="w-full bg-white text-sm">
-                <thead><tr className="bg-slate-50 border-b border-slate-100 text-xs text-slate-500 font-semibold uppercase">
-                  <th className="px-4 py-2 text-left">Produk</th>
-                  <th className="px-4 py-2 text-right">Qty Order</th>
-                  <th className="px-4 py-2 text-right">Qty Terima</th>
-                  <th className="px-4 py-2 text-left">Satuan</th>
-                  <th className="px-4 py-2 w-8"></th>
-                </tr></thead>
-                <tbody>
-                  {items.map((it, idx) => (
-                    <tr key={idx} className="border-b border-slate-50">
-                      <td className="px-4 py-2">{it.productName}</td>
-                      <td className="px-4 py-2 text-right font-mono font-semibold">{it.qtyOrdered}</td>
-                      <td className="px-4 py-2 text-right font-mono text-success font-semibold">{it.qtyReceived}</td>
-                      <td className="px-4 py-2 text-slate-400">{it.unit}</td>
-                      <td className="px-4 py-2">
-                        <button type="button" onClick={() => setItems(p => p.filter((_, i) => i !== idx))} className="text-slate-300 hover:text-red-500 transition-colors"><X size={12} /></button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
-
-          <div className="flex gap-2 pt-1">
-            <button type="button" onClick={closeModal} className="btn-secondary flex-1 justify-center">Batal</button>
-            <button type="submit" disabled={createMut.isPending} className="btn-primary flex-1 justify-center">
-              {createMut.isPending ? 'Menyimpan…' : 'Simpan Dokumen'}
-            </button>
-          </div>
-        </form>
-      </Modal>
-
-      {/* ── Detail / View Modal ───────────────────────────────────────────────── */}
-      <Modal open={modal?.mode === 'view'} onClose={closeModal} title={`Detail — ${modal?.data?.docNumber}`} size="xl">
-        {modal?.data && <DetailView data={modal.data} onClose={closeModal} />}
-      </Modal>
-
-      {/* ── Confirm Vendor Modal ──────────────────────────────────────────────── */}
-      <Modal open={modal?.mode === 'confirm'} onClose={closeModal} title="Konfirmasi ke Vendor" size="sm">
-        <div className="space-y-4">
-          <p className="text-sm text-slate-600">
-            Konfirmasi kuantitas <strong>{modal?.data?.docNumber}</strong> ke vendor dan generate Surat Jalan?
-          </p>
-          <div>
-            <label className="label">Catatan (opsional)</label>
-            <textarea className="input" rows={2} value={actionNote} onChange={e => setActionNote(e.target.value)} placeholder="Kuantitas sesuai…" />
-          </div>
-          <div className="flex gap-2">
-            <button onClick={closeModal} className="btn-secondary flex-1 justify-center">Batal</button>
+      {view === 'analytics' ? (
+        <AnalyticsPanel />
+      ) : (
+        <>
+          {/* Filter subtabs */}
+          <div className="flex items-center gap-1 mb-4">
             <button
-              onClick={() => confirmMut.mutate({ id: modal.data.id, notes: actionNote })}
-              disabled={confirmMut.isPending}
-              className="btn-primary flex-1 justify-center"
+              onClick={() => applyFilter('sj', 'all')}
+              className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+                activeFilter === 'all'
+                  ? 'bg-slate-800 text-white'
+                  : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'
+              }`}
             >
-              <CheckCircle size={14} /> {confirmMut.isPending ? 'Memproses…' : 'Konfirmasi + Generate SJ'}
+              Semua
             </button>
-          </div>
-        </div>
-      </Modal>
-
-      {/* ── Complete Modal ────────────────────────────────────────────────────── */}
-      <Modal open={modal?.mode === 'complete'} onClose={closeModal} title="Rekap Akhir" size="sm">
-        <div className="space-y-4">
-          <p className="text-sm text-slate-600">
-            Selesaikan dokumen <strong>{modal?.data?.docNumber}</strong>?
-            Semua packing job harus sudah diverifikasi.
-          </p>
-          <div className="flex gap-2">
-            <button onClick={closeModal} className="btn-secondary flex-1 justify-center">Batal</button>
             <button
-              onClick={() => completeMut.mutate(modal.data.id)}
-              disabled={completeMut.isPending}
-              className="btn-primary flex-1 justify-center"
+              onClick={() => applyFilter('status', 'draft')}
+              className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+                activeFilter === 'status' && statusFilter === 'draft'
+                  ? 'bg-slate-600 text-white'
+                  : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'
+              }`}
             >
-              <PackageCheck size={14} /> {completeMut.isPending ? 'Memproses…' : 'Selesaikan'}
+              Draft
+            </button>
+            <button
+              onClick={() => applyFilter('sj', 'missing')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+                activeFilter === 'sj'
+                  ? 'bg-amber-500 text-white'
+                  : 'text-amber-600 hover:bg-amber-50'
+              }`}
+            >
+              <AlertCircle size={11} /> SJ Belum Dilampirkan
+              {activeFilter === 'all' && missingCount > 0 && (
+                <span className="bg-amber-100 text-amber-700 text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+                  {missingCount}
+                </span>
+              )}
+            </button>
+            <button
+              onClick={() => applyFilter('selisih', 'unclear')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+                activeFilter === 'selisih'
+                  ? 'bg-orange-500 text-white'
+                  : 'text-orange-600 hover:bg-orange-50'
+              }`}
+            >
+              <TriangleAlert size={11} /> Ada Selisih
+              {activeFilter === 'all' && unclearCount > 0 && (
+                <span className="bg-orange-100 text-orange-700 text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+                  {unclearCount}
+                </span>
+              )}
             </button>
           </div>
-        </div>
-      </Modal>
 
-      {/* ── QR Scanner overlay ────────────────────────────────────────────────── */}
-      {showScanner && (
-        <QRScanner
-          onScan={handleProductScan}
-          onClose={() => setShowScanner(false)}
-          hint="Scan barcode / QR produk untuk memilih otomatis"
-        />
-      )}
-    </div>
-  )
-}
-
-// ── Detail sub-component ──────────────────────────────────────────────────────
-
-function DetailView({ data, onClose }) {
-  const statusColor = STATUS_BADGE[data.status]
-  return (
-    <div className="space-y-5 text-sm">
-      {/* Header info */}
-      <div className="grid grid-cols-3 gap-4">
-        <div><label className="label">No. Dokumen</label><p className="font-mono font-semibold text-slate-800">{data.docNumber}</p></div>
-        <div><label className="label">Status</label><span className={statusColor}>{STATUS_LABEL[data.status]}</span></div>
-        <div><label className="label">Tanggal Terima</label><p className="text-slate-600">{fmt(data.receivedDate)}</p></div>
-        <div><label className="label">Vendor</label><p className="font-semibold text-slate-800">{data.Vendor?.name}</p></div>
-        <div><label className="label">Diterima Oleh</label><p className="text-slate-600">{data.receivedByUser?.name}</p></div>
-        <div><label className="label">No. SJ Vendor</label><p className="text-slate-500">{data.vendorDeliveryNote || '—'}</p></div>
-        {data.notes && <div className="col-span-3"><label className="label">Catatan</label><p className="text-slate-500">{data.notes}</p></div>}
-      </div>
-
-      {/* Items */}
-      <div>
-        <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">Items</p>
-        <div className="border border-slate-200 rounded-lg overflow-hidden">
-          <table className="w-full text-xs">
-            <thead><tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-semibold uppercase">
-              <th className="px-3 py-2 text-left">Produk</th>
-              <th className="px-3 py-2 text-right">SKU</th>
-              <th className="px-3 py-2 text-right">Qty Order</th>
-              <th className="px-3 py-2 text-right">Qty Terima</th>
-              <th className="px-3 py-2 text-right">Ready</th>
-              <th className="px-3 py-2 text-right">Reject</th>
-            </tr></thead>
-            <tbody>
-              {data.items?.map(item => (
-                <tr key={item.id} className="border-b border-slate-50 last:border-0">
-                  <td className="px-3 py-2 font-medium text-slate-700">{item.Product?.name}</td>
-                  <td className="px-3 py-2 text-right font-mono text-slate-400">{item.Product?.sku}</td>
-                  <td className="px-3 py-2 text-right font-mono">{item.qtyOrdered}</td>
-                  <td className="px-3 py-2 text-right font-mono font-semibold">{item.qtyReceived}</td>
-                  <td className="px-3 py-2 text-right font-mono font-semibold text-green-600">{item.qtyReady ?? '—'}</td>
-                  <td className="px-3 py-2 text-right font-mono font-semibold text-red-500">{item.qtyReject ?? '—'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* Surat Jalan */}
-      {data.suratJalan && (
-        <div className="flex items-center gap-3 p-3 bg-teal-50 border border-teal-200 rounded-lg">
-          <CheckCircle size={16} className="text-teal-600 flex-shrink-0" />
-          <div>
-            <p className="font-semibold text-teal-800 text-xs">Surat Jalan Digenerate</p>
-            <p className="text-teal-600 font-mono text-xs">{data.suratJalan.sjNumber}</p>
+          <div className="card overflow-hidden">
+            <Table columns={columns} data={data?.data} loading={isLoading} emptyText="Belum ada catatan barang masuk" />
+            <Pagination pagination={data?.pagination} onPageChange={setPage} />
           </div>
-          <span className="ml-auto text-teal-500 text-xs">{data.suratJalan.printedAt ? '✓ Printed' : 'Belum print'}</span>
-        </div>
+        </>
       )}
-
-      {/* Packing Jobs */}
-      {data.packingJobs?.length > 0 && (
-        <div>
-          <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">Packing Jobs</p>
-          <div className="space-y-1.5">
-            {data.packingJobs.map(job => (
-              <div key={job.id} className="flex items-center justify-between px-3 py-2 bg-slate-50 rounded-lg border border-slate-200 text-xs">
-                <span className="font-medium text-slate-700">Job #{job.id} — {job.assignedToUser?.name}</span>
-                <span className={`badge-muted ${
-                  job.status === 'VERIFIED'   ? 'badge-green' :
-                  job.status === 'SUBMITTED'  ? 'badge-teal'  :
-                  job.status === 'IN_PROGRESS'? 'badge-amber' : 'badge-muted'
-                }`}>{job.status}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      <button onClick={onClose} className="btn-secondary w-full justify-center mt-1">Tutup</button>
     </div>
   )
 }

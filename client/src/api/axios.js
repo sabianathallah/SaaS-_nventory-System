@@ -1,36 +1,59 @@
 import axios from 'axios'
+import toast from 'react-hot-toast'
 
-const api = axios.create({ baseURL: import.meta.env.VITE_API_URL || '/api' })
+const api = axios.create({
+  baseURL: import.meta.env.VITE_API_URL || '/api',
+  timeout: 30_000,
+})
 
 // Module-level company scope — set by SelectedCompanyContext
 let _scopedCompanyId = null
 export function setAxiosCompanyScope(id) { _scopedCompanyId = id }
 
+function getCompanyId() {
+  if (_scopedCompanyId) return _scopedCompanyId
+  try {
+    const c = JSON.parse(localStorage.getItem('selectedCompany'))
+    return c?.id ?? null
+  } catch { return null }
+}
+
 // Routes that belong to Administration and should NEVER be company-scoped
-const ADMIN_PATHS = ['/users', '/companies', '/role-permissions', '/system']
+const ADMIN_PATHS = ['/users', '/companies', '/roles', '/permissions', '/system', '/me']
 
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('token')
   if (token) config.headers.Authorization = `Bearer ${token}`
 
-  if (_scopedCompanyId) {
+  const companyId = getCompanyId()
+  if (companyId) {
     const url = config.url || ''
     const isAdminPath = ADMIN_PATHS.some(p => url.startsWith(p))
     if (!isAdminPath) {
-      config.params = { ...(config.params || {}), companyId: _scopedCompanyId }
+      config.params = { ...(config.params || {}), companyId }
     }
   }
 
   return config
 })
 
+let _redirectingToLogin = false
+
 api.interceptors.response.use(
   (res) => res,
   (err) => {
-    if (err.response?.status === 401) {
+    if (err.code === 'ECONNABORTED' || err.message?.includes('timeout')) {
+      toast.error('Request timeout — server tidak merespons. Coba lagi.')
+      return Promise.reject(err)
+    }
+    if (err.response?.status === 401 && !_redirectingToLogin) {
+      _redirectingToLogin = true
+      const msg = err.response?.data?.message ?? ''
+      const isExpired = msg.toLowerCase().includes('expired')
       localStorage.removeItem('token')
       localStorage.removeItem('user')
-      window.location.href = '/login'
+      toast.error(isExpired ? 'Sesi berakhir, silakan login kembali.' : 'Tidak terautentikasi.')
+      setTimeout(() => { _redirectingToLogin = false; window.location.href = '/login' }, 1500)
     }
     return Promise.reject(err)
   }

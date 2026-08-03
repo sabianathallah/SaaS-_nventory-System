@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { warehousesApi } from '../api'
 import PageHeader from '../components/PageHeader'
 import { Table, Pagination } from '../components/Table'
@@ -8,35 +8,51 @@ import Modal from '../components/Modal'
 import SearchBar from '../components/SearchBar'
 import toast from 'react-hot-toast'
 import { Plus, Pencil, Trash2, Package } from 'lucide-react'
+import { useCompanyGuard } from '../hooks/useCompanyGuard'
+import CompanyRequiredBanner from '../components/CompanyRequiredBanner'
+import { useAuth } from '../context/AuthContext'
 
 export default function Warehouses() {
   const qc       = useQueryClient()
   const navigate = useNavigate()
-  const [page, setPage]     = useState(1)
+  const { needsCompany } = useCompanyGuard()
+  const { hasPermission } = useAuth()
+  const canManage = hasPermission('inventory.manage')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const page  = Number(searchParams.get('page')  || '1')
+  const limit = Number(searchParams.get('limit') || '10')
+  const setPage = (p) => setSearchParams(prev => { prev.set('page', String(p)); return prev }, { replace: true })
   const [search, setSearch] = useState('')
   const [modal, setModal]   = useState(null)
   const [form, setForm]     = useState({ name: '', location: '' })
 
   const { data, isLoading } = useQuery({
-    queryKey: ['warehouses', { page, name: search }],
-    queryFn:  () => warehousesApi.list({ page, limit: 10, name: search }),
+    queryKey: ['warehouses', { page, limit, name: search }],
+    queryFn:  () => warehousesApi.list({ page, limit, name: search }),
   })
 
   const save = useMutation({
     mutationFn: d => modal.data ? warehousesApi.update(modal.data.id, d) : warehousesApi.create(d),
-    onSuccess: () => { qc.invalidateQueries(['warehouses']); toast.success(modal.data ? 'Warehouse updated' : 'Warehouse created'); setModal(null) },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['warehouses'] }); toast.success(modal.data ? 'Warehouse updated' : 'Warehouse created'); setModal(null) },
     onError: e => toast.error(e.response?.data?.message || 'Error'),
   })
   const del = useMutation({
     mutationFn: id => warehousesApi.remove(id),
-    onSuccess: () => { qc.invalidateQueries(['warehouses']); toast.success('Warehouse deleted'); setModal(null) },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['warehouses'] }); toast.success('Warehouse deleted'); setModal(null) },
     onError: e => toast.error(e.response?.data?.message || 'Error'),
   })
 
+  const fmt = (n) => Number(n ?? 0).toLocaleString('id-ID')
+
   const columns = [
-    { key: 'id',       label: '#',         width: 60,  render: r => <span className="font-mono text-xs text-slate-400">{r.id}</span> },
-    { key: 'name',     label: 'Gudang',             render: r => <span className="font-semibold text-slate-800">{r.name}</span> },
-    { key: 'location', label: 'Lokasi',              render: r => <span className="text-slate-500 text-sm">{r.location}</span> },
+    { key: 'name',     label: 'Gudang',    render: r => <span className="font-semibold text-slate-800">{r.name}</span> },
+    { key: 'location', label: 'Lokasi',    render: r => <span className="text-slate-500 text-sm">{r.location || '—'}</span> },
+    { key: 'products', label: 'Produk',  width: 90,  render: r => (
+      <span className="text-sm font-semibold text-slate-700">{fmt(r.productCount ?? 0)}</span>
+    )},
+    { key: 'stock',    label: 'Total Stok', width: 110, render: r => (
+      <span className="font-mono font-bold text-sm text-brand">{fmt(r.totalStock ?? 0)} <span className="text-xs font-normal text-slate-400">unit</span></span>
+    )},
     { key: 'actions',  label: '', width: 120, render: r => (
       <div className="flex items-center gap-1 justify-end">
         <button
@@ -46,8 +62,8 @@ export default function Warehouses() {
         >
           <Package size={12} /> Produk
         </button>
-        <button onClick={() => { setForm({ name: r.name, location: r.location }); setModal({ mode: 'edit', data: r }) }} className="p-1.5 rounded text-slate-400 btn-edit transition-colors"><Pencil size={13} /></button>
-        <button onClick={() => setModal({ mode: 'delete', data: r })} className="p-1.5 rounded text-slate-400 hover:text-danger hover:bg-danger-light transition-colors"><Trash2 size={13} /></button>
+        {canManage && <button onClick={() => { setForm({ name: r.name, location: r.location }); setModal({ mode: 'edit', data: r }) }} className="p-1.5 rounded text-slate-400 btn-edit transition-colors"><Pencil size={13} /></button>}
+        {canManage && <button onClick={() => setModal({ mode: 'delete', data: r })} className="p-1.5 rounded text-slate-400 hover:text-danger hover:bg-danger-light transition-colors"><Trash2 size={13} /></button>}
       </div>
     )},
   ]
@@ -55,8 +71,19 @@ export default function Warehouses() {
   return (
     <div className="px-6 py-6">
       <PageHeader title="Gudang" subtitle={`${data?.pagination?.total ?? 0} gudang`}
-        action={<button onClick={() => { setForm({ name: '', location: '' }); setModal({ mode: 'create' }) }} className="btn-primary"><Plus size={14} />Gudang Baru</button>}
+        action={canManage && (
+          <button
+            onClick={() => {
+              if (needsCompany) return toast.error('Pilih perusahaan terlebih dahulu')
+              setForm({ name: '', location: '' }); setModal({ mode: 'create' })
+            }}
+            className="btn-primary"
+          >
+            <Plus size={14} />Gudang Baru
+          </button>
+        )}
       />
+      {needsCompany && <div className="mb-4"><CompanyRequiredBanner action="menambah gudang" /></div>}
       <div className="card overflow-hidden">
         <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/50 flex items-center gap-3">
           <SearchBar value={search} onChange={v => { setSearch(v); setPage(1) }} placeholder="Cari gudang…" />

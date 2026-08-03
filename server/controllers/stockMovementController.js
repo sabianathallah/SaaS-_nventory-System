@@ -1,27 +1,57 @@
 'use strict';
-const { Stock_Movement, Product, Warehouse, sequelize } = require('../models');
+const { Stock_Movement, Product, ProductSKU, ProductVariantOption, Warehouse, sequelize } = require('../models');
 const { Op, fn, col, literal } = require('sequelize');
 const { companyFilter, companyId } = require('../helpers/tenancy');
 const { paginate, buildFilter, paginatedResponse } = require('../helpers/queryHelper');
+
+const ALLOWED_PURPOSES = ['Penjualan','Endorse','Photoshoot','R&D','Pemakaian Internal','Hadiah / Gift','Sample','Retur Vendor','Lainnya'];
+
+function extraFilters(query) {
+    const { ArticleId, CategoryId, purpose } = query;
+    const productWhere = {};
+    if (ArticleId)  productWhere.ArticleId  = ArticleId;
+    if (CategoryId) productWhere.CategoryId = CategoryId;
+    const purposeWhere = (purpose && ALLOWED_PURPOSES.includes(purpose))
+        ? [literal(`(SELECT soh.purpose FROM "Stock_Out_Headers" soh WHERE soh.id = "Stock_Movement"."ReferenceId" AND "Stock_Movement"."type" = 'OUT') = '${purpose.replace(/'/g, "''")}'`)]
+        : [];
+    return { productWhere, purposeWhere };
+}
 
 class StockMovementController {
     static async getAll(req, res, next) {
         try {
             const { page, limit, offset } = paginate(req.query);
             const filter = buildFilter(req.query, {
-                type:        'exact',
-                ProductId:   'exact',
-                WarehouseId: 'exact',
-                dateFrom:    { field: 'createdAt', type: 'gte' },
-                dateTo:      { field: 'createdAt', type: 'lte' },
+                type:         'exact',
+                ProductId:    'exact',
+                ProductSKUId: 'exact',
+                WarehouseId:  'exact',
+                dateFrom:     { field: 'date', type: 'gte' },
+                dateTo:       { field: 'date', type: 'lte' },
             });
+            const { productWhere, purposeWhere } = extraFilters(req.query);
+            const where = { ...companyFilter(req), ...filter };
+            if (purposeWhere.length) where[Op.and] = [...(where[Op.and] || []), ...purposeWhere];
+
             const { rows, count } = await Stock_Movement.findAndCountAll({
-                where: { ...companyFilter(req), ...filter },
+                where,
+                attributes: {
+                    include: [
+                        [
+                            literal(`(SELECT soh.purpose FROM "Stock_Out_Headers" soh WHERE soh.id = "Stock_Movement"."ReferenceId" AND "Stock_Movement"."type" = 'OUT')`),
+                            'purpose'
+                        ],
+                    ]
+                },
                 include: [
-                    { model: Product,   attributes: ['id', 'name', 'sku'] },
-                    { model: Warehouse, attributes: ['id', 'name'] }
+                    { model: Product, attributes: ['id', 'name', 'sku', 'unit'], ...(Object.keys(productWhere).length ? { where: productWhere } : {}) },
+                    { model: Warehouse, attributes: ['id', 'name'] },
+                    {
+                        model: ProductSKU, attributes: ['id', 'sku_code'], required: false,
+                        include: [{ model: ProductVariantOption, attributes: ['id', 'value'], through: { attributes: [] } }]
+                    },
                 ],
-                order: [['createdAt', 'DESC']],
+                order: [['date', 'DESC'], ['createdAt', 'DESC']],
                 limit, offset,
                 distinct: true
             });
@@ -62,18 +92,25 @@ class StockMovementController {
     static async getSummary(req, res, next) {
         try {
             const filter = buildFilter(req.query, {
-                type:        'exact',
-                ProductId:   'exact',
-                WarehouseId: 'exact',
-                dateFrom:    { field: 'createdAt', type: 'gte' },
-                dateTo:      { field: 'createdAt', type: 'lte' },
+                type:         'exact',
+                ProductId:    'exact',
+                ProductSKUId: 'exact',
+                WarehouseId:  'exact',
+                dateFrom:     { field: 'date', type: 'gte' },
+                dateTo:       { field: 'date', type: 'lte' },
             });
+            const { productWhere, purposeWhere } = extraFilters(req.query);
             const base = { ...companyFilter(req), ...filter };
+            if (purposeWhere.length) base[Op.and] = [...(base[Op.and] || []), ...purposeWhere];
+
+            const summaryOpts = Object.keys(productWhere).length
+                ? { include: [{ model: Product, where: productWhere, attributes: [] }] }
+                : {};
 
             const [inRow, outRow, adjRow] = await Promise.all([
-                Stock_Movement.sum('quantity', { where: { ...base, type: 'IN' } }),
-                Stock_Movement.sum('quantity', { where: { ...base, type: 'OUT' } }),
-                Stock_Movement.sum('quantity', { where: { ...base, type: 'ADJUSTMENT' } }),
+                Stock_Movement.sum('quantity', { where: { ...base, type: 'IN'  }, ...summaryOpts }),
+                Stock_Movement.sum('quantity', { where: { ...base, type: 'OUT' }, ...summaryOpts }),
+                Stock_Movement.sum('quantity', { where: { ...base, type: 'ADJUSTMENT' }, ...summaryOpts }),
             ]);
 
             const totalIn  = inRow  || 0;
@@ -86,20 +123,26 @@ class StockMovementController {
     static async getChart(req, res, next) {
         try {
             const filter = buildFilter(req.query, {
-                ProductId:   'exact',
-                WarehouseId: 'exact',
-                dateFrom:    { field: 'createdAt', type: 'gte' },
-                dateTo:      { field: 'createdAt', type: 'lte' },
+                type:         'exact',
+                ProductId:    'exact',
+                ProductSKUId: 'exact',
+                WarehouseId:  'exact',
+                dateFrom:     { field: 'date', type: 'gte' },
+                dateTo:       { field: 'date', type: 'lte' },
             });
+            const { productWhere, purposeWhere } = extraFilters(req.query);
+            const where = { ...companyFilter(req), ...filter };
+            if (purposeWhere.length) where[Op.and] = [...(where[Op.and] || []), ...purposeWhere];
             const rows = await Stock_Movement.findAll({
-                where: { ...companyFilter(req), ...filter },
+                where,
+                ...(Object.keys(productWhere).length ? { include: [{ model: Product, where: productWhere, attributes: [] }] } : {}),
                 attributes: [
-                    [fn('DATE', col('createdAt')), 'date'],
+                    [fn('DATE', col('date')), 'date'],
                     'type',
                     [fn('SUM', col('quantity')), 'total'],
                 ],
-                group: [fn('DATE', col('createdAt')), 'type'],
-                order: [[fn('DATE', col('createdAt')), 'ASC']],
+                group: [fn('DATE', col('date')), 'type'],
+                order: [[fn('DATE', col('date')), 'ASC']],
                 raw: true,
             });
 
@@ -116,32 +159,56 @@ class StockMovementController {
     static async exportCsv(req, res, next) {
         try {
             const filter = buildFilter(req.query, {
-                type:        'exact',
-                ProductId:   'exact',
-                WarehouseId: 'exact',
-                dateFrom:    { field: 'createdAt', type: 'gte' },
-                dateTo:      { field: 'createdAt', type: 'lte' },
+                type:         'exact',
+                ProductId:    'exact',
+                ProductSKUId: 'exact',
+                WarehouseId:  'exact',
+                dateFrom:     { field: 'date', type: 'gte' },
+                dateTo:       { field: 'date', type: 'lte' },
             });
+            const { productWhere, purposeWhere } = extraFilters(req.query);
+            const where = { ...companyFilter(req), ...filter };
+            if (purposeWhere.length) where[Op.and] = [...(where[Op.and] || []), ...purposeWhere];
             const rows = await Stock_Movement.findAll({
-                where: { ...companyFilter(req), ...filter },
+                where,
+                attributes: {
+                    include: [
+                        [
+                            literal(`(SELECT soh.purpose FROM "Stock_Out_Headers" soh WHERE soh.id = "Stock_Movement"."ReferenceId" AND "Stock_Movement"."type" = 'OUT')`),
+                            'purpose'
+                        ],
+                    ]
+                },
                 include: [
-                    { model: Product,   attributes: ['name', 'sku'] },
-                    { model: Warehouse, attributes: ['name'] }
+                    { model: Product, attributes: ['name', 'sku'], ...(Object.keys(productWhere).length ? { where: productWhere } : {}) },
+                    { model: Warehouse, attributes: ['name'] },
+                    {
+                        model: ProductSKU, attributes: ['sku_code'], required: false,
+                        include: [{ model: ProductVariantOption, attributes: ['value'], through: { attributes: [] } }]
+                    },
                 ],
-                order: [['createdAt', 'DESC']],
+                order: [['date', 'DESC'], ['createdAt', 'DESC']],
                 limit: 5000,
             });
 
-            const header = 'Date,Type,Product,SKU,Warehouse,Quantity,Ref\n';
-            const body = rows.map(r => [
-                new Date(r.createdAt).toISOString(),
-                r.type,
-                `"${r.Product?.name ?? ''}"`,
-                r.Product?.sku ?? '',
-                `"${r.Warehouse?.name ?? ''}"`,
-                r.quantity,
-                r.ReferenceId ?? '',
-            ].join(',')).join('\n');
+            const header = 'Date,Type,Tujuan,Product,SKU Produk,SKU Varian,Varian,Warehouse,Quantity,Note,Ref\n';
+            const body = rows.map(r => {
+                const opts    = r.ProductSKU?.ProductVariantOptions ?? [];
+                const variant = opts.map(o => o.value).join(' / ');
+                return [
+                    new Date(r.date ?? r.createdAt).toISOString(),
+                    r.type,
+                    `"${r.type === 'OUT' ? (r.getDataValue?.('purpose') ?? r.purpose ?? '') : ''}"`,
+                    `"${r.Product?.name ?? ''}"`,
+                    r.Product?.sku ?? '',
+                    r.ProductSKU?.sku_code ?? '',
+                    `"${variant}"`,
+                    `"${r.Warehouse?.name ?? ''}"`,
+                    r.quantity,
+                    `"${r.note ?? ''}"`,
+                    r.ReferenceId ?? '',
+                ].join(',')
+            }).join('\n');
 
             res.setHeader('Content-Type', 'text/csv');
             res.setHeader('Content-Disposition', 'attachment; filename="movements.csv"');

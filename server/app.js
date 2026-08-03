@@ -1,6 +1,7 @@
 'use strict';
 const express = require('express');
 const cors    = require('cors');
+const path    = require('path');
 
 const router       = require('./routes/index');
 const errorHandler = require('./middlewares/errorHandler');
@@ -22,12 +23,17 @@ app.use(cors({
         if (/^https:\/\/[a-z0-9-]+\.vercel\.app$/i.test(origin)) {
             return callback(null, true);
         }
+        if (/^https?:\/\/(www\.)?prefacesystem\.com$/.test(origin)) {
+            return callback(null, true);
+        }
         return callback(new Error(`Origin ${origin} not allowed by CORS`));
     },
     credentials: true,
 }));
 
 app.get('/health', (_req, res) => res.json({ ok: true }));
+
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
