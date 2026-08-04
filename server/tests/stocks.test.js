@@ -55,6 +55,14 @@ describe('Stock In', () => {
   });
 
   test('POST /stock-in-headers — creates stock movement when item is added', async () => {
+    // Headers are created 'closed' by default — must be reopened before
+    // items can be added one at a time via this endpoint.
+    const openRes = await request(app)
+      .patch(`/stock-in-headers/${stockInId}/status`)
+      .set(auth())
+      .send({ status: 'open' });
+    expect(openRes.status).toBe(200);
+
     const res = await request(app)
       .post(`/stock-in-headers/${stockInId}/items`)
       .set(auth())

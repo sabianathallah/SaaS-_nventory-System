@@ -80,12 +80,13 @@ class UserController {
         try {
             const user = await User.findOne({ where: { id: req.params.id, ...userCompanyFilter(req) } });
             if (!user) throw { name: 'NotFound', message: 'User not found' };
-            const { name, email, role, avatar, companyId: _c, password: _p, ...rest } = req.body;
+            const { name, email, role, avatar, password: newPassword, companyId: _c, ...rest } = req.body;
             const allowed = {};
             if (name      !== undefined) allowed.name   = name;
             if (email     !== undefined) allowed.email  = email;
             if (role      !== undefined) allowed.role   = role;
             if (avatar    !== undefined) allowed.avatar = avatar;
+            if (newPassword) allowed.password = newPassword;
             if (req.body.divisis !== undefined) {
                 const divisis = normalizeDivisis(req.body.divisis);
                 allowed.divisis = divisis;
