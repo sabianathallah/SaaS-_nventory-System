@@ -177,14 +177,16 @@ class TaskController {
             // the parent task can't see sub-tasks the creator added without
             // also re-assigning them one by one, which defeats the point of
             // "assign the parent, break it into steps for that person".
+            // Access is checked via hasTaskAccess, which walks the FULL ancestor
+            // chain (not just this immediate parent) — SubtaskTree recurses to
+            // any depth, so an assignee on the top-level task must still be able
+            // to open a grand-child sub-task's own sub-tasks (layer 3+), even
+            // though they were never individually assigned to the layer-2 node.
             if (req.query.parentTaskId) {
                 const parent = await Task.findOne({ where: { id: req.query.parentTaskId, ...companyFilter(req) } });
                 if (!parent) throw { name: 'NotFound', message: 'Task tidak ditemukan' };
-                if (!canViewAll) {
-                    const isParentAssignee = await TaskAssignee.findOne({ where: { taskId: parent.id, userId: req.user.id } });
-                    if (parent.createdBy !== req.user.id && !isParentAssignee) {
-                        throw { name: 'Forbidden', message: 'Anda tidak punya akses ke sub-task ini' };
-                    }
+                if (!(await hasTaskAccess(parent, req, canViewAll))) {
+                    throw { name: 'Forbidden', message: 'Anda tidak punya akses ke sub-task ini' };
                 }
             } else if (req.query.mine === 'true' || !canViewAll) {
                 // `mine=true` scopes strictly to the current user (assigned to them
