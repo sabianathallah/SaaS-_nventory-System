@@ -31,6 +31,12 @@ module.exports = (sequelize, DataTypes) => {
         onDelete: 'CASCADE',
         onUpdate: 'CASCADE'
       });
+      User.hasMany(models.EmployeeDocument, {
+        foreignKey: { name: 'userId', allowNull: false },
+        as: 'documents',
+        onDelete: 'CASCADE',
+        onUpdate: 'CASCADE'
+      });
       User.hasMany(models.LeaveRequest, {
         foreignKey: { name: 'userId', allowNull: false },
         as: 'leaveRequests',

@@ -413,6 +413,24 @@ export const hrisApi = {
   deleteOfficeLocation:  (id)       => api.delete(`/hris/office-locations/${id}`).then(r => r.data),
 
   attendanceReport: (params) => api.get('/hris/reports/attendance', { params }).then(r => r.data),
+
+  employeeDocuments:        (params) => api.get('/hris/employee-documents', { params }).then(r => r.data),
+  employeeDocumentEmployees: ()      => api.get('/hris/employee-documents/employees').then(r => r.data),
+  createEmployeeDocument:   ({ userId, type, title, expiryDate, note, document }) => {
+    const fd = new FormData()
+    fd.append('userId', userId); fd.append('type', type); fd.append('title', title)
+    if (expiryDate) fd.append('expiryDate', expiryDate)
+    if (note) fd.append('note', note)
+    fd.append('document', document)
+    return api.post('/hris/employee-documents', fd).then(r => r.data)
+  },
+  updateEmployeeDocument:      (id, data) => api.put(`/hris/employee-documents/${id}`, data).then(r => r.data),
+  replaceEmployeeDocumentFile: (id, file) => {
+    const fd = new FormData()
+    fd.append('document', file)
+    return api.patch(`/hris/employee-documents/${id}/file`, fd).then(r => r.data)
+  },
+  deleteEmployeeDocument: (id) => api.delete(`/hris/employee-documents/${id}`).then(r => r.data),
 }
 
 export const profileApi = {

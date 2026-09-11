@@ -16,7 +16,7 @@ import {
   PackageCheck, Link2, BarChart2, BookMarked, ChevronDown,
   SendHorizonal, FileText, PanelLeftClose, PanelLeftOpen, UserCog,
   Laptop, Wallet, CalendarClock, ShieldCheck, AlarmClock, Receipt, ListChecks,
-  Star, CheckCircle2, Home,
+  Star, CheckCircle2, Home, FolderOpen,
 } from 'lucide-react'
 import logoPreface from '../assets/logo-preface.jpeg'
 
@@ -136,6 +136,7 @@ const HRIS_NAV_GROUPS = [
       // terpisah, un-comment 3 baris di bawah & hapus baris /hris/pengajuan.
       { to: '/hris/pengajuan', icon: FileText,       label: 'Pengajuan', requirePermission: 'hris.view' },
       { to: '/hris/payslip',   icon: Receipt,        label: 'Slip Gaji', requirePermission: 'hris.view' },
+      { to: '/hris/documents', icon: FolderOpen,     label: 'Dokumen Saya', requirePermission: 'hris.view' },
       // { to: '/hris/leave',      icon: FileText,      label: 'Cuti',      requirePermission: 'hris.view' },
       // { to: '/hris/wfa',        icon: Laptop,        label: 'WFA',       requirePermission: 'hris.view' },
       // { to: '/hris/late-excuse', icon: AlarmClock,   label: 'Izin Telat', requirePermission: 'hris.view' },
@@ -155,6 +156,7 @@ const HRIS_NAV_GROUPS = [
       { to: '/hris/payment-adjustments', icon: Wallet,       label: 'Penyesuaian Payment', requirePermission: 'hris.reports.view' },
       { to: '/hris/admin/salary-profiles', icon: Wallet,     label: 'Profil Gaji',   requirePermission: 'hris.salary.manage' },
       { to: '/hris/admin/payslips',     icon: Receipt,       label: 'Slip Gaji (Admin)', requirePermission: 'hris.payslip.manage' },
+      { to: '/hris/admin/documents',    icon: FolderOpen,    label: 'Dokumen Karyawan', requirePermission: 'hris.document.manage' },
       { to: '/hris/reports',            icon: BarChart2,     label: 'Laporan HRIS', requirePermission: 'hris.reports.view' },
     ],
   },
@@ -181,6 +183,7 @@ const PAGE_TITLES = {
   '/hris/admin/shifts': 'Kelola Shift', '/hris/admin/attendance-review': 'Persetujuan Presensi', '/hris/admin/locations': 'Kelola Lokasi Kantor', '/hris/reports': 'Laporan HRIS',
   '/hris/admin/leave-quota': 'Kuota Cuti', '/hris/admin/wfa-quota': 'Kuota WFA', '/hris/admin/work-policy': 'Aturan Jam Kerja', '/hris/payment-adjustments': 'Penyesuaian Payment',
   '/hris/payslip': 'Slip Gaji Saya', '/hris/admin/salary-profiles': 'Profil Gaji', '/hris/admin/payslips': 'Slip Gaji',
+  '/hris/documents': 'Dokumen Saya', '/hris/admin/documents': 'Dokumen Karyawan',
   '/warehouses': 'Gudang', '/suppliers': 'Vendor',
   '/stock-in': 'Penerimaan Stok', '/stock-in/new': 'Penerimaan Stok Baru', '/stock-out': 'Pengeluaran Stok', '/movements': 'Pergerakan',
   '/opname': 'Stock Opname', '/transfers': 'Transfer Stok', '/handover': 'Handover Pengiriman',

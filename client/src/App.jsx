@@ -25,6 +25,8 @@ import HrisPaymentAdjustments from './pages/hris/PaymentAdjustments'
 import HrisSalaryProfiles from './pages/hris/admin/SalaryProfiles'
 import HrisPayslipsAdmin from './pages/hris/admin/Payslips'
 import HrisPayslip from './pages/hris/Payslip'
+import HrisDocumentsAdmin from './pages/hris/admin/Documents'
+import HrisDocuments from './pages/hris/Documents'
 import HrisWorkPolicy from './pages/hris/admin/WorkPolicy'
 import Products from './pages/Products'
 import ProductDetail from './pages/ProductDetail'
@@ -137,6 +139,8 @@ function AppRoutes() {
                 <Route path="/hris/admin/salary-profiles" element={<PageVisibleRoute pageKey="hris"><PermissionRoute permission="hris.salary.manage" page="Profil Gaji"><HrisSalaryProfiles /></PermissionRoute></PageVisibleRoute>} />
                 <Route path="/hris/admin/payslips" element={<PageVisibleRoute pageKey="hris"><PermissionRoute permission="hris.payslip.manage" page="Slip Gaji"><HrisPayslipsAdmin /></PermissionRoute></PageVisibleRoute>} />
                 <Route path="/hris/payslip" element={<PageVisibleRoute pageKey="hris"><PermissionRoute permission="hris.view" page="Slip Gaji Saya"><HrisPayslip /></PermissionRoute></PageVisibleRoute>} />
+                <Route path="/hris/admin/documents" element={<PageVisibleRoute pageKey="hris"><PermissionRoute permission="hris.document.manage" page="Dokumen Karyawan"><HrisDocumentsAdmin /></PermissionRoute></PageVisibleRoute>} />
+                <Route path="/hris/documents" element={<PageVisibleRoute pageKey="hris"><PermissionRoute permission="hris.view" page="Dokumen Saya"><HrisDocuments /></PermissionRoute></PageVisibleRoute>} />
 
                 {/* ── Produk ── */}
                 <Route path="/products"          element={<PageVisibleRoute pageKey="products"><PermissionRoute permission="inventory.view" page="Produk"><Products /></PermissionRoute></PageVisibleRoute>} />

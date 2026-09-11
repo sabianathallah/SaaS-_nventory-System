@@ -4,7 +4,7 @@ const router = express.Router();
 
 const requirePermission = require('../middlewares/requirePermission');
 const requireCompany = require('../middlewares/requireCompany');
-const { uploadSingle } = require('../helpers/cloudinary');
+const { uploadSingle, uploadEmployeeDocument } = require('../helpers/cloudinary');
 const AttendanceController = require('../controllers/attendanceController');
 const LeaveController = require('../controllers/leaveController');
 const OvertimeController = require('../controllers/overtimeController');
@@ -17,6 +17,7 @@ const SickLeaveController = require('../controllers/sickLeaveController');
 const SalaryProfileController = require('../controllers/salaryProfileController');
 const PayslipController = require('../controllers/payslipController');
 const HrisSettingController = require('../controllers/hrisSettingController');
+const EmployeeDocumentController = require('../controllers/employeeDocumentController');
 
 router.use(requirePermission('hris.view'));
 
@@ -114,5 +115,13 @@ router.patch('/payslips/:id/publish',   requirePermission('hris.payslip.manage')
 router.patch('/payslips/:id/unpublish', requirePermission('hris.payslip.manage'), PayslipController.unpublish);
 router.delete('/payslips/:id',       requirePermission('hris.payslip.manage'), PayslipController.destroy);
 router.get('/payslips/:id/download', PayslipController.download);
+
+// ── Dokumen Karyawan (KTP, NPWP, kontrak, dll) ────────────────────────────────
+router.get('/employee-documents/employees', requirePermission('hris.document.manage'), EmployeeDocumentController.listEmployees);
+router.get('/employee-documents',           EmployeeDocumentController.list);
+router.post('/employee-documents',          requirePermission('hris.document.manage'), requireCompany, uploadEmployeeDocument('document', 'saas-inventory/employee-docs'), EmployeeDocumentController.create);
+router.put('/employee-documents/:id',       requirePermission('hris.document.manage'), EmployeeDocumentController.update);
+router.patch('/employee-documents/:id/file', requirePermission('hris.document.manage'), uploadEmployeeDocument('document', 'saas-inventory/employee-docs'), EmployeeDocumentController.replaceFile);
+router.delete('/employee-documents/:id',    requirePermission('hris.document.manage'), EmployeeDocumentController.destroy);
 
 module.exports = router;

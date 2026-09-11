@@ -164,4 +164,54 @@ async function destroyUpload(url) {
   }
 }
 
-module.exports = { cloudinary, upload, uploadSingle, uploadArray, destroyByUrl, destroyUpload, isConfigured, uploadHandoverAttachment, destroyHandoverAttachment };
+// Employee document upload (KTP, NPWP, kontrak kerja, dll) — supports PDF +
+// images, same middleware-factory shape as uploadSingle() (not a raw multer
+// instance like uploadHandoverAttachment) so it drops straight into a route
+// chain without an extra .single() call.
+function uploadEmployeeDocument(field = 'document', folder = 'saas-inventory/employee-docs') {
+  if (isConfigured) {
+    const storage = new CloudinaryStorage({
+      cloudinary,
+      params: (req, file) => ({
+        folder,
+        resource_type: 'auto',
+        allowed_formats: ['jpg', 'jpeg', 'png', 'webp', 'pdf'],
+        public_id: `document-${Date.now()}`,
+      }),
+    });
+    const docUpload = multer({ storage, limits: { fileSize: 10 * 1024 * 1024 } });
+    return (req, res, next) => {
+      if (!req.is('multipart/form-data')) return next();
+      docUpload.single(field)(req, res, next);
+    };
+  }
+
+  // Local disk fallback
+  const diskDir = path.join(__dirname, '..', 'uploads', 'employee-docs');
+  fs.mkdirSync(diskDir, { recursive: true });
+  const diskStorage = multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, diskDir),
+    filename:    (_req, file, cb) => {
+      const ext = path.extname(file.originalname).toLowerCase();
+      cb(null, `${field}-${Date.now()}${ext}`);
+    },
+  });
+  const diskUpload = multer({
+    storage: diskStorage,
+    limits: { fileSize: 10 * 1024 * 1024 },
+    fileFilter: (_req, file, cb) => {
+      const allowed = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+      cb(null, allowed.includes(file.mimetype));
+    },
+  });
+  return (req, res, next) => {
+    if (!req.is('multipart/form-data')) return next();
+    diskUpload.single(field)(req, res, (err) => {
+      if (err) return next(err);
+      if (req.file) req.file.path = `/uploads/employee-docs/${req.file.filename}`;
+      next();
+    });
+  };
+}
+
+module.exports = { cloudinary, upload, uploadSingle, uploadArray, destroyByUrl, destroyUpload, isConfigured, uploadHandoverAttachment, destroyHandoverAttachment, uploadEmployeeDocument };

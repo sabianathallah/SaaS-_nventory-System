@@ -1,7 +1,7 @@
 'use strict';
 const cron = require('node-cron');
 const { Op } = require('sequelize');
-const { Attendance, Shift, Task, TaskAssignee, Notification } = require('../models');
+const { Attendance, Shift, Task, TaskAssignee, Notification, EmployeeDocument } = require('../models');
 const { todayDateOnly, addDaysStr, weekdayOf } = require('./timezone');
 const { backfillAbsentForDates } = require('./absentBackfill');
 
@@ -20,6 +20,38 @@ function setupCronJobs() {
     // Tiap menit: task dengan reminderAt yang sudah lewat tapi belum
     // dinotifikasi (reminderSentAt IS NULL) — MS To Do-style "Remind me".
     cron.schedule('* * * * *', taskReminderJob, { timezone: 'Asia/Jakarta' });
+
+    // Jam 07:00 WIB: dokumen karyawan (KTP/NPWP/kontrak/dll) yang sudah/mau
+    // kedaluwarsa dalam 30 hari ke depan, notifikasi ke karyawan yang
+    // bersangkutan. Granularitas harian cukup, gak perlu tiap menit.
+    cron.schedule('0 7 * * *', employeeDocumentExpiryJob, { timezone: 'Asia/Jakarta' });
+}
+
+const DOCUMENT_REMINDER_LEAD_DAYS = 30;
+
+async function employeeDocumentExpiryJob() {
+    try {
+        const threshold = addDaysStr(todayDateOnly(), DOCUMENT_REMINDER_LEAD_DAYS);
+        const docs = await EmployeeDocument.findAll({
+            where: { expiryDate: { [Op.lte]: threshold, [Op.ne]: null }, expiryReminderSentAt: null },
+        });
+
+        for (const doc of docs) {
+            const isExpired = doc.expiryDate < todayDateOnly();
+            await Notification.create({
+                userId: doc.userId,
+                companyId: doc.companyId,
+                type: 'DOCUMENT_EXPIRY',
+                title: isExpired ? 'Dokumen sudah kedaluwarsa' : 'Dokumen akan kedaluwarsa',
+                message: `Dokumen "${doc.title}" (${doc.type}) ${isExpired ? 'sudah kedaluwarsa' : 'akan kedaluwarsa'} pada ${doc.expiryDate}`,
+                link: '/hris/documents',
+            });
+            await doc.update({ expiryReminderSentAt: new Date() });
+        }
+        if (docs.length) console.log(`[cron] dokumen karyawan expiry: ${docs.length} notifikasi dikirim`);
+    } catch (err) {
+        console.error('[cron] dokumen karyawan expiry gagal:', err.message);
+    }
 }
 
 async function autoCheckOutJob() {
@@ -84,4 +116,4 @@ async function taskReminderJob() {
     }
 }
 
-module.exports = { setupCronJobs };
+module.exports = { setupCronJobs, employeeDocumentExpiryJob };
