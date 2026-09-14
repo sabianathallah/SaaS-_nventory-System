@@ -1,7 +1,7 @@
 import { useState, useMemo, useRef, useEffect } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { stockOutApi, stockOutDraftApi, warehousesApi, stockInApi, productsApi, productSkusApi, stocksApi, skuWarehouseStocksApi } from '../api'
+import { stockOutApi, stockOutDraftApi, warehousesApi, stockInApi, productsApi, productSkusApi, stocksApi, skuWarehouseStocksApi, stockOutPurposesApi, channelsApi } from '../api'
 import { useAuth } from '../context/AuthContext'
 import QRScanner from '../components/QRScanner'
 import SearchableSelect from '../components/SearchableSelect'
@@ -9,23 +9,14 @@ import { useExternalScanner } from '../hooks/useExternalScanner'
 import { useCompanyGuard } from '../hooks/useCompanyGuard'
 import CompanyRequiredBanner from '../components/CompanyRequiredBanner'
 import toast from 'react-hot-toast'
-import { ArrowLeft, PackageMinus, ScanLine, Plus, Trash2, Save, ScanBarcode, ChevronDown, Package, FileSpreadsheet, BookmarkCheck, X, Printer, Lock, LockOpen, CheckCheck } from 'lucide-react'
+import { ArrowLeft, PackageMinus, ScanLine, Plus, Trash2, Save, ScanBarcode, ChevronDown, Package, FileSpreadsheet, BookmarkCheck, X, Printer, Lock, LockOpen, CheckCheck, Check } from 'lucide-react'
 import { exportExcel } from '../utils/exportExcel'
 import logoPreface from '../assets/logo-preface.jpeg'
 
 const fmt = (n) => Number(n ?? 0).toLocaleString('id-ID')
 
-const PURPOSES = [
-  'Penjualan',
-  'Endorse',
-  'Photoshoot',
-  'R&D',
-  'Pemakaian Internal',
-  'Hadiah / Gift',
-  'Sample',
-  'Retur Vendor',
-  'Lainnya',
-]
+// Nilai sentinel untuk opsi "+ Tambah tujuan baru" di dropdown Tujuan.
+const ADD_NEW_PURPOSE = '__add_new_purpose__'
 
 const skuLabel = (sku) => {
   const opts = sku?.ProductVariantOptions ?? []
@@ -35,7 +26,7 @@ const skuLabel = (sku) => {
 
 const fmtDate = (d) => d ? new Date(d).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10)
 
-const EMPTY_FORM = { warehouseId: '', purpose: '', purposeDetail: '', note: '', date: fmtDate(), items: [] }
+const EMPTY_FORM = { warehouseId: '', purpose: '', purposeDetail: '', channelId: '', note: '', date: fmtDate(), items: [] }
 
 // ── Item row (view mode) — qty editable & bisa dihapus saat sesi terbuka ───────
 function OutItemRow({ item, headerId, canViewValue, editable, canDelete, showActionCol, showRepairCol }) {
@@ -380,6 +371,7 @@ export default function StockOutDetail() {
         ...f,
         warehouseId: draft.WarehouseId ?? '',
         purpose:     draft.purpose     || purposeParam || '',
+        channelId:   draft.ChannelId   ?? '',
         note:        draft.note        ?? '',
         date:        draft.date        ? fmtDate(draft.date) : fmtDate(),
       }))
@@ -416,6 +408,35 @@ export default function StockOutDetail() {
     queryKey: ['warehouses', { limit: 100 }],
     queryFn:  () => warehousesApi.list({ limit: 100 }),
     enabled:  isNew,
+  })
+
+  const { data: purposes } = useQuery({
+    queryKey: ['stock-out-purposes', { limit: 200 }],
+    queryFn:  () => stockOutPurposesApi.list({ limit: 200 }),
+    enabled:  isNew,
+  })
+  const purposeOptions = (purposes?.data ?? []).filter(p => p.isActive)
+
+  const { data: channels } = useQuery({
+    queryKey: ['channels', { limit: 200 }],
+    queryFn:  () => channelsApi.list({ limit: 200 }),
+    enabled:  isNew,
+  })
+  const channelOptions = (channels?.data ?? []).filter(c => c.isActive)
+
+  const [addingPurpose, setAddingPurpose]     = useState(false)
+  const [newPurposeName, setNewPurposeName]   = useState('')
+  const addPurposeMutation = useMutation({
+    mutationFn: (name) => stockOutPurposesApi.create({ name }),
+    onSuccess: (created) => {
+      qc.invalidateQueries({ queryKey: ['stock-out-purposes'] })
+      setForm(f => ({ ...f, purpose: created.name, purposeDetail: '' }))
+      saveFormField('purpose', created.name)
+      setAddingPurpose(false)
+      setNewPurposeName('')
+      toast.success('Tujuan baru ditambahkan & dipilih')
+    },
+    onError: e => toast.error(e.response?.data?.message || 'Gagal menambah tujuan'),
   })
 
   const { data: skuWarehouseStocks } = useQuery({
@@ -470,6 +491,7 @@ export default function StockOutDetail() {
       return stockOutDraftApi.submit(draftId, {
         WarehouseId: form.warehouseId,
         purpose,
+        ChannelId: form.purpose === 'Penjualan' ? (form.channelId || null) : null,
         date: form.date,
         note: form.note,
         VendorId:         vendorIdParam || null,
@@ -585,6 +607,7 @@ export default function StockOutDetail() {
     if (!form.warehouseId) return toast.error('Pilih warehouse')
     if (!form.purpose) return toast.error('Pilih tujuan stock out')
     if (form.purpose === 'Lainnya' && !form.purposeDetail.trim()) return toast.error('Jelaskan tujuan lainnya')
+    if (form.purpose === 'Penjualan' && !form.channelId) return toast.error('Pilih channel penjualan')
     if (!draftItems.length) return toast.error('Tambahkan minimal 1 item')
     createMutation.mutate()
   }
@@ -670,6 +693,9 @@ export default function StockOutDetail() {
               {detail.purpose ?? '—'}
             </span>
           </div>
+          {detail.purpose === 'Penjualan' && (
+            <div><p className="label mb-1">Channel</p><p className="font-semibold text-slate-700">{detail.Channel?.name ?? '—'}</p></div>
+          )}
           <div><p className="label mb-1">Catatan</p><p className="text-slate-500">{detail.notes || detail.note || '—'}</p></div>
           <div>
             <p className="label mb-1">Total Produk</p>
@@ -969,13 +995,64 @@ export default function StockOutDetail() {
               <select
                 className="input"
                 value={form.purpose}
-                onChange={e => { setForm(f => ({ ...f, purpose: e.target.value, purposeDetail: '' })); saveFormField('purpose', e.target.value) }}
+                onChange={e => {
+                  const v = e.target.value
+                  if (v === ADD_NEW_PURPOSE) { setAddingPurpose(true); return }
+                  setForm(f => ({ ...f, purpose: v, purposeDetail: '', channelId: '' }))
+                  saveFormField('purpose', v)
+                }}
                 required
               >
                 <option value="">Pilih tujuan…</option>
-                {PURPOSES.map(p => <option key={p} value={p}>{p}</option>)}
+                {purposeOptions.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
+                <option value={ADD_NEW_PURPOSE}>+ Tambah tujuan baru…</option>
               </select>
             </div>
+            {addingPurpose && (
+              <div className="sm:col-span-2 flex items-center gap-2 bg-brand/5 border border-brand/20 rounded-lg p-2.5">
+                <input
+                  autoFocus
+                  className="input flex-1"
+                  placeholder="Nama tujuan baru… (mis. Konten Sosmed)"
+                  value={newPurposeName}
+                  onChange={e => setNewPurposeName(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && newPurposeName.trim()) { e.preventDefault(); addPurposeMutation.mutate(newPurposeName.trim()) }
+                    if (e.key === 'Escape') { setAddingPurpose(false); setNewPurposeName('') }
+                  }}
+                />
+                <button type="button"
+                  onClick={() => newPurposeName.trim() && addPurposeMutation.mutate(newPurposeName.trim())}
+                  disabled={!newPurposeName.trim() || addPurposeMutation.isPending}
+                  className="p-2 rounded bg-brand text-white hover:bg-brand/90 disabled:opacity-40 flex-shrink-0"
+                >
+                  <Check size={14} />
+                </button>
+                <button type="button"
+                  onClick={() => { setAddingPurpose(false); setNewPurposeName('') }}
+                  className="p-2 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 flex-shrink-0"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            )}
+            {form.purpose === 'Penjualan' && (
+              <div>
+                <label className="label">Channel Penjualan <span className="text-red-500">*</span></label>
+                <select
+                  className="input"
+                  value={form.channelId}
+                  onChange={e => { setForm(f => ({ ...f, channelId: e.target.value })); saveFormField('ChannelId', e.target.value || null) }}
+                  required
+                >
+                  <option value="">Pilih channel…</option>
+                  {channelOptions.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+                {channelOptions.length === 0 && (
+                  <p className="text-xs text-amber-600 mt-1">Belum ada channel aktif — tambah dulu di Data Master.</p>
+                )}
+              </div>
+            )}
             {form.purpose === 'Lainnya' && (
               <div className="sm:col-span-2">
                 <label className="label">Jelaskan tujuan <span className="text-red-500">*</span></label>
@@ -1120,7 +1197,7 @@ export default function StockOutDetail() {
               if (draftId) {
                 clearTimeout(saveTimer.current)
                 const purpose = form.purpose === 'Lainnya' ? `Lainnya: ${form.purposeDetail?.trim()}` : form.purpose
-                await stockOutDraftApi.update(draftId, { date: form.date, WarehouseId: form.warehouseId || null, purpose: purpose || null, note: form.note || null }).catch(() => {})
+                await stockOutDraftApi.update(draftId, { date: form.date, WarehouseId: form.warehouseId || null, purpose: purpose || null, ChannelId: form.channelId || null, note: form.note || null }).catch(() => {})
               }
               qc.invalidateQueries({ queryKey: ['stock-out-draft-current'] })
               navigate('/stock-out')
@@ -1252,7 +1329,7 @@ function StockOutPrintLayout({ detail, items, recipient, docType = 'SURAT_JALAN'
                   <td className="print-meta-val"><strong>{detail.Warehouse?.name ?? '—'}</strong></td>
                   <td className="print-meta-key">Keperluan</td>
                   <td className="print-meta-sep">:</td>
-                  <td className="print-meta-val">{detail.purpose ?? '—'}</td>
+                  <td className="print-meta-val">{detail.purpose ?? '—'}{detail.purpose === 'Penjualan' && detail.Channel?.name ? ` (${detail.Channel.name})` : ''}</td>
                 </tr>
                 {!isLaporan && (
                   <tr>

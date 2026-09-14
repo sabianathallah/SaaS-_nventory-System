@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { categoriesApi, articlesApi, subCategoriesApi, requestTypeApi, channelsApi } from '../api'
+import { categoriesApi, articlesApi, subCategoriesApi, requestTypeApi, channelsApi, stockOutPurposesApi } from '../api'
 import { Pagination } from '../components/Table'
 import SearchBar from '../components/SearchBar'
 import toast from 'react-hot-toast'
-import { Plus, Pencil, Trash2, Check, X, Loader2, Tag, BookOpen, Building2, Truck, FileText, Megaphone, Layers } from 'lucide-react'
+import { Plus, Pencil, Trash2, Check, X, Loader2, Tag, BookOpen, Building2, Truck, FileText, Megaphone, Layers, ArrowUpFromLine } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useSelectedCompany } from '../context/SelectedCompanyContext'
 
@@ -232,6 +232,7 @@ export default function Catalog() {
   const blocked = isSuperAdmin && !selectedCompany
   const canManageCatalog = hasPermission('inventory.manage')
   const canManageChannel = hasPermission('channel.manage')
+  const canManagePurpose = hasPermission('inventory.manage') || hasPermission('stock.manage')
 
   const [catPage, setCatPage] = useState(1)
   const [catSearch, setCatSearch] = useState('')
@@ -376,6 +377,34 @@ export default function Catalog() {
   const delChannel = useMutation({
     mutationFn: id => channelsApi.remove(id),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['channels'] }); toast.success('Channel dihapus') },
+    onError: e => toast.error(e.response?.data?.message || 'Gagal menghapus'),
+  })
+
+  // ── Tujuan Stock Out ───────────────────────────────────────────────────────
+  const { data: purposes, isLoading: purposesLoading } = useQuery({
+    queryKey: ['stock-out-purposes', { limit: 200 }],
+    queryFn:  () => stockOutPurposesApi.list({ limit: 200 }),
+    enabled:  canManagePurpose,
+  })
+  const [newPurposeName, setNewPurposeName] = useState('')
+
+  const addPurpose = useMutation({
+    mutationFn: () => stockOutPurposesApi.create({ name: newPurposeName.trim() }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['stock-out-purposes'] })
+      setNewPurposeName('')
+      toast.success('Tujuan ditambahkan')
+    },
+    onError: e => toast.error(e.response?.data?.message || 'Gagal menambah'),
+  })
+  const togglePurposeActive = useMutation({
+    mutationFn: ([id, val]) => stockOutPurposesApi.update(id, { isActive: val }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['stock-out-purposes'] }),
+    onError: e => toast.error(e.response?.data?.message || 'Gagal update'),
+  })
+  const delPurpose = useMutation({
+    mutationFn: id => stockOutPurposesApi.remove(id),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['stock-out-purposes'] }); toast.success('Tujuan dihapus') },
     onError: e => toast.error(e.response?.data?.message || 'Gagal menghapus'),
   })
 
@@ -629,6 +658,84 @@ export default function Catalog() {
                   className="p-1.5 rounded bg-brand text-white hover:bg-brand/90 disabled:opacity-40"
                 >
                   {addChannel.isPending ? <Loader2 size={13} className="animate-spin" /> : <Plus size={13} />}
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      )}
+
+      {/* Tujuan Stock Out */}
+      {canManagePurpose && (
+      <div className="card overflow-hidden">
+        <div className="flex items-center gap-3 px-5 py-4 border-b border-slate-100">
+          <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500 flex-shrink-0">
+            <ArrowUpFromLine size={15} />
+          </div>
+          <div>
+            <h3 className="text-sm font-bold text-slate-800">Tujuan Stock Out</h3>
+            <p className="text-xs text-slate-400">{(purposes?.data ?? []).length} tujuan · Muncul di dropdown "Tujuan" saat Stock Out</p>
+          </div>
+        </div>
+
+        <table className="w-full">
+          <thead>
+            <tr className="border-b border-slate-100 bg-slate-50/50">
+              <th className="px-4 py-2.5 text-left text-xs font-semibold text-slate-400 uppercase tracking-wide">Nama</th>
+              <th className="px-4 py-2.5 text-center text-xs font-semibold text-slate-400 uppercase tracking-wide w-32">Status</th>
+              <th className="px-4 py-2.5 w-16" />
+            </tr>
+          </thead>
+          <tbody>
+            {purposesLoading ? (
+              <tr><td colSpan={3} className="px-4 py-6 text-center text-sm text-slate-400">Memuat…</td></tr>
+            ) : (purposes?.data ?? []).length === 0 ? (
+              <tr><td colSpan={3} className="px-4 py-8 text-center text-sm text-slate-300">Belum ada tujuan</td></tr>
+            ) : (purposes?.data ?? []).map(p => (
+              <tr key={p.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/60">
+                <td className="px-4 py-3 text-sm font-medium text-slate-700">{p.name}</td>
+                <td className="px-4 py-3 text-center">
+                  <button
+                    onClick={() => togglePurposeActive.mutate([p.id, !p.isActive])}
+                    className={`inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full font-medium transition-colors ${
+                      p.isActive
+                        ? 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200'
+                        : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                    }`}
+                  >
+                    {p.isActive ? 'Aktif' : 'Nonaktif'}
+                  </button>
+                </td>
+                <td className="px-4 py-3 text-right">
+                  <button
+                    onClick={() => { if (confirm(`Hapus tujuan "${p.name}"? Stock Out lama dengan tujuan ini tidak berubah, cuma gak muncul lagi di pilihan baru.`)) delPurpose.mutate(p.id) }}
+                    className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                </td>
+              </tr>
+            ))}
+            {/* Add row */}
+            <tr className="border-t border-slate-100 bg-slate-50/30">
+              <td className="px-4 py-2.5" colSpan={2}>
+                <input
+                  value={newPurposeName}
+                  onChange={e => setNewPurposeName(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && newPurposeName.trim() && !blocked && addPurpose.mutate()}
+                  placeholder="Nama tujuan baru… (mis. Konten Sosmed)"
+                  className="input py-1 text-sm w-full max-w-xs"
+                  disabled={blocked}
+                />
+              </td>
+              <td className="px-4 py-2.5 text-right">
+                <button
+                  onClick={() => newPurposeName.trim() && addPurpose.mutate()}
+                  disabled={!newPurposeName.trim() || addPurpose.isPending || blocked}
+                  className="p-1.5 rounded bg-brand text-white hover:bg-brand/90 disabled:opacity-40"
+                >
+                  {addPurpose.isPending ? <Loader2 size={13} className="animate-spin" /> : <Plus size={13} />}
                 </button>
               </td>
             </tr>

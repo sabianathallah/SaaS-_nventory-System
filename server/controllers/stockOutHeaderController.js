@@ -1,6 +1,6 @@
 'use strict';
 const { Op } = require('sequelize');
-const { sequelize, Stock_Out_Header, Stock_Movement, Stock, SkuWarehouseStock, User, Product, ProductSKU, ProductVariantOption, Warehouse, Vendor, VendorDelivery } = require('../models');
+const { sequelize, Stock_Out_Header, Stock_Movement, Stock, SkuWarehouseStock, User, Product, ProductSKU, ProductVariantOption, Warehouse, Vendor, VendorDelivery, Channel } = require('../models');
 const { companyFilter, companyId } = require('../helpers/tenancy');
 const { upsertSkuWarehouseStock } = require('../helpers/skuStock');
 const { paginate, buildFilter, paginatedResponse } = require('../helpers/queryHelper');
@@ -60,6 +60,7 @@ class StockOutHeaderController {
                     { model: User, foreignKey: 'createdBy', attributes: ['id', 'name'] },
                     { model: User, foreignKey: 'updatedBy', as: 'updater', attributes: ['id', 'name'] },
                     { model: Warehouse, attributes: ['id', 'name'] },
+                    { model: Channel, attributes: ['id', 'name'] },
                 ],
                 order: [['date', 'DESC'], ['id', 'DESC']],
                 limit, offset,
@@ -79,6 +80,7 @@ class StockOutHeaderController {
                     { model: Warehouse, attributes: ['id', 'name'] },
                     { model: Vendor, attributes: ['id', 'name'] },
                     { model: VendorDelivery, as: 'sourceDelivery', attributes: ['id', 'date'] },
+                    { model: Channel, attributes: ['id', 'name'] },
                 ]
             });
             if (!header) throw { name: 'NotFound', message: 'Stock out header not found' };
@@ -118,6 +120,10 @@ class StockOutHeaderController {
                 await t.rollback();
                 return res.status(400).json({ message: 'Tujuan stock out wajib dipilih' });
             }
+            if (headerData.purpose === 'Penjualan' && !headerData.ChannelId) {
+                await t.rollback();
+                return res.status(400).json({ message: 'Channel penjualan wajib dipilih untuk tujuan "Penjualan"' });
+            }
 
             // Resolve ProductId from ProductSKUId when not provided directly
             const resolvedItems = [];
@@ -148,6 +154,7 @@ class StockOutHeaderController {
                     date: headerData.date || new Date(),
                     VendorId: headerData.VendorId || null,
                     sourceDeliveryId: headerData.sourceDeliveryId || null,
+                    ChannelId: headerData.ChannelId || null,
                     createdBy: req.user.id,
                     companyId: cid,
                 },

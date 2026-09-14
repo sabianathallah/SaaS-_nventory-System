@@ -114,6 +114,7 @@ class StockOutDraftController {
             if (req.body.WarehouseId !== undefined) updates.WarehouseId = req.body.WarehouseId;
             if (req.body.date        !== undefined) updates.date        = req.body.date;
             if (req.body.purpose     !== undefined) updates.purpose     = req.body.purpose;
+            if (req.body.ChannelId   !== undefined) updates.ChannelId   = req.body.ChannelId;
             if (req.body.note        !== undefined) updates.note        = req.body.note;
             await draft.update(updates);
 
@@ -216,6 +217,7 @@ class StockOutDraftController {
             const WarehouseId = req.body.WarehouseId || draft.WarehouseId;
             const date        = req.body.date        || draft.date;
             const purpose     = req.body.purpose     || draft.purpose;
+            const ChannelId   = req.body.ChannelId   || draft.ChannelId || null;
             const note        = req.body.note        !== undefined ? req.body.note : draft.note;
             const VendorId         = req.body.VendorId         || null;
             const sourceDeliveryId = req.body.sourceDeliveryId || null;
@@ -227,6 +229,10 @@ class StockOutDraftController {
             if (!purpose) {
                 await t.rollback();
                 return res.status(400).json({ message: 'Tujuan stock out wajib dipilih' });
+            }
+            if (purpose === 'Penjualan' && !ChannelId) {
+                await t.rollback();
+                return res.status(400).json({ message: 'Channel penjualan wajib dipilih untuk tujuan "Penjualan"' });
             }
 
             const items = draft.Stock_Out_Draft_Items || [];
@@ -241,6 +247,7 @@ class StockOutDraftController {
                 WarehouseId,
                 date: date || new Date(),
                 purpose,
+                ChannelId,
                 notes: note || null,
                 VendorId,
                 sourceDeliveryId,

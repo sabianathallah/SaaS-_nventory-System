@@ -23,12 +23,18 @@ module.exports = (sequelize, DataTypes) => {
         onDelete: 'SET NULL',
         onUpdate: 'CASCADE',
       });
+      Stock_Out_Draft.belongsTo(models.Channel, {
+        foreignKey: { name: 'ChannelId', allowNull: true },
+        onDelete: 'SET NULL',
+        onUpdate: 'CASCADE',
+      });
     }
   }
   Stock_Out_Draft.init({
     WarehouseId: { type: DataTypes.INTEGER, allowNull: true },
     date:        { type: DataTypes.DATEONLY, allowNull: true },
     purpose:     { type: DataTypes.STRING,   allowNull: true },
+    ChannelId:   { type: DataTypes.INTEGER,  allowNull: true },
     note:        { type: DataTypes.STRING,   allowNull: true },
     status:      { type: DataTypes.STRING,   allowNull: false, defaultValue: 'draft' },
     createdBy:   { type: DataTypes.INTEGER,  allowNull: false },

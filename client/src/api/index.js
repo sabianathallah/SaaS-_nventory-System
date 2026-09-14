@@ -63,6 +63,7 @@ export const skuWarehouseStocksApi  = {
   list: (params) => api.get('/sku-warehouse-stocks', { params }).then(r => r.data),
 }
 export const channelsApi = crud('/channels')
+export const stockOutPurposesApi = crud('/stock-out-purposes')
 export const skuChannelStocksApi = {
   list:        (params) => api.get('/sku-channel-stocks', { params }).then(r => r.data),
   upsert:      (data)    => api.put('/sku-channel-stocks', data).then(r => r.data),

@@ -2,14 +2,12 @@ import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
-import { movementsApi, warehousesApi, productsApi, productSkusApi, articlesApi, categoriesApi, stockOutApi } from '../api'
+import { movementsApi, warehousesApi, productsApi, productSkusApi, articlesApi, categoriesApi, stockOutApi, stockOutPurposesApi } from '../api'
 import PageHeader from '../components/PageHeader'
 import SearchableSelect from '../components/SearchableSelect'
 import { Table, Pagination } from '../components/Table'
 import { exportExcel } from '../utils/exportExcel'
 import toast from 'react-hot-toast'
-
-const PURPOSES = ['Penjualan','Endorse','Photoshoot','R&D','Pemakaian Internal','Hadiah / Gift','Sample','Retur Vendor','Lainnya']
 
 const TYPE_BADGE = {
   IN:         <span className="badge-green">▲ IN</span>,
@@ -86,6 +84,12 @@ export default function Movements() {
     queryKey: ['stock-out-outstanding-repairs'],
     queryFn:  () => stockOutApi.outstandingRepairs(),
   })
+
+  const { data: purposesData } = useQuery({
+    queryKey: ['stock-out-purposes', { limit: 200 }],
+    queryFn:  () => stockOutPurposesApi.list({ limit: 200 }),
+  })
+  const PURPOSES = (purposesData?.data ?? []).map(p => p.name)
 
   const { data: warehouses } = useQuery({
     queryKey: ['warehouses', { limit: 500 }],
