@@ -243,7 +243,7 @@ function ItemRow({ item, canDelete, headerId, canViewValue, editable }) {
 // ── Items table ───────────────────────────────────────────────────────────────
 // draftMode=true  → items come from server draft (item.ProductSKU structure), onRemove(item.id)
 // draftMode=false → view mode, uses ItemRow
-function ItemsTable({ items, canDelete, headerId, onRemove, draftMode, removeLoading, canViewValue, editable }) {
+function ItemsTable({ items, canDelete, headerId, onRemove, draftMode, removeLoading, canViewValue, editable, canEditQty, onUpdateQty }) {
   const cols = 3 + (canViewValue ? 2 : 0) + (canDelete ? 1 : 0)
   return (
     <div className="overflow-x-auto">
@@ -278,7 +278,23 @@ function ItemsTable({ items, canDelete, headerId, onRemove, draftMode, removeLoa
                 <p className="font-semibold text-slate-800 leading-tight">{prod?.name}</p>
                 <p className="text-xs text-slate-400">{skuLabel(sku)}</p>
               </td>
-              <td className="td py-3 text-right font-bold text-slate-800">{item.quantity}</td>
+              <td className="td py-3 text-right">
+                {canEditQty ? (
+                  <input
+                    key={`${item.id}-${item.quantity}`}
+                    type="number" min="1"
+                    defaultValue={item.quantity}
+                    onBlur={e => {
+                      const val = Number(e.target.value)
+                      if (val >= 1 && val !== item.quantity) onUpdateQty(item.id, val)
+                    }}
+                    onKeyDown={e => e.key === 'Enter' && e.currentTarget.blur()}
+                    className="w-20 text-right font-mono font-bold text-slate-800 border border-slate-200 rounded-lg px-2 py-1 text-sm focus:outline-none focus:border-brand/50 bg-white"
+                  />
+                ) : (
+                  <span className="font-bold text-slate-800">{item.quantity}</span>
+                )}
+              </td>
               {canViewValue && <td className="td py-3 text-right font-mono text-slate-600">Rp {fmt(item.price)}</td>}
               {canViewValue && <td className="td py-3 text-right font-mono font-semibold text-slate-800">Rp {fmt(Number(item.price) * item.quantity)}</td>}
               <td className="td py-3">
@@ -402,6 +418,15 @@ export default function StockInDetail() {
     mutationFn: (itemId) => stockInDraftApi.removeItem(draftId, itemId),
     onSuccess:  ()       => qc.invalidateQueries({ queryKey: ['stock-in-draft'] }),
     onError:    e        => toast.error(e.response?.data?.message || 'Error'),
+  })
+
+  const updateItemQtyMutation = useMutation({
+    mutationFn: ({ itemId, quantity }) => stockInDraftApi.updateItem(draftId, itemId, { quantity }),
+    onSuccess:  ()  => qc.invalidateQueries({ queryKey: draftQueryKey }),
+    onError:    (e) => {
+      toast.error(e.response?.data?.message || 'Gagal mengubah qty')
+      qc.invalidateQueries({ queryKey: draftQueryKey })
+    },
   })
 
   const createMutation = useMutation({
@@ -820,6 +845,8 @@ export default function StockInDetail() {
                 onRemove={itemId => removeItemMutation.mutate(itemId)}
                 removeLoading={removeItemMutation.isPending}
                 canViewValue={canViewValue}
+                canEditQty={canManualInput}
+                onUpdateQty={(itemId, quantity) => updateItemQtyMutation.mutate({ itemId, quantity })}
               />
           }
 
