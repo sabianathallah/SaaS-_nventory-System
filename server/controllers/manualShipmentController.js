@@ -4,6 +4,7 @@ const {
   sequelize, ManualShipment, ManualShipmentItem,
   ShipmentCategory, Product, ProductSKU,
   ProductVariantOption, ProductVariantType, User, Request,
+  Stock_Out_Draft, Stock_Out_Draft_Item,
 } = require('../models');
 const { companyFilter, companyId: getCompanyId } = require('../helpers/tenancy');
 
@@ -483,6 +484,58 @@ exports.destroy = async (req, res, next) => {
 // ── EXPEDITION PRESETS ────────────────────────────────────────────────────────
 exports.expeditionPresets = (_req, res) => {
   res.json({ data: EXPEDITION_PRESETS });
+};
+
+// ── RETROACTIVE STOCK OUT ─────────────────────────────────────────────────────
+// Shipment ini dibuat lewat direct-shipment (skippedStockOut=true) karena stok
+// belum ada di sistem. Sekarang (mis. setelah Stock In datang) staff bisa
+// menyusulkan Stock Out-nya: bikin draft prefilled dari item shipment, staff
+// tinggal pilih warehouse + tujuan + submit lewat form Stock Out biasa.
+// Draft ini SENGAJA tidak dikaitkan ke sourceRequestId (beda dari alur normal)
+// supaya submit() tidak membuat ManualShipment baru — begitu submit, shipment
+// yang sudah ada ini yang ditandai skippedStockOut=false (lihat stockOutDraftController.submit).
+exports.createStockOutDraft = async (req, res, next) => {
+  const t = await sequelize.transaction();
+  try {
+    const shipment = await ManualShipment.findOne({
+      where: { id: req.params.id, ...companyFilter(req) },
+      include: [ITEM_INCLUDE],
+      transaction: t,
+    });
+    if (!shipment) { await t.rollback(); return res.status(404).json({ message: 'Shipping tidak ditemukan' }); }
+    if (!shipment.skippedStockOut) {
+      await t.rollback();
+      return res.status(400).json({ message: 'Shipping ini sudah tercatat lewat Stock Out' });
+    }
+
+    // Idempotent — kalau sudah pernah diklik dan draft-nya masih ada, pakai itu lagi.
+    const existing = await Stock_Out_Draft.findOne({ where: { manualShipmentId: shipment.id }, transaction: t });
+    if (existing) {
+      await t.commit();
+      return res.status(200).json({ draftId: existing.id });
+    }
+
+    const draft = await Stock_Out_Draft.create({
+      status: 'draft',
+      note: `Susulan Stock Out untuk Shipping #${shipment.invoiceNumber}`,
+      manualShipmentId: shipment.id,
+      createdBy: req.user.id,
+      companyId: getCompanyId(req),
+    }, { transaction: t });
+
+    for (const item of shipment.items) {
+      await Stock_Out_Draft_Item.create({
+        DraftId: draft.id,
+        ProductSKUId: item.productSkuId || null,
+        ProductId: item.productId || null,
+        quantity: item.quantity,
+        companyId: getCompanyId(req),
+      }, { transaction: t });
+    }
+
+    await t.commit();
+    res.status(201).json({ draftId: draft.id });
+  } catch (err) { await t.rollback(); next(err); }
 };
 
 // ── EXPORTED HELPER (used by requestController) ───────────────────────────────

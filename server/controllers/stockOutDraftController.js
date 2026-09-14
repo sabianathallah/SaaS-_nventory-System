@@ -3,7 +3,7 @@ const {
     sequelize, Stock_Out_Draft, Stock_Out_Draft_Item,
     Stock_Out_Header, Stock_Movement, Stock, SkuWarehouseStock,
     ProductSKU, Product, ProductVariantOption, Warehouse, User,
-    Request, RequestItem, RequestType,
+    Request, RequestItem, RequestType, ManualShipment,
 } = require('../models');
 const { upsertSkuWarehouseStock } = require('../helpers/skuStock');
 const { companyFilter, companyId } = require('../helpers/tenancy');
@@ -251,6 +251,7 @@ class StockOutDraftController {
                 notes: note || null,
                 VendorId,
                 sourceDeliveryId,
+                manualShipmentId: draft.manualShipmentId || null,
                 createdBy: req.user.id,
                 companyId: cid,
             }, { transaction: t });
@@ -353,6 +354,18 @@ class StockOutDraftController {
                         await linkedRequest.update({ status: 'DONE', processedBy: req.user.id, stockOutDraftId: null }, { transaction: t });
                     }
                 }
+            }
+
+            // Draft susulan dari ManualShipment yang skippedStockOut (lihat
+            // manualShipmentController.createStockOutDraft) — bukan dari pengajuan,
+            // jadi tidak lewat cabang di atas. Tandai shipment yang sudah ada itu
+            // selesai tercatat, jangan bikin shipment baru.
+            if (draft.manualShipmentId) {
+                await ManualShipment.update(
+                    { skippedStockOut: false },
+                    { where: { id: draft.manualShipmentId }, transaction: t }
+                );
+                manualShipmentId = draft.manualShipmentId;
             }
 
             await draft.destroy({ transaction: t });

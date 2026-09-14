@@ -28,6 +28,12 @@ module.exports = (sequelize, DataTypes) => {
         onDelete: 'SET NULL',
         onUpdate: 'CASCADE',
       });
+      Stock_Out_Draft.belongsTo(models.ManualShipment, {
+        foreignKey: { name: 'manualShipmentId', allowNull: true },
+        as: 'manualShipment',
+        onDelete: 'SET NULL',
+        onUpdate: 'CASCADE',
+      });
     }
   }
   Stock_Out_Draft.init({
@@ -35,6 +41,7 @@ module.exports = (sequelize, DataTypes) => {
     date:        { type: DataTypes.DATEONLY, allowNull: true },
     purpose:     { type: DataTypes.STRING,   allowNull: true },
     ChannelId:   { type: DataTypes.INTEGER,  allowNull: true },
+    manualShipmentId: { type: DataTypes.INTEGER, allowNull: true },
     note:        { type: DataTypes.STRING,   allowNull: true },
     status:      { type: DataTypes.STRING,   allowNull: false, defaultValue: 'draft' },
     createdBy:   { type: DataTypes.INTEGER,  allowNull: false },

@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   ArrowLeft, Package, ShoppingCart, Gift, CheckCircle2, Truck,
   XCircle, Edit2, Trash2, Upload, Printer, FileText, ImageIcon,
-  ExternalLink, Clock, CreditCard, AlertCircle,
+  ExternalLink, Clock, CreditCard, AlertCircle, PackageMinus,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { manualShipmentsApi } from '../api'
@@ -441,6 +441,11 @@ export default function ManualShipmentDetail() {
     mutationFn: (type) => manualShipmentsApi.markPrinted(id, type),
     onSuccess: () => invalidate(),
   })
+  const createStockOutMut = useMutation({
+    mutationFn: () => manualShipmentsApi.createStockOutDraft(id),
+    onSuccess: ({ draftId }) => navigate(`/stock-out/new?draftId=${draftId}`),
+    onError: e => toast.error(e.response?.data?.message || 'Gagal membuat draft Stock Out'),
+  })
 
   if (isLoading) return <div className="flex items-center justify-center h-64 text-slate-400">Memuat…</div>
   if (isError)   return (
@@ -456,6 +461,7 @@ export default function ManualShipmentDetail() {
     ...(s.status === 'pending' && { label: s.type === 'sales' ? 'Belum Bayar' : 'Siap Diambil' }),
   }
   const canEdit   = ['draft', 'pending'].includes(s.status) && perm('shipping.manual.edit')
+  const canFixStockOut = s.status !== 'cancelled' && perm('shipping.manual.edit')
   const canCancel = !['completed', 'cancelled'].includes(s.status) && perm('shipping.manual.cancel')
   const canDelete = ['draft', 'pending', 'cancelled'].includes(s.status) && perm('shipping.manual.delete')
   const canUploadResi = !['draft', 'completed', 'cancelled'].includes(s.status) && perm('shipping.manual.upload_resi')
@@ -491,9 +497,20 @@ export default function ManualShipmentDetail() {
             </p>
           )}
           {s.skippedStockOut && (
-            <p className="text-xs text-amber-600 flex items-center gap-1 mt-1">
-              <AlertCircle size={11} /> Dibuat tanpa Stock Out — pergerakan stok barang ini tidak tercatat di sistem.
-            </p>
+            <div className="flex items-center gap-2 flex-wrap mt-1">
+              <p className="text-xs text-amber-600 flex items-center gap-1">
+                <AlertCircle size={11} /> Dibuat tanpa Stock Out — pergerakan stok barang ini tidak tercatat di sistem.
+              </p>
+              {canFixStockOut && (
+                <button
+                  onClick={() => createStockOutMut.mutate()}
+                  disabled={createStockOutMut.isPending}
+                  className="flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full border bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100 transition-colors disabled:opacity-50"
+                >
+                  <PackageMinus size={11} /> {createStockOutMut.isPending ? 'Menyiapkan…' : 'Stock Out Sekarang'}
+                </button>
+              )}
+            </div>
           )}
         </div>
       </div>

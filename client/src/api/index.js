@@ -269,6 +269,7 @@ export const manualShipmentsApi = {
     return api.post(`/manual-shipments/${id}/courier-resi`, fd).then(r => r.data)
   },
   markPrinted:      (id, type)      => api.post(`/manual-shipments/${id}/mark-printed`, { type }).then(r => r.data),
+  createStockOutDraft: (id)         => api.post(`/manual-shipments/${id}/create-stock-out-draft`).then(r => r.data),
   destroy:          (id)            => api.delete(`/manual-shipments/${id}`).then(r => r.data),
   expeditionPresets: ()             => api.get('/manual-shipments/expedition-presets').then(r => r.data),
 }

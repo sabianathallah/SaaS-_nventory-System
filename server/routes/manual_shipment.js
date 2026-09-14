@@ -24,6 +24,7 @@ router.patch('/:id/status',                canCancel,         ctrl.changeStatus)
 router.post('/:id/payment-proof', canApprovePayment, uploadProof, ctrl.uploadPaymentProof);
 router.post('/:id/courier-resi',  uploadResi,  canUploadResi,     ctrl.uploadCourierResi);
 router.post('/:id/mark-printed',           canView,           ctrl.markPrinted);
+router.post('/:id/create-stock-out-draft', canEdit,           ctrl.createStockOutDraft);
 router.delete('/:id',                      canDelete,         ctrl.destroy);
 
 module.exports = router;

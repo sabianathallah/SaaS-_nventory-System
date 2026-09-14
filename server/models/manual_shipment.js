@@ -10,6 +10,7 @@ module.exports = (sequelize, DataTypes) => {
       ManualShipment.belongsTo(models.User, { foreignKey: 'paymentProofVerifiedBy', as: 'paymentVerifier' });
       ManualShipment.hasMany(models.ManualShipmentItem, { foreignKey: 'shipmentId', as: 'items' });
       ManualShipment.belongsTo(models.Request, { foreignKey: 'sourceRequestId', as: 'sourceRequest' });
+      ManualShipment.hasMany(models.Stock_Out_Header, { foreignKey: 'manualShipmentId', as: 'stockOutHeaders' });
     }
   }
   ManualShipment.init({
