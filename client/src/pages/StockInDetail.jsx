@@ -329,6 +329,7 @@ export default function StockInDetail() {
 
   // Granular permission flags
   const canManualInput = hasPermission('stock.in.manual_input') || hasPermission('stock.manage')
+  const canScanIn       = hasPermission('stock.in.scan')         || hasPermission('stock.manage')
   const canDeleteItem  = hasPermission('stock.in.delete_item')  || hasPermission('stock.manage')
   const canViewValue   = hasPermission('inventory.view_value')  || hasPermission('inventory.manage')
   const canEditSession = hasPermission('stock.in.create')       || hasPermission('stock.manage')
@@ -629,7 +630,7 @@ export default function StockInDetail() {
             <PackagePlus size={13} className="text-red-700" />
             <span className="text-xs font-bold text-slate-600 uppercase tracking-wide">Items ({items.length})</span>
           </div>
-          {isOpen && canManualInput && (
+          {isOpen && (canManualInput || canScanIn) && (
             <div className="p-4 border-b border-slate-100 bg-emerald-50/40 space-y-3">
               {scannerConnected && (
                 <input
@@ -674,7 +675,9 @@ export default function StockInDetail() {
                   </button>
                 </div>
               </div>
-              <ProductSkuPicker onSelect={({ sku, quantity, price }) => addHeaderItemMutation.mutate({ ProductSKUId: sku.id, quantity, price: price || 0 })} />
+              {canManualInput && (
+                <ProductSkuPicker onSelect={({ sku, quantity, price }) => addHeaderItemMutation.mutate({ ProductSKUId: sku.id, quantity, price: price || 0 })} />
+              )}
             </div>
           )}
           <ItemsTable items={items} canDelete={canDeleteItem && isOpen} headerId={detail.id} draftMode={false} canViewValue={canViewValue} editable={isOpen && canEditSession} />
