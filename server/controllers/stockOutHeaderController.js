@@ -409,6 +409,83 @@ class StockOutHeaderController {
             res.status(200).json({ message: 'Stock out header deleted successfully' });
         } catch (err) { await t.rollback(); next(err); }
     }
+
+    // Tandai qty berapa dari baris Retur Vendor yang sudah balik dari vendor.
+    // Tidak menyentuh stok — murni penanda status, terpisah dari sesi open/closed.
+    static async markRepairReturn(req, res, next) {
+        try {
+            const header = await Stock_Out_Header.findOne({ where: { id: req.params.id, ...companyFilter(req) } });
+            if (!header) throw { name: 'NotFound', message: 'Stock out header not found' };
+            if (header.purpose !== 'Retur Vendor') {
+                return res.status(400).json({ message: 'Penandaan retur hanya berlaku untuk stock out dengan tujuan "Retur Vendor"' });
+            }
+
+            const mv = await Stock_Movement.findOne({ where: { id: req.params.itemId, ReferenceId: header.id, type: 'OUT' } });
+            if (!mv) throw { name: 'NotFound', message: 'Item not found' };
+
+            const qtyReturned = Number(req.body.qtyReturned);
+            if (Number.isNaN(qtyReturned) || qtyReturned < 0 || qtyReturned > mv.quantity) {
+                return res.status(400).json({ message: `qtyReturned harus antara 0 dan ${mv.quantity}` });
+            }
+
+            await mv.update({
+                repairQtyReturned: qtyReturned,
+                repairReturnedAt: qtyReturned > 0 ? new Date() : null,
+            });
+            res.status(200).json(mv);
+        } catch (err) { next(err); }
+    }
+
+    // List baris Retur Vendor yang belum sepenuhnya balik (masih outstanding di vendor).
+    // ReferenceId di Stock_Movements bersifat polimorfik (dipakai lintas jenis header),
+    // jadi header "Retur Vendor" dicari dulu, baru movement-nya di-filter berdasarkan id itu.
+    static async getOutstandingRepairs(req, res, next) {
+        try {
+            const headers = await Stock_Out_Header.findAll({
+                where: { purpose: 'Retur Vendor', ...companyFilter(req) },
+                include: [{ model: Vendor, attributes: ['id', 'name'] }],
+            });
+            if (!headers.length) return res.status(200).json([]);
+            const headerById = new Map(headers.map(h => [h.id, h]));
+
+            const rows = await Stock_Movement.findAll({
+                where: {
+                    type: 'OUT',
+                    source: 'STOCK_OUT',
+                    ReferenceId: { [Op.in]: [...headerById.keys()] },
+                    ...companyFilter(req),
+                    [Op.and]: sequelize.literal('"repairQtyReturned" < "quantity"'),
+                },
+                include: [
+                    { model: Product,   attributes: ['id', 'name', 'sku', 'unit'] },
+                    { model: ProductSKU, attributes: ['id', 'sku_code'], required: false,
+                      include: [{ model: ProductVariantOption, attributes: ['id', 'value'], through: { attributes: [] } }] },
+                ],
+                order: [['date', 'ASC']],
+            });
+
+            const now = Date.now();
+            const data = rows.map(r => {
+                const plain = r.toJSON();
+                const header = headerById.get(plain.ReferenceId);
+                const daysOutstanding = Math.floor((now - new Date(plain.date).getTime()) / 86400000);
+                return {
+                    id: plain.id,
+                    stockOutHeaderId: plain.ReferenceId,
+                    date: plain.date,
+                    product: plain.Product,
+                    sku: plain.ProductSKU,
+                    vendor: header?.Vendor ?? null,
+                    qtySent: plain.quantity,
+                    qtyReturned: plain.repairQtyReturned,
+                    qtyOutstanding: plain.quantity - plain.repairQtyReturned,
+                    daysOutstanding,
+                    isStale: daysOutstanding >= 14,
+                };
+            });
+            res.status(200).json(data);
+        } catch (err) { next(err); }
+    }
 }
 
 module.exports = StockOutHeaderController;

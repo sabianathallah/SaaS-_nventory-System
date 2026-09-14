@@ -9,7 +9,7 @@ import { useExternalScanner } from '../hooks/useExternalScanner'
 import { useCompanyGuard } from '../hooks/useCompanyGuard'
 import CompanyRequiredBanner from '../components/CompanyRequiredBanner'
 import toast from 'react-hot-toast'
-import { ArrowLeft, PackageMinus, ScanLine, Plus, Trash2, Save, ScanBarcode, ChevronDown, Package, FileSpreadsheet, BookmarkCheck, X, Printer, Lock, LockOpen } from 'lucide-react'
+import { ArrowLeft, PackageMinus, ScanLine, Plus, Trash2, Save, ScanBarcode, ChevronDown, Package, FileSpreadsheet, BookmarkCheck, X, Printer, Lock, LockOpen, CheckCheck } from 'lucide-react'
 import { exportExcel } from '../utils/exportExcel'
 import logoPreface from '../assets/logo-preface.jpeg'
 
@@ -38,7 +38,7 @@ const fmtDate = (d) => d ? new Date(d).toISOString().slice(0, 10) : new Date().t
 const EMPTY_FORM = { warehouseId: '', purpose: '', purposeDetail: '', note: '', date: fmtDate(), items: [] }
 
 // ── Item row (view mode) — qty editable & bisa dihapus saat sesi terbuka ───────
-function OutItemRow({ item, headerId, canViewValue, editable, canDelete, showActionCol }) {
+function OutItemRow({ item, headerId, canViewValue, editable, canDelete, showActionCol, showRepairCol }) {
   const qc = useQueryClient()
   const sku     = item.ProductSKU
   const opts    = sku?.ProductVariantOptions ?? []
@@ -46,6 +46,8 @@ function OutItemRow({ item, headerId, canViewValue, editable, canDelete, showAct
   const price   = Number(sku?.price ?? 0)
   const [qty, setQty] = useState(item.quantity)
   useEffect(() => { setQty(item.quantity) }, [item.quantity])
+  const [qtyReturned, setQtyReturned] = useState(item.repairQtyReturned ?? 0)
+  useEffect(() => { setQtyReturned(item.repairQtyReturned ?? 0) }, [item.repairQtyReturned])
   const invalidate = () => qc.invalidateQueries({ queryKey: ['stock-out', String(headerId)] })
 
   const updateMutation = useMutation({
@@ -58,11 +60,23 @@ function OutItemRow({ item, headerId, canViewValue, editable, canDelete, showAct
     onSuccess: () => { invalidate(); toast.success('Item dihapus, stok dikembalikan') },
     onError:   e => toast.error(e.response?.data?.message || 'Error'),
   })
+  const repairMutation = useMutation({
+    mutationFn: (v) => stockOutApi.markRepairReturn(headerId, item.id, v),
+    onSuccess: () => { invalidate(); toast.success('Status retur diperbarui') },
+    onError:   e => { setQtyReturned(item.repairQtyReturned ?? 0); toast.error(e.response?.data?.message || 'Error') },
+  })
 
   const commitQty = () => {
     const v = Number(qty)
     if (!v || v <= 0) { setQty(item.quantity); return }
     if (v !== item.quantity) updateMutation.mutate(v)
+  }
+  const commitRepairQty = () => {
+    let v = Number(qtyReturned)
+    if (Number.isNaN(v) || v < 0) v = 0
+    if (v > item.quantity) v = item.quantity
+    setQtyReturned(v)
+    if (v !== (item.repairQtyReturned ?? 0)) repairMutation.mutate(v)
   }
 
   return (
@@ -91,6 +105,40 @@ function OutItemRow({ item, headerId, canViewValue, editable, canDelete, showAct
       </td>
       {canViewValue && <td className="td py-3 text-right font-mono text-slate-500">Rp {fmt(price)}</td>}
       {canViewValue && <td className="td py-3 text-right font-mono font-semibold text-slate-800">Rp {fmt(price * item.quantity)}</td>}
+      {showRepairCol && (
+        <td className="td py-3">
+          <div className="flex items-center justify-end gap-2 flex-wrap">
+            <span className={qtyReturned >= item.quantity ? 'badge-green' : qtyReturned > 0 ? 'badge-amber' : 'badge-red'}>
+              {qtyReturned >= item.quantity ? 'Sudah Balik' : qtyReturned > 0 ? 'Sebagian' : 'Masih di Vendor'}
+            </span>
+            <div className="flex items-center gap-1">
+              <label className="sr-only" htmlFor={`repair-qty-${item.id}`}>Qty sudah balik dari vendor</label>
+              <input
+                id={`repair-qty-${item.id}`}
+                type="number" min="0" max={item.quantity} inputMode="numeric"
+                className="input w-16 text-right py-1.5 inline-block"
+                value={qtyReturned}
+                disabled={repairMutation.isPending}
+                onChange={e => setQtyReturned(e.target.value)}
+                onBlur={commitRepairQty}
+                onKeyDown={e => e.key === 'Enter' && e.currentTarget.blur()}
+              />
+              <span className="text-xs text-slate-400">/ {item.quantity}</span>
+              {qtyReturned < item.quantity && (
+                <button
+                  type="button"
+                  title="Tandai semua balik"
+                  disabled={repairMutation.isPending}
+                  onClick={() => { setQtyReturned(item.quantity); repairMutation.mutate(item.quantity) }}
+                  className="p-1.5 rounded text-slate-300 hover:text-emerald-600 hover:bg-emerald-50 transition-colors disabled:opacity-40"
+                >
+                  <CheckCheck size={15} />
+                </button>
+              )}
+            </div>
+          </div>
+        </td>
+      )}
       {showActionCol && (
         <td className="td py-3 w-10">
           {canDelete && (
@@ -735,6 +783,7 @@ export default function StockOutDetail() {
                   <th className="th py-2 text-right w-24">Qty</th>
                   {canViewValue && <th className="th py-2 text-right w-36">Harga Satuan</th>}
                   {canViewValue && <th className="th py-2 text-right w-36">Subtotal</th>}
+                  {detail.purpose === 'Retur Vendor' && <th className="th py-2 text-right w-60">Status Retur</th>}
                   {isOpen && <th className="th py-2 w-10"></th>}
                 </tr>
               </thead>
@@ -748,6 +797,7 @@ export default function StockOutDetail() {
                     editable={isOpen && canEditSession}
                     canDelete={canDeleteItemOut}
                     showActionCol={isOpen}
+                    showRepairCol={detail.purpose === 'Retur Vendor'}
                   />
                 ))}
               </tbody>

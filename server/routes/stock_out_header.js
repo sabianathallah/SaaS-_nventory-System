@@ -13,6 +13,7 @@ const canDelete     = rpAny('stock.manage', 'stock.out.delete');
 const canDeleteItem = rpAny('stock.manage', 'stock.out.delete_item');
 
 router.get('/',       canView,                                               C.getAll);
+router.get('/repairs/outstanding', canView,                                  C.getOutstandingRepairs);
 router.get('/:id',    canView,                                               C.getById);
 router.post('/',      canCreate, requireCompany, requireWarehouseNotInOpname, C.create);
 router.put('/:id',    canEdit,                                               C.update);
@@ -22,5 +23,6 @@ router.delete('/:id', canDelete,                                             C.d
 router.post('/:id/items',           canCreate, requireCompany, requireWarehouseNotInOpname, C.addItem);
 router.put('/:id/items/:itemId',    canEdit,                                 C.updateItem);
 router.delete('/:id/items/:itemId', canDeleteItem,                           C.removeItem);
+router.patch('/:id/items/:itemId/repair-return', canEdit,                    C.markRepairReturn);
 
 module.exports = router;

@@ -82,6 +82,8 @@ export const stockOutApi = {
   addItem:    (id, data)          => api.post(`/stock-out-headers/${id}/items`, data).then(r => r.data),
   updateItem: (id, itemId, data)  => api.put(`/stock-out-headers/${id}/items/${itemId}`, data).then(r => r.data),
   removeItem: (id, itemId)        => api.delete(`/stock-out-headers/${id}/items/${itemId}`).then(r => r.data),
+  markRepairReturn: (id, itemId, qtyReturned) => api.patch(`/stock-out-headers/${id}/items/${itemId}/repair-return`, { qtyReturned }).then(r => r.data),
+  outstandingRepairs: ()          => api.get('/stock-out-headers/repairs/outstanding').then(r => r.data),
 }
 export const stockInDraftApi = {
   current:    ()                   => api.get('/stock-in-drafts/current').then(r => r.data),

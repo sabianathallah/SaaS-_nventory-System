@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
-import { movementsApi, warehousesApi, productsApi, productSkusApi, articlesApi, categoriesApi } from '../api'
+import { movementsApi, warehousesApi, productsApi, productSkusApi, articlesApi, categoriesApi, stockOutApi } from '../api'
 import PageHeader from '../components/PageHeader'
 import SearchableSelect from '../components/SearchableSelect'
 import { Table, Pagination } from '../components/Table'
@@ -80,6 +80,11 @@ export default function Movements() {
   const { data: chartData } = useQuery({
     queryKey: ['movements-chart', filters],
     queryFn:  () => movementsApi.chart(filters),
+  })
+
+  const { data: outstandingRepairs } = useQuery({
+    queryKey: ['stock-out-outstanding-repairs'],
+    queryFn:  () => stockOutApi.outstandingRepairs(),
   })
 
   const { data: warehouses } = useQuery({
@@ -267,6 +272,58 @@ export default function Movements() {
         <SummaryCard label="Adjustment"  value={summary?.totalAdj ?? 0} color="text-warning" />
         <SummaryCard label="Net Change"  value={net} color={netColor} prefix={net >= 0 ? '+' : ''} />
       </div>
+
+      {/* Barang Masih di Vendor (Retur Vendor yang belum sepenuhnya balik) */}
+      {outstandingRepairs && outstandingRepairs.length > 0 && (
+        <div className="card p-4 border-l-4 border-amber-400">
+          <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
+            <p className="text-sm font-semibold text-slate-700">⏳ Barang Masih di Vendor ({outstandingRepairs.length})</p>
+            <span className="text-xs text-slate-400">Retur perbaikan yang belum sepenuhnya balik</span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[520px] text-sm">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-200">
+                  <th className="th py-2 text-left">Produk</th>
+                  <th className="th py-2 text-left">Vendor</th>
+                  <th className="th py-2 text-right w-24">Sisa Qty</th>
+                  <th className="th py-2 text-right w-32">Lama di Vendor</th>
+                  <th className="th py-2 text-left w-28">Stock Out #</th>
+                </tr>
+              </thead>
+              <tbody>
+                {outstandingRepairs.slice(0, 8).map(r => (
+                  <tr
+                    key={r.id}
+                    tabIndex={0}
+                    className="border-b border-slate-100 hover:bg-slate-50/50 focus:bg-slate-50 focus:outline-none cursor-pointer"
+                    onClick={() => navigate(`/stock-out/${r.stockOutHeaderId}`)}
+                    onKeyDown={e => e.key === 'Enter' && navigate(`/stock-out/${r.stockOutHeaderId}`)}
+                  >
+                    <td className="td py-2">
+                      <p className="font-semibold text-slate-800">{r.product?.name ?? '—'}</p>
+                      {r.sku && <p className="text-xs text-slate-400">{(r.sku.ProductVariantOptions ?? []).map(o => o.value).join(' / ') || r.sku.sku_code}</p>}
+                    </td>
+                    <td className="td py-2 text-slate-600">{r.vendor?.name ?? '—'}</td>
+                    <td className="td py-2 text-right font-mono font-bold text-danger">{r.qtyOutstanding} / {r.qtySent}</td>
+                    <td className="td py-2 text-right">
+                      <span className={r.isStale ? 'badge-red' : 'badge-muted'}>
+                        {r.daysOutstanding} hari{r.isStale ? ' ⚠' : ''}
+                      </span>
+                    </td>
+                    <td className="td py-2 text-violet-600 font-medium">#{r.stockOutHeaderId}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {outstandingRepairs.length > 8 && (
+            <p className="text-xs text-slate-400 mt-3">
+              +{outstandingRepairs.length - 8} item lainnya masih outstanding — cek daftar Stock Out dengan filter "Retur Vendor" untuk lihat semua.
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Chart */}
       {chartData && chartData.length > 0 && (

@@ -66,6 +66,9 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: false,
       defaultValue: DataTypes.NOW,
     },
+    // Retur Vendor tracking: berapa qty dari baris OUT ini yang sudah balik dari vendor.
+    repairQtyReturned: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
+    repairReturnedAt:  { type: DataTypes.DATE, allowNull: true },
     companyId: { type: DataTypes.INTEGER, allowNull: true }
   }, {
     sequelize,
