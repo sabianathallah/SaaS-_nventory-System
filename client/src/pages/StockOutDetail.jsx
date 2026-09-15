@@ -18,6 +18,25 @@ const fmt = (n) => Number(n ?? 0).toLocaleString('id-ID')
 // Nilai sentinel untuk opsi "+ Tambah tujuan baru" di dropdown Tujuan.
 const ADD_NEW_PURPOSE = '__add_new_purpose__'
 
+// Kelompokkan opsi Tujuan biar dropdown nggak jadi flat list panjang.
+// Nama yang nggak match kategori manapun jatuh ke "Lainnya" (termasuk tujuan custom baru).
+const PURPOSE_GROUPS = [
+  { label: 'Penjualan & Retur',   names: ['Penjualan', 'Retur Customer', 'Retur Vendor'] },
+  { label: 'Internal & Sample',   names: ['Pemakaian Internal', 'Sample', 'R&D'] },
+  { label: 'Promosi & Konten',    names: ['Early Access', 'Endorse', 'Photoshoot', 'Hadiah / Gift'] },
+]
+function groupPurposeOptions(options) {
+  const grouped = PURPOSE_GROUPS.map(g => ({ label: g.label, items: [] }))
+  const rest = []
+  for (const p of options) {
+    const group = grouped.find((g, i) => PURPOSE_GROUPS[i].names.includes(p.name))
+    if (group) group.items.push(p)
+    else rest.push(p)
+  }
+  if (rest.length) grouped.push({ label: 'Lainnya', items: rest })
+  return grouped.filter(g => g.items.length)
+}
+
 const skuLabel = (sku) => {
   const opts = sku?.ProductVariantOptions ?? []
   if (!opts.length) return sku?.sku_code ?? ''
@@ -416,6 +435,7 @@ export default function StockOutDetail() {
     enabled:  isNew,
   })
   const purposeOptions = (purposes?.data ?? []).filter(p => p.isActive)
+  const purposeGroups  = groupPurposeOptions(purposeOptions)
 
   const { data: channels } = useQuery({
     queryKey: ['channels', { limit: 200 }],
@@ -1012,7 +1032,11 @@ export default function StockOutDetail() {
                 required
               >
                 <option value="">Pilih tujuan…</option>
-                {purposeOptions.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
+                {purposeGroups.map(g => (
+                  <optgroup key={g.label} label={g.label}>
+                    {g.items.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
+                  </optgroup>
+                ))}
                 <option value={ADD_NEW_PURPOSE}>+ Tambah tujuan baru…</option>
               </select>
             </div>
