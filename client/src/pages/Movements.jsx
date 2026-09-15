@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, Fragment } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
@@ -96,6 +96,39 @@ export default function Movements() {
     const stale = rows.filter(r => r.isStale).length
     return { productCount: products.size, vendorCount: namedVendors.size, missingVendor, qty, stale }
   }, [outstandingRepairs])
+
+  // Group per produk + dokumen Stock Out — variant/size-nya di-expand on-demand,
+  // biar satu produk 4-size nggak makan 4 baris kayak sebelumnya.
+  const outstandingGroups = useMemo(() => {
+    const map = new Map()
+    for (const r of outstandingRepairs ?? []) {
+      const key = `${r.product?.id ?? r.product?.name}-${r.stockOutHeaderId}`
+      if (!map.has(key)) {
+        map.set(key, {
+          key,
+          productName: r.product?.name ?? '—',
+          vendor: r.vendor,
+          stockOutHeaderId: r.stockOutHeaderId,
+          daysOutstanding: r.daysOutstanding,
+          isStale: r.isStale,
+          qtyOutstanding: 0,
+          qtySent: 0,
+          variants: [],
+        })
+      }
+      const g = map.get(key)
+      g.qtyOutstanding += r.qtyOutstanding ?? 0
+      g.qtySent += r.qtySent ?? 0
+      g.variants.push(r)
+    }
+    return [...map.values()].sort((a, b) => b.daysOutstanding - a.daysOutstanding)
+  }, [outstandingRepairs])
+  const [expandedGroups, setExpandedGroups] = useState(() => new Set())
+  const toggleGroup = (key) => setExpandedGroups(prev => {
+    const next = new Set(prev)
+    next.has(key) ? next.delete(key) : next.add(key)
+    return next
+  })
 
   const { data: purposesData } = useQuery({
     queryKey: ['stock-out-purposes', { limit: 200 }],
@@ -330,38 +363,68 @@ export default function Movements() {
                 </tr>
               </thead>
               <tbody>
-                {(showAllOutstanding ? outstandingRepairs : outstandingRepairs.slice(0, 8)).map(r => (
-                  <tr
-                    key={r.id}
-                    tabIndex={0}
-                    className="group border-b border-slate-100 last:border-0 hover:bg-amber-50/40 focus:bg-amber-50/40 focus:outline-none cursor-pointer transition-colors"
-                    onClick={() => navigate(`/stock-out/${r.stockOutHeaderId}`)}
-                    onKeyDown={e => e.key === 'Enter' && navigate(`/stock-out/${r.stockOutHeaderId}`)}
-                  >
-                    <td className="td py-2.5 pl-5">
-                      <p className="font-semibold text-slate-800 group-hover:text-violet-700 transition-colors">{r.product?.name ?? '—'}</p>
-                      {r.sku && <p className="text-xs text-slate-400">{(r.sku.ProductVariantOptions ?? []).map(o => o.value).join(' / ') || r.sku.sku_code}</p>}
-                    </td>
-                    <td className="td py-2.5 text-slate-600">{r.vendor?.name ?? '—'}</td>
-                    <td className="td py-2.5 text-right font-mono font-bold text-danger">{r.qtyOutstanding} <span className="text-slate-300 font-normal">/ {r.qtySent}</span></td>
-                    <td className="td py-2.5 text-right">
-                      <span className={r.isStale ? 'badge-red inline-flex items-center gap-1' : 'badge-muted'}>
-                        {r.isStale && <AlertTriangle size={11} />}
-                        {r.daysOutstanding} hari
-                      </span>
-                    </td>
-                    <td className="td py-2.5 pr-5 text-violet-600 font-medium">#{r.stockOutHeaderId}</td>
-                  </tr>
-                ))}
+                {(showAllOutstanding ? outstandingGroups : outstandingGroups.slice(0, 8)).map(g => {
+                  const isExpanded  = expandedGroups.has(g.key)
+                  const hasVariants = g.variants.length > 1
+                  return (
+                    <Fragment key={g.key}>
+                      <tr
+                        tabIndex={0}
+                        className="group border-b border-slate-100 last:border-0 hover:bg-amber-50/40 focus:bg-amber-50/40 focus:outline-none cursor-pointer transition-colors"
+                        onClick={() => hasVariants ? toggleGroup(g.key) : navigate(`/stock-out/${g.stockOutHeaderId}`)}
+                        onKeyDown={e => e.key === 'Enter' && (hasVariants ? toggleGroup(g.key) : navigate(`/stock-out/${g.stockOutHeaderId}`))}
+                      >
+                        <td className="td py-2.5 pl-5">
+                          <p className="font-semibold text-slate-800 group-hover:text-violet-700 transition-colors flex items-center gap-1.5">
+                            {hasVariants && (isExpanded
+                              ? <ChevronUp size={13} className="text-slate-400 flex-shrink-0" />
+                              : <ChevronDown size={13} className="text-slate-400 flex-shrink-0" />)}
+                            {g.productName}
+                          </p>
+                          {hasVariants && <p className="text-xs text-slate-400 pl-[19px]">{g.variants.length} varian</p>}
+                        </td>
+                        <td className="td py-2.5 text-slate-600">{g.vendor?.name ?? '—'}</td>
+                        <td className="td py-2.5 text-right font-mono font-bold text-danger">{g.qtyOutstanding} <span className="text-slate-300 font-normal">/ {g.qtySent}</span></td>
+                        <td className="td py-2.5 text-right">
+                          <span className={g.isStale ? 'badge-red inline-flex items-center gap-1' : 'badge-muted'}>
+                            {g.isStale && <AlertTriangle size={11} />}
+                            {g.daysOutstanding} hari
+                          </span>
+                        </td>
+                        <td className="td py-2.5 pr-5">
+                          <button
+                            onClick={e => { e.stopPropagation(); navigate(`/stock-out/${g.stockOutHeaderId}`) }}
+                            className="text-violet-600 hover:text-violet-800 font-medium hover:underline"
+                          >
+                            #{g.stockOutHeaderId}
+                          </button>
+                        </td>
+                      </tr>
+                      {isExpanded && g.variants.map(v => (
+                        <tr key={v.id} className="border-b border-slate-100 last:border-0 bg-slate-50/40">
+                          <td className="td py-2 pl-5">
+                            <p className="text-xs text-slate-500 pl-[19px]">
+                              {(v.sku?.ProductVariantOptions ?? []).map(o => o.value).join(' / ') || v.sku?.sku_code || '—'}
+                            </p>
+                          </td>
+                          <td className="td py-2"></td>
+                          <td className="td py-2 text-right font-mono text-xs text-slate-500">{v.qtyOutstanding} <span className="text-slate-300">/ {v.qtySent}</span></td>
+                          <td className="td py-2"></td>
+                          <td className="td py-2 pr-5"></td>
+                        </tr>
+                      ))}
+                    </Fragment>
+                  )
+                })}
               </tbody>
             </table>
           </div>
-          {outstandingRepairs.length > 8 && (
+          {outstandingGroups.length > 8 && (
             <button
               onClick={() => setShowAllOutstanding(v => !v)}
               className="w-full flex items-center justify-center gap-1 text-xs text-violet-600 hover:text-violet-800 hover:bg-violet-50/50 font-semibold py-2.5 border-t border-slate-100 transition-colors"
             >
-              {showAllOutstanding ? <>Sembunyikan <ChevronUp size={13} /></> : <>Lihat semua ({outstandingRepairs.length - 8} lainnya) <ChevronDown size={13} /></>}
+              {showAllOutstanding ? <>Sembunyikan <ChevronUp size={13} /></> : <>Lihat semua ({outstandingGroups.length - 8} lainnya) <ChevronDown size={13} /></>}
             </button>
           )}
         </div>
