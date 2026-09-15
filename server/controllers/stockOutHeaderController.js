@@ -475,7 +475,9 @@ class StockOutHeaderController {
                 include: [{ model: Vendor, attributes: ['id', 'name'] }],
             });
             if (!headers.length) return res.status(200).json([]);
-            const headerById = new Map(headers.map(h => [h.id, h]));
+            // ReferenceId (Stock_Movement) adalah BIGINT dan pulang sebagai string dari pg,
+            // sedangkan header.id adalah number — key di-string-kan biar match konsisten.
+            const headerById = new Map(headers.map(h => [String(h.id), h]));
 
             const rows = await Stock_Movement.findAll({
                 where: {
@@ -496,7 +498,7 @@ class StockOutHeaderController {
             const now = Date.now();
             const data = rows.map(r => {
                 const plain = r.toJSON();
-                const header = headerById.get(plain.ReferenceId);
+                const header = headerById.get(String(plain.ReferenceId));
                 const daysOutstanding = Math.floor((now - new Date(plain.date).getTime()) / 86400000);
                 return {
                     id: plain.id,
