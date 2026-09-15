@@ -1,22 +1,32 @@
 import { useState } from 'react'
 import { useNavigate, useParams, Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { productsApi, productSkusApi } from '../api'
+import { productsApi, productSkusApi, skuChannelStocksApi } from '../api'
+import { useAuth } from '../context/AuthContext'
 import toast from 'react-hot-toast'
 import QrModal from '../components/QrModal'
 import {
   ArrowLeft, Trash2, ChevronRight, ImageIcon, Loader2,
-  Hash, Layers, Pencil, QrCode, Package, Tag,
+  Hash, Layers, Pencil, QrCode, Package, Tag, Plus, X,
 } from 'lucide-react'
 
 // ── SKU Table read-only ───────────────────────────────────────────────────────
 
 function SkuTableView({ productId, productName }) {
+  const navigate = useNavigate()
   const [qrSku, setQrSku] = useState(null)
+  const { hasPermission } = useAuth()
+  const canEdit = hasPermission('inventory.product.edit') || hasPermission('inventory.manage')
 
   const { data: skus = [], isLoading } = useQuery({
     queryKey: ['product-skus', productId],
     queryFn:  () => productSkusApi.list(productId),
+  })
+
+  const { data: channelStocks } = useQuery({
+    queryKey: ['sku-channel-stocks', 'product', productId, skus.map(s => s.id).join(',')],
+    queryFn:  () => skuChannelStocksApi.list({ ProductSKUId: skus.map(s => s.id).join(',') }),
+    enabled:  !!skus.length,
   })
 
   if (isLoading) return (
@@ -27,14 +37,26 @@ function SkuTableView({ productId, productName }) {
 
   if (!skus.length) return (
     <div className="text-center py-10 rounded-xl border-2 border-dashed border-slate-200">
-      <Hash size={28} className="mx-auto text-slate-200 mb-2" />
-      <p className="text-sm font-semibold text-slate-400">Belum ada SKU</p>
-      <p className="text-xs text-slate-300 mt-1">Tambahkan SKU melalui halaman Edit Produk</p>
+      <Hash size={28} className="mx-auto text-slate-300 mb-3" />
+      <p className="text-sm font-semibold text-slate-500">Belum ada SKU</p>
+      <p className="text-xs text-slate-400 mt-1 mb-4">
+        Tentukan variant produk terlebih dahulu, lalu buat SKU untuk setiap kombinasi.
+      </p>
+      {canEdit && (
+        <button
+          type="button"
+          onClick={() => navigate(`/products/${productId}/edit`)}
+          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-brand text-white text-sm font-medium hover:bg-brand/90 transition-colors"
+        >
+          <Plus size={14} /> Buat SKU
+        </button>
+      )}
     </div>
   )
 
-  const totalQty   = skus.reduce((s, k) => s + Number(k.qty || 0), 0)
-  const totalNilai = skus.reduce((s, k) => s + Number(k.qty || 0) * Number(k.price || 0), 0)
+  const totalQty      = skus.reduce((s, k) => s + Number(k.qty || 0), 0)
+  const totalNilai    = skus.reduce((s, k) => s + Number(k.qty || 0) * Number(k.price || 0), 0)
+  const listedSkuIds  = new Set((channelStocks ?? []).filter(c => c.isListed).map(c => c.ProductSKUId))
 
   const variantLabel = (sku) => {
     const opts = sku.ProductVariantOptions || []
@@ -62,6 +84,7 @@ function SkuTableView({ productId, productName }) {
               <th className="th">SKU Code</th>
               <th className="th text-right">Harga</th>
               <th className="th text-right">Stok</th>
+              <th className="th">Listing</th>
               <th className="th text-right">Nilai Stok</th>
               <th className="th w-10" />
             </tr>
@@ -69,6 +92,7 @@ function SkuTableView({ productId, productName }) {
           <tbody className="divide-y divide-slate-100">
             {skus.map(sku => {
               const nilai = Number(sku.qty || 0) * Number(sku.price || 0)
+              const listedChannels = (channelStocks ?? []).filter(s => s.ProductSKUId === sku.id && s.isListed)
               return (
                 <tr key={sku.id} className="group hover:bg-slate-50/60 transition-colors">
                   <td className="td">{variantLabel(sku)}</td>
@@ -84,6 +108,17 @@ function SkuTableView({ productId, productName }) {
                     <span className={`text-sm font-bold tabular-nums ${Number(sku.qty) === 0 ? 'text-red-500' : Number(sku.qty) < 5 ? 'text-amber-500' : 'text-slate-800'}`}>
                       {Number(sku.qty || 0).toLocaleString('id-ID')}
                     </span>
+                  </td>
+                  <td className="td">
+                    <div className="flex items-center gap-1 flex-wrap">
+                      {listedChannels.length
+                        ? listedChannels.map(s => (
+                            <span key={s.ChannelId} className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100">
+                              {s.Channel?.name ?? '—'}
+                            </span>
+                          ))
+                        : <span className="text-xs text-slate-300">—</span>}
+                    </div>
                   </td>
                   <td className="td text-right">
                     <span className="text-sm tabular-nums text-emerald-700 font-semibold">
@@ -109,6 +144,7 @@ function SkuTableView({ productId, productName }) {
               <td colSpan={2} className="px-4 py-2.5 text-xs font-semibold text-slate-500">{skus.length} SKU</td>
               <td className="px-4 py-2.5 text-xs text-slate-400 text-right">—</td>
               <td className="px-4 py-2.5 text-xs font-bold text-slate-700 text-right tabular-nums">{totalQty.toLocaleString('id-ID')}</td>
+              <td className="px-4 py-2.5 text-xs font-semibold text-indigo-600">{listedSkuIds.size} dari {skus.length} SKU listing</td>
               <td className="px-4 py-2.5 text-xs font-bold text-emerald-700 text-right tabular-nums">Rp {totalNilai.toLocaleString('id-ID')}</td>
               <td />
             </tr>
@@ -127,6 +163,10 @@ export default function ProductDetail() {
   const { id }   = useParams()
   const navigate = useNavigate()
   const qc       = useQueryClient()
+  const { hasPermission } = useAuth()
+  const canEdit   = hasPermission('inventory.product.edit')   || hasPermission('inventory.manage')
+  const canDelete = hasPermission('inventory.product.delete') || hasPermission('inventory.manage')
+  const [lightbox, setLightbox] = useState(null)
 
   const { data: product, isLoading } = useQuery({
     queryKey: ['product', id],
@@ -136,7 +176,7 @@ export default function ProductDetail() {
   const del = useMutation({
     mutationFn: () => productsApi.remove(id),
     onSuccess: () => {
-      qc.invalidateQueries(['products'])
+      qc.invalidateQueries({ queryKey: ['products'] })
       toast.success('Produk dihapus')
       navigate('/products', { replace: true })
     },
@@ -153,7 +193,7 @@ export default function ProductDetail() {
     <div className="flex flex-col items-center justify-center h-64 gap-3">
       <Package size={32} className="text-slate-300" />
       <p className="text-slate-400 text-sm">Produk tidak ditemukan</p>
-      <Link to="/products" className="btn-secondary text-sm"><ArrowLeft size={14} /> Kembali</Link>
+      <button onClick={() => navigate(-1)} className="btn-secondary text-sm flex items-center gap-1"><ArrowLeft size={14} /> Kembali</button>
     </div>
   )
 
@@ -162,34 +202,41 @@ export default function ProductDetail() {
   const skus       = product.ProductSKUs ?? []
 
   return (
+    <>
     <div className="min-h-screen bg-canvas">
       {/* ── Sticky Header ──────────────────────────────────────────── */}
       <div className="sticky top-0 z-20 bg-white border-b border-slate-200 shadow-sm">
         <div className="flex items-center gap-4 px-6 h-14">
-          <Link to="/products" className="flex items-center gap-1.5 text-sm text-slate-400 hover:text-slate-700 transition-colors flex-shrink-0">
+          <button onClick={() => navigate(-1)} className="flex items-center gap-1.5 text-sm text-slate-400 hover:text-slate-700 transition-colors flex-shrink-0">
             <ArrowLeft size={15} /> Products
-          </Link>
+          </button>
           <ChevronRight size={14} className="text-slate-200" />
           <h1 className="text-sm font-bold text-slate-800 flex-1 truncate">{product.name}</h1>
 
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => { if (confirm(`Hapus "${product.name}"? Tindakan ini tidak bisa dibatalkan.`)) del.mutate() }}
-              disabled={del.isPending}
-              className="btn-secondary text-red-500 hover:bg-red-50 hover:border-red-200 text-sm"
-            >
-              {del.isPending ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
-              Hapus
-            </button>
-            <button
-              type="button"
-              onClick={() => navigate(`/products/${id}/edit`)}
-              className="btn-primary text-sm"
-            >
-              <Pencil size={14} /> Ubah
-            </button>
-          </div>
+          {(canDelete || canEdit) && (
+            <div className="flex items-center gap-2">
+              {canDelete && (
+                <button
+                  type="button"
+                  onClick={() => { if (confirm(`Hapus "${product.name}"? Tindakan ini tidak bisa dibatalkan.`)) del.mutate() }}
+                  disabled={del.isPending}
+                  className="btn-secondary text-red-500 hover:bg-red-50 hover:border-red-200 text-sm"
+                >
+                  {del.isPending ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                  Hapus
+                </button>
+              )}
+              {canEdit && (
+                <button
+                  type="button"
+                  onClick={() => navigate(`/products/${id}/edit`)}
+                  className="btn-primary text-sm"
+                >
+                  <Pencil size={14} /> Ubah
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -200,7 +247,11 @@ export default function ProductDetail() {
         <div className="card px-6 py-6">
           <div className="flex gap-6">
             {/* Photo */}
-            <div className="w-40 h-40 rounded-2xl overflow-hidden border border-slate-200 bg-slate-50 flex-shrink-0">
+            <div
+              className="w-40 h-40 rounded-2xl overflow-hidden border border-slate-200 bg-slate-50 flex-shrink-0"
+              style={product.imageUrl ? { cursor: 'zoom-in' } : {}}
+              onClick={() => product.imageUrl && setLightbox(product.imageUrl)}
+            >
               {product.imageUrl ? (
                 <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover" />
               ) : (
@@ -222,13 +273,19 @@ export default function ProductDetail() {
 
               <div className="flex flex-wrap gap-4">
                 <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Kategori</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Tipe</p>
                   {product.Category
                     ? <span className="badge-teal">{product.Category.name}</span>
                     : <span className="text-slate-300 text-xs">—</span>}
                 </div>
                 <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Artikel</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Sub Kategori</p>
+                  {product.SubCategory
+                    ? <span className="badge-muted">{product.SubCategory.name}</span>
+                    : <span className="text-slate-300 text-xs">—</span>}
+                </div>
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Koleksi</p>
                   {product.Article
                     ? <span className="badge-muted">{product.Article.name}</span>
                     : <span className="text-slate-300 text-xs">—</span>}
@@ -296,5 +353,43 @@ export default function ProductDetail() {
 
       </div>
     </div>
+
+    {/* Lightbox */}
+    {lightbox && (
+      <div
+        onClick={() => setLightbox(null)}
+        style={{
+          position: 'fixed', inset: 0, zIndex: 1000,
+          background: 'rgba(0,0,0,0.85)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          cursor: 'zoom-out',
+        }}
+      >
+        <button
+          onClick={() => setLightbox(null)}
+          style={{
+            position: 'absolute', top: 16, right: 16,
+            background: 'rgba(255,255,255,0.15)', border: 'none',
+            borderRadius: '50%', width: 36, height: 36,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            cursor: 'pointer', color: '#fff',
+          }}
+        >
+          <X size={18} />
+        </button>
+        <img
+          src={lightbox}
+          alt="Preview"
+          onClick={e => e.stopPropagation()}
+          style={{
+            maxWidth: '90vw', maxHeight: '90vh',
+            objectFit: 'contain', borderRadius: 8,
+            boxShadow: '0 8px 40px rgba(0,0,0,0.5)',
+            cursor: 'default',
+          }}
+        />
+      </div>
+    )}
+    </>
   )
 }

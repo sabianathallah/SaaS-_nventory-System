@@ -1,8 +1,8 @@
-const { User, Company, RolePermission } = require('../models')
+const { User, Company, Role, RolePermission } = require('../models')
 const { compare } = require('../helpers/bcrypt')
 const { signToken, verifyToken } = require('../helpers/jwt')
 const AuditLogger = require('../helpers/auditLogger')
-const { DEFAULT_PERMISSIONS } = require('../helpers/permissions')
+const { Op } = require('sequelize')
 
 class LoginController {
     static async login(req, res, next) {
@@ -60,18 +60,18 @@ class LoginController {
 
             const access_token = signToken(payload)
 
-            // Load role permissions: company-specific → global (companyId=null) → hardcoded defaults
-            let rpRecord = await RolePermission.findOne({
-                where: { role: user.role, companyId: user.companyId ?? null },
+            // Load permissions: company-specific role → global role fallback
+            const roleRow = await Role.findOne({
+                where: {
+                    name: user.role,
+                    [Op.or]: [{ companyId: user.companyId }, { companyId: null }],
+                },
+                order: [['companyId', 'DESC NULLS LAST']],
             });
-            if (!rpRecord && user.companyId) {
-                rpRecord = await RolePermission.findOne({
-                    where: { role: user.role, companyId: null },
-                });
-            }
-            const permissions = rpRecord
-                ? rpRecord.permissions
-                : (DEFAULT_PERMISSIONS[user.role] ?? []);
+            const rpRows = roleRow
+                ? await RolePermission.findAll({ where: { roleId: roleRow.id } })
+                : [];
+            const permissions = rpRows.map(r => r.permissionKey);
 
             // Log login activity
             await AuditLogger.logLogin({
@@ -88,6 +88,9 @@ class LoginController {
                     email: user.email,
                     role: user.role,
                     companyId: user.companyId,
+                    avatar: user.avatar ?? null,
+                    divisi: user.divisi ?? null,
+                    divisis: user.divisis ?? [],
                     permissions,
                     company: user.company ? {
                         id: user.company.id,

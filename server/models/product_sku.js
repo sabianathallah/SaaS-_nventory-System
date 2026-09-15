@@ -36,9 +36,9 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.INTEGER,
       allowNull: false,
       defaultValue: 0,
-      validate: { min: { args: [0], msg: 'Qty cannot be negative' } },
     },
     companyId: { type: DataTypes.INTEGER, allowNull: true },
+    position: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
   }, {
     sequelize,
     modelName: 'ProductSKU',

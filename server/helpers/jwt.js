@@ -3,7 +3,7 @@
 const jwt = require('jsonwebtoken');
 
 const SECRET_KEY = process.env.JWT_SECRET || 'inventory_saas_secret_key';
-const EXPIRES_IN = process.env.JWT_EXPIRES_IN || '24h';
+const EXPIRES_IN = process.env.JWT_EXPIRES_IN || '8h';
 
 const signToken = (payload) => jwt.sign(payload, SECRET_KEY, { expiresIn: EXPIRES_IN });
 

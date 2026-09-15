@@ -1,0 +1,349 @@
+import { useState, useMemo } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useSearchParams } from 'react-router-dom'
+import { tasksApi, taskListsApi, usersApi } from '../api'
+import { useAuth } from '../context/AuthContext'
+import PageHeader from '../components/PageHeader'
+import SearchBar from '../components/SearchBar'
+import toast from 'react-hot-toast'
+import { exportExcel } from '../utils/exportExcel'
+import { Plus, LayoutList, Columns3, CalendarDays, Table2, FileSpreadsheet } from 'lucide-react'
+import TasksSidebar from '../components/tasks/TasksSidebar'
+import DivisionFolders from '../components/tasks/DivisionFolders'
+import DivisionWorkspaceBar from '../components/tasks/DivisionWorkspaceBar'
+import ListView from '../components/tasks/ListView'
+import BoardView from '../components/tasks/BoardView'
+import CalendarView from '../components/tasks/CalendarView'
+import TableView from '../components/tasks/TableView'
+import TaskDashboard from '../components/tasks/TaskDashboard'
+import TaskAnalytics from '../components/tasks/TaskAnalytics'
+import TaskDetailPanel from '../components/tasks/TaskDetailPanel'
+import CreateTaskModal from '../components/tasks/CreateTaskModal'
+import { SIDEBAR_VIEWS, ALL_TASKS_VIEW, FOLDERS_VIEW, ANALYTICS_VIEW, STATUS_CONFIG, PRIORITY_CONFIG } from '../components/tasks/taskConfig'
+
+const VIEW_LABELS = Object.fromEntries([...SIDEBAR_VIEWS, ALL_TASKS_VIEW, FOLDERS_VIEW, ANALYTICS_VIEW].map(v => [v.id, v.label]))
+const VALID_VIEW_IDS = new Set([...SIDEBAR_VIEWS, ALL_TASKS_VIEW, FOLDERS_VIEW, ANALYTICS_VIEW].map(v => v.id))
+
+export default function Tasks() {
+  const qc = useQueryClient()
+  const { user, hasPermission, isSuperAdmin, isAdmin } = useAuth()
+  const [searchParams, setSearchParams] = useSearchParams()
+
+  // Landing view saat modul dibuka: grid folder per divisi (ala Notion) —
+  // dari situ user masuk ke workspace divisinya. Dashboard/My Day tetap ada,
+  // diakses lewat sidebar seperti biasa, lintas-divisi seperti sebelumnya.
+  const [sidebarView, setSidebarView] = useState('folders')
+  const [viewMode, setViewMode] = useState('list')
+  const [groupBy, setGroupBy] = useState('status')
+  const [search, setSearch] = useState('')
+  const [activeTag, setActiveTag] = useState('')
+  const [sortBy, setSortBy] = useState('created')
+  const [showCreate, setShowCreate] = useState(false)
+  const [selectedId, setSelectedId] = useState(null)
+
+  // Deep-link dari notification bell (?open=<id>) dan dari shortcut navbar
+  // utama (?view=<id>, mis. link "Penting"/"Ditugaskan" di Layout.jsx) —
+  // masing-masing dikonsumsi sekali saja lewat guard, sama pola dengan
+  // `consumedOpenId` di bawah supaya tidak cascade render tambahan.
+  const [consumedOpenId, setConsumedOpenId] = useState(null)
+  const openParam = searchParams.get('open')
+  if (openParam && openParam !== consumedOpenId) {
+    setConsumedOpenId(openParam)
+    setSelectedId(Number(openParam))
+  }
+
+  const [consumedViewParam, setConsumedViewParam] = useState(null)
+  const viewParam = searchParams.get('view')
+  if (viewParam && viewParam !== consumedViewParam && VALID_VIEW_IDS.has(viewParam)) {
+    setConsumedViewParam(viewParam)
+    setSidebarView(viewParam)
+  }
+
+  // Folder workspaces are encoded the same way Lists used to be (`list:<id>`)
+  // — `division:<name>` for a divisi's full task set, `divlist:<name>:<id>`
+  // when narrowed to one of that divisi's Lists — so there's still exactly
+  // one "active nav item" driving everything.
+  const isDivisionRoot = sidebarView.startsWith('division:')
+  const isDivisionList = sidebarView.startsWith('divlist:')
+  const activeDivisi = isDivisionRoot ? sidebarView.slice('division:'.length)
+    : isDivisionList ? sidebarView.split(':')[1] : null
+  const activeListId = isDivisionList ? sidebarView.split(':')[2] : null
+
+  const queryParams = activeListId
+    ? { listId: activeListId, sortBy, limit: 200 }
+    : activeDivisi
+    ? { divisi: activeDivisi, sortBy, limit: 200 }
+    : { view: sidebarView, sortBy, limit: 200 }
+
+  const isDashboard = sidebarView === 'dashboard'
+  const isFolders = sidebarView === 'folders'
+  const isAnalytics = sidebarView === 'analytics'
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['tasks', queryParams],
+    queryFn: () => tasksApi.list(queryParams),
+    enabled: !isDashboard && !isFolders && !isAnalytics,
+  })
+  const tasks = data?.data ?? []
+
+  const availableTags = useMemo(() => {
+    const set = new Set()
+    for (const t of (data?.data ?? [])) for (const tag of (t.tags ?? [])) set.add(tag)
+    return [...set].sort()
+  }, [data])
+
+  const filteredTasks = useMemo(() => {
+    let list = data?.data ?? []
+    if (search.trim()) {
+      const q = search.trim().toLowerCase()
+      list = list.filter(t => t.title.toLowerCase().includes(q))
+    }
+    if (activeTag) list = list.filter(t => (t.tags ?? []).includes(activeTag))
+    return list
+  }, [data, search, activeTag])
+
+  const { data: usersRes } = useQuery({
+    queryKey: ['users', 'for-tasks'],
+    queryFn: () => usersApi.list({ limit: 500 }),
+  })
+  const userOptions = usersRes?.data ?? []
+
+  const { data: listsRes } = useQuery({
+    queryKey: ['task-lists', activeDivisi],
+    queryFn: () => taskListsApi.list({ divisi: activeDivisi }),
+    enabled: !!activeDivisi,
+  })
+  const activeList = activeListId ? (listsRes ?? []).find(l => String(l.id) === activeListId) : null
+  const canManageActiveDivisi = !!activeDivisi && (
+    isSuperAdmin || isAdmin || hasPermission('tasks.manage') || hasPermission('tasks.edit') || user?.divisi === activeDivisi || user?.divisis?.includes(activeDivisi)
+  )
+
+  const selectedTask = tasks.find(t => t.id === selectedId) || null
+
+  // Generic optimistic single-field patch — used by Board's status-drag and
+  // Calendar's date-drag alike, so both reuse the same cancel/rollback dance.
+  const quickPatch = useMutation({
+    mutationFn: ({ id, patch }) => tasksApi.update(id, patch),
+    onMutate: async ({ id, patch }) => {
+      const key = ['tasks', queryParams]
+      await qc.cancelQueries({ queryKey: key })
+      const prev = qc.getQueryData(key)
+      qc.setQueryData(key, (old) => old && {
+        ...old,
+        data: old.data.map(t => t.id === id ? { ...t, ...patch } : t),
+      })
+      return { prev }
+    },
+    onError: (e, _vars, ctx) => {
+      if (ctx?.prev) qc.setQueryData(['tasks', queryParams], ctx.prev)
+      toast.error(e.response?.data?.message || 'Error')
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: ['tasks'] }),
+  })
+
+  function toggleDone(task) {
+    const nextStatus = task.status === 'DONE' ? 'TODO' : 'DONE'
+    quickPatch.mutate({ id: task.id, patch: { status: nextStatus } })
+    // Completing is optimistic (quickPatch already updates the cache before
+    // the server responds) and reversible for a few seconds via Undo instead
+    // of a blocking confirm dialog — checking off tasks happens too often to
+    // interrupt every single time.
+    if (nextStatus === 'DONE') {
+      toast((t) => (
+        <span className="flex items-center gap-2.5">
+          Task selesai
+          <button
+            onClick={() => { quickPatch.mutate({ id: task.id, patch: { status: 'TODO' } }); toast.dismiss(t.id) }}
+            className="font-semibold underline underline-offset-2"
+          >
+            Undo
+          </button>
+        </span>
+      ), { duration: 4000 })
+    }
+  }
+
+  function handleExport() {
+    const headers = ['Judul', 'Status', 'Priority', 'Assignee', 'Due Date', 'Dibuat oleh']
+    const rows = filteredTasks.map(t => [
+      t.title,
+      STATUS_CONFIG[t.status]?.label ?? t.status,
+      PRIORITY_CONFIG[t.priority]?.label ?? t.priority,
+      (t.assignees ?? []).map(a => a.name).join(', ') || '—',
+      t.dueDate || '—',
+      t.creator?.name || '—',
+    ])
+    const viewLabel = activeList?.name ?? activeDivisi ?? VIEW_LABELS[sidebarView] ?? sidebarView
+    exportExcel(`tasks-${viewLabel}-${new Date().toISOString().slice(0, 10)}`, {
+      headers, rows, sheetName: 'Tasks',
+    })
+  }
+
+  const viewLabel = activeList?.name ?? activeDivisi ?? VIEW_LABELS[sidebarView] ?? ''
+
+  return (
+    <div className="px-6 py-6">
+      <PageHeader
+        title="Tugas"
+        subtitle={isDashboard ? 'Ringkasan seluruh task' : isFolders ? 'Pilih folder divisi' : isAnalytics ? 'Performa staff & divisi' : `${filteredTasks.length} task — ${viewLabel}`}
+        action={
+          <div className="flex items-center gap-2">
+            {!isDashboard && !isFolders && !isAnalytics && (
+              <button onClick={handleExport} className="btn-secondary" title="Export ke Excel">
+                <FileSpreadsheet size={14} />Export
+              </button>
+            )}
+            {!isFolders && !isAnalytics && (
+              <button onClick={() => setShowCreate(true)} className="btn-primary">
+                <Plus size={14} />Task Baru
+              </button>
+            )}
+          </div>
+        }
+      />
+
+      <div className="card overflow-hidden flex" style={{ minHeight: 500 }}>
+        <TasksSidebar active={sidebarView} onSelect={(v) => { setSidebarView(v); setSelectedId(null) }} />
+
+        <div className="flex-1 min-w-0 flex flex-col">
+          {isDashboard ? (
+            <div className="flex-1 overflow-y-auto">
+              <TaskDashboard />
+            </div>
+          ) : isFolders ? (
+            <div className="flex-1 overflow-y-auto">
+              <DivisionFolders onSelect={(name) => { setSidebarView(`division:${name}`); setSelectedId(null) }} />
+            </div>
+          ) : isAnalytics ? (
+            <div className="flex-1 overflow-y-auto">
+              <TaskAnalytics />
+            </div>
+          ) : (
+          <>
+          {activeDivisi && (
+            <DivisionWorkspaceBar
+              divisi={activeDivisi}
+              activeListId={activeListId}
+              canManage={canManageActiveDivisi}
+              onBack={() => { setSidebarView('folders'); setSelectedId(null) }}
+              onSelectRoot={() => { setSidebarView(`division:${activeDivisi}`); setSelectedId(null) }}
+              onSelectList={(listId) => { setSidebarView(`divlist:${activeDivisi}:${listId}`); setSelectedId(null) }}
+            />
+          )}
+          <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/50 flex items-center gap-3">
+            <SearchBar value={search} onChange={setSearch} placeholder="Cari task…" />
+            {viewMode === 'list' && (
+              <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-lg p-0.5 ml-auto">
+                <button
+                  onClick={() => setGroupBy('status')}
+                  className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${groupBy === 'status' ? 'nav-active' : 'text-slate-400 hover:text-slate-600'}`}
+                >
+                  Status
+                </button>
+                <button
+                  onClick={() => setGroupBy('recurrence')}
+                  className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${groupBy === 'recurrence' ? 'nav-active' : 'text-slate-400 hover:text-slate-600'}`}
+                >
+                  Pengulangan
+                </button>
+              </div>
+            )}
+            <div className={`flex items-center gap-1 bg-white border border-slate-200 rounded-lg p-0.5 ${viewMode === 'list' ? '' : 'ml-auto'}`}>
+              <button
+                onClick={() => setViewMode('list')}
+                className={`p-1.5 rounded-md transition-colors ${viewMode === 'list' ? 'nav-active' : 'text-slate-400 hover:text-slate-600'}`}
+                title="List view"
+              >
+                <LayoutList size={14} />
+              </button>
+              <button
+                onClick={() => setViewMode('board')}
+                className={`p-1.5 rounded-md transition-colors ${viewMode === 'board' ? 'nav-active' : 'text-slate-400 hover:text-slate-600'}`}
+                title="Board view"
+              >
+                <Columns3 size={14} />
+              </button>
+              <button
+                onClick={() => setViewMode('calendar')}
+                className={`p-1.5 rounded-md transition-colors ${viewMode === 'calendar' ? 'nav-active' : 'text-slate-400 hover:text-slate-600'}`}
+                title="Calendar view"
+              >
+                <CalendarDays size={14} />
+              </button>
+              <button
+                onClick={() => setViewMode('table')}
+                className={`p-1.5 rounded-md transition-colors ${viewMode === 'table' ? 'nav-active' : 'text-slate-400 hover:text-slate-600'}`}
+                title="Table view"
+              >
+                <Table2 size={14} />
+              </button>
+            </div>
+          </div>
+
+          {availableTags.length > 0 && (
+            <div className="px-4 py-2 border-b border-slate-100 flex items-center gap-1.5 flex-wrap">
+              {availableTags.map(tag => (
+                <button
+                  key={tag}
+                  onClick={() => setActiveTag(t => t === tag ? '' : tag)}
+                  className={`text-[11px] font-medium px-2 py-0.5 rounded-full transition-colors ${
+                    activeTag === tag ? 'nav-active' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                  }`}
+                >
+                  #{tag}
+                </button>
+              ))}
+            </div>
+          )}
+
+          <div className="flex-1 overflow-y-auto p-4">
+            {isLoading ? (
+              <p className="text-sm text-slate-400 text-center py-16">Memuat…</p>
+            ) : viewMode === 'list' ? (
+              <ListView tasks={filteredTasks} view={sidebarView} groupBy={groupBy} onOpen={(t) => setSelectedId(t.id)} onToggleDone={toggleDone} />
+            ) : viewMode === 'board' ? (
+              <BoardView
+                tasks={filteredTasks}
+                onOpen={(t) => setSelectedId(t.id)}
+                onToggleDone={toggleDone}
+                onStatusChange={(id, status) => quickPatch.mutate({ id, patch: { status } })}
+              />
+            ) : viewMode === 'calendar' ? (
+              <CalendarView
+                tasks={filteredTasks}
+                onOpen={(t) => setSelectedId(t.id)}
+                onReschedule={(id, dueDate) => quickPatch.mutate({ id, patch: { dueDate } })}
+              />
+            ) : (
+              <TableView
+                tasks={filteredTasks}
+                sortBy={sortBy}
+                onSortChange={setSortBy}
+                onOpen={(t) => setSelectedId(t.id)}
+              />
+            )}
+          </div>
+          </>
+          )}
+        </div>
+      </div>
+
+      <TaskDetailPanel
+        task={selectedTask}
+        userOptions={userOptions}
+        onClose={() => {
+          setSelectedId(null)
+          if (searchParams.get('open')) setSearchParams(prev => { prev.delete('open'); return prev }, { replace: true })
+        }}
+      />
+
+      <CreateTaskModal
+        open={showCreate}
+        onClose={() => setShowCreate(false)}
+        userOptions={userOptions}
+        defaultView={sidebarView}
+        divisi={activeDivisi}
+      />
+    </div>
+  )
+}

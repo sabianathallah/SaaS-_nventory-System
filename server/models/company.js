@@ -46,6 +46,22 @@ module.exports = (sequelize, DataTypes) => {
     subscriptionExpiresAt: {
       type: DataTypes.DATE,
       allowNull: true
+    },
+    legalName: {
+      type: DataTypes.STRING,
+      allowNull: true
+    },
+    address: {
+      type: DataTypes.TEXT,
+      allowNull: true
+    },
+    contactPhone: {
+      type: DataTypes.STRING,
+      allowNull: true
+    },
+    contactEmail: {
+      type: DataTypes.STRING,
+      allowNull: true
     }
   }, {
     sequelize,

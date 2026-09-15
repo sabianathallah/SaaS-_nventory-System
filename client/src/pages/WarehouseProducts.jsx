@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useParams, useNavigate, Link } from 'react-router-dom'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { warehousesApi, productsApi } from '../api'
 import SearchBar from '../components/SearchBar'
@@ -103,9 +103,12 @@ export default function WarehouseProducts() {
   const navigate = useNavigate()
 
   const [search, setSearch] = useState('')
-  const [page, setPage]     = useState(1)
   const [sort, setSort]     = useState({ col: 'name', dir: 'asc' })
   const [exporting, setExporting] = useState(false)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const page  = Number(searchParams.get('page')  || '1')
+  const limit = Number(searchParams.get('limit') || '20')
+  const setPage = (p) => setSearchParams(prev => { prev.set('page', String(p)); return prev }, { replace: true })
 
   const handleSort = (col) => {
     setSort(s => ({ col, dir: s.col === col && s.dir === 'asc' ? 'desc' : 'asc' }))
@@ -118,9 +121,9 @@ export default function WarehouseProducts() {
   })
 
   const { data, isLoading: prodLoading } = useQuery({
-    queryKey: ['products', { page, name: search, WarehouseId: id, sortBy: sort.col, sortOrder: sort.dir }],
+    queryKey: ['products', { page, limit, name: search, WarehouseId: id, sortBy: sort.col, sortOrder: sort.dir }],
     queryFn:  () => productsApi.list({
-      page, limit: 20, name: search,
+      page, limit, name: search,
       WarehouseId: id,
       sortBy:    sort.col,
       sortOrder: sort.dir,
@@ -142,7 +145,7 @@ export default function WarehouseProducts() {
     setExporting(true)
     try {
       const result = await productsApi.list({ limit: 9999, WarehouseId: id, sortBy: sort.col, sortOrder: sort.dir })
-      const headers = ['No', 'Nama Produk', 'Unit', 'Kategori', 'Total SKU', 'Total Stok', 'Harga Min (Rp)', 'Harga Max (Rp)', 'Nilai Stok (Rp)']
+      const headers = ['No', 'Nama Produk', 'Unit', 'Tipe', 'Total SKU', 'Total Stok', 'Harga Min (Rp)', 'Harga Max (Rp)', 'Nilai Stok (Rp)']
       const exRows = result.data.map((p, i) => {
         const skus   = p.ProductSKUs ?? []
         const prices = skus.map(s => Number(s.price || 0)).filter(Boolean)
@@ -167,9 +170,9 @@ export default function WarehouseProducts() {
       {/* ── Sticky Header ──────────────────────────────────────────── */}
       <div className="sticky top-0 z-20 bg-white border-b border-slate-200 shadow-sm">
         <div className="flex items-center gap-3 px-6 h-14">
-          <Link to="/warehouses" className="flex items-center gap-1.5 text-sm text-slate-400 hover:text-slate-700 transition-colors flex-shrink-0">
+          <button onClick={() => navigate(-1)} className="flex items-center gap-1.5 text-sm text-slate-400 hover:text-slate-700 transition-colors flex-shrink-0">
             <ArrowLeft size={15} /> Warehouses
-          </Link>
+          </button>
           <ChevronRight size={14} className="text-slate-200" />
           <span className="text-sm text-slate-500 truncate">{warehouse?.name ?? '…'}</span>
           <ChevronRight size={14} className="text-slate-200" />
@@ -240,7 +243,7 @@ export default function WarehouseProducts() {
                 <thead>
                   <tr className="border-b border-slate-100">
                     <SortTh label="Produk"   col="name"       sort={sort} onSort={handleSort} />
-                    <th className="th">Kategori</th>
+                    <th className="th">Tipe</th>
                     <th className="th">Variant</th>
                     <th className="th">SKU</th>
                     <th className="th">Harga</th>
@@ -278,7 +281,7 @@ export default function WarehouseProducts() {
                           </div>
                         </td>
 
-                        {/* Kategori */}
+                        {/* Tipe */}
                         <td className="td">
                           {p.Category
                             ? <span className="badge-teal">{p.Category.name}</span>

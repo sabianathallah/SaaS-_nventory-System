@@ -1,0 +1,42 @@
+'use strict';
+const { ALL_PERMISSIONS, DEFAULT_PERMISSIONS } = require('../helpers/permissions');
+
+module.exports = {
+  async up(queryInterface) {
+    const now = new Date();
+    // Upsert all permissions (adds new ones, skips existing)
+    for (const p of ALL_PERMISSIONS) {
+      await queryInterface.sequelize.query(
+        `INSERT INTO "Permissions" (key, label, "group", "createdAt", "updatedAt")
+         VALUES (:key, :label, :group, :now, :now)
+         ON CONFLICT (key) DO UPDATE SET label = :label, "group" = :group, "updatedAt" = :now`,
+        { replacements: { key: p.key, label: p.label, group: p.group, now } }
+      );
+    }
+
+    // For each role, add new permission keys that appear in DEFAULT_PERMISSIONS but not yet assigned
+    const newKeys = ['packing.incoming.close', 'handover.delete'];
+    const roles = await queryInterface.sequelize.query(
+      `SELECT id, name FROM "Roles"`,
+      { type: queryInterface.sequelize.QueryTypes.SELECT }
+    );
+    for (const role of roles) {
+      const defaults = DEFAULT_PERMISSIONS[role.name] ?? [];
+      for (const key of newKeys) {
+        if (!defaults.includes(key)) continue;
+        await queryInterface.sequelize.query(
+          `INSERT INTO "RolePermissions" ("roleId", "permissionKey", "createdAt", "updatedAt")
+           VALUES (:roleId, :key, :now, :now)
+           ON CONFLICT DO NOTHING`,
+          { replacements: { roleId: role.id, key, now } }
+        );
+      }
+    }
+  },
+
+  async down(queryInterface) {
+    await queryInterface.sequelize.query(
+      `DELETE FROM "Permissions" WHERE key IN ('packing.incoming.close', 'handover.delete')`
+    );
+  },
+};

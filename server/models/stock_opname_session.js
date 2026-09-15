@@ -20,6 +20,18 @@ module.exports = (sequelize, DataTypes) => {
         onDelete: 'CASCADE',
         onUpdate: 'CASCADE'
       });
+      Stock_Opname_Session.belongsTo(models.User, {
+        foreignKey: { name: 'updatedBy', allowNull: true },
+        as: 'updater',
+        onDelete: 'SET NULL',
+        onUpdate: 'CASCADE'
+      });
+      Stock_Opname_Session.belongsTo(models.User, {
+        foreignKey: { name: 'closedBy', allowNull: true },
+        as: 'closer',
+        onDelete: 'SET NULL',
+        onUpdate: 'CASCADE'
+      });
       Stock_Opname_Session.hasMany(models.Stock_Opname_Item, {
         foreignKey: { name: 'SessionId', allowNull: false },
         onDelete: 'CASCADE',
@@ -54,6 +66,8 @@ module.exports = (sequelize, DataTypes) => {
         notEmpty: { msg: 'Creator is required' }
       }
     },
+    updatedBy: { type: DataTypes.INTEGER, allowNull: true },
+    closedBy:  { type: DataTypes.INTEGER, allowNull: true },
     notes: DataTypes.TEXT,
     companyId: { type: DataTypes.INTEGER, allowNull: true }
   }, {

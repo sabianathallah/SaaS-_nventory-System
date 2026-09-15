@@ -19,8 +19,8 @@ export default function Modal({ open, onClose, title, children, size = 'md' }) {
         className="absolute inset-0 bg-slate-900/40 backdrop-blur-[2px]"
         onClick={onClose}
       />
-      <div className={`relative w-full ${sizes[size]} bg-white rounded-xl shadow-modal border border-slate-200 animate-scale-in overflow-hidden`}>
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+      <div className={`relative w-full ${sizes[size]} max-h-[90vh] bg-white rounded-xl shadow-modal border border-slate-200 animate-scale-in overflow-hidden flex flex-col`}>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 flex-shrink-0">
           <h2 className="font-semibold text-slate-800 text-sm">{title}</h2>
           <button
             onClick={onClose}
@@ -29,7 +29,7 @@ export default function Modal({ open, onClose, title, children, size = 'md' }) {
             <X size={15} />
           </button>
         </div>
-        <div className="px-6 py-5">{children}</div>
+        <div className="px-6 py-5 overflow-y-auto">{children}</div>
       </div>
     </div>
   )

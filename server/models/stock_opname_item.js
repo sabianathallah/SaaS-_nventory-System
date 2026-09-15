@@ -20,6 +20,11 @@ module.exports = (sequelize, DataTypes) => {
         onDelete: 'CASCADE',
         onUpdate: 'CASCADE'
       });
+      Stock_Opname_Item.belongsTo(models.ProductSKU, {
+        foreignKey: { name: 'ProductSKUId', allowNull: true },
+        onDelete: 'SET NULL',
+        onUpdate: 'CASCADE'
+      });
     }
   }
   Stock_Opname_Item.init({
@@ -39,6 +44,7 @@ module.exports = (sequelize, DataTypes) => {
         notEmpty: { msg: 'Product is required' }
       }
     },
+    ProductSKUId: { type: DataTypes.INTEGER, allowNull: true },
     scanned_qty: {
       type: DataTypes.INTEGER,
       validate: { min: 0 }

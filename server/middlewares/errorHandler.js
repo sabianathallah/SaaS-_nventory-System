@@ -1,5 +1,5 @@
 const errorHandler = (err, req, res, next) => {
-    let status  = err.statusCode || 500;
+    let status  = err.statusCode || err.status || 500;
     let message = err.message    || 'Internal Server Error';
     let errors  = undefined;
 
