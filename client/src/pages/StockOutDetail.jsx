@@ -443,13 +443,25 @@ export default function StockOutDetail() {
     enabled:  isNew,
   })
 
+  const [editingVendor, setEditingVendor] = useState(false)
   const { data: vendors } = useQuery({
     queryKey: ['vendors', { limit: 200 }],
     queryFn:  () => vendorsApi.list({ limit: 200 }),
-    enabled:  isNew && !vendorIdParam,
+    enabled:  (isNew && !vendorIdParam) || editingVendor,
   })
   const channelOptions = (channels?.data ?? []).filter(c => c.isActive)
   const vendorOptions  = vendors?.data ?? []
+
+  const updateVendorMutation = useMutation({
+    mutationFn: (VendorId) => stockOutApi.update(id, { VendorId }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['stock-out', id] })
+      qc.invalidateQueries({ queryKey: ['stock-out-outstanding-repairs'] })
+      setEditingVendor(false)
+      toast.success('Vendor diperbarui')
+    },
+    onError: e => toast.error(e.response?.data?.message || 'Gagal memperbarui vendor'),
+  })
 
   const [addingPurpose, setAddingPurpose]     = useState(false)
   const [newPurposeName, setNewPurposeName]   = useState('')
@@ -737,10 +749,35 @@ export default function StockOutDetail() {
             <p className="label mb-1">Oleh</p>
             <p className="font-semibold text-slate-700">{detail.User?.name ?? '—'}</p>
           </div>
-          {detail.Vendor && (
+          {detail.purpose === 'Retur Vendor' && (
             <div>
               <p className="label mb-1">Vendor</p>
-              <p className="font-semibold text-slate-700">{detail.Vendor.name}</p>
+              {editingVendor ? (
+                <div className="flex items-center gap-1.5">
+                  <select
+                    autoFocus
+                    className="input text-sm py-1"
+                    defaultValue={detail.VendorId ?? ''}
+                    onChange={e => e.target.value && updateVendorMutation.mutate(Number(e.target.value))}
+                    disabled={updateVendorMutation.isPending}
+                  >
+                    <option value="">Pilih vendor…</option>
+                    {vendorOptions.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+                  </select>
+                  <button type="button" onClick={() => setEditingVendor(false)} className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100">
+                    <X size={13} />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setEditingVendor(true)}
+                  className="font-semibold text-slate-700 hover:text-violet-700 flex items-center gap-1.5 group"
+                >
+                  {detail.Vendor?.name ?? <span className="text-amber-600 font-medium">Belum diisi</span>}
+                  <PencilLine size={12} className="text-slate-300 group-hover:text-violet-500" />
+                </button>
+              )}
             </div>
           )}
           {detail.sourceDelivery && (

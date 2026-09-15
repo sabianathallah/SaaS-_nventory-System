@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { stockOutApi, stockOutDraftApi, warehousesApi } from '../api'
+import { stockOutApi, stockOutDraftApi, warehousesApi, vendorsApi } from '../api'
 import { useAuth } from '../context/AuthContext'
 import PageHeader from '../components/PageHeader'
 import { Table, Pagination } from '../components/Table'
@@ -49,14 +49,22 @@ export default function StockOut() {
     setPage(1)
   }
 
+  const [vendorFilter, setVendorFilter] = useState('')
+  const handleVendorChange = (val) => { setVendorFilter(val); setPage(1) }
+
   const { data: warehouses } = useQuery({
     queryKey: ['warehouses', { limit: 100 }],
     queryFn:  () => warehousesApi.list({ limit: 100 }),
   })
 
+  const { data: vendors } = useQuery({
+    queryKey: ['vendors', { limit: 200 }],
+    queryFn:  () => vendorsApi.list({ limit: 200 }),
+  })
+
   const { data, isLoading } = useQuery({
-    queryKey: ['stock-out', { page, limit, WarehouseId: warehouseFilter || undefined, search, noteSearch }],
-    queryFn:  () => stockOutApi.list({ page, limit, WarehouseId: warehouseFilter || undefined, search: search || undefined, noteSearch: noteSearch || undefined }),
+    queryKey: ['stock-out', { page, limit, WarehouseId: warehouseFilter || undefined, VendorId: vendorFilter || undefined, search, noteSearch }],
+    queryFn:  () => stockOutApi.list({ page, limit, WarehouseId: warehouseFilter || undefined, VendorId: vendorFilter || undefined, search: search || undefined, noteSearch: noteSearch || undefined }),
   })
 
   const { data: drafts = [] } = useQuery({
@@ -225,14 +233,24 @@ export default function StockOut() {
             <option key={w.id} value={w.id}>{w.name}</option>
           ))}
         </select>
+        <select
+          value={vendorFilter}
+          onChange={e => handleVendorChange(e.target.value)}
+          className="input text-sm w-44"
+        >
+          <option value="">Semua Vendor</option>
+          {(vendors?.data ?? []).map(v => (
+            <option key={v.id} value={v.id}>{v.name}</option>
+          ))}
+        </select>
         <form onSubmit={handleSearch} className="flex gap-2 flex-wrap">
           <div className="relative">
             <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               value={searchInput}
               onChange={e => setSearchInput(e.target.value)}
-              placeholder="Cari tujuan / produk…"
-              className="input text-sm pl-7 w-52"
+              placeholder="Cari tujuan / produk / vendor…"
+              className="input text-sm pl-7 w-56"
             />
           </div>
           <div className="relative">

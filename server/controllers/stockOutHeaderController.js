@@ -12,10 +12,11 @@ class StockOutHeaderController {
             const filter = buildFilter(req.query, {
                 destination:  'like',
                 WarehouseId:  'exact',
+                VendorId:     'exact',
                 dateFrom:     { field: 'date', type: 'gte' },
                 dateTo:       { field: 'date', type: 'lte' },
             });
-            // Search umum: tujuan/keperluan header + nama produk di dalam item.
+            // Search umum: tujuan/keperluan header + nama produk di dalam item + nama vendor.
             // Search catatan terpisah: catatan header + catatan per item.
             const extra = [];
             if (req.query.search) {
@@ -25,6 +26,7 @@ class StockOutHeaderController {
                         { destination: { [Op.iLike]: `%${req.query.search}%` } },
                         { purpose:     { [Op.iLike]: `%${req.query.search}%` } },
                         sequelize.literal(`"Stock_Out_Header"."id" IN (SELECT sm."ReferenceId" FROM "Stock_Movements" sm JOIN "Products" p ON sm."ProductId" = p.id WHERE sm."type" = 'OUT' AND p."name" ILIKE ${term})`),
+                        sequelize.literal(`"Stock_Out_Header"."VendorId" IN (SELECT id FROM "Vendors" WHERE "name" ILIKE ${term})`),
                     ],
                 });
             }
