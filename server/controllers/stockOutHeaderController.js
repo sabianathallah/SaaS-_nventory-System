@@ -222,15 +222,28 @@ class StockOutHeaderController {
         try {
             const header = await Stock_Out_Header.findOne({ where: { id: req.params.id, ...companyFilter(req) } });
             if (!header) throw { name: 'NotFound', message: 'Stock out header not found' };
-            if (header.status !== 'open') {
-                return res.status(400).json({ message: 'Sesi masih terkunci. Buka sesi dulu untuk mengedit.' });
+
+            const { date, destination, notes, VendorId } = req.body;
+            const editingLockedFields = date !== undefined || destination !== undefined || notes !== undefined || req.body.WarehouseId !== undefined;
+
+            // VendorId adalah metadata murni (nggak nyentuh stok), jadi boleh dilengkapi
+            // kapan pun termasuk saat sesi sudah closed — beda dari field lain di bawah.
+            if (editingLockedFields) {
+                if (header.status !== 'open') {
+                    return res.status(400).json({ message: 'Sesi masih terkunci. Buka sesi dulu untuk mengedit.' });
+                }
+                // WarehouseId changes are blocked — moving stock requires delete + recreate
+                if (req.body.WarehouseId && Number(req.body.WarehouseId) !== header.WarehouseId) {
+                    return res.status(400).json({ message: 'Gudang tidak dapat diubah. Hapus dan buat ulang dokumen untuk mengganti gudang.' });
+                }
             }
-            // WarehouseId changes are blocked — moving stock requires delete + recreate
-            if (req.body.WarehouseId && Number(req.body.WarehouseId) !== header.WarehouseId) {
-                return res.status(400).json({ message: 'Gudang tidak dapat diubah. Hapus dan buat ulang dokumen untuk mengganti gudang.' });
-            }
-            const { date, destination, notes } = req.body;
-            await header.update({ date, destination, notes, updatedBy: req.user.id });
+
+            const updates = { updatedBy: req.user.id };
+            if (date        !== undefined) updates.date        = date;
+            if (destination !== undefined) updates.destination = destination;
+            if (notes       !== undefined) updates.notes       = notes;
+            if (VendorId    !== undefined) updates.VendorId    = VendorId || null;
+            await header.update(updates);
             res.status(200).json(header);
         } catch (err) { next(err); }
     }
