@@ -234,6 +234,10 @@ class StockOutDraftController {
                 await t.rollback();
                 return res.status(400).json({ message: 'Channel penjualan wajib dipilih untuk tujuan "Penjualan"' });
             }
+            if (purpose === 'Retur Vendor' && !VendorId) {
+                await t.rollback();
+                return res.status(400).json({ message: 'Vendor wajib dipilih untuk tujuan "Retur Vendor"' });
+            }
 
             const items = draft.Stock_Out_Draft_Items || [];
             if (!items.length) {

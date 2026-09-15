@@ -1,7 +1,7 @@
 import { useState, useMemo, useRef, useEffect } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { stockOutApi, stockOutDraftApi, warehousesApi, stockInApi, productsApi, productSkusApi, stocksApi, skuWarehouseStocksApi, stockOutPurposesApi, channelsApi } from '../api'
+import { stockOutApi, stockOutDraftApi, warehousesApi, stockInApi, productsApi, productSkusApi, stocksApi, skuWarehouseStocksApi, stockOutPurposesApi, channelsApi, vendorsApi } from '../api'
 import { useAuth } from '../context/AuthContext'
 import QRScanner from '../components/QRScanner'
 import SearchableSelect from '../components/SearchableSelect'
@@ -26,7 +26,7 @@ const skuLabel = (sku) => {
 
 const fmtDate = (d) => d ? new Date(d).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10)
 
-const EMPTY_FORM = { warehouseId: '', purpose: '', purposeDetail: '', channelId: '', note: '', date: fmtDate(), items: [] }
+const EMPTY_FORM = { warehouseId: '', purpose: '', purposeDetail: '', channelId: '', vendorId: '', note: '', date: fmtDate(), items: [] }
 
 // ── Item row (view mode) — qty editable & bisa dihapus saat sesi terbuka ───────
 function OutItemRow({ item, headerId, canViewValue, editable, canDelete, showActionCol, showRepairCol }) {
@@ -422,7 +422,14 @@ export default function StockOutDetail() {
     queryFn:  () => channelsApi.list({ limit: 200 }),
     enabled:  isNew,
   })
+
+  const { data: vendors } = useQuery({
+    queryKey: ['vendors', { limit: 200 }],
+    queryFn:  () => vendorsApi.list({ limit: 200 }),
+    enabled:  isNew && !vendorIdParam,
+  })
   const channelOptions = (channels?.data ?? []).filter(c => c.isActive)
+  const vendorOptions  = vendors?.data ?? []
 
   const [addingPurpose, setAddingPurpose]     = useState(false)
   const [newPurposeName, setNewPurposeName]   = useState('')
@@ -494,7 +501,7 @@ export default function StockOutDetail() {
         ChannelId: form.purpose === 'Penjualan' ? (form.channelId || null) : null,
         date: form.date,
         note: form.note,
-        VendorId:         vendorIdParam || null,
+        VendorId:         vendorIdParam || (form.vendorId || null),
         sourceDeliveryId: sourceDeliveryIdParam || null,
       })
     },
@@ -608,6 +615,7 @@ export default function StockOutDetail() {
     if (!form.purpose) return toast.error('Pilih tujuan stock out')
     if (form.purpose === 'Lainnya' && !form.purposeDetail.trim()) return toast.error('Jelaskan tujuan lainnya')
     if (form.purpose === 'Penjualan' && !form.channelId) return toast.error('Pilih channel penjualan')
+    if (form.purpose === 'Retur Vendor' && !vendorIdParam && !form.vendorId) return toast.error('Pilih vendor tujuan retur')
     if (!draftItems.length) return toast.error('Tambahkan minimal 1 item')
     createMutation.mutate()
   }
@@ -1050,6 +1058,23 @@ export default function StockOutDetail() {
                 </select>
                 {channelOptions.length === 0 && (
                   <p className="text-xs text-amber-600 mt-1">Belum ada channel aktif — tambah dulu di Data Master.</p>
+                )}
+              </div>
+            )}
+            {form.purpose === 'Retur Vendor' && !vendorIdParam && (
+              <div>
+                <label className="label">Vendor <span className="text-red-500">*</span></label>
+                <select
+                  className="input"
+                  value={form.vendorId}
+                  onChange={e => setForm(f => ({ ...f, vendorId: e.target.value }))}
+                  required
+                >
+                  <option value="">Pilih vendor…</option>
+                  {vendorOptions.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+                </select>
+                {vendorOptions.length === 0 && (
+                  <p className="text-xs text-amber-600 mt-1">Belum ada data vendor — tambah dulu di menu Vendors.</p>
                 )}
               </div>
             )}

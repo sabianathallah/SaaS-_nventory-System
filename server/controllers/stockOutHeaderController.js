@@ -129,6 +129,10 @@ class StockOutHeaderController {
                 await t.rollback();
                 return res.status(400).json({ message: 'Channel penjualan wajib dipilih untuk tujuan "Penjualan"' });
             }
+            if (headerData.purpose === 'Retur Vendor' && !headerData.VendorId) {
+                await t.rollback();
+                return res.status(400).json({ message: 'Vendor wajib dipilih untuk tujuan "Retur Vendor"' });
+            }
 
             // Resolve ProductId from ProductSKUId when not provided directly
             const resolvedItems = [];

@@ -90,10 +90,11 @@ export default function Movements() {
   const outstandingSummary = useMemo(() => {
     const rows = outstandingRepairs ?? []
     const products = new Set(rows.map(r => r.product?.id ?? r.product?.name))
-    const vendors  = new Set(rows.map(r => r.vendor?.id ?? r.vendor?.name ?? '—'))
-    const qty      = rows.reduce((s, r) => s + (r.qtyOutstanding ?? 0), 0)
-    const stale    = rows.filter(r => r.isStale).length
-    return { productCount: products.size, vendorCount: vendors.size, qty, stale }
+    const namedVendors  = new Set(rows.filter(r => r.vendor?.id).map(r => r.vendor.id))
+    const missingVendor = rows.some(r => !r.vendor?.id)
+    const qty   = rows.reduce((s, r) => s + (r.qtyOutstanding ?? 0), 0)
+    const stale = rows.filter(r => r.isStale).length
+    return { productCount: products.size, vendorCount: namedVendors.size, missingVendor, qty, stale }
   }, [outstandingRepairs])
 
   const { data: purposesData } = useQuery({
@@ -307,7 +308,12 @@ export default function Movements() {
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <OutstandingStat icon={PackageSearch} label="Total Produk" value={outstandingSummary.productCount} />
               <OutstandingStat icon={Layers} label="Qty Outstanding" value={outstandingSummary.qty} accent="amber" />
-              <OutstandingStat icon={Building2} label="Vendor Terlibat" value={outstandingSummary.vendorCount} />
+              <OutstandingStat
+                icon={Building2}
+                label="Vendor Terlibat"
+                value={outstandingSummary.vendorCount}
+                note={outstandingSummary.missingVendor ? 'Ada item tanpa vendor tercatat' : null}
+              />
               <OutstandingStat icon={AlertTriangle} label="Sudah > 14 Hari" value={outstandingSummary.stale} accent={outstandingSummary.stale > 0 ? 'red' : undefined} />
             </div>
           </div>
@@ -492,7 +498,7 @@ const STAT_ACCENTS = {
   red:   { icon: 'text-danger',    value: 'text-danger' },
 }
 
-function OutstandingStat({ icon: Icon, label, value, accent = 'slate' }) {
+function OutstandingStat({ icon: Icon, label, value, accent = 'slate', note }) {
   const c = STAT_ACCENTS[accent] ?? STAT_ACCENTS.slate
   return (
     <div className="rounded-xl bg-white/70 border border-white shadow-sm px-3 py-2.5">
@@ -501,6 +507,7 @@ function OutstandingStat({ icon: Icon, label, value, accent = 'slate' }) {
         <p className="text-[10.5px] font-medium text-slate-500 uppercase tracking-wide">{label}</p>
       </div>
       <p className={`text-xl font-bold font-mono leading-none ${c.value}`}>{value.toLocaleString()}</p>
+      {note && <p className="text-[10px] text-amber-600 mt-1 leading-tight">{note}</p>}
     </div>
   )
 }
