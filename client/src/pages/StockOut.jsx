@@ -133,10 +133,14 @@ export default function StockOut() {
               ? <span className="badge-amber text-[10px]">Sebagian {returned}/{total}</span>
               : <span className="badge-red text-[10px]">Masih di Vendor</span>
         )
+        const subInfo = isReturVendor ? r.Vendor?.name : r.purpose === 'Penjualan' ? r.Channel?.name : null
         return (
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-violet-50 text-violet-700 border border-violet-100 truncate max-w-[140px]">{r.purpose}</span>
-            {repairBadge}
+          <div>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-violet-50 text-violet-700 border border-violet-100 truncate max-w-[140px]">{r.purpose}</span>
+              {repairBadge}
+            </div>
+            {subInfo && <p className="text-[11px] text-slate-400 mt-0.5">{subInfo}</p>}
           </div>
         )
       },
