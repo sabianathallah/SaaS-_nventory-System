@@ -54,6 +54,10 @@ class StockOutHeaderController {
                             sequelize.literal(`(SELECT COALESCE(SUM(sm.quantity * COALESCE(ps.price, 0)), 0) FROM "Stock_Movements" sm LEFT JOIN "ProductSKUs" ps ON sm."ProductSKUId" = ps.id WHERE sm."ReferenceId" = "Stock_Out_Header"."id" AND sm."type" = 'OUT')`),
                             'grandTotal'
                         ],
+                        [
+                            sequelize.literal(`(SELECT COALESCE(SUM("repairQtyReturned"), 0) FROM "Stock_Movements" WHERE "ReferenceId" = "Stock_Out_Header"."id" AND "type" = 'OUT')`),
+                            'totalRepairQtyReturned'
+                        ],
                     ]
                 },
                 include: [
@@ -61,6 +65,7 @@ class StockOutHeaderController {
                     { model: User, foreignKey: 'updatedBy', as: 'updater', attributes: ['id', 'name'] },
                     { model: Warehouse, attributes: ['id', 'name'] },
                     { model: Channel, attributes: ['id', 'name'] },
+                    { model: Vendor, attributes: ['id', 'name'], required: false },
                 ],
                 order: [['date', 'DESC'], ['id', 'DESC']],
                 limit, offset,

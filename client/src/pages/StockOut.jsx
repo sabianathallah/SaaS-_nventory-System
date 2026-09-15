@@ -121,9 +121,25 @@ export default function StockOut() {
     },
     {
       key: 'purpose', label: 'Tujuan',
-      render: r => r.purpose
-        ? <span className="inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-violet-50 text-violet-700 border border-violet-100 truncate max-w-[140px]">{r.purpose}</span>
-        : <span className="text-xs text-slate-400">—</span>,
+      render: r => {
+        if (!r.purpose) return <span className="text-xs text-slate-400">—</span>
+        const isReturVendor = r.purpose === 'Retur Vendor'
+        const returned = Number(r.totalRepairQtyReturned ?? 0)
+        const total    = Number(r.totalQty ?? 0)
+        const repairBadge = isReturVendor && total > 0 && (
+          returned >= total
+            ? <span className="badge-green text-[10px]">Sudah Balik</span>
+            : returned > 0
+              ? <span className="badge-amber text-[10px]">Sebagian {returned}/{total}</span>
+              : <span className="badge-red text-[10px]">Masih di Vendor</span>
+        )
+        return (
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-violet-50 text-violet-700 border border-violet-100 truncate max-w-[140px]">{r.purpose}</span>
+            {repairBadge}
+          </div>
+        )
+      },
     },
     {
       key: 'itemCount', label: 'Item', width: 60,

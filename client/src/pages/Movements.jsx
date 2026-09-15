@@ -8,6 +8,7 @@ import SearchableSelect from '../components/SearchableSelect'
 import { Table, Pagination } from '../components/Table'
 import { exportExcel } from '../utils/exportExcel'
 import toast from 'react-hot-toast'
+import { PackageSearch, Layers, Building2, AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react'
 
 const TYPE_BADGE = {
   IN:         <span className="badge-green">▲ IN</span>,
@@ -84,6 +85,16 @@ export default function Movements() {
     queryKey: ['stock-out-outstanding-repairs'],
     queryFn:  () => stockOutApi.outstandingRepairs(),
   })
+  const [showAllOutstanding, setShowAllOutstanding] = useState(false)
+
+  const outstandingSummary = useMemo(() => {
+    const rows = outstandingRepairs ?? []
+    const products = new Set(rows.map(r => r.product?.id ?? r.product?.name))
+    const vendors  = new Set(rows.map(r => r.vendor?.id ?? r.vendor?.name ?? '—'))
+    const qty      = rows.reduce((s, r) => s + (r.qtyOutstanding ?? 0), 0)
+    const stale    = rows.filter(r => r.isStale).length
+    return { productCount: products.size, vendorCount: vendors.size, qty, stale }
+  }, [outstandingRepairs])
 
   const { data: purposesData } = useQuery({
     queryKey: ['stock-out-purposes', { limit: 200 }],
@@ -279,52 +290,73 @@ export default function Movements() {
 
       {/* Barang Masih di Vendor (Retur Vendor yang belum sepenuhnya balik) */}
       {outstandingRepairs && outstandingRepairs.length > 0 && (
-        <div className="card p-4 border-l-4 border-amber-400">
-          <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
-            <p className="text-sm font-semibold text-slate-700">⏳ Barang Masih di Vendor ({outstandingRepairs.length})</p>
-            <span className="text-xs text-slate-400">Retur perbaikan yang belum sepenuhnya balik</span>
+        <div className="card overflow-hidden border border-amber-200/70">
+          <div className="relative px-5 pt-4 pb-4 bg-gradient-to-br from-amber-50 via-amber-50/40 to-transparent border-b border-amber-100">
+            <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
+              <div className="flex items-center gap-2">
+                <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-amber-100 text-amber-600">
+                  <PackageSearch size={17} />
+                </span>
+                <div>
+                  <p className="text-sm font-bold text-slate-800 leading-tight">Barang Masih di Vendor</p>
+                  <p className="text-[11px] text-slate-400 leading-tight">Retur perbaikan yang belum sepenuhnya balik</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <OutstandingStat icon={PackageSearch} label="Total Produk" value={outstandingSummary.productCount} />
+              <OutstandingStat icon={Layers} label="Qty Outstanding" value={outstandingSummary.qty} accent="amber" />
+              <OutstandingStat icon={Building2} label="Vendor Terlibat" value={outstandingSummary.vendorCount} />
+              <OutstandingStat icon={AlertTriangle} label="Sudah > 14 Hari" value={outstandingSummary.stale} accent={outstandingSummary.stale > 0 ? 'red' : undefined} />
+            </div>
           </div>
+
           <div className="overflow-x-auto">
             <table className="w-full min-w-[520px] text-sm">
               <thead>
-                <tr className="bg-slate-50 border-b border-slate-200">
-                  <th className="th py-2 text-left">Produk</th>
+                <tr className="bg-slate-50/80 border-b border-slate-200">
+                  <th className="th py-2 pl-5 text-left">Produk</th>
                   <th className="th py-2 text-left">Vendor</th>
                   <th className="th py-2 text-right w-24">Sisa Qty</th>
                   <th className="th py-2 text-right w-32">Lama di Vendor</th>
-                  <th className="th py-2 text-left w-28">Stock Out #</th>
+                  <th className="th py-2 pr-5 text-left w-28">Stock Out #</th>
                 </tr>
               </thead>
               <tbody>
-                {outstandingRepairs.slice(0, 8).map(r => (
+                {(showAllOutstanding ? outstandingRepairs : outstandingRepairs.slice(0, 8)).map(r => (
                   <tr
                     key={r.id}
                     tabIndex={0}
-                    className="border-b border-slate-100 hover:bg-slate-50/50 focus:bg-slate-50 focus:outline-none cursor-pointer"
+                    className="group border-b border-slate-100 last:border-0 hover:bg-amber-50/40 focus:bg-amber-50/40 focus:outline-none cursor-pointer transition-colors"
                     onClick={() => navigate(`/stock-out/${r.stockOutHeaderId}`)}
                     onKeyDown={e => e.key === 'Enter' && navigate(`/stock-out/${r.stockOutHeaderId}`)}
                   >
-                    <td className="td py-2">
-                      <p className="font-semibold text-slate-800">{r.product?.name ?? '—'}</p>
+                    <td className="td py-2.5 pl-5">
+                      <p className="font-semibold text-slate-800 group-hover:text-violet-700 transition-colors">{r.product?.name ?? '—'}</p>
                       {r.sku && <p className="text-xs text-slate-400">{(r.sku.ProductVariantOptions ?? []).map(o => o.value).join(' / ') || r.sku.sku_code}</p>}
                     </td>
-                    <td className="td py-2 text-slate-600">{r.vendor?.name ?? '—'}</td>
-                    <td className="td py-2 text-right font-mono font-bold text-danger">{r.qtyOutstanding} / {r.qtySent}</td>
-                    <td className="td py-2 text-right">
-                      <span className={r.isStale ? 'badge-red' : 'badge-muted'}>
-                        {r.daysOutstanding} hari{r.isStale ? ' ⚠' : ''}
+                    <td className="td py-2.5 text-slate-600">{r.vendor?.name ?? '—'}</td>
+                    <td className="td py-2.5 text-right font-mono font-bold text-danger">{r.qtyOutstanding} <span className="text-slate-300 font-normal">/ {r.qtySent}</span></td>
+                    <td className="td py-2.5 text-right">
+                      <span className={r.isStale ? 'badge-red inline-flex items-center gap-1' : 'badge-muted'}>
+                        {r.isStale && <AlertTriangle size={11} />}
+                        {r.daysOutstanding} hari
                       </span>
                     </td>
-                    <td className="td py-2 text-violet-600 font-medium">#{r.stockOutHeaderId}</td>
+                    <td className="td py-2.5 pr-5 text-violet-600 font-medium">#{r.stockOutHeaderId}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
           {outstandingRepairs.length > 8 && (
-            <p className="text-xs text-slate-400 mt-3">
-              +{outstandingRepairs.length - 8} item lainnya masih outstanding — cek daftar Stock Out dengan filter "Retur Vendor" untuk lihat semua.
-            </p>
+            <button
+              onClick={() => setShowAllOutstanding(v => !v)}
+              className="w-full flex items-center justify-center gap-1 text-xs text-violet-600 hover:text-violet-800 hover:bg-violet-50/50 font-semibold py-2.5 border-t border-slate-100 transition-colors"
+            >
+              {showAllOutstanding ? <>Sembunyikan <ChevronUp size={13} /></> : <>Lihat semua ({outstandingRepairs.length - 8} lainnya) <ChevronDown size={13} /></>}
+            </button>
           )}
         </div>
       )}
@@ -450,6 +482,25 @@ function SummaryCard({ label, value, color, prefix = '' }) {
     <div className="card p-4">
       <p className="text-xs text-slate-500 mb-1">{label}</p>
       <p className={`text-2xl font-bold font-mono ${color}`}>{prefix}{value.toLocaleString()}</p>
+    </div>
+  )
+}
+
+const STAT_ACCENTS = {
+  slate: { icon: 'text-slate-400', value: 'text-slate-800' },
+  amber: { icon: 'text-amber-500', value: 'text-amber-700' },
+  red:   { icon: 'text-danger',    value: 'text-danger' },
+}
+
+function OutstandingStat({ icon: Icon, label, value, accent = 'slate' }) {
+  const c = STAT_ACCENTS[accent] ?? STAT_ACCENTS.slate
+  return (
+    <div className="rounded-xl bg-white/70 border border-white shadow-sm px-3 py-2.5">
+      <div className="flex items-center gap-1.5 mb-1">
+        {Icon && <Icon size={12} className={c.icon} />}
+        <p className="text-[10.5px] font-medium text-slate-500 uppercase tracking-wide">{label}</p>
+      </div>
+      <p className={`text-xl font-bold font-mono leading-none ${c.value}`}>{value.toLocaleString()}</p>
     </div>
   )
 }
