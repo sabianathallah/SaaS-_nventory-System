@@ -308,7 +308,7 @@ class RequestController {
         ...(recipientName    !== undefined && { recipientName }),
         ...(recipientPhone   !== undefined && { recipientPhone }),
         ...(recipientAddress !== undefined && { recipientAddress }),
-        ...(neededAt         !== undefined && { neededAt }),
+        ...(neededAt         !== undefined && { neededAt: neededAt || null }),
         ...(note             !== undefined && { note }),
         ...(needsReturn      !== undefined && { needsReturn: needsReturn === true || needsReturn === 'true' }),
         ...(divisi           !== undefined && { divisi }),
