@@ -447,7 +447,7 @@ export default function StockOutDetail() {
   const { data: vendors } = useQuery({
     queryKey: ['vendors', { limit: 200 }],
     queryFn:  () => vendorsApi.list({ limit: 200 }),
-    enabled:  (isNew && !vendorIdParam) || editingVendor,
+    enabled:  (isNew && !vendorIdParam) || editingVendor || (!isNew && detail?.purpose === 'Retur Vendor'),
   })
   const channelOptions = (channels?.data ?? []).filter(c => c.isActive)
   const vendorOptions  = vendors?.data ?? []
