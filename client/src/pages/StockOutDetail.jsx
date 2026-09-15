@@ -9,7 +9,7 @@ import { useExternalScanner } from '../hooks/useExternalScanner'
 import { useCompanyGuard } from '../hooks/useCompanyGuard'
 import CompanyRequiredBanner from '../components/CompanyRequiredBanner'
 import toast from 'react-hot-toast'
-import { ArrowLeft, PackageMinus, ScanLine, Plus, Trash2, Save, ScanBarcode, ChevronDown, Package, FileSpreadsheet, BookmarkCheck, X, Printer, Lock, LockOpen, CheckCheck, Check } from 'lucide-react'
+import { ArrowLeft, PackageMinus, ScanLine, Plus, Trash2, Save, ScanBarcode, ChevronDown, Package, FileSpreadsheet, BookmarkCheck, X, Printer, Lock, LockOpen, CheckCheck, Check, PencilLine } from 'lucide-react'
 import { exportExcel } from '../utils/exportExcel'
 import logoPreface from '../assets/logo-preface.jpeg'
 
