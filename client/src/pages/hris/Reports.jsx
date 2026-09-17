@@ -94,7 +94,7 @@ export default function Reports() {
   const filteredAttendances = useMemo(() => {
     return (data?.attendances ?? []).filter(a =>
       (statusFilter === 'ALL' || a.status === statusFilter) &&
-      (userFilter === 'ALL' || a.userId === userFilter)
+      (userFilter === 'ALL' || String(a.userId) === userFilter)
     )
   }, [data, statusFilter, userFilter])
 
