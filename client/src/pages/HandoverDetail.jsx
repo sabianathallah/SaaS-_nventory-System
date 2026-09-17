@@ -102,8 +102,9 @@ export default function HandoverDetail() {
 
   const addResiMutation = useMutation({
     mutationFn: ({ id: hid, resi }) => handoverApi.addResi(hid, resi),
-    onSuccess: () => {
+    onSuccess: (_h, { resi }) => {
       qc.invalidateQueries({ queryKey: ['handover', id] })
+      toast.success(`${resi} ditambahkan`)
       setScanInput('')
       scanInputRef.current?.focus()
     },
