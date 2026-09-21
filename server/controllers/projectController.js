@@ -29,8 +29,8 @@ const COUNT_ATTRS = {
 };
 
 // Projects are a company-wide, cross-divisi object, so there's no per-divisi
-// gate like TaskLists have — anyone in the company can see and create one,
-// but only its owner/creator (or a task admin) may edit or delete it.
+// gate — anyone in the company can see and create one, but only its
+// owner/creator (or a task admin) may edit or delete it.
 async function canManageProject(req, project) {
     if (project.createdBy === req.user.id) return true;
     if (project.ownerId && project.ownerId === req.user.id) return true;

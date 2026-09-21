@@ -140,7 +140,6 @@ export const tasksApi = {
   addDocumentLink:  (id, documentUrl) => api.post(`/tasks/${id}/attachments`, { documentUrl }).then(r => r.data),
   removeAttachment: (id, attachmentId) => api.delete(`/tasks/${id}/attachments/${attachmentId}`).then(r => r.data),
 }
-export const taskListsApi = crud('/task-lists')
 export const projectsApi  = crud('/projects')
 export const notificationsApi = {
   list:         (params) => api.get('/notifications', { params }).then(r => r.data),

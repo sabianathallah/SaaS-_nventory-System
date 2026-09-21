@@ -45,12 +45,6 @@ module.exports = (sequelize, DataTypes) => {
         onDelete: 'CASCADE',
         onUpdate: 'CASCADE',
       });
-      Task.belongsTo(models.TaskList, {
-        foreignKey: { name: 'listId', allowNull: true },
-        as: 'list',
-        onDelete: 'SET NULL',
-        onUpdate: 'CASCADE',
-      });
       Task.belongsTo(models.Project, {
         foreignKey: { name: 'projectId', allowNull: true },
         as: 'project',
@@ -79,7 +73,6 @@ module.exports = (sequelize, DataTypes) => {
     myDayDate:   { type: DataTypes.DATEONLY, allowNull: true },
     parentTaskId: { type: DataTypes.INTEGER, allowNull: true },
     divisi:         { type: DataTypes.STRING(100), allowNull: true },
-    listId:         { type: DataTypes.INTEGER, allowNull: true },
     projectId:      { type: DataTypes.INTEGER, allowNull: true },
     tags:           { type: DataTypes.JSON, allowNull: false, defaultValue: [] },
     reminderAt:     { type: DataTypes.DATE, allowNull: true },

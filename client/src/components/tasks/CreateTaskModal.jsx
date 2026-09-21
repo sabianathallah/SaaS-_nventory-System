@@ -1,8 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import Modal from '../Modal'
-import { tasksApi, taskListsApi, projectsApi } from '../../api'
-import { useAuth } from '../../context/AuthContext'
+import { tasksApi, projectsApi } from '../../api'
 import toast from 'react-hot-toast'
 import { PRIORITY_CONFIG, RECURRENCE_CONFIG } from './taskConfig'
 import DescriptionEditor from './DescriptionEditor'
@@ -10,12 +9,11 @@ import AssigneeMultiSelect from './AssigneeMultiSelect'
 
 const EMPTY_FORM = {
   title: '', description: '', priority: 'MEDIUM', dueDate: '', assigneeIds: [],
-  listId: '', projectId: '', tags: '', reminderAt: '', recurrence: 'NONE',
+  projectId: '', tags: '', reminderAt: '', recurrence: 'NONE',
 }
 
 export default function CreateTaskModal({ open, onClose, userOptions, defaultView, divisi, projectId }) {
   const qc = useQueryClient()
-  const { user } = useAuth()
   // Dibuat dari dalam workspace sebuah project → langsung masuk project itu.
   const [form, setForm] = useState({ ...EMPTY_FORM, projectId: projectId || '' })
   const [syncedProjectId, setSyncedProjectId] = useState(projectId || '')
@@ -30,22 +28,11 @@ export default function CreateTaskModal({ open, onClose, userOptions, defaultVie
     enabled: open,
   })
 
-  // Task lands in the folder it's created from; outside a folder it falls
-  // back to the creator's own divisi (mirrors the server-side default).
-  const effectiveDivisi = divisi || user?.divisi || null
-
-  const { data: lists } = useQuery({
-    queryKey: ['task-lists', effectiveDivisi],
-    queryFn: () => taskListsApi.list({ divisi: effectiveDivisi }),
-    enabled: open && !!effectiveDivisi,
-  })
-
   const create = useMutation({
     mutationFn: (d) => tasksApi.create({
       ...d,
       dueDate: d.dueDate || null,
       assigneeIds: d.assigneeIds,
-      listId: d.listId || null,
       projectId: d.projectId || null,
       divisi: divisi || undefined,
       tags: d.tags ? d.tags.split(',').map(t => t.trim()).filter(Boolean) : [],
@@ -89,22 +76,13 @@ export default function CreateTaskModal({ open, onClose, userOptions, defaultVie
             <label className="label">Assignee</label>
             <AssigneeMultiSelect value={form.assigneeIds} onChange={ids => setForm(f => ({ ...f, assigneeIds: ids }))} options={userOptions} />
           </div>
-          {effectiveDivisi && (
-            <div>
-              <label className="label">List</label>
-              <select className="select" value={form.listId} onChange={e => setForm(f => ({ ...f, listId: e.target.value }))}>
-                <option value="">Tanpa list</option>
-                {(lists ?? []).map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
-              </select>
-            </div>
-          )}
-        </div>
-        <div>
-          <label className="label">Project</label>
-          <select className="select" value={form.projectId} onChange={e => setForm(f => ({ ...f, projectId: e.target.value }))}>
-            <option value="">Tanpa project</option>
-            {(projects ?? []).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-          </select>
+          <div>
+            <label className="label">Project</label>
+            <select className="select" value={form.projectId} onChange={e => setForm(f => ({ ...f, projectId: e.target.value }))}>
+              <option value="">Tanpa project</option>
+              {(projects ?? []).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          </div>
         </div>
         <div>
           <label className="label">Tags</label>

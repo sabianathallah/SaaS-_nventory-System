@@ -100,12 +100,12 @@ export default function TaskDashboard() {
             <MiniBarChart title="Berdasarkan Priority" data={stats.byPriority} colors={PRIORITY_COLORS} labels={PRIORITY_LABELS} />
           </div>
 
-          {stats.byList?.length > 0 && (
+          {stats.byProject?.length > 0 && (
             <div className="card px-5 py-4">
-              <p className="text-sm font-bold text-slate-700 mb-3">Berdasarkan List</p>
+              <p className="text-sm font-bold text-slate-700 mb-3">Berdasarkan Project</p>
               <div className="space-y-2.5">
-                {stats.byList.map((l) => {
-                  const max = Math.max(...stats.byList.map((x) => x.count), 1)
+                {stats.byProject.map((l) => {
+                  const max = Math.max(...stats.byProject.map((x) => x.count), 1)
                   const pct = Math.round((l.count / max) * 100)
                   return (
                     <div key={l.id}>

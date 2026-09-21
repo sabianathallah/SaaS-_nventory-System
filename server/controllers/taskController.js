@@ -1,5 +1,5 @@
 'use strict';
-const { Task, TaskComment, TaskAttachment, TaskList, TaskAssignee, Project, Notification, User, sequelize } = require('../models');
+const { Task, TaskComment, TaskAttachment, TaskAssignee, Project, Notification, User, sequelize } = require('../models');
 const { Op } = require('sequelize');
 const { companyFilter, companyId } = require('../helpers/tenancy');
 const { paginate, buildFilter, paginatedResponse } = require('../helpers/queryHelper');
@@ -24,7 +24,6 @@ const TASK_INCLUDE = [
         through: { attributes: ['assignmentStatus', 'assignmentNote'] },
     },
     { model: User, as: 'creator', attributes: USER_ATTRS },
-    { model: TaskList, as: 'list', attributes: ['id', 'name', 'color', 'icon'] },
     { model: Project, as: 'project', attributes: ['id', 'name', 'color', 'icon', 'status'] },
     { model: TaskAttachment, as: 'attachments', include: [{ model: User, as: 'user', attributes: USER_ATTRS }] },
     // Only ever populated for sub-tasks — lets flat listings (like My Day,
@@ -135,7 +134,7 @@ class TaskController {
     static async list(req, res, next) {
         try {
             const { page, limit, offset } = paginate(req.query);
-            const filter = buildFilter(req.query, { status: 'exact', priority: 'exact', listId: 'exact', divisi: 'exact', projectId: 'exact' });
+            const filter = buildFilter(req.query, { status: 'exact', priority: 'exact', divisi: 'exact', projectId: 'exact' });
 
             // Collected separately (rather than spread alongside `filter`) because
             // several of these conditions share the Op.or/Op.and symbol keys —
@@ -263,7 +262,7 @@ class TaskController {
 
     static async create(req, res, next) {
         try {
-            const { title, description, status, priority, dueDate, assigneeIds, isImportant, myDayDate, parentTaskId, listId, projectId, tags, reminderAt, recurrence, divisi } = req.body;
+            const { title, description, status, priority, dueDate, assigneeIds, isImportant, myDayDate, parentTaskId, projectId, tags, reminderAt, recurrence, divisi } = req.body;
             if (!title) throw { name: 'BadRequest', message: 'title wajib diisi' };
 
             // Sub-tasks inherit the parent's companyId server-side — never trust
@@ -316,7 +315,6 @@ class TaskController {
                 isImportant: !!isImportant,
                 myDayDate: myDayDate !== undefined && myDayDate !== null && myDayDate !== '' ? myDayDate : defaultMyDayDate,
                 parentTaskId: parentTaskId || null,
-                listId: listId || null,
                 projectId: resolvedProjectId,
                 tags: Array.isArray(tags) ? tags : [],
                 reminderAt: reminderAt || null,
@@ -350,7 +348,7 @@ class TaskController {
                 throw { name: 'Forbidden', message: 'Anda tidak punya akses untuk mengubah task ini' };
             }
 
-            const { title, description, status, priority, dueDate, assigneeIds, isImportant, myDayDate, parentTaskId, listId, projectId, tags, reminderAt, recurrence } = req.body;
+            const { title, description, status, priority, dueDate, assigneeIds, isImportant, myDayDate, parentTaskId, projectId, tags, reminderAt, recurrence } = req.body;
             const isCompletingNow = status === 'DONE' && task.status !== 'DONE';
             // Reopening a previously-done task (e.g. undo from the Dashboard
             // checklist) clears completedAt so it drops back out of the
@@ -398,7 +396,6 @@ class TaskController {
                 isImportant: isImportant === undefined ? task.isImportant : !!isImportant,
                 myDayDate: resolvedMyDayDate,
                 parentTaskId: parentTaskId === undefined ? task.parentTaskId : (parentTaskId || null),
-                listId: listId === undefined ? task.listId : (listId || null),
                 projectId: projectId === undefined ? task.projectId : (projectId || null),
                 tags: tags === undefined ? task.tags : (Array.isArray(tags) ? tags : []),
                 reminderAt: reminderAt === undefined ? task.reminderAt : (reminderAt || null),
@@ -447,7 +444,6 @@ class TaskController {
                     createdBy: task.createdBy,
                     companyId: task.companyId,
                     divisi: task.divisi,
-                    listId: task.listId,
                     projectId: task.projectId,
                     tags: task.tags,
                     recurrence: task.recurrence,
@@ -484,7 +480,6 @@ class TaskController {
                         createdBy: sub.createdBy,
                         companyId: sub.companyId,
                         divisi: sub.divisi,
-                        listId: sub.listId,
                         projectId: sub.projectId,
                         tags: sub.tags,
                         recurrence: 'NONE',
@@ -617,7 +612,7 @@ class TaskController {
             const today = new Date().toISOString().slice(0, 10);
             const weekAhead = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
 
-            const [statusRows, priorityRows, overdue, dueSoon, total, done, pendingAssignments, listRows, taskLists] = await Promise.all([
+            const [statusRows, priorityRows, overdue, dueSoon, total, done, pendingAssignments, projectRows, projects] = await Promise.all([
                 Task.count({ where: baseWhere, group: ['status'] }),
                 Task.count({ where: baseWhere, group: ['priority'] }),
                 Task.count({ where: { ...baseWhere, status: { [Op.ne]: 'DONE' }, dueDate: { [Op.lt]: today } } }),
@@ -625,12 +620,12 @@ class TaskController {
                 Task.count({ where: baseWhere }),
                 Task.count({ where: { ...baseWhere, status: 'DONE' } }),
                 TaskAssignee.count({ where: { userId: req.user.id, assignmentStatus: 'PENDING' } }),
-                Task.count({ where: baseWhere, group: ['listId'] }),
-                TaskList.findAll({ where: { userId: req.user.id }, attributes: ['id', 'name', 'color'] }),
+                Task.count({ where: baseWhere, group: ['projectId'] }),
+                Project.findAll({ where: companyFilter(req), attributes: ['id', 'name', 'color'] }),
             ]);
 
             const toMap = (rows, key) => Object.fromEntries(rows.map(r => [r[key], r.count]));
-            const byListCounts = toMap(listRows, 'listId');
+            const byProjectCounts = toMap(projectRows, 'projectId');
 
             res.json({
                 byStatus: { TODO: 0, IN_PROGRESS: 0, DONE: 0, ...toMap(statusRows, 'status') },
@@ -640,7 +635,11 @@ class TaskController {
                 completionRate: total > 0 ? Math.round((done / total) * 100) : 0,
                 pendingAssignments,
                 total,
-                byList: taskLists.map(l => ({ id: l.id, name: l.name, color: l.color, count: byListCounts[l.id] ?? 0 })),
+                // Project tanpa task sama sekali tidak ikut ditampilkan —
+                // panel ini soal ke mana beban kerja menumpuk, bukan katalog project.
+                byProject: projects
+                    .map(p => ({ id: p.id, name: p.name, color: p.color, count: byProjectCounts[p.id] ?? 0 }))
+                    .filter(p => p.count > 0),
             });
         } catch (err) { next(err); }
     }

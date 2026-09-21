@@ -1,8 +1,7 @@
 import { useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
-import { tasksApi, taskListsApi, projectsApi, usersApi } from '../api'
-import { useAuth } from '../context/AuthContext'
+import { tasksApi, projectsApi, usersApi } from '../api'
 import PageHeader from '../components/PageHeader'
 import SearchBar from '../components/SearchBar'
 import toast from 'react-hot-toast'
@@ -28,7 +27,6 @@ const VALID_VIEW_IDS = new Set([...SIDEBAR_VIEWS, ALL_TASKS_VIEW, FOLDERS_VIEW, 
 
 export default function Tasks() {
   const qc = useQueryClient()
-  const { user, hasPermission, isSuperAdmin, isAdmin } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
 
   // Landing view saat modul dibuka: grid folder per divisi (ala Notion) —
@@ -61,15 +59,9 @@ export default function Tasks() {
     setSidebarView(viewParam)
   }
 
-  // Folder workspaces are encoded the same way Lists used to be (`list:<id>`)
-  // — `division:<name>` for a divisi's full task set, `divlist:<name>:<id>`
-  // when narrowed to one of that divisi's Lists — so there's still exactly
-  // one "active nav item" driving everything.
-  const isDivisionRoot = sidebarView.startsWith('division:')
-  const isDivisionList = sidebarView.startsWith('divlist:')
-  const activeDivisi = isDivisionRoot ? sidebarView.slice('division:'.length)
-    : isDivisionList ? sidebarView.split(':')[1] : null
-  const activeListId = isDivisionList ? sidebarView.split(':')[2] : null
+  // Satu "active nav item" mengendalikan semuanya: `division:<name>` untuk
+  // workspace folder divisi, `project:<id>` untuk workspace project.
+  const activeDivisi = sidebarView.startsWith('division:') ? sidebarView.slice('division:'.length) : null
 
   // Workspace satu project (`project:<id>`) — sejajar dengan folder divisi,
   // bedanya project lintas divisi jadi tidak difilter per divisi.
@@ -77,8 +69,6 @@ export default function Tasks() {
 
   const queryParams = activeProjectId
     ? { projectId: activeProjectId, sortBy, limit: 200 }
-    : activeListId
-    ? { listId: activeListId, sortBy, limit: 200 }
     : activeDivisi
     ? { divisi: activeDivisi, sortBy, limit: 200 }
     : { view: sidebarView, sortBy, limit: 200 }
@@ -117,21 +107,11 @@ export default function Tasks() {
   })
   const userOptions = usersRes?.data ?? []
 
-  const { data: listsRes } = useQuery({
-    queryKey: ['task-lists', activeDivisi],
-    queryFn: () => taskListsApi.list({ divisi: activeDivisi }),
-    enabled: !!activeDivisi,
-  })
-  const activeList = activeListId ? (listsRes ?? []).find(l => String(l.id) === activeListId) : null
-
   const { data: projectsRes } = useQuery({
     queryKey: ['projects'],
     queryFn: () => projectsApi.list(),
   })
   const activeProject = activeProjectId ? (projectsRes ?? []).find(p => String(p.id) === activeProjectId) : null
-  const canManageActiveDivisi = !!activeDivisi && (
-    isSuperAdmin || isAdmin || hasPermission('tasks.manage') || hasPermission('tasks.edit') || user?.divisi === activeDivisi || user?.divisis?.includes(activeDivisi)
-  )
 
   const selectedTask = tasks.find(t => t.id === selectedId) || null
 
@@ -201,13 +181,13 @@ export default function Tasks() {
       t.dueDate || '—',
       t.creator?.name || '—',
     ])
-    const viewLabel = activeProject?.name ?? activeList?.name ?? activeDivisi ?? VIEW_LABELS[sidebarView] ?? sidebarView
+    const viewLabel = activeProject?.name ?? activeDivisi ?? VIEW_LABELS[sidebarView] ?? sidebarView
     exportExcel(`tasks-${viewLabel}-${new Date().toISOString().slice(0, 10)}`, {
       headers, rows, sheetName: 'Tasks',
     })
   }
 
-  const viewLabel = activeProject?.name ?? activeList?.name ?? activeDivisi ?? VIEW_LABELS[sidebarView] ?? ''
+  const viewLabel = activeProject?.name ?? activeDivisi ?? VIEW_LABELS[sidebarView] ?? ''
 
   return (
     <div className="px-6 py-6">
@@ -265,11 +245,7 @@ export default function Tasks() {
           {activeDivisi && (
             <DivisionWorkspaceBar
               divisi={activeDivisi}
-              activeListId={activeListId}
-              canManage={canManageActiveDivisi}
               onBack={() => { setSidebarView('folders'); setSelectedId(null) }}
-              onSelectRoot={() => { setSidebarView(`division:${activeDivisi}`); setSelectedId(null) }}
-              onSelectList={(listId) => { setSidebarView(`divlist:${activeDivisi}:${listId}`); setSelectedId(null) }}
             />
           )}
           <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/50 flex items-center gap-3">

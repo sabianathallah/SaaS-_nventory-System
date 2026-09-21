@@ -48,7 +48,6 @@ const requestsRouter           = require('./requests');
 const requestTypesRouter       = require('./request_types');
 const hrisRouter                = require('./hris');
 const taskRouter                = require('./task');
-const taskListRouter             = require('./task-list');
 const projectRouter              = require('./project');
 const notificationRouter        = require('./notification');
 const { Role, RolePermission } = require('../models');
@@ -121,7 +120,6 @@ router.use('/requests',      requestsRouter);
 router.use('/request-types', requestTypesRouter);
 router.use('/hris',          hrisRouter);
 router.use('/tasks',         taskRouter);
-router.use('/task-lists',    taskListRouter);
 router.use('/projects',      projectRouter);
 router.use('/notifications', notificationRouter);
 

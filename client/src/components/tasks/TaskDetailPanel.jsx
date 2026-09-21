@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { tasksApi, taskListsApi, projectsApi } from '../../api'
+import { tasksApi, projectsApi } from '../../api'
 import { useAuth } from '../../context/AuthContext'
 import toast from 'react-hot-toast'
 import { X, Send, Star, Sun, Trash2, ChevronLeft } from 'lucide-react'
@@ -62,7 +62,6 @@ export default function TaskDetailPanel({ task: rootTask, userOptions, onClose }
       priority: task.priority,
       dueDate: task.dueDate || '',
       assigneeIds: (task.assignees ?? []).map(a => a.id),
-      listId: task.listId || '',
       projectId: task.projectId || '',
       tags: (task.tags ?? []).join(', '),
       reminderAt: task.reminderAt ? task.reminderAt.slice(0, 16) : '',
@@ -71,12 +70,6 @@ export default function TaskDetailPanel({ task: rootTask, userOptions, onClose }
     setTab('details')
     setRejectNote(null)
   }
-
-  const { data: lists } = useQuery({
-    queryKey: ['task-lists', task?.divisi],
-    queryFn: () => taskListsApi.list({ divisi: task.divisi }),
-    enabled: !!task?.divisi,
-  })
 
   // Project bersifat lintas divisi, jadi daftarnya tidak di-scope ke divisi
   // task ini — task boleh pindah ke project divisi mana pun.
@@ -352,13 +345,6 @@ export default function TaskDetailPanel({ task: rootTask, userOptions, onClose }
             </div>
 
             <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="label">List</label>
-                <select className="select" value={form.listId} onChange={e => { field({ listId: e.target.value }); commitField('listId', e.target.value) }}>
-                  <option value="">Tanpa list</option>
-                  {(lists ?? []).map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
-                </select>
-              </div>
               <div>
                 <label className="label">Project</label>
                 <select className="select" value={form.projectId} onChange={e => { field({ projectId: e.target.value }); commitField('projectId', e.target.value) }}>

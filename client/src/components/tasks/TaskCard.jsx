@@ -44,7 +44,6 @@ export default function TaskCard({ task, onOpen, onToggleDone, dragHandleProps, 
 
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
-          {task.list && <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: task.list.color }} title={task.list.name} />}
           <p className={`text-sm font-semibold truncate ${done ? 'text-slate-400 line-through' : 'text-slate-800'}`}>{task.title}</p>
         </div>
         {/* Only set for sub-tasks — shows up when a flat list (My Day) surfaces
