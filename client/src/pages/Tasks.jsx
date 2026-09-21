@@ -178,6 +178,18 @@ export default function Tasks() {
     }
   }
 
+  // Drag kartu antar grup project di List View — optimistic patch ikut membawa
+  // objek `project`-nya (bukan cuma projectId) supaya chip di kartu langsung
+  // berubah, bukan baru ikut setelah refetch.
+  function moveToProject(task, projectId) {
+    const target = projectId ? (projectsRes ?? []).find(p => String(p.id) === String(projectId)) : null
+    quickPatch.mutate({
+      id: task.id,
+      patch: { projectId: projectId ?? null, project: target ? { id: target.id, name: target.name, color: target.color } : null },
+    })
+    toast.success(target ? `Dipindah ke project "${target.name}"` : 'Dilepas dari project')
+  }
+
   function handleExport() {
     const headers = ['Judul', 'Project', 'Status', 'Priority', 'Assignee', 'Due Date', 'Dibuat oleh']
     const rows = filteredTasks.map(t => [
@@ -336,7 +348,14 @@ export default function Tasks() {
             {isLoading ? (
               <p className="text-sm text-slate-400 text-center py-16">Memuat…</p>
             ) : viewMode === 'list' ? (
-              <ListView tasks={filteredTasks} view={sidebarView} groupBy={groupBy} onOpen={(t) => setSelectedId(t.id)} onToggleDone={toggleDone} />
+              <ListView
+                tasks={filteredTasks}
+                view={sidebarView}
+                groupBy={groupBy}
+                onOpen={(t) => setSelectedId(t.id)}
+                onToggleDone={toggleDone}
+                onProjectChange={moveToProject}
+              />
             ) : viewMode === 'board' ? (
               <BoardView
                 tasks={filteredTasks}

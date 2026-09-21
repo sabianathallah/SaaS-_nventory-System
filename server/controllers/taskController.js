@@ -216,7 +216,12 @@ class TaskController {
             // deleted or actually hidden: the dedicated Completed tab (and the
             // Home page's month/week-grouped Completed History) has no such
             // cutoff and still shows the full history, organized by month.
-            const isArchiveExempt = view === 'completed' || !!req.query.parentTaskId || !!filter.status;
+            // Sebuah project berumur panjang (bisa jalan berbulan-bulan), jadi
+            // aturan arsip ini tidak berlaku di dalamnya: kalau berlaku,
+            // workspace-nya cuma menampilkan sebagian task sementara progress
+            // bar di header menghitung semuanya — angka dan isi list jadi
+            // tidak cocok satu sama lain.
+            const isArchiveExempt = view === 'completed' || !!req.query.parentTaskId || !!filter.status || !!req.query.projectId;
             if (!isArchiveExempt) {
                 const startOfMonth = new Date();
                 startOfMonth.setDate(1);

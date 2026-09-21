@@ -77,6 +77,21 @@ describe('Projects CRUD + task grouping', () => {
     expect(Number(res.body.doneCount)).toBe(1);
   });
 
+  test('GET /tasks?projectId — arsip bulanan tidak berlaku di dalam project', async () => {
+    // Task DONE dari bulan lalu disembunyikan di view biasa, tapi project
+    // berumur panjang — kalau ikut disembunyikan, isi list tidak akan cocok
+    // dengan progress bar yang menghitung semua task.
+    const lastMonth = new Date();
+    lastMonth.setMonth(lastMonth.getMonth() - 2);
+    await Task.update({ completedAt: lastMonth }, { where: { id: taskId } });
+
+    const inProject = await request(app).get(`/tasks?projectId=${projectId}`).set(auth());
+    expect(inProject.body.data.some(t => t.id === taskId)).toBe(true);
+
+    const allView = await request(app).get('/tasks?view=all').set(auth());
+    expect(allView.body.data.some(t => t.id === taskId)).toBe(false);
+  });
+
   test('PUT /projects/:id — updates status', async () => {
     const res = await request(app)
       .put(`/projects/${projectId}`)
