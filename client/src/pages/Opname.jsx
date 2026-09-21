@@ -74,7 +74,10 @@ export default function Opname() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['opname'] })
       qc.invalidateQueries({ queryKey: ['opname-count'] })
-      qc.invalidateQueries({ queryKey: ['stocks'] })
+      // Stok yang ditampilkan di app tidak pernah memakai key ['stocks'] —
+      // yang nyata adalah ['stocks-opname'] dan ['sku-warehouse-stocks'].
+      qc.invalidateQueries({ queryKey: ['stocks-opname'] })
+      qc.invalidateQueries({ queryKey: ['sku-warehouse-stocks'] })
       qc.invalidateQueries({ queryKey: ['movements'] })
       toast.success('Session ditutup — stok disesuaikan')
       setModal(null)

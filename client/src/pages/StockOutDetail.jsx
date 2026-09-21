@@ -1,7 +1,7 @@
 import { useState, useMemo, useRef, useEffect } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { stockOutApi, stockOutDraftApi, warehousesApi, stockInApi, productsApi, productSkusApi, stocksApi, skuWarehouseStocksApi, stockOutPurposesApi, channelsApi, vendorsApi } from '../api'
+import { stockOutApi, stockOutDraftApi, warehousesApi, stockInApi, productsApi, productSkusApi, skuWarehouseStocksApi, stockOutPurposesApi, channelsApi, vendorsApi } from '../api'
 import { useAuth } from '../context/AuthContext'
 import QRScanner from '../components/QRScanner'
 import SearchableSelect from '../components/SearchableSelect'
@@ -541,7 +541,9 @@ export default function StockOutDetail() {
       qc.removeQueries({ queryKey: ['stock-out-draft'] })
       qc.invalidateQueries({ queryKey: ['stock-out-draft-current'] })
       qc.invalidateQueries({ queryKey: ['stock-out'] })
-      qc.invalidateQueries({ queryKey: ['stocks'] })
+      qc.invalidateQueries({ queryKey: ['stocks-opname'] })
+      qc.invalidateQueries({ queryKey: ['sku-warehouse-stocks'] })
+      qc.invalidateQueries({ queryKey: ['sku-channel-stocks'] })
       qc.invalidateQueries({ queryKey: ['manual-shipments'] })
       if (data.manualShipmentId) {
         toast.success('Stock OUT selesai — draft Shipping Manual otomatis dibuat')

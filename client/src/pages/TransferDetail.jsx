@@ -104,7 +104,8 @@ export default function TransferDetail() {
     onSuccess: () => {
       toast.success('Transfer dihapus, stok dikembalikan')
       qc.invalidateQueries({ queryKey: ['transfers'] })
-      qc.invalidateQueries({ queryKey: ['stocks'] })
+      qc.invalidateQueries({ queryKey: ['stocks-opname'] })
+      qc.invalidateQueries({ queryKey: ['sku-warehouse-stocks'] })
       qc.invalidateQueries({ queryKey: ['movements'] })
       navigate('/transfers')
     },
