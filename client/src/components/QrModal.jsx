@@ -19,8 +19,15 @@ function calcLayout(w, h) {
   const pad   = Math.max(1, +(Math.min(w, h) * 0.055).toFixed(1))  // mm
   const textH = Math.max(4, +(h * 0.30).toFixed(1))                 // mm for text below QR
   const qrMm  = Math.max(6, +(Math.min(w - pad * 2, h - pad * 2 - textH)).toFixed(1))
-  const namePt = Math.max(4,   +(h * 0.135).toFixed(1))
-  const codePt = Math.max(3.5, +(h * 0.110).toFixed(1))
+  let namePt = Math.max(4,   +(h * 0.135).toFixed(1))
+  let codePt = Math.max(3.5, +(h * 0.110).toFixed(1))
+
+  // 40×30 punya sisa ruang teks yang lega — perbesar font tanpa mengecilkan QR
+  if (w === 40 && h === 30) {
+    namePt = 6.5
+    codePt = 4.5
+  }
+
   return { pad, qrMm, namePt, codePt }
 }
 
