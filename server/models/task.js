@@ -51,6 +51,12 @@ module.exports = (sequelize, DataTypes) => {
         onDelete: 'SET NULL',
         onUpdate: 'CASCADE',
       });
+      Task.belongsTo(models.Project, {
+        foreignKey: { name: 'projectId', allowNull: true },
+        as: 'project',
+        onDelete: 'SET NULL',
+        onUpdate: 'CASCADE',
+      });
     }
   }
   Task.init({
@@ -74,6 +80,7 @@ module.exports = (sequelize, DataTypes) => {
     parentTaskId: { type: DataTypes.INTEGER, allowNull: true },
     divisi:         { type: DataTypes.STRING(100), allowNull: true },
     listId:         { type: DataTypes.INTEGER, allowNull: true },
+    projectId:      { type: DataTypes.INTEGER, allowNull: true },
     tags:           { type: DataTypes.JSON, allowNull: false, defaultValue: [] },
     reminderAt:     { type: DataTypes.DATE, allowNull: true },
     reminderSentAt: { type: DataTypes.DATE, allowNull: true },

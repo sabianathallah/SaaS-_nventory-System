@@ -28,7 +28,32 @@ export default function ListView({ tasks, view, groupBy = 'status', onOpen, onTo
     )
   }
 
-  const groups = groupBy === 'recurrence'
+  // Grouping by project keys off the project actually attached to each task
+  // (not a fetched project list) so a view can only ever show the projects
+  // it really contains — tasks without one collect in "Tanpa project", always
+  // last so the named projects read first.
+  const projectGroups = () => {
+    const byId = new Map()
+    for (const t of tasks) {
+      const key = t.project?.id ?? 'none'
+      if (!byId.has(key)) {
+        byId.set(key, {
+          key,
+          label: t.project?.name ?? 'Tanpa project',
+          color: t.project?.color ?? null,
+          tasks: [],
+        })
+      }
+      byId.get(key).tasks.push(t)
+    }
+    const groups = [...byId.values()]
+    groups.sort((a, b) => (a.key === 'none') - (b.key === 'none') || a.label.localeCompare(b.label))
+    return groups
+  }
+
+  const groups = groupBy === 'project'
+    ? projectGroups()
+    : groupBy === 'recurrence'
     ? RECURRENCE_ORDER.map(key => ({
         key,
         label: RECURRENCE_CONFIG[key].label,
@@ -46,10 +71,13 @@ export default function ListView({ tasks, view, groupBy = 'status', onOpen, onTo
 
   return (
     <div className="space-y-6">
-      {groups.map(({ key, label, dot, tasks: groupTasks }) => (
+      {groups.map(({ key, label, dot, color, tasks: groupTasks }) => (
         <div key={key}>
           <div className="flex items-center gap-2 mb-2">
-            <span className={`w-1.5 h-1.5 rounded-full ${dot}`} />
+            <span
+              className={`w-1.5 h-1.5 rounded-full ${color ? '' : dot ?? 'bg-slate-300'}`}
+              style={color ? { background: color } : undefined}
+            />
             <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">{label}</p>
             <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-1.5 rounded-full">{groupTasks.length}</span>
           </div>

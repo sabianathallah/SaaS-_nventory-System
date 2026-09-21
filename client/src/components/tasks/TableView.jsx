@@ -5,6 +5,7 @@ import SubtaskTree from './SubtaskTree'
 
 const COLUMNS = [
   { key: 'title',    label: 'Judul' },
+  { key: 'project',  label: 'Project' },
   { key: 'status',   label: 'Status' },
   { key: 'priority', label: 'Priority' },
   { key: 'assignee', label: 'Assignee' },
@@ -69,6 +70,17 @@ export default function TableView({ tasks, sortBy, onSortChange, onOpen }) {
                   </td>
                   <td className="px-3 py-2">
                     <span className={`font-medium ${done ? 'text-slate-400 line-through' : 'text-slate-800'}`}>{task.title}</span>
+                  </td>
+                  <td className="px-3 py-2">
+                    {task.project ? (
+                      <span
+                        className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full"
+                        style={{ background: `${task.project.color}1a`, color: task.project.color }}
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full" style={{ background: task.project.color }} />
+                        {task.project.name}
+                      </span>
+                    ) : <span className="text-slate-300">—</span>}
                   </td>
                   <td className="px-3 py-2">
                     <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${STATUS_CONFIG[task.status].cls}`}>{STATUS_CONFIG[task.status].label}</span>

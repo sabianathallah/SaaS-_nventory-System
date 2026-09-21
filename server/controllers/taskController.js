@@ -1,5 +1,5 @@
 'use strict';
-const { Task, TaskComment, TaskAttachment, TaskList, TaskAssignee, Notification, User, sequelize } = require('../models');
+const { Task, TaskComment, TaskAttachment, TaskList, TaskAssignee, Project, Notification, User, sequelize } = require('../models');
 const { Op } = require('sequelize');
 const { companyFilter, companyId } = require('../helpers/tenancy');
 const { paginate, buildFilter, paginatedResponse } = require('../helpers/queryHelper');
@@ -25,6 +25,7 @@ const TASK_INCLUDE = [
     },
     { model: User, as: 'creator', attributes: USER_ATTRS },
     { model: TaskList, as: 'list', attributes: ['id', 'name', 'color', 'icon'] },
+    { model: Project, as: 'project', attributes: ['id', 'name', 'color', 'icon', 'status'] },
     { model: TaskAttachment, as: 'attachments', include: [{ model: User, as: 'user', attributes: USER_ATTRS }] },
     // Only ever populated for sub-tasks — lets flat listings (like My Day,
     // which surfaces sub-tasks alongside top-level ones) show "Sub-task dari: …".
@@ -134,7 +135,7 @@ class TaskController {
     static async list(req, res, next) {
         try {
             const { page, limit, offset } = paginate(req.query);
-            const filter = buildFilter(req.query, { status: 'exact', priority: 'exact', listId: 'exact', divisi: 'exact' });
+            const filter = buildFilter(req.query, { status: 'exact', priority: 'exact', listId: 'exact', divisi: 'exact', projectId: 'exact' });
 
             // Collected separately (rather than spread alongside `filter`) because
             // several of these conditions share the Op.or/Op.and symbol keys —
@@ -257,16 +258,22 @@ class TaskController {
 
     static async create(req, res, next) {
         try {
-            const { title, description, status, priority, dueDate, assigneeIds, isImportant, myDayDate, parentTaskId, listId, tags, reminderAt, recurrence, divisi } = req.body;
+            const { title, description, status, priority, dueDate, assigneeIds, isImportant, myDayDate, parentTaskId, listId, projectId, tags, reminderAt, recurrence, divisi } = req.body;
             if (!title) throw { name: 'BadRequest', message: 'title wajib diisi' };
 
             // Sub-tasks inherit the parent's companyId server-side — never trust
             // a client-supplied companyId for them.
             let resolvedCompanyId = companyId(req) ?? req.user.companyId;
+            // A sub-task is a step inside its parent's work, so it also lands in
+            // the parent's project unless the caller names a different one —
+            // otherwise SubtaskTree (which only sends parentTaskId) would leave
+            // every checklist step unassigned to any project.
+            let resolvedProjectId = projectId || null;
             if (parentTaskId) {
                 const parent = await Task.findOne({ where: { id: parentTaskId, ...companyFilter(req) } });
                 if (!parent) throw { name: 'NotFound', message: 'Parent task tidak ditemukan' };
                 resolvedCompanyId = parent.companyId;
+                if (projectId === undefined) resolvedProjectId = parent.projectId;
             }
 
             // A task belongs to its creator's divisi by default. Creating it
@@ -305,6 +312,7 @@ class TaskController {
                 myDayDate: myDayDate !== undefined && myDayDate !== null && myDayDate !== '' ? myDayDate : defaultMyDayDate,
                 parentTaskId: parentTaskId || null,
                 listId: listId || null,
+                projectId: resolvedProjectId,
                 tags: Array.isArray(tags) ? tags : [],
                 reminderAt: reminderAt || null,
                 recurrence: rec,
@@ -337,7 +345,7 @@ class TaskController {
                 throw { name: 'Forbidden', message: 'Anda tidak punya akses untuk mengubah task ini' };
             }
 
-            const { title, description, status, priority, dueDate, assigneeIds, isImportant, myDayDate, parentTaskId, listId, tags, reminderAt, recurrence } = req.body;
+            const { title, description, status, priority, dueDate, assigneeIds, isImportant, myDayDate, parentTaskId, listId, projectId, tags, reminderAt, recurrence } = req.body;
             const isCompletingNow = status === 'DONE' && task.status !== 'DONE';
             // Reopening a previously-done task (e.g. undo from the Dashboard
             // checklist) clears completedAt so it drops back out of the
@@ -386,6 +394,7 @@ class TaskController {
                 myDayDate: resolvedMyDayDate,
                 parentTaskId: parentTaskId === undefined ? task.parentTaskId : (parentTaskId || null),
                 listId: listId === undefined ? task.listId : (listId || null),
+                projectId: projectId === undefined ? task.projectId : (projectId || null),
                 tags: tags === undefined ? task.tags : (Array.isArray(tags) ? tags : []),
                 reminderAt: reminderAt === undefined ? task.reminderAt : (reminderAt || null),
                 recurrence: resolvedRecurrence,
@@ -434,6 +443,7 @@ class TaskController {
                     companyId: task.companyId,
                     divisi: task.divisi,
                     listId: task.listId,
+                    projectId: task.projectId,
                     tags: task.tags,
                     recurrence: task.recurrence,
                     parentTaskId: task.parentTaskId,
@@ -470,6 +480,7 @@ class TaskController {
                         companyId: sub.companyId,
                         divisi: sub.divisi,
                         listId: sub.listId,
+                        projectId: sub.projectId,
                         tags: sub.tags,
                         recurrence: 'NONE',
                         parentTaskId: nextTask.id,

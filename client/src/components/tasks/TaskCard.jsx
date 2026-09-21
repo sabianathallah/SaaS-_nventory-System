@@ -1,4 +1,4 @@
-import { MessageSquare, Calendar, Star, Check, ListTree, ChevronRight, CornerDownRight } from 'lucide-react'
+import { MessageSquare, Calendar, Star, Check, ListTree, ChevronRight, CornerDownRight, Boxes } from 'lucide-react'
 import { PRIORITY_CONFIG, ASSIGNMENT_STATUS_CONFIG, avatarColor, initials, fmtDue } from './taskConfig'
 
 export default function TaskCard({ task, onOpen, onToggleDone, dragHandleProps, dragging, expandable, expanded, onToggleExpand }) {
@@ -54,6 +54,18 @@ export default function TaskCard({ task, onOpen, onToggleDone, dragHandleProps, 
             <CornerDownRight size={10} className="flex-shrink-0" />
             Sub-task dari: <span className="text-slate-500 truncate">{task.parentTask.title}</span>
           </p>
+        )}
+        {/* Chip project — konteks "task ini bagian dari apa", sengaja di atas
+            baris tags supaya kebaca duluan sebelum metadata lain. */}
+        {task.project && (
+          <span
+            className="inline-flex items-center gap-1 mt-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full max-w-full"
+            style={{ background: `${task.project.color}1a`, color: task.project.color }}
+            title={`Project: ${task.project.name}`}
+          >
+            <Boxes size={9} className="flex-shrink-0" />
+            <span className="truncate">{task.project.name}</span>
+          </span>
         )}
         {Array.isArray(task.tags) && task.tags.length > 0 && (
           <div className="flex items-center gap-1 mt-1 flex-wrap">

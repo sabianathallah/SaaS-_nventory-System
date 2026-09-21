@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
-import { tasksApi, taskListsApi, usersApi } from '../api'
+import { tasksApi, taskListsApi, projectsApi, usersApi } from '../api'
 import { useAuth } from '../context/AuthContext'
 import PageHeader from '../components/PageHeader'
 import SearchBar from '../components/SearchBar'
@@ -11,6 +11,8 @@ import { Plus, LayoutList, Columns3, CalendarDays, Table2, FileSpreadsheet } fro
 import TasksSidebar from '../components/tasks/TasksSidebar'
 import DivisionFolders from '../components/tasks/DivisionFolders'
 import DivisionWorkspaceBar from '../components/tasks/DivisionWorkspaceBar'
+import ProjectsGrid from '../components/tasks/ProjectsGrid'
+import ProjectWorkspaceBar from '../components/tasks/ProjectWorkspaceBar'
 import ListView from '../components/tasks/ListView'
 import BoardView from '../components/tasks/BoardView'
 import CalendarView from '../components/tasks/CalendarView'
@@ -19,10 +21,10 @@ import TaskDashboard from '../components/tasks/TaskDashboard'
 import TaskAnalytics from '../components/tasks/TaskAnalytics'
 import TaskDetailPanel from '../components/tasks/TaskDetailPanel'
 import CreateTaskModal from '../components/tasks/CreateTaskModal'
-import { SIDEBAR_VIEWS, ALL_TASKS_VIEW, FOLDERS_VIEW, ANALYTICS_VIEW, STATUS_CONFIG, PRIORITY_CONFIG } from '../components/tasks/taskConfig'
+import { SIDEBAR_VIEWS, ALL_TASKS_VIEW, FOLDERS_VIEW, PROJECTS_VIEW, ANALYTICS_VIEW, STATUS_CONFIG, PRIORITY_CONFIG } from '../components/tasks/taskConfig'
 
-const VIEW_LABELS = Object.fromEntries([...SIDEBAR_VIEWS, ALL_TASKS_VIEW, FOLDERS_VIEW, ANALYTICS_VIEW].map(v => [v.id, v.label]))
-const VALID_VIEW_IDS = new Set([...SIDEBAR_VIEWS, ALL_TASKS_VIEW, FOLDERS_VIEW, ANALYTICS_VIEW].map(v => v.id))
+const VIEW_LABELS = Object.fromEntries([...SIDEBAR_VIEWS, ALL_TASKS_VIEW, FOLDERS_VIEW, PROJECTS_VIEW, ANALYTICS_VIEW].map(v => [v.id, v.label]))
+const VALID_VIEW_IDS = new Set([...SIDEBAR_VIEWS, ALL_TASKS_VIEW, FOLDERS_VIEW, PROJECTS_VIEW, ANALYTICS_VIEW].map(v => v.id))
 
 export default function Tasks() {
   const qc = useQueryClient()
@@ -69,7 +71,13 @@ export default function Tasks() {
     : isDivisionList ? sidebarView.split(':')[1] : null
   const activeListId = isDivisionList ? sidebarView.split(':')[2] : null
 
-  const queryParams = activeListId
+  // Workspace satu project (`project:<id>`) — sejajar dengan folder divisi,
+  // bedanya project lintas divisi jadi tidak difilter per divisi.
+  const activeProjectId = sidebarView.startsWith('project:') ? sidebarView.slice('project:'.length) : null
+
+  const queryParams = activeProjectId
+    ? { projectId: activeProjectId, sortBy, limit: 200 }
+    : activeListId
     ? { listId: activeListId, sortBy, limit: 200 }
     : activeDivisi
     ? { divisi: activeDivisi, sortBy, limit: 200 }
@@ -77,12 +85,13 @@ export default function Tasks() {
 
   const isDashboard = sidebarView === 'dashboard'
   const isFolders = sidebarView === 'folders'
+  const isProjects = sidebarView === 'projects'
   const isAnalytics = sidebarView === 'analytics'
 
   const { data, isLoading } = useQuery({
     queryKey: ['tasks', queryParams],
     queryFn: () => tasksApi.list(queryParams),
-    enabled: !isDashboard && !isFolders && !isAnalytics,
+    enabled: !isDashboard && !isFolders && !isProjects && !isAnalytics,
   })
   const tasks = data?.data ?? []
 
@@ -114,6 +123,12 @@ export default function Tasks() {
     enabled: !!activeDivisi,
   })
   const activeList = activeListId ? (listsRes ?? []).find(l => String(l.id) === activeListId) : null
+
+  const { data: projectsRes } = useQuery({
+    queryKey: ['projects'],
+    queryFn: () => projectsApi.list(),
+  })
+  const activeProject = activeProjectId ? (projectsRes ?? []).find(p => String(p.id) === activeProjectId) : null
   const canManageActiveDivisi = !!activeDivisi && (
     isSuperAdmin || isAdmin || hasPermission('tasks.manage') || hasPermission('tasks.edit') || user?.divisi === activeDivisi || user?.divisis?.includes(activeDivisi)
   )
@@ -164,36 +179,37 @@ export default function Tasks() {
   }
 
   function handleExport() {
-    const headers = ['Judul', 'Status', 'Priority', 'Assignee', 'Due Date', 'Dibuat oleh']
+    const headers = ['Judul', 'Project', 'Status', 'Priority', 'Assignee', 'Due Date', 'Dibuat oleh']
     const rows = filteredTasks.map(t => [
       t.title,
+      t.project?.name || '—',
       STATUS_CONFIG[t.status]?.label ?? t.status,
       PRIORITY_CONFIG[t.priority]?.label ?? t.priority,
       (t.assignees ?? []).map(a => a.name).join(', ') || '—',
       t.dueDate || '—',
       t.creator?.name || '—',
     ])
-    const viewLabel = activeList?.name ?? activeDivisi ?? VIEW_LABELS[sidebarView] ?? sidebarView
+    const viewLabel = activeProject?.name ?? activeList?.name ?? activeDivisi ?? VIEW_LABELS[sidebarView] ?? sidebarView
     exportExcel(`tasks-${viewLabel}-${new Date().toISOString().slice(0, 10)}`, {
       headers, rows, sheetName: 'Tasks',
     })
   }
 
-  const viewLabel = activeList?.name ?? activeDivisi ?? VIEW_LABELS[sidebarView] ?? ''
+  const viewLabel = activeProject?.name ?? activeList?.name ?? activeDivisi ?? VIEW_LABELS[sidebarView] ?? ''
 
   return (
     <div className="px-6 py-6">
       <PageHeader
         title="Tugas"
-        subtitle={isDashboard ? 'Ringkasan seluruh task' : isFolders ? 'Pilih folder divisi' : isAnalytics ? 'Performa staff & divisi' : `${filteredTasks.length} task — ${viewLabel}`}
+        subtitle={isDashboard ? 'Ringkasan seluruh task' : isFolders ? 'Pilih folder divisi' : isProjects ? 'Pilih project' : isAnalytics ? 'Performa staff & divisi' : `${filteredTasks.length} task — ${viewLabel}`}
         action={
           <div className="flex items-center gap-2">
-            {!isDashboard && !isFolders && !isAnalytics && (
+            {!isDashboard && !isFolders && !isProjects && !isAnalytics && (
               <button onClick={handleExport} className="btn-secondary" title="Export ke Excel">
                 <FileSpreadsheet size={14} />Export
               </button>
             )}
-            {!isFolders && !isAnalytics && (
+            {!isFolders && !isProjects && !isAnalytics && (
               <button onClick={() => setShowCreate(true)} className="btn-primary">
                 <Plus size={14} />Task Baru
               </button>
@@ -214,12 +230,26 @@ export default function Tasks() {
             <div className="flex-1 overflow-y-auto">
               <DivisionFolders onSelect={(name) => { setSidebarView(`division:${name}`); setSelectedId(null) }} />
             </div>
+          ) : isProjects ? (
+            <div className="flex-1 overflow-y-auto">
+              <ProjectsGrid
+                userOptions={userOptions}
+                onSelect={(id) => { setSidebarView(`project:${id}`); setSelectedId(null) }}
+              />
+            </div>
           ) : isAnalytics ? (
             <div className="flex-1 overflow-y-auto">
               <TaskAnalytics />
             </div>
           ) : (
           <>
+          {activeProjectId && (
+            <ProjectWorkspaceBar
+              projectId={activeProjectId}
+              userOptions={userOptions}
+              onBack={() => { setSidebarView('projects'); setSelectedId(null) }}
+            />
+          )}
           {activeDivisi && (
             <DivisionWorkspaceBar
               divisi={activeDivisi}
@@ -245,6 +275,12 @@ export default function Tasks() {
                   className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${groupBy === 'recurrence' ? 'nav-active' : 'text-slate-400 hover:text-slate-600'}`}
                 >
                   Pengulangan
+                </button>
+                <button
+                  onClick={() => setGroupBy('project')}
+                  className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${groupBy === 'project' ? 'nav-active' : 'text-slate-400 hover:text-slate-600'}`}
+                >
+                  Project
                 </button>
               </div>
             )}
@@ -343,6 +379,7 @@ export default function Tasks() {
         userOptions={userOptions}
         defaultView={sidebarView}
         divisi={activeDivisi}
+        projectId={activeProjectId}
       />
     </div>
   )

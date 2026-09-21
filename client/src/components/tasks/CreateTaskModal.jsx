@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import Modal from '../Modal'
-import { tasksApi, taskListsApi } from '../../api'
+import { tasksApi, taskListsApi, projectsApi } from '../../api'
 import { useAuth } from '../../context/AuthContext'
 import toast from 'react-hot-toast'
 import { PRIORITY_CONFIG, RECURRENCE_CONFIG } from './taskConfig'
@@ -10,13 +10,25 @@ import AssigneeMultiSelect from './AssigneeMultiSelect'
 
 const EMPTY_FORM = {
   title: '', description: '', priority: 'MEDIUM', dueDate: '', assigneeIds: [],
-  listId: '', tags: '', reminderAt: '', recurrence: 'NONE',
+  listId: '', projectId: '', tags: '', reminderAt: '', recurrence: 'NONE',
 }
 
-export default function CreateTaskModal({ open, onClose, userOptions, defaultView, divisi }) {
+export default function CreateTaskModal({ open, onClose, userOptions, defaultView, divisi, projectId }) {
   const qc = useQueryClient()
   const { user } = useAuth()
-  const [form, setForm] = useState(EMPTY_FORM)
+  // Dibuat dari dalam workspace sebuah project → langsung masuk project itu.
+  const [form, setForm] = useState({ ...EMPTY_FORM, projectId: projectId || '' })
+  const [syncedProjectId, setSyncedProjectId] = useState(projectId || '')
+  if ((projectId || '') !== syncedProjectId) {
+    setSyncedProjectId(projectId || '')
+    setForm(f => ({ ...f, projectId: projectId || '' }))
+  }
+
+  const { data: projects } = useQuery({
+    queryKey: ['projects'],
+    queryFn: () => projectsApi.list(),
+    enabled: open,
+  })
 
   // Task lands in the folder it's created from; outside a folder it falls
   // back to the creator's own divisi (mirrors the server-side default).
@@ -34,6 +46,7 @@ export default function CreateTaskModal({ open, onClose, userOptions, defaultVie
       dueDate: d.dueDate || null,
       assigneeIds: d.assigneeIds,
       listId: d.listId || null,
+      projectId: d.projectId || null,
       divisi: divisi || undefined,
       tags: d.tags ? d.tags.split(',').map(t => t.trim()).filter(Boolean) : [],
       reminderAt: d.reminderAt || null,
@@ -42,7 +55,7 @@ export default function CreateTaskModal({ open, onClose, userOptions, defaultVie
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['tasks'] })
       toast.success('Task dibuat')
-      setForm(EMPTY_FORM)
+      setForm({ ...EMPTY_FORM, projectId: projectId || '' })
       onClose()
     },
     onError: e => toast.error(e.response?.data?.message || 'Error'),
@@ -85,6 +98,13 @@ export default function CreateTaskModal({ open, onClose, userOptions, defaultVie
               </select>
             </div>
           )}
+        </div>
+        <div>
+          <label className="label">Project</label>
+          <select className="select" value={form.projectId} onChange={e => setForm(f => ({ ...f, projectId: e.target.value }))}>
+            <option value="">Tanpa project</option>
+            {(projects ?? []).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
         </div>
         <div>
           <label className="label">Tags</label>

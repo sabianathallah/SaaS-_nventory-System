@@ -1,5 +1,5 @@
 import { useAuth } from '../../context/AuthContext'
-import { SIDEBAR_VIEWS, ALL_TASKS_VIEW, FOLDERS_VIEW, ANALYTICS_VIEW } from './taskConfig'
+import { SIDEBAR_VIEWS, ALL_TASKS_VIEW, FOLDERS_VIEW, PROJECTS_VIEW, ANALYTICS_VIEW } from './taskConfig'
 
 export default function TasksSidebar({ active, onSelect }) {
   const { hasPermission, isSuperAdmin, isAdmin } = useAuth()
@@ -10,6 +10,9 @@ export default function TasksSidebar({ active, onSelect }) {
   // fixed cross-divisi views below — kept as its own row so it always reads
   // as the entry point, matching how it's the landing view on open.
   const isFolderContext = active === 'folders' || active.startsWith('division:') || active.startsWith('divlist:')
+  // "Projects" is the second browsing mode next to Folders — divisi answers
+  // "siapa yang punya task ini", project answers "task ini bagian dari apa".
+  const isProjectContext = active === 'projects' || active.startsWith('project:')
 
   return (
     <div className="w-56 flex-shrink-0 border-r border-slate-100 bg-offwhite/40 py-4 px-2.5 space-y-0.5 overflow-y-auto">
@@ -21,6 +24,16 @@ export default function TasksSidebar({ active, onSelect }) {
       >
         <FOLDERS_VIEW.icon size={14} className="flex-shrink-0" strokeWidth={isFolderContext ? 2.4 : 1.9} />
         <span className="truncate flex-1 text-left">{FOLDERS_VIEW.label}</span>
+      </button>
+
+      <button
+        onClick={() => onSelect('projects')}
+        className={`flex items-center gap-2.5 w-full px-2.5 py-2 rounded-lg text-sm transition-colors mb-2 ${
+          isProjectContext ? 'nav-active font-semibold shadow-sm' : 'text-slate-600 hover:bg-white hover:text-slate-900'
+        }`}
+      >
+        <PROJECTS_VIEW.icon size={14} className="flex-shrink-0" strokeWidth={isProjectContext ? 2.4 : 1.9} />
+        <span className="truncate flex-1 text-left">{PROJECTS_VIEW.label}</span>
       </button>
 
       <p className="px-2.5 pb-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Tampilan</p>

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { tasksApi, taskListsApi } from '../../api'
+import { tasksApi, taskListsApi, projectsApi } from '../../api'
 import { useAuth } from '../../context/AuthContext'
 import toast from 'react-hot-toast'
 import { X, Send, Star, Sun, Trash2, ChevronLeft } from 'lucide-react'
@@ -63,6 +63,7 @@ export default function TaskDetailPanel({ task: rootTask, userOptions, onClose }
       dueDate: task.dueDate || '',
       assigneeIds: (task.assignees ?? []).map(a => a.id),
       listId: task.listId || '',
+      projectId: task.projectId || '',
       tags: (task.tags ?? []).join(', '),
       reminderAt: task.reminderAt ? task.reminderAt.slice(0, 16) : '',
       recurrence: task.recurrence || 'NONE',
@@ -75,6 +76,14 @@ export default function TaskDetailPanel({ task: rootTask, userOptions, onClose }
     queryKey: ['task-lists', task?.divisi],
     queryFn: () => taskListsApi.list({ divisi: task.divisi }),
     enabled: !!task?.divisi,
+  })
+
+  // Project bersifat lintas divisi, jadi daftarnya tidak di-scope ke divisi
+  // task ini — task boleh pindah ke project divisi mana pun.
+  const { data: projects } = useQuery({
+    queryKey: ['projects'],
+    queryFn: () => projectsApi.list(),
+    enabled: !!task,
   })
 
   const save = useMutation({
@@ -348,6 +357,13 @@ export default function TaskDetailPanel({ task: rootTask, userOptions, onClose }
                 <select className="select" value={form.listId} onChange={e => { field({ listId: e.target.value }); commitField('listId', e.target.value) }}>
                   <option value="">Tanpa list</option>
                   {(lists ?? []).map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="label">Project</label>
+                <select className="select" value={form.projectId} onChange={e => { field({ projectId: e.target.value }); commitField('projectId', e.target.value) }}>
+                  <option value="">Tanpa project</option>
+                  {(projects ?? []).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                 </select>
               </div>
               <div>

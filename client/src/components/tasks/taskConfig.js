@@ -1,4 +1,4 @@
-import { Star, ClipboardList, ListChecks, CheckCircle2, Globe, LayoutDashboard, FolderKanban, BarChart2 } from 'lucide-react'
+import { Star, ClipboardList, ListChecks, CheckCircle2, Globe, LayoutDashboard, FolderKanban, BarChart2, Boxes } from 'lucide-react'
 
 // Same semantic color tokens as the rest of the app (tailwind.config.js:
 // success/warning/danger/info) instead of ad-hoc slate/blue/green — ties
@@ -41,6 +41,19 @@ export const RECURRENCE_CONFIG = {
 // most-frequent first, non-repeating tasks last.
 export const RECURRENCE_ORDER = ['DAILY', 'WEEKLY', 'MONTHLY', 'NONE']
 
+// Project lifecycle — same semantic tokens as STATUS_CONFIG so a project
+// badge reads like the task badges it sits next to.
+export const PROJECT_STATUS_CONFIG = {
+  PLANNING: { label: 'Perencanaan', cls: 'bg-slate-100 text-slate-500 border border-slate-200',           dot: 'bg-slate-400' },
+  ACTIVE:   { label: 'Berjalan',    cls: 'bg-info-light text-info border border-info-border',             dot: 'bg-info' },
+  ON_HOLD:  { label: 'Ditunda',     cls: 'bg-warning-light text-warning border border-warning-border',    dot: 'bg-warning' },
+  DONE:     { label: 'Selesai',     cls: 'bg-success-light text-success border border-success-border',    dot: 'bg-success' },
+}
+
+// Warna default yang ditawarkan saat bikin project baru — dipakai bergilir
+// biar dua project berurutan tidak kembar warnanya.
+export const PROJECT_COLORS = ['#C8102E', '#2563EB', '#16A34A', '#D97706', '#7C3AED', '#0D9488']
+
 export const BOARD_COLUMNS = ['TODO', 'IN_PROGRESS', 'DONE']
 
 // Sidebar views — mirrors the "view" query param handled server-side in taskController.list.
@@ -58,6 +71,10 @@ export const ALL_TASKS_VIEW = { id: 'all', label: 'All Tasks', icon: Globe, empt
 
 // Landing page saat modul Tugas pertama dibuka — grid folder per divisi.
 export const FOLDERS_VIEW = { id: 'folders', label: 'Folders', icon: FolderKanban }
+
+// Lapis pengelompokan kedua di samping folder divisi: project lintas divisi
+// (ala Notion) — satu task hanya boleh masuk satu project.
+export const PROJECTS_VIEW = { id: 'projects', label: 'Projects', icon: Boxes, empty: 'Belum ada task di project ini.' }
 
 // Admin/manager-only staff & divisi performance dashboard — only ever shown
 // in the sidebar when TasksSidebar's `canSeeAll` check passes.
