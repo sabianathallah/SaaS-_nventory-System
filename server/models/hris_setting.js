@@ -16,6 +16,22 @@ module.exports = (sequelize, DataTypes) => {
     lateExcuseBonus:   { type: DataTypes.INTEGER, allowNull: false, defaultValue: 5 },
     scoreHalfDay:      { type: DataTypes.INTEGER, allowNull: false, defaultValue: 50 },
     fieldPendingScore: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 75 },
+    // Poin lama jam kerja — bobot 0 = skor harian murni dari jam datang.
+    workDurationWeight: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
+    scoreWorkOvertime:  { type: DataTypes.INTEGER, allowNull: false, defaultValue: 100 },
+    scoreWorkFull:      { type: DataTypes.INTEGER, allowNull: false, defaultValue: 100 },
+    scoreWorkTier1:     { type: DataTypes.INTEGER, allowNull: false, defaultValue: 90 },
+    scoreWorkTier2:     { type: DataTypes.INTEGER, allowNull: false, defaultValue: 80 },
+    scoreWorkTier3:     { type: DataTypes.INTEGER, allowNull: false, defaultValue: 70 },
+    // Batas menit tiap tier (telat dari jam shift / kurang dari target durasi).
+    lateTier1Max:       { type: DataTypes.INTEGER, allowNull: false, defaultValue: 29 },
+    lateTier2Max:       { type: DataTypes.INTEGER, allowNull: false, defaultValue: 45 },
+    lateTier3Max:       { type: DataTypes.INTEGER, allowNull: false, defaultValue: 60 },
+    workShortTier1Max:  { type: DataTypes.INTEGER, allowNull: false, defaultValue: 29 },
+    workShortTier2Max:  { type: DataTypes.INTEGER, allowNull: false, defaultValue: 60 },
+    workOvertimeMinMinutes: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 60 },
+    // Minimum hari terhitung untuk masuk papan skor.
+    leaderboardMinDays: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 10 },
   }, {
     sequelize,
     modelName: 'HrisSetting',

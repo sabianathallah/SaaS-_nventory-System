@@ -22,6 +22,7 @@ router.use(requirePermission('hris.view'));
 
 // ── Aturan Jam Kerja (durasi minimal & toleransi telat, per company) ─────────
 router.get('/settings', HrisSettingController.get);
+router.get('/settings/logs', requirePermission('hris.manage'), HrisSettingController.logs);
 router.put('/settings', requirePermission('hris.manage'), requireCompany, HrisSettingController.update);
 
 // ── Attendance ───────────────────────────────────────────────────────────────

@@ -121,6 +121,12 @@ module.exports = (sequelize, DataTypes) => {
     earlyLeaveReviewedAt: { type: DataTypes.DATE, allowNull: true },
     earlyLeaveReviewNote: { type: DataTypes.TEXT, allowNull: true },
     fieldScore: { type: DataTypes.INTEGER, allowNull: true },
+    // Jam pulang diisi cron (lupa check-out), bukan jam pulang sebenarnya.
+    autoCheckOut: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+    // Skor harian yang sudah dibekukan. scoreSnapshotAt terisi + scoreSnapshot
+    // NULL = hari netral (cuti/sakit), bukan "belum dihitung".
+    scoreSnapshot:   { type: DataTypes.INTEGER, allowNull: true },
+    scoreSnapshotAt: { type: DataTypes.DATE, allowNull: true },
     note:      { type: DataTypes.TEXT, allowNull: true },
     editedBy:  { type: DataTypes.INTEGER, allowNull: true },
     editedAt:  { type: DataTypes.DATE, allowNull: true },

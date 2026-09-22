@@ -8,10 +8,26 @@ const { userHasPermission } = require('../helpers/permCheck');
 const { todayDateOnly, nowPartsInJakarta, addDaysStr, weekdayOf } = require('../helpers/timezone');
 const { lateSeverity } = require('../helpers/lateSeverity');
 const { dailyScore } = require('../helpers/attendanceScore');
-const { getHrisSettings, fmtMinutes } = require('../helpers/hrisSettings');
+const { getHrisSettings, fmtMinutes, MAX_SCORE } = require('../helpers/hrisSettings');
 const { backfillAbsentForDates } = require('../helpers/absentBackfill');
 
 const USER_ATTRS = ['id', 'name', 'email', 'divisi'];
+
+// Record yang datanya berubah setelah skornya dibekukan harus dihitung ulang,
+// jadi snapshot-nya dibatalkan. Ditempel ke setiap update admin/reviewer yang
+// memengaruhi skor.
+const CLEAR_SCORE_SNAPSHOT = { scoreSnapshot: null, scoreSnapshotAt: null };
+
+// Jumlah hari Senin-Jumat dalam rentang tanggal (inklusif). Weekend dianggap
+// libur, sama seperti auto-absen.
+function countWorkdays(startDate, endDate) {
+    let count = 0;
+    for (let d = startDate; d <= endDate; d = addDaysStr(d, 1)) {
+        const wd = weekdayOf(d);
+        if (wd !== 0 && wd !== 6) count += 1;
+    }
+    return count;
+}
 
 async function resolveOfficeLocation(req, lat, lng) {
     const locations = await OfficeLocation.findAll({ where: { ...companyFilter(req) } });
@@ -302,6 +318,7 @@ class AttendanceController {
     // ditampilkan ke semua karyawan (bukan cuma admin) sebagai reminder.
     static async lateLeaderboard(req, res, next) {
         try {
+            const today = todayDateOnly();
             const { year: jakartaYear, month: jakartaMonth } = nowPartsInJakarta();
             const month = parseInt(req.query.month) || jakartaMonth;
             const year  = parseInt(req.query.year)  || jakartaYear;
@@ -315,7 +332,7 @@ class AttendanceController {
                     where: { date: dateRange, ...companyFilter(req) },
                     include: [
                         { model: User, as: 'user', attributes: ['id', 'name', 'avatar'] },
-                        { model: Shift, as: 'shift', attributes: ['startTime'] },
+                        { model: Shift, as: 'shift', attributes: ['startTime', 'endTime'] },
                     ],
                 }),
                 SickLeaveRequest.findAll({
@@ -352,7 +369,12 @@ class AttendanceController {
                 if (r.status === 'ABSENT') cur.absentCount += 1;
                 // Skor kedisiplinan harian — telat dibobot per menit, izin telat
                 // & FIELD dapat poin parsial, hari netral (cuti) tidak dihitung.
-                const daily = dailyScore(r, hrisSettings);
+                // Hari yang skornya sudah dibekukan cron dipakai apa adanya,
+                // supaya kebijakan poin yang berubah hari ini tidak menulis
+                // ulang ranking hari-hari yang sudah lewat.
+                const daily = r.scoreSnapshotAt
+                    ? { score: r.scoreSnapshot, counted: r.scoreSnapshot != null }
+                    : dailyScore(r, hrisSettings);
                 if (daily.counted) {
                     cur.scoreSum += daily.score;
                     cur.scoredDays += 1;
@@ -370,9 +392,14 @@ class AttendanceController {
             const mostAbsent = all.filter(u => u.absentCount > 0).sort((a, b) => b.absentCount - a.absentCount).slice(0, 5);
             const mostSick = all.filter(u => u.sickCount > 0).sort((a, b) => b.sickCount - a.sickCount).slice(0, 5);
 
-            // Ranking utama: rata-rata skor harian. Tie-break: yang hadir lebih
-            // banyak hari lebih tinggi (skor 100 dari 20 hari > 100 dari 2 hari).
-            const scoreboard = all.filter(u => u.scoredDays > 0)
+            // Ranking utama: rata-rata skor harian, tapi harus punya cukup hari
+            // dulu — tanpa ini 2 hari @100 mengalahkan 20 hari @99. Ambangnya
+            // dibatasi ke jumlah hari kerja yang sudah lewat bulan itu, supaya
+            // awal bulan papannya tidak kosong. Tie-break: yang lebih banyak
+            // hari terhitung menang.
+            const workdaysElapsed = countWorkdays(start, end < today ? end : today);
+            const minDays = Math.max(1, Math.min(hrisSettings.leaderboardMinDays, workdaysElapsed));
+            const scoreboard = all.filter(u => u.scoredDays >= minDays)
                 .map(({ userId, name, avatar, scoreSum, scoredDays }) => ({
                     userId, name, avatar, scoredDays,
                     score: Math.round(scoreSum / scoredDays),
@@ -382,8 +409,16 @@ class AttendanceController {
 
             // Nilai skor ikut dikirim supaya penjelasan cara hitung di UI
             // transparan dan selalu sinkron dengan setting company.
-            const { scoreOnTime, scoreLateTier1, scoreLateTier2, scoreLateTier3, scoreLateTier4, lateExcuseBonus, fieldPendingScore } = hrisSettings;
-            const scoring = { scoreOnTime, scoreLateTier1, scoreLateTier2, scoreLateTier3, scoreLateTier4, lateExcuseBonus, fieldPendingScore };
+            const SCORING_KEYS = [
+                'scoreOnTime', 'scoreLateTier1', 'scoreLateTier2', 'scoreLateTier3', 'scoreLateTier4',
+                'lateExcuseBonus', 'fieldPendingScore',
+                'lateTier1Max', 'lateTier2Max', 'lateTier3Max',
+                'workDurationWeight', 'scoreWorkOvertime', 'scoreWorkFull',
+                'scoreWorkTier1', 'scoreWorkTier2', 'scoreWorkTier3',
+                'workShortTier1Max', 'workShortTier2Max', 'workOvertimeMinMinutes', 'minWorkMinutes',
+            ];
+            const scoring = Object.fromEntries(SCORING_KEYS.map(k => [k, hrisSettings[k]]));
+            scoring.minDays = minDays;
 
             res.json({ scoreboard, scoring, mostLate, mostOnTime, mostAbsent, mostSick });
         } catch (err) { next(err); }
@@ -457,8 +492,8 @@ class AttendanceController {
             let fieldScorePatch = { fieldScore: null };
             if (status === 'APPROVED' && fieldScore != null) {
                 const score = Number(fieldScore);
-                if (!Number.isInteger(score) || score < 0 || score > 100) {
-                    throw { name: 'BadRequest', message: 'Skor kerja lapangan harus 0–100' };
+                if (!Number.isInteger(score) || score < 0 || score > MAX_SCORE) {
+                    throw { name: 'BadRequest', message: `Skor kerja lapangan harus 0–${MAX_SCORE}` };
                 }
                 fieldScorePatch = { fieldScore: score };
             }
@@ -478,6 +513,7 @@ class AttendanceController {
             await attendance.update({
                 ...statusPatch,
                 ...fieldScorePatch,
+                ...CLEAR_SCORE_SNAPSHOT,
                 reviewStatus: status,
                 reviewedBy: req.user.id,
                 reviewedAt: new Date(),
@@ -523,6 +559,7 @@ class AttendanceController {
 
             await attendance.update({
                 status: status === 'APPROVED' ? 'PRESENT' : attendance.status,
+                ...CLEAR_SCORE_SNAPSHOT,
                 lateExcuseStatus: status,
                 lateExcuseReviewedBy: req.user.id,
                 lateExcuseReviewedAt: new Date(),
@@ -581,12 +618,18 @@ class AttendanceController {
                 ? { reviewStatus: 'APPROVED', reviewedBy: req.user.id, reviewedAt: new Date() }
                 : {};
 
+            // Jam check-out yang dikoreksi manual = jam pulang sebenarnya sudah
+            // diketahui, jadi penalti auto check-out dicabut.
+            const autoCheckOutPatch = checkOutAt ? { autoCheckOut: false } : {};
+
             await attendance.update({
                 status:     status     ?? attendance.status,
                 note:       note       ?? attendance.note,
                 checkInAt:  checkInAt  ?? attendance.checkInAt,
                 checkOutAt: checkOutAt ?? attendance.checkOutAt,
                 workMode:   nextWorkMode,
+                ...autoCheckOutPatch,
+                ...CLEAR_SCORE_SNAPSHOT,
                 ...reviewPatch,
                 editedBy:   req.user.id,
                 editedAt:   new Date(),

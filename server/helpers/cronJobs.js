@@ -2,6 +2,8 @@
 const cron = require('node-cron');
 const { Op } = require('sequelize');
 const { Attendance, Shift, Task, TaskAssignee, Notification } = require('../models');
+const { dailyScore } = require('./attendanceScore');
+const { getHrisSettingsByCompany } = require('./hrisSettings');
 const { todayDateOnly, addDaysStr, weekdayOf } = require('./timezone');
 const { backfillAbsentForDates } = require('./absentBackfill');
 
@@ -16,6 +18,12 @@ function setupCronJobs() {
     // manual lagi. Sabtu/Minggu di-skip, dan lintas semua company (system job,
     // bukan request-scoped) sekaligus.
     cron.schedule('10 0 * * *', autoMarkAbsentJob, { timezone: 'Asia/Jakarta' });
+
+    // Jam 00:30 WIB (setelah auto check-out & auto absen): bekukan skor
+    // kedisiplinan harian kemarin. Skor yang sudah dibekukan dipakai apa adanya
+    // oleh leaderboard, jadi mengubah kebijakan poin tidak lagi mengubah
+    // ranking bulan-bulan yang sudah lewat.
+    cron.schedule('30 0 * * *', snapshotScoresJob, { timezone: 'Asia/Jakarta' });
 
     // Tiap menit: task dengan reminderAt yang sudah lewat tapi belum
     // dinotifikasi (reminderSentAt IS NULL) — MS To Do-style "Remind me".
@@ -35,6 +43,12 @@ async function autoCheckOutJob() {
             const checkOutAt = new Date(`${row.date}T${row.shift.endTime}+07:00`);
             await row.update({
                 checkOutAt,
+                // Ditandai supaya poin lama jam kerja tidak dihitung penuh —
+                // jam pulang aslinya tidak diketahui. Kalau tidak, diam-diam
+                // tidak check-out jadi lebih untung daripada check-out jujur
+                // lebih awal. Admin yang memperbaiki jam check-out mencabut
+                // tanda ini.
+                autoCheckOut: true,
                 note: row.note || 'Check-out otomatis oleh sistem (lupa check-out, disesuaikan jam akhir shift)',
             });
         }
@@ -54,6 +68,42 @@ async function autoMarkAbsentJob() {
         if (result.created) console.log(`[cron] auto absen: ${result.created} record dibuat untuk ${yesterday}`);
     } catch (err) {
         console.error('[cron] auto absen gagal:', err.message);
+    }
+}
+
+// Bekukan skor harian kemarin, satu kali per record. Settingnya diambil per
+// company supaya tiap tenant dinilai dengan kebijakannya sendiri.
+async function snapshotScoresJob(date) {
+    try {
+        const target = date ?? addDaysStr(todayDateOnly(), -1);
+        const rows = await Attendance.findAll({
+            where: { date: target, scoreSnapshotAt: null },
+            include: [{ model: Shift, as: 'shift', attributes: ['startTime', 'endTime'] }],
+        });
+        if (!rows.length) return 0;
+
+        const settingsCache = new Map();
+        const settingsFor = async (cid) => {
+            const key = cid ?? 'null';
+            if (!settingsCache.has(key)) settingsCache.set(key, await getHrisSettingsByCompany(cid));
+            return settingsCache.get(key);
+        };
+
+        const now = new Date();
+        let saved = 0;
+        for (const row of rows) {
+            const daily = dailyScore(row, await settingsFor(row.companyId));
+            await row.update({
+                scoreSnapshot: daily.counted ? daily.score : null,
+                scoreSnapshotAt: now,
+            });
+            saved += 1;
+        }
+        console.log(`[cron] snapshot skor: ${saved} record dibekukan untuk ${target}`);
+        return saved;
+    } catch (err) {
+        console.error('[cron] snapshot skor gagal:', err.message);
+        return 0;
     }
 }
 
@@ -84,4 +134,4 @@ async function taskReminderJob() {
     }
 }
 
-module.exports = { setupCronJobs };
+module.exports = { setupCronJobs, snapshotScoresJob };

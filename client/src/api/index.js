@@ -343,6 +343,7 @@ export const hrisApi = {
   reviewEarlyLeave:        (id, data) => api.patch(`/hris/attendance/${id}/review-early-leave`, data).then(r => r.data),
   hrisSettings:       ()     => api.get('/hris/settings').then(r => r.data),
   updateHrisSettings: (data) => api.put('/hris/settings', data).then(r => r.data),
+  hrisSettingLogs:    ()     => api.get('/hris/settings/logs').then(r => r.data),
   submitLateReason:        (id, data) => api.patch(`/hris/attendance/${id}/late-reason`, data).then(r => r.data),
 
   lateExcuseList:   (params)   => api.get('/hris/late-excuse', { params }).then(r => r.data),

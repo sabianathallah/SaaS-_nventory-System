@@ -417,15 +417,41 @@ export default function Attendance() {
                 <div className="mt-2 rounded-lg border border-slate-100 bg-slate-50/60 px-3.5 py-2.5">
                   <p className="text-[11px] font-semibold text-slate-500 mb-1">Cara hitung skor (per hari, patokan jam mulai shift masing-masing)</p>
                   <p className="text-[11px] text-slate-400 leading-relaxed">
-                    Tepat waktu <b className="text-slate-500">{leaderboard.scoring.scoreOnTime}</b> ·
-                    telat 1–29 mnt <b className="text-slate-500">{leaderboard.scoring.scoreLateTier1}</b> ·
-                    30–45 mnt <b className="text-slate-500">{leaderboard.scoring.scoreLateTier2}</b> ·
-                    46–60 mnt <b className="text-slate-500">{leaderboard.scoring.scoreLateTier3}</b> ·
-                    &gt;60 mnt <b className="text-slate-500">{leaderboard.scoring.scoreLateTier4}</b> ·
+                    <b className="text-slate-500">Jam datang:</b> tepat waktu <b className="text-slate-500">{leaderboard.scoring.scoreOnTime}</b> ·
+                    telat 1–{leaderboard.scoring.lateTier1Max} mnt <b className="text-slate-500">{leaderboard.scoring.scoreLateTier1}</b> ·
+                    {leaderboard.scoring.lateTier1Max + 1}–{leaderboard.scoring.lateTier2Max} mnt <b className="text-slate-500">{leaderboard.scoring.scoreLateTier2}</b> ·
+                    {leaderboard.scoring.lateTier2Max + 1}–{leaderboard.scoring.lateTier3Max} mnt <b className="text-slate-500">{leaderboard.scoring.scoreLateTier3}</b> ·
+                    &gt;{leaderboard.scoring.lateTier3Max} mnt <b className="text-slate-500">{leaderboard.scoring.scoreLateTier4}</b> ·
                     izin telat disetujui = skor jam datang <b className="text-slate-500">+{leaderboard.scoring.lateExcuseBonus}</b> ·
                     lapangan belum direview <b className="text-slate-500">{leaderboard.scoring.fieldPendingScore}</b> (disetujui &amp; sudah di vendor = normal, belum sampai = dinilai admin) ·
                     absen/klaim ditolak <b className="text-slate-500">0</b> ·
-                    cuti &amp; sakit tidak dihitung. Skor akhir = rata-rata harian bulan berjalan.
+                    cuti &amp; sakit tidak dihitung.
+                  </p>
+                  {leaderboard.scoring.workDurationWeight > 0 && (
+                    <p className="text-[11px] text-slate-400 leading-relaxed mt-1">
+                      <b className="text-slate-500">Lama jam kerja</b> ({leaderboard.scoring.workDurationWeight}% dari skor harian,
+                      target = rentang jam shift-mu, tanpa shift {fmtDur(leaderboard.scoring.minWorkMinutes)}):
+                      {leaderboard.scoring.scoreWorkOvertime > leaderboard.scoring.scoreWorkFull && (
+                        <> lembur ≥ {leaderboard.scoring.workOvertimeMinMinutes} mnt <b className="text-slate-500">{leaderboard.scoring.scoreWorkOvertime}</b> ·</>
+                      )}
+                      {' '}penuh <b className="text-slate-500">{leaderboard.scoring.scoreWorkFull}</b> ·
+                      kurang 1–{leaderboard.scoring.workShortTier1Max} mnt <b className="text-slate-500">{leaderboard.scoring.scoreWorkTier1}</b> ·
+                      {leaderboard.scoring.workShortTier1Max + 1}–{leaderboard.scoring.workShortTier2Max} mnt <b className="text-slate-500">{leaderboard.scoring.scoreWorkTier2}</b> ·
+                      &gt;{leaderboard.scoring.workShortTier2Max} mnt <b className="text-slate-500">{leaderboard.scoring.scoreWorkTier3}</b>.
+                      Hari yang belum check-out dinilai dari jam datang saja; yang lupa check-out
+                      (jam pulangnya diisi sistem) dapat tier terendah — minta admin koreksi jam
+                      pulangnya kalau itu terjadi.
+                    </p>
+                  )}
+                  <p className="text-[11px] text-slate-400 leading-relaxed mt-1">
+                    Skor akhir = rata-rata harian bulan berjalan
+                    {leaderboard.scoring.workDurationWeight > 0
+                      ? ` (${100 - leaderboard.scoring.workDurationWeight}% jam datang + ${leaderboard.scoring.workDurationWeight}% lama jam kerja)`
+                      : ''}
+                    {leaderboard.scoring.minDays > 1
+                      ? `, dan baru masuk papan skor setelah punya minimal ${leaderboard.scoring.minDays} hari terhitung.`
+                      : '.'}
+                    {' '}Skor tiap hari dibekukan tengah malam, jadi perubahan aturan tidak mengubah hari yang sudah lewat.
                   </p>
                 </div>
               )}
@@ -773,6 +799,14 @@ export default function Attendance() {
                       )}
                       <div>
                         {fmtTime(r.checkOutAt)}
+                        {/* Jam pulang diisi sistem, bukan jam pulang sebenarnya —
+                            poin lama jam kerjanya kena tier terendah sampai
+                            admin mengoreksi jamnya. */}
+                        {r.autoCheckOut && (
+                          <span className="badge-amber ml-1.5" title="Lupa check-out — jam pulang diisi sistem sesuai jam akhir shift. Poin lama jam kerja pakai tier terendah sampai admin mengoreksi.">
+                            Auto
+                          </span>
+                        )}
                         <LocationTag location={r.checkOutLocation} lat={r.checkOutLat} lng={r.checkOutLng} />
                       </div>
                     </div>
