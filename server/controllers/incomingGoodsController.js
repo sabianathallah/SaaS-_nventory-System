@@ -143,7 +143,6 @@ class IncomingGoodsController {
             const updates = Object.fromEntries(Object.entries(req.body).filter(([k]) => allowed.includes(k)));
             await item.update(updates);
 
-            // recalculate totalQty on header
             const allItems = await IncomingGoodsItem.findAll({ where: { IncomingGoodsId: ig.id } });
             const totalQty = allItems.reduce((sum, i) => sum + (i.qtyReceived || 0), 0);
             await ig.update({ totalQty });
@@ -235,7 +234,6 @@ class IncomingGoodsController {
                 return res.status(400).json({ message: `Masih ada ${unverified.length} packing job yang belum diverifikasi` });
             }
 
-            // Aggregate qtyReady & qtyReject per item from all PackingResults
             const { PackingResult } = require('../models');
             for (const item of ig.items) {
                 const results = await PackingResult.findAll({
@@ -254,8 +252,8 @@ class IncomingGoodsController {
                 include: [{ model: IncomingGoodsItem, as: 'items', include: [{ model: Product, attributes: PRODUCT_ATTRS }] }],
             });
 
-            const totalReady   = ig.items.reduce((s, i) => s + (i.qtyReady  || 0), 0);
-            const totalReject  = ig.items.reduce((s, i) => s + (i.qtyReject || 0), 0);
+            const totalReady    = ig.items.reduce((s, i) => s + (i.qtyReady  || 0), 0);
+            const totalReject   = ig.items.reduce((s, i) => s + (i.qtyReject || 0), 0);
             const totalReceived = ig.items.reduce((s, i) => s + i.qtyReceived, 0);
 
             res.status(200).json({

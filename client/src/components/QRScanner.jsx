@@ -19,6 +19,8 @@ export default function QRScanner({ onScan, onClose, hint = 'Arahkan kamera ke b
   const controlsRef = useRef(null)
   const audioCtxRef = useRef(null)
   const cooldownRef = useRef(false)
+  const onScanRef   = useRef(onScan)
+  useEffect(() => { onScanRef.current = onScan }, [onScan])
   const [error,        setError]        = useState(null)
   const [manual,       setManual]       = useState('')
   const [showManual,   setShowManual]   = useState(false)
@@ -72,7 +74,7 @@ export default function QRScanner({ onScan, onClose, hint = 'Arahkan kamera ke b
 
         const code = result.getText()
         beep()
-        onScan(code)
+        onScanRef.current(code)
         if (autoClose) {
           onClose()
         } else {

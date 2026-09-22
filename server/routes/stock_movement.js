@@ -1,14 +1,19 @@
 'use strict';
 const express = require('express');
-const router = express.Router();
-const StockMovementController = require('../controllers/stockMovementController');
+const router  = express.Router();
+const C       = require('../controllers/stockMovementController');
+const rp      = require('../middlewares/requirePermission');
+const { requireAnyPermission } = rp;
+const requireCompany = require('../middlewares/requireCompany');
 
-router.get('/summary', StockMovementController.getSummary);
-router.get('/chart', StockMovementController.getChart);
-router.get('/export/csv', StockMovementController.exportCsv);
-router.get('/', StockMovementController.getAll);
-router.get('/:id', StockMovementController.getById);
-router.post('/', StockMovementController.create);
-router.delete('/:id', StockMovementController.delete);
+const canView = requireAnyPermission('stock.view', 'dashboard.view_movements');
+
+router.get('/summary',    canView, C.getSummary);
+router.get('/chart',      canView, C.getChart);
+router.get('/export/csv', rp('stock.view'), C.exportCsv);
+router.get('/',           canView, C.getAll);
+router.get('/:id',        canView, C.getById);
+router.post('/',          rp('stock.manage'), requireCompany, C.create);
+router.delete('/:id',     rp('stock.manage'), C.delete);
 
 module.exports = router;

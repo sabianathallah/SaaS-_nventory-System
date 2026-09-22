@@ -22,7 +22,10 @@ export function useExternalScanner(onScan, enabled) {
         const code = bufferRef.current.trim()
         bufferRef.current = ''
         clearTimeout(timerRef.current)
-        if (code.length > 2) onScanRef.current(code)
+        if (code.length > 2) {
+          e.preventDefault() // cegah Enter mengaktifkan button/form yang sedang fokus
+          onScanRef.current(code)
+        }
         return
       }
 

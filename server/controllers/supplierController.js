@@ -36,7 +36,8 @@ class SupplierController {
         try {
             const supplier = await Supplier.findOne({ where: { id: req.params.id, ...companyFilter(req) } });
             if (!supplier) throw { name: 'NotFound', message: 'Supplier not found' };
-            await supplier.update(req.body);
+            const { companyId: _c, ...safeBody } = req.body;
+            await supplier.update(safeBody);
             res.status(200).json(supplier);
         } catch (err) { next(err); }
     }

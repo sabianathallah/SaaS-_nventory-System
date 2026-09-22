@@ -1,11 +1,15 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useSearchParams } from 'react-router-dom'
 import { packingJobsApi, incomingGoodsApi } from '../api'
 import { useAuth } from '../context/AuthContext'
 import PageHeader from '../components/PageHeader'
+import SearchableSelect from '../components/SearchableSelect'
 import { Table, Pagination } from '../components/Table'
 import Modal from '../components/Modal'
 import QRScanner from '../components/QRScanner'
+import { useCompanyGuard } from '../hooks/useCompanyGuard'
+import CompanyRequiredBanner from '../components/CompanyRequiredBanner'
 import toast from 'react-hot-toast'
 import {
   Plus, Eye, Play, ClipboardCheck, CheckSquare,
@@ -102,8 +106,13 @@ function JobCard({ job, isTimPacking, isHeadPacking, onDetail, onStart, onSubmit
 export default function PackingJobs() {
   const qc = useQueryClient()
   const { isHeadPacking, isTimPacking } = useAuth()
+  const { needsCompany } = useCompanyGuard()
 
-  const [page, setPage]               = useState(1)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const page  = Number(searchParams.get('page')  || '1')
+  const limit = Number(searchParams.get('limit') || '15')
+  const setPage = (p) => setSearchParams(prev => { prev.set('page', String(p)); return prev }, { replace: true })
+
   const [modal, setModal]             = useState(null)
   const [form, setForm]               = useState(EMPTY_FORM)
   const [submitItems, setSubmitItems] = useState([])
@@ -111,8 +120,8 @@ export default function PackingJobs() {
   const [showScanner, setShowScanner]   = useState(false)
 
   const { data, isLoading } = useQuery({
-    queryKey: ['packing-jobs', { page }],
-    queryFn:  () => packingJobsApi.list({ page, limit: 15 }),
+    queryKey: ['packing-jobs', { page, limit }],
+    queryFn:  () => packingJobsApi.list({ page, limit }),
   })
 
   const igQuery = useQuery({
@@ -282,6 +291,7 @@ export default function PackingJobs() {
 
   return (
     <div className="px-4 md:px-6 py-5 md:py-6">
+      {needsCompany && <div className="mb-4"><CompanyRequiredBanner action="membuat packing job" /></div>}
       <PageHeader
         title="Packing Jobs"
         subtitle={`${data?.pagination?.total ?? 0} job`}
@@ -331,21 +341,23 @@ export default function PackingJobs() {
         <form onSubmit={handleCreate} className="space-y-4">
           <div>
             <label className="label">Barang Masuk <span className="text-danger">*</span></label>
-            <select className="input" value={form.IncomingGoodsId} onChange={set('IncomingGoodsId')} required>
-              <option value="">— Pilih —</option>
-              {(igQuery.data?.data ?? []).map(ig => (
-                <option key={ig.id} value={ig.id}>{ig.docNumber}</option>
-              ))}
-            </select>
+            <SearchableSelect
+              value={form.IncomingGoodsId}
+              onChange={v => setForm(f => ({ ...f, IncomingGoodsId: v }))}
+              options={[{ value: '', label: '— Pilih —' }, ...(igQuery.data?.data ?? []).map(ig => ({ value: ig.id, label: ig.docNumber }))]}
+              placeholder="— Pilih —"
+              required
+            />
           </div>
           <div>
             <label className="label">Tim Packing <span className="text-danger">*</span></label>
-            <select className="input" value={form.assignedTo} onChange={set('assignedTo')} required>
-              <option value="">— Pilih Pekerja —</option>
-              {(workersQuery.data?.data ?? []).map(u => (
-                <option key={u.id} value={u.id}>{u.name}</option>
-              ))}
-            </select>
+            <SearchableSelect
+              value={form.assignedTo}
+              onChange={v => setForm(f => ({ ...f, assignedTo: v }))}
+              options={[{ value: '', label: '— Pilih Pekerja —' }, ...(workersQuery.data?.data ?? []).map(u => ({ value: u.id, label: u.name }))]}
+              placeholder="— Pilih Pekerja —"
+              required
+            />
           </div>
           <div>
             <label className="label">Catatan</label>

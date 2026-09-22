@@ -5,6 +5,10 @@ process.env.NODE_ENV = 'test';
 
 const { signToken } = require('../helpers/jwt');
 const { hashPassword } = require('../helpers/bcrypt');
+const { ALL_KEYS } = (() => {
+  const { ALL_PERMISSIONS } = require('../helpers/permissions');
+  return { ALL_KEYS: ALL_PERMISSIONS.map(p => p.key) };
+})();
 
 let _initialized = false;
 let _state = null;
@@ -19,7 +23,7 @@ async function initDb() {
   if (_initialized) return _state;
 
   const {
-    sequelize, Company, User, Category, Warehouse,
+    sequelize, Company, User, Category, Warehouse, Role, RolePermission, Permission,
   } = require('../models');
 
   await sequelize.sync({ force: true });
@@ -66,6 +70,17 @@ async function initDb() {
     admin:      signToken({ id: admin.id,       email: admin.email,      role: 'COMPANY_ADMIN', companyId: company.id }),
     ops:        signToken({ id: ops.id,         email: ops.email,        role: 'OPERASIONAL',   companyId: company.id }),
   };
+
+  // Seed Permission catalogue so GET /permissions returns data
+  const { ALL_PERMISSIONS: ALL_PERMS } = require('../helpers/permissions');
+  await Permission.bulkCreate(
+    ALL_PERMS.map(p => ({ key: p.key, label: p.label, group: p.group })),
+    { ignoreDuplicates: true }
+  );
+
+  // Seed Role + RolePermissions so requirePermission middleware passes for COMPANY_ADMIN
+  const adminRole = await Role.create({ name: 'COMPANY_ADMIN', displayName: 'Company Admin', companyId: company.id });
+  await RolePermission.bulkCreate(ALL_KEYS.map(key => ({ roleId: adminRole.id, permissionKey: key })));
 
   const category = await Category.create({ name: 'Test Category', companyId: company.id });
   const warehouse = await Warehouse.create({ name: 'Test Warehouse', location: 'Jakarta', companyId: company.id });

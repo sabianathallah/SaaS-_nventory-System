@@ -1,1 +1,5 @@
 .vercel
+.DS_Store
+server/.DS_Store
+server/uploads/**
+!server/uploads/**/.gitkeep

@@ -15,8 +15,36 @@ module.exports = (sequelize, DataTypes) => {
         onDelete: 'CASCADE',
         onUpdate: 'CASCADE'
       });
+      Stock_Out_Header.belongsTo(models.User, {
+        foreignKey: { name: 'updatedBy', allowNull: true },
+        as: 'updater',
+        onDelete: 'SET NULL',
+        onUpdate: 'CASCADE'
+      });
       Stock_Out_Header.belongsTo(models.Warehouse, {
         foreignKey: { name: 'WarehouseId', allowNull: true },
+        onDelete: 'SET NULL',
+        onUpdate: 'CASCADE'
+      });
+      Stock_Out_Header.belongsTo(models.Vendor, {
+        foreignKey: { name: 'VendorId', allowNull: true },
+        onDelete: 'SET NULL',
+        onUpdate: 'CASCADE'
+      });
+      Stock_Out_Header.belongsTo(models.VendorDelivery, {
+        foreignKey: { name: 'sourceDeliveryId', allowNull: true },
+        as: 'sourceDelivery',
+        onDelete: 'SET NULL',
+        onUpdate: 'CASCADE'
+      });
+      Stock_Out_Header.belongsTo(models.Channel, {
+        foreignKey: { name: 'ChannelId', allowNull: true },
+        onDelete: 'SET NULL',
+        onUpdate: 'CASCADE'
+      });
+      Stock_Out_Header.belongsTo(models.ManualShipment, {
+        foreignKey: { name: 'manualShipmentId', allowNull: true },
+        as: 'manualShipment',
         onDelete: 'SET NULL',
         onUpdate: 'CASCADE'
       });
@@ -25,12 +53,23 @@ module.exports = (sequelize, DataTypes) => {
   Stock_Out_Header.init({
     destination: { type: DataTypes.STRING, allowNull: true },
     WarehouseId: { type: DataTypes.INTEGER, allowNull: true },
+    VendorId:         { type: DataTypes.INTEGER, allowNull: true },
+    sourceDeliveryId: { type: DataTypes.INTEGER, allowNull: true },
+    ChannelId:        { type: DataTypes.INTEGER, allowNull: true },
+    manualShipmentId: { type: DataTypes.INTEGER, allowNull: true },
     date: {
       type: DataTypes.DATE,
       allowNull: false,
       defaultValue: DataTypes.NOW
     },
+    purpose: {
+      type: DataTypes.STRING(100),
+      allowNull: false,
+      defaultValue: 'Lainnya',
+    },
     notes: DataTypes.STRING,
+    // Sesi edit: 'closed' = terkunci (default), 'open' = item bisa diedit
+    status: { type: DataTypes.STRING(10), allowNull: false, defaultValue: 'closed' },
     companyId: { type: DataTypes.INTEGER, allowNull: true },
     createdBy: {
       type: DataTypes.INTEGER,
@@ -39,7 +78,8 @@ module.exports = (sequelize, DataTypes) => {
         notNull: { msg: 'Creator is required' },
         notEmpty: { msg: 'Creator is required' }
       }
-    }
+    },
+    updatedBy: { type: DataTypes.INTEGER, allowNull: true },
   }, {
     sequelize,
     modelName: 'Stock_Out_Header',

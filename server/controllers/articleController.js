@@ -44,7 +44,8 @@ class ArticleController {
     try {
       const article = await Article.findOne({ where: { id: req.params.id, ...companyFilter(req) } });
       if (!article) throw { name: 'NotFound', message: 'Article not found' };
-      await article.update(req.body);
+      const { companyId: _c, ...safeBody } = req.body;
+      await article.update(safeBody);
       res.status(200).json(article);
     } catch (err) { next(err); }
   }

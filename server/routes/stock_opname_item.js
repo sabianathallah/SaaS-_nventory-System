@@ -1,12 +1,17 @@
 'use strict';
 const express = require('express');
-const router = express.Router();
-const StockOpnameItemController = require('../controllers/stockOpnameItemController');
+const router  = express.Router();
+const C       = require('../controllers/stockOpnameItemController');
+const { requireAnyPermission: rpAny } = require('../middlewares/requirePermission');
 
-router.get('/', StockOpnameItemController.getAll);
-router.get('/:id', StockOpnameItemController.getById);
-router.post('/', StockOpnameItemController.create);
-router.put('/:id', StockOpnameItemController.update);
-router.delete('/:id', StockOpnameItemController.delete);
+const canView   = rpAny('stock.manage', 'stock.view', 'stock.opname.view');
+const canInput  = rpAny('stock.manage', 'stock.opname.create', 'stock.opname.scan', 'stock.opname.manual_input');
+const canDelete = rpAny('stock.manage', 'stock.opname.delete');
+
+router.get('/',    canView,                                                                     C.getAll);
+router.get('/:id', canView,                                                                     C.getById);
+router.post('/',   canInput,                                                                    C.create);
+router.put('/:id', rpAny('stock.manage', 'stock.opname.create', 'stock.opname.manual_input'),  C.update);
+router.delete('/:id', canDelete,                                                                C.delete);
 
 module.exports = router;

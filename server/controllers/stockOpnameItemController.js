@@ -1,5 +1,5 @@
 'use strict';
-const { Stock_Opname_Item, Stock_Opname_Session, Product, Stock } = require('../models');
+const { Stock_Opname_Item, Stock_Opname_Session, Product, ProductSKU, ProductVariantOption, ProductVariantType, Stock, SkuWarehouseStock } = require('../models');
 const { companyFilter } = require('../helpers/tenancy');
 const { paginate, buildFilter, paginatedResponse } = require('../helpers/queryHelper');
 
@@ -15,7 +15,10 @@ class StockOpnameItemController {
                 where: filter,
                 include: [
                     { model: Stock_Opname_Session, attributes: ['id', 'status', 'started_at'], where: companyFilter(req), required: true },
-                    { model: Product, attributes: ['id', 'name', 'sku'] }
+                    { model: Product, attributes: ['id', 'name', 'sku'] },
+                    { model: ProductSKU, attributes: ['id', 'sku_code'], required: false,
+                      include: [{ model: ProductVariantOption, attributes: ['id', 'value'], through: { attributes: [] },
+                        include: [{ model: ProductVariantType, attributes: ['id', 'name'] }] }] },
                 ],
                 limit, offset,
                 distinct: true
@@ -29,7 +32,10 @@ class StockOpnameItemController {
             const item = await Stock_Opname_Item.findByPk(req.params.id, {
                 include: [
                     { model: Stock_Opname_Session, attributes: ['id', 'status', 'started_at'], where: companyFilter(req), required: true },
-                    { model: Product, attributes: ['id', 'name', 'sku'] }
+                    { model: Product, attributes: ['id', 'name', 'sku'] },
+                    { model: ProductSKU, attributes: ['id', 'sku_code'], required: false,
+                      include: [{ model: ProductVariantOption, attributes: ['id', 'value'], through: { attributes: [] },
+                        include: [{ model: ProductVariantType, attributes: ['id', 'name'] }] }] },
                 ]
             });
             if (!item) throw { name: 'NotFound', message: 'Stock opname item not found' };
@@ -46,21 +52,32 @@ class StockOpnameItemController {
             const body = { ...req.body };
             const SessionId = body.SessionId || body.StockOpnameSessionId;
             const scanned_qty = body.scanned_qty ?? body.actualQty;
-            const { ProductId } = body;
+            const { ProductId, ProductSKUId } = body;
 
             if (!SessionId || !ProductId || scanned_qty == null) {
                 return res.status(400).json({ message: 'SessionId, ProductId, dan actualQty wajib diisi' });
             }
 
-            const session = await Stock_Opname_Session.findByPk(SessionId);
+            const session = await Stock_Opname_Session.findOne({ where: { id: SessionId, ...companyFilter(req) } });
             if (!session) return res.status(404).json({ message: 'Opname session tidak ditemukan' });
+            if (session.status !== 'open') return res.status(400).json({ message: 'Tidak bisa menambah item ke sesi yang sudah ditutup atau dibatalkan' });
 
             let system_qty = body.system_qty;
             if (system_qty == null) {
-                const stock = await Stock.findOne({
-                    where: { ProductId, WarehouseId: session.warehouseId },
-                });
-                system_qty = stock?.quantity ?? 0;
+                if (ProductSKUId) {
+                    // Per-SKU, per-warehouse qty from SkuWarehouseStocks — the live ledger.
+                    // ProductSKU.qty is a legacy cross-warehouse total and would be wrong
+                    // for any company with more than one warehouse.
+                    const skuStock = await SkuWarehouseStock.findOne({
+                        where: { ProductSKUId, WarehouseId: session.warehouseId },
+                    });
+                    system_qty = skuStock?.qty ?? 0;
+                } else {
+                    const stock = await Stock.findOne({
+                        where: { ProductId, WarehouseId: session.warehouseId },
+                    });
+                    system_qty = stock?.quantity ?? 0;
+                }
             }
             const scanned = Number(scanned_qty);
             const difference = scanned - Number(system_qty);
@@ -68,6 +85,7 @@ class StockOpnameItemController {
             const item = await Stock_Opname_Item.create({
                 SessionId,
                 ProductId,
+                ProductSKUId: ProductSKUId || null,
                 scanned_qty: scanned,
                 system_qty,
                 difference,
@@ -82,7 +100,15 @@ class StockOpnameItemController {
                 include: [{ model: Stock_Opname_Session, where: companyFilter(req), required: true }]
             });
             if (!item) throw { name: 'NotFound', message: 'Stock opname item not found' };
-            await item.update(req.body);
+            const { scanned_qty, difference } = req.body;
+            const updates = {};
+            if (scanned_qty != null) {
+                updates.scanned_qty = Number(scanned_qty);
+                // Recalculate difference when scanned_qty changes (unless client sends explicit override)
+                if (difference == null) updates.difference = Number(scanned_qty) - Number(item.system_qty);
+            }
+            if (difference != null) updates.difference = Number(difference);
+            await item.update(updates);
             res.status(200).json(item);
         } catch (err) { next(err); }
     }

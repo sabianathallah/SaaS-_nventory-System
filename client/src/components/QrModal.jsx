@@ -19,12 +19,19 @@ function calcLayout(w, h) {
   const pad   = Math.max(1, +(Math.min(w, h) * 0.055).toFixed(1))  // mm
   const textH = Math.max(4, +(h * 0.30).toFixed(1))                 // mm for text below QR
   const qrMm  = Math.max(6, +(Math.min(w - pad * 2, h - pad * 2 - textH)).toFixed(1))
-  const namePt = Math.max(4,   +(h * 0.135).toFixed(1))
-  const codePt = Math.max(3.5, +(h * 0.110).toFixed(1))
+  let namePt = Math.max(4,   +(h * 0.135).toFixed(1))
+  let codePt = Math.max(3.5, +(h * 0.110).toFixed(1))
+
+  // 40×30 punya sisa ruang teks yang lega — perbesar font tanpa mengecilkan QR
+  if (w === 40 && h === 30) {
+    namePt = 6.5
+    codePt = 4.5
+  }
+
   return { pad, qrMm, namePt, codePt }
 }
 
-export default function QrModal({ sku, skuName, onClose }) {
+export default function QrModal({ sku, productName, variantLabel, onClose }) {
   const qrRef = useRef(null)
   const [sizeId,  setSizeId]  = useState('40x30')
   const [customW, setCustomW] = useState('')
@@ -56,10 +63,14 @@ export default function QrModal({ sku, skuName, onClose }) {
     svgClone.setAttribute('height', '100%')
     const svgHtml = svgClone.outerHTML
 
+    const displayName = variantLabel
+      ? `${esc(productName)} - ${esc(variantLabel)}`
+      : esc(productName)
+
     const label = `<div class="label">
   <div class="qr">${svgHtml}</div>
   <div class="info">
-    ${skuName ? `<div class="name">${esc(skuName)}</div>` : ''}
+    ${displayName ? `<div class="name">${displayName}</div>` : ''}
     <div class="code">${esc(sku.sku_code)}</div>
   </div>
 </div>`
@@ -121,8 +132,10 @@ body{font-family:'Courier New',monospace;background:#fff;}
               <QRCode value={sku.sku_code} size={qrPx} />
             </div>
             <div className="text-center w-full">
-              {skuName && (
-                <p style={{ fontSize: namePx, fontWeight: 'bold', lineHeight: 1.2, wordBreak: 'break-word' }} className="text-slate-800">{skuName}</p>
+              {productName && (
+                <p style={{ fontSize: namePx, fontWeight: 'bold', lineHeight: 1.2, wordBreak: 'break-word' }} className="text-slate-800">
+                  {variantLabel ? `${productName} - ${variantLabel}` : productName}
+                </p>
               )}
               <p style={{ fontSize: codePx, lineHeight: 1.2 }} className="font-mono text-slate-400 break-all">{sku.sku_code}</p>
             </div>
