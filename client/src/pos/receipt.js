@@ -1,48 +1,85 @@
 // Struk thermal: dirender ke iframe tersembunyi lalu window.print().
 // Jalan tanpa internet; printer thermal di Mac tampil sebagai printer biasa.
 // Logo hitam-putih di-inline (data URI) supaya ikut tercetak walau offline.
+// Printer thermal hanya hitam: semua garis/teks hitam pekat, tanpa abu-abu atau gradasi.
 import logo from '../assets/logo-preface-receipt.png?inline'
 
 const num = (n) => Number(n || 0).toLocaleString('id-ID')
 const rp = (n) => 'Rp' + num(n)
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
 const METHOD = { CASH: 'Tunai', QRIS: 'QRIS', TRANSFER: 'Transfer', EDC: 'Kartu (EDC)', OTHER: 'Lainnya' }
+const HANDLE = '@prefacewearhouse'
+const STAR = '&#9733;'
 
 // 80 mm = ukuran kertas struk POS standar (area cetak ± 72 mm); 58 mm untuk printer portabel
-export const DEFAULT_RECEIPT = { widthMm: 80, fontPx: 12 }
+export const DEFAULT_RECEIPT = { widthMm: 80, fontPx: 12, style: 'minimal', showCashier: false }
+export const RECEIPT_STYLES = [['minimal', 'Minimalis'], ['street', 'Streetwear']]
 
-// Printer thermal hanya hitam: semua garis/teks hitam pekat, tanpa abu-abu.
-// Gaya minimalis: banyak ruang kosong, label kecil berjarak, bintang PREFACE sebagai pemisah.
-const STAR = '&#9733;'
-// "TSHIRT PREFACE - QUEENPIN" -> "TSHIRT · QUEENPIN": merek sudah ada di logo, nama jadi muat satu baris
+// "TSHIRT PREFACE - QUEENPIN" -> "TSHIRT \u00b7 QUEENPIN": merek sudah ada di logo, nama jadi muat satu baris
 const shortName = (n) => String(n || '').replace(/[\u200b-\u200d\u2060\ufeff]/g, '').replace(/\s+PREFACE\s+-\s+/i, ' \u00b7 ').replace(/\s+PREFACE$/i, '').trim()
-export function receiptHtml(order, { event, settings = DEFAULT_RECEIPT, cashierName }) {
-  const w = Number(settings.widthMm) || 80
-  const f = Number(settings.fontPx) || 12
+const firstName = (n) => String(n || '').trim().split(/\s+/)[0] || ''
+
+// Barcode Code 39 dari nomor struk (huruf besar, angka, '-'); bisa di-scan untuk mencari transaksi.
+const C39 = {
+  0: '000110100', 1: '100100001', 2: '001100001', 3: '101100000', 4: '000110001', 5: '100110000', 6: '001110000',
+  7: '000100101', 8: '100100100', 9: '001100100', A: '100001001', B: '001001001', C: '101001000', D: '000011001',
+  E: '100011000', F: '001011000', G: '000001101', H: '100001100', I: '001001100', J: '000011100', K: '100000011',
+  L: '001000011', M: '101000010', N: '000010011', O: '100010010', P: '001010010', Q: '000000111', R: '100000110',
+  S: '001000110', T: '000010110', U: '110000001', V: '011000001', W: '111000000', X: '010010001', Y: '110010000',
+  Z: '011010000', '-': '010000101', '.': '110000100', ' ': '011000100', '*': '010010100',
+}
+export function code39Widths(text) {
+  const chars = `*${String(text).toUpperCase().replace(/[^0-9A-Z.\- ]/g, '')}*`
+  const out = [] // lebar modul berurutan: bar, spasi, bar, ... (1 = tipis, 3 = tebal)
+  ;[...chars].forEach((ch, i) => {
+    for (const bit of C39[ch]) out.push(bit === '1' ? 3 : 1)
+    if (i < chars.length - 1) out.push(1) // jeda antar karakter
+  })
+  return out
+}
+function code39Svg(text, heightPx = 44) {
+  const widths = code39Widths(text)
+  let x = 10, rects = '' // 10 modul zona tenang kiri/kanan
+  widths.forEach((w, i) => { if (i % 2 === 0) rects += `<rect x="${x}" y="0" width="${w}" height="${heightPx}"/>`; x += w })
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${x + 10} ${heightPx}" preserveAspectRatio="none" style="width:100%;height:${heightPx}px;display:block" shape-rendering="crispEdges">${rects}</svg>`
+}
+
+function ctx(order, event, settings) {
   const d = new Date(order.soldAt)
-  const date = d.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })
-  const time = d.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
-  const pcs = order.items.reduce((s, i) => s + i.qty, 0)
-  const saved = order.itemDiscount + order.orderDiscount
-  // baris "Terima kasih" sudah dicetak tetap, jangan dobel dari catatan event
-  const foot = String(event?.receiptFooter || '').split('\n').filter(l => !/^\s*terima kasih!?\s*$/i.test(l)).join('\n').trim()
+  return {
+    w: Number(settings.widthMm) || 80,
+    f: Number(settings.fontPx) || 12,
+    date: d.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }),
+    time: d.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
+    pcs: order.items.reduce((s, i) => s + i.qty, 0),
+    name: String(order.customerName || '').trim(),
+    // baris "Terima kasih" sudah dicetak tetap, jangan dobel dari catatan event
+    foot: String(event?.receiptFooter || '').split('\n').filter(l => !/^\s*terima kasih!?\s*$/i.test(l)).join('\n').trim(),
+    pays: order.payments.map(p => `<div class="row"><span>${METHOD[p.method] || esc(p.method)}</span><span>${num(p.amount)}</span></div>`).join(''),
+  }
+}
+const pageCss = (w, f, font) => `
+  @page { size: ${w}mm auto; margin: 0; }
+  * { box-sizing: border-box; }
+  body { margin: 0; width: ${w}mm; color: #000; font: ${f}px/1.5 ${font}; font-variant-numeric: tabular-nums;
+         -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .c { text-align: center; } .row { display: flex; justify-content: space-between; gap: 10px; }`
+
+// ── Minimalis ────────────────────────────────────────────────────────────────
+function minimal(order, { event, settings, cashierName }) {
+  const { w, f, date, time, pcs, name, foot, pays } = ctx(order, event, settings)
   const items = order.items.map(i => `
     <div class="item">
-      <div class="row top"><span class="name">${esc(shortName(i.name))}</span><span class="amt">${num(i.qty * i.unitPrice)}</span></div>
+      <div class="row top"><span class="nm">${esc(shortName(i.name))}</span><span class="amt">${num(i.qty * i.unitPrice)}</span></div>
       <div class="sub">${i.variant ? `<span class="size">${esc(i.variant)}</span>` : ''}${i.qty} &times; ${num(i.unitPrice)}</div>
       ${i.discount ? `<div class="row sub"><span>&mdash; diskon</span><span>-${num(i.discount)}</span></div>` : ''}
     </div>`).join('')
-  const pays = order.payments.map(p => `<div class="row"><span>${METHOD[p.method] || esc(p.method)}</span><span>${num(p.amount)}</span></div>`).join('')
-  return `<!doctype html><html><head><meta charset="utf-8"><style>
-    @page { size: ${w}mm auto; margin: 0; }
-    * { box-sizing: border-box; }
-    body { margin: 0; padding: 6mm 5mm 8mm; width: ${w}mm; color: #000;
-           font: ${f}px/1.5 "Helvetica Neue", Helvetica, Arial, sans-serif; font-variant-numeric: tabular-nums; }
-    .c { text-align: center; }
-    .row { display: flex; justify-content: space-between; gap: 10px; }
+  const meta = [['No. Struk', order.orderNumber], ['Tanggal', date], name && ['Atas nama', name], ['Jam', time],
+    settings.showCashier && cashierName && ['Kasir', cashierName]].filter(Boolean)
+  return `<!doctype html><html><head><meta charset="utf-8"><style>${pageCss(w, f, '"Helvetica Neue", Helvetica, Arial, sans-serif')}
+    body { padding: 6mm 5mm 8mm; }
     .logo { display: block; width: 54%; margin: 0 auto; image-rendering: pixelated; }
-    .brand { margin-top: 6px; font-size: ${f - 3}px; letter-spacing: .55em; padding-left: .55em; }
-    .tag { font-size: ${f - 2}px; letter-spacing: .04em; white-space: pre-line; margin-top: 2px; }
+    .handle { margin-top: 6px; font-size: ${f - 1}px; letter-spacing: .12em; }
     .star { margin: 10px 0; display: flex; align-items: center; gap: 8px; font-size: ${f - 3}px; }
     .star::before, .star::after { content: ""; flex: 1; border-top: 1px solid #000; }
     .event { font-size: ${f - 1}px; font-weight: 700; letter-spacing: .22em; text-transform: uppercase; }
@@ -52,11 +89,8 @@ export function receiptHtml(order, { event, settings = DEFAULT_RECEIPT, cashierN
     .k { display: block; font-size: ${f - 4}px; letter-spacing: .25em; text-transform: uppercase; }
     .v { font-weight: 700; }
     .label { font-size: ${f - 4}px; letter-spacing: .3em; margin: 12px 0 4px; }
-    .item { padding: 6px 0; border-bottom: 1px dotted #000; }
-    .item:last-child { border-bottom: 0; }
-    .top { align-items: baseline; }
-    .name { font-weight: 700; letter-spacing: .02em; word-break: break-word; }
-    .amt { white-space: nowrap; }
+    .item { padding: 6px 0; border-bottom: 1px dotted #000; } .item:last-child { border-bottom: 0; }
+    .top { align-items: baseline; } .nm { font-weight: 700; letter-spacing: .02em; word-break: break-word; } .amt { white-space: nowrap; }
     .sub { font-size: ${f - 1}px; margin-top: 1px; }
     .size { display: inline-block; min-width: 18px; padding: 0 4px; margin-right: 6px; border: 1px solid #000;
             border-radius: 2px; font-size: ${f - 2}px; font-weight: 700; text-align: center; line-height: 1.35; }
@@ -65,49 +99,121 @@ export function receiptHtml(order, { event, settings = DEFAULT_RECEIPT, cashierN
              display: flex; justify-content: space-between; align-items: baseline; }
     .grand .k { font-size: ${f - 2}px; letter-spacing: .35em; font-weight: 700; }
     .grand .big { font-size: ${f + 9}px; font-weight: 800; letter-spacing: -.01em; }
-    .change { font-weight: 700; }
-    .saved { margin-top: 10px; font-size: ${f - 1}px; letter-spacing: .06em; }
+    .bold { font-weight: 700; }
     .thanks { font-size: ${f + 2}px; font-weight: 800; letter-spacing: .4em; padding-left: .4em; }
+    .for { font-size: ${f + 4}px; font-weight: 800; margin-top: 2px; }
     .foot { font-size: ${f - 2}px; white-space: pre-line; margin-top: 4px; }
-    .tiny { font-size: ${f - 4}px; letter-spacing: .15em; text-transform: uppercase; margin-top: 10px; }
+    .bc { margin: 12px 6% 2px; } .bcn { font-size: ${f - 3}px; letter-spacing: .3em; }
   </style></head><body>
     <img class="logo" src="${logo}" alt="PREFACE">
-    <div class="c brand">PREFACE WEARHOUSE</div>
-    ${event?.receiptHeader ? `<div class="c tag">${esc(event.receiptHeader)}</div>` : ''}
-
+    <div class="c handle">${HANDLE}</div>
     <div class="star">${STAR}</div>
     ${event?.name ? `<div class="c event">${esc(event.name)}</div>` : ''}
     ${event?.location ? `<div class="c loc">${esc(event.location)}</div>` : ''}
-
-    <div class="meta">
-      <div><span class="k">No. Struk</span><span class="v">${esc(order.orderNumber)}</span></div>
-      <div><span class="k">Tanggal</span><span class="v">${date}</span></div>
-      <div><span class="k">Kasir</span><span class="v">${esc(cashierName || '-')}</span></div>
-      <div><span class="k">Jam</span><span class="v">${time}</span></div>
-    </div>
+    <div class="meta">${meta.map(([k, v]) => `<div><span class="k">${k}</span><span class="v">${esc(v)}</span></div>`).join('')}</div>
 
     <div class="label">PESANAN &middot; ${pcs} ITEM</div>
     ${items}
-
     <div class="sum" style="margin-top:8px">
       <div class="row"><span>Subtotal</span><span>${num(order.subtotal)}</span></div>
       ${order.itemDiscount ? `<div class="row"><span>Diskon item</span><span>-${num(order.itemDiscount)}</span></div>` : ''}
       ${order.orderDiscount ? `<div class="row"><span>Diskon tambahan</span><span>-${num(order.orderDiscount)}</span></div>` : ''}
     </div>
     <div class="grand"><span class="k">TOTAL</span><span class="big">${rp(order.total)}</span></div>
-
     <div class="sum">
       ${pays}
       ${order.cashReceived != null ? `<div class="row"><span>Uang diterima</span><span>${num(order.cashReceived)}</span></div>
-        <div class="row change"><span>Kembali</span><span>${rp(order.change)}</span></div>` : ''}
+        <div class="row bold"><span>Kembali</span><span>${rp(order.change)}</span></div>` : ''}
     </div>
-    ${saved ? `<div class="c saved">${STAR} Kamu hemat <b>${rp(saved)}</b> ${STAR}</div>` : ''}
 
     <div class="star">${STAR} ${STAR} ${STAR}</div>
     <div class="c thanks">TERIMA KASIH</div>
+    ${name ? `<div class="c for">${esc(firstName(name))}!</div>` : ''}
     ${foot ? `<div class="c foot">${esc(foot)}</div>` : ''}
-    <div class="c tiny">Simpan struk ini sebagai bukti pembelian</div>
+    <div class="bc">${code39Svg(order.orderNumber, 34)}</div>
+    <div class="c bcn">${esc(order.orderNumber)}</div>
   </body></html>`
+}
+
+// ── Streetwear: blok hitam tebal, huruf condensed besar, nomor item 01/02, barcode ala hang tag ──
+function street(order, { event, settings, cashierName }) {
+  const { w, f, date, time, pcs, name, foot, pays } = ctx(order, event, settings)
+  const items = order.items.map((i, idx) => `
+    <div class="item">
+      <div class="no">${String(idx + 1).padStart(2, '0')}</div>
+      <div class="body">
+        <div class="nm">${esc(shortName(i.name))}</div>
+        <div class="row tags"><span>${i.variant ? `<b class="chip">SIZE ${esc(i.variant)}</b>` : ''}<b class="chip">QTY ${String(i.qty).padStart(2, '0')}</b> @${num(i.unitPrice)}</span><span class="amt">${num(i.qty * i.unitPrice)}</span></div>
+        ${i.discount ? `<div class="row tags"><span>DISKON</span><span>-${num(i.discount)}</span></div>` : ''}
+      </div>
+    </div>`).join('')
+  const strip = Array(6).fill(`PREFACE ${STAR}`).join(' ')
+  return `<!doctype html><html><head><meta charset="utf-8"><style>${pageCss(w, f, '"Helvetica Neue", Helvetica, Arial, sans-serif')}
+    body { padding: 4mm 4mm 7mm; }
+    .cond { font-family: Impact, "Haettenschweiler", "Arial Narrow", "Helvetica Neue", sans-serif; font-weight: 400; letter-spacing: .01em; }
+    .logo { display: block; width: 86%; margin: 0 auto; image-rendering: pixelated; }
+    .handle { font-size: ${f}px; font-weight: 800; letter-spacing: .08em; margin-top: 4px; }
+    .strip { margin: 8px -4mm; padding: 3px 0; background: #000; color: #fff; white-space: nowrap; overflow: hidden;
+             font-size: ${f - 2}px; font-weight: 800; letter-spacing: .3em; text-align: center; }
+    .drop { display: flex; justify-content: space-between; align-items: flex-end; margin: 6px 0; }
+    .drop .ev { font-size: ${f + 8}px; line-height: 1; text-transform: uppercase; }
+    .drop .loc { font-size: ${f - 2}px; font-weight: 700; letter-spacing: .15em; text-transform: uppercase; }
+    .drop .r { text-align: right; font-size: ${f - 2}px; font-weight: 700; line-height: 1.3; }
+    .bar { border-top: 3px solid #000; margin: 6px 0; }
+    .label { display: flex; justify-content: space-between; font-size: ${f - 3}px; font-weight: 800; letter-spacing: .25em; }
+    .item { display: flex; gap: 8px; padding: 6px 0; border-bottom: 1.5px solid #000; }
+    .no { font-family: Impact, "Arial Narrow", sans-serif; font-size: ${f + 12}px; line-height: .9; min-width: 30px; }
+    .body { flex: 1; min-width: 0; }
+    .nm { font-family: Impact, "Arial Narrow", sans-serif; font-size: ${f + 5}px; line-height: 1.05; text-transform: uppercase; word-break: break-word; }
+    .tags { font-size: ${f - 2}px; margin-top: 3px; align-items: center; }
+    .chip { display: inline-block; padding: 0 4px; margin-right: 4px; border: 1.5px solid #000; font-size: ${f - 3}px; letter-spacing: .08em; }
+    .amt { font-weight: 800; font-size: ${f}px; white-space: nowrap; }
+    .sum { margin-top: 6px; font-size: ${f - 1}px; } .sum .row { padding: 1px 0; } .up { text-transform: uppercase; }
+    .total { margin: 8px -4mm 6px; padding: 6px 4mm 5px; background: #000; color: #fff; display: flex; justify-content: space-between; align-items: flex-end; }
+    .total .k { font-size: ${f - 1}px; font-weight: 800; letter-spacing: .3em; }
+    .total .big { font-family: Impact, "Arial Narrow", sans-serif; font-size: ${f + 16}px; line-height: 1; }
+    .bold { font-weight: 800; }
+    .ty { margin-top: 10px; border: 3px solid #000; padding: 8px 6px 6px; text-align: center; }
+    .ty .s { font-size: ${f - 3}px; font-weight: 800; letter-spacing: .35em; }
+    .ty .big { font-family: Impact, "Arial Narrow", sans-serif; font-size: ${f + 20}px; line-height: .95; text-transform: uppercase; word-break: break-word; }
+    .foot { font-size: ${f - 2}px; white-space: pre-line; margin-top: 6px; }
+    .bc { margin: 10px 2% 0; } .bcn { display: flex; justify-content: space-between; font-size: ${f - 3}px; font-weight: 800; letter-spacing: .2em; margin-top: 2px; }
+  </style></head><body>
+    <img class="logo" src="${logo}" alt="PREFACE">
+    <div class="c handle">${HANDLE}</div>
+    <div class="strip">${strip}</div>
+    <div class="drop">
+      <div>${event?.name ? `<div class="ev cond">${esc(event.name)}</div>` : ''}${event?.location ? `<div class="loc">${esc(event.location)}</div>` : ''}</div>
+      <div class="r">${date}<br>${time}${settings.showCashier && cashierName ? `<br>KASIR ${esc(firstName(cashierName)).toUpperCase()}` : ''}</div>
+    </div>
+    <div class="bar"></div>
+    <div class="label"><span>ORDER ${esc(order.orderNumber)}</span><span>${String(pcs).padStart(2, '0')} PCS</span></div>
+    ${items}
+    <div class="sum">
+      <div class="row"><span>SUBTOTAL</span><span>${num(order.subtotal)}</span></div>
+      ${order.itemDiscount ? `<div class="row"><span>DISKON ITEM</span><span>-${num(order.itemDiscount)}</span></div>` : ''}
+      ${order.orderDiscount ? `<div class="row"><span>DISKON TAMBAHAN</span><span>-${num(order.orderDiscount)}</span></div>` : ''}
+    </div>
+    <div class="total"><span class="k">TOTAL</span><span class="big">${rp(order.total)}</span></div>
+    <div class="sum up">
+      ${pays}
+      ${order.cashReceived != null ? `<div class="row"><span>UANG DITERIMA</span><span>${num(order.cashReceived)}</span></div>
+        <div class="row bold"><span>KEMBALI</span><span>${rp(order.change)}</span></div>` : ''}
+    </div>
+    <div class="ty">
+      <div class="s">${STAR} THANK YOU ${STAR}</div>
+      <div class="big">${name ? esc(firstName(name)) : 'FOR COPPING'}</div>
+      <div class="s" style="margin-top:4px">${name ? 'FOR COPPING PREFACE' : 'PREFACE'}</div>
+    </div>
+    ${foot ? `<div class="c foot">${esc(foot)}</div>` : ''}
+    <div class="bc">${code39Svg(order.orderNumber, 40)}</div>
+    <div class="bcn"><span>${esc(order.orderNumber)}</span><span>${HANDLE.toUpperCase()}</span></div>
+  </body></html>`
+}
+
+export function receiptHtml(order, opts) {
+  const settings = { ...DEFAULT_RECEIPT, ...(opts.settings || {}) }
+  return (settings.style === 'street' ? street : minimal)(order, { ...opts, settings })
 }
 
 export function printReceipt(html) {

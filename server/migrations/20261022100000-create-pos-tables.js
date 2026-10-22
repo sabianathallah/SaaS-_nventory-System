@@ -57,6 +57,8 @@ module.exports = {
       total:         { type: Sequelize.INTEGER, allowNull: false, defaultValue: 0 },
       cashReceived:  { type: Sequelize.INTEGER, allowNull: true },
       change:        { type: Sequelize.INTEGER, allowNull: false, defaultValue: 0 },
+      customerName:  { type: Sequelize.STRING(100), allowNull: true },
+      customerPhone: { type: Sequelize.STRING(30), allowNull: true },
       discountNote:  { type: Sequelize.STRING(200), allowNull: true },
       note:          { type: Sequelize.STRING(200), allowNull: true },
       status:        { type: Sequelize.STRING(10), allowNull: false, defaultValue: 'PAID' },

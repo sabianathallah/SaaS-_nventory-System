@@ -7,7 +7,7 @@ import NoPermission from '../components/NoPermission'
 import Modal from '../components/Modal'
 import { allItems, delItem, deviceId, getItem, nextSeq, requestPersistence, setItem } from '../pos/store'
 import { enqueueOrder, onSyncChange, posHttp, startAutoSync, syncQueue, syncState } from '../pos/sync'
-import { DEFAULT_RECEIPT, printReceipt, receiptHtml } from '../pos/receipt'
+import { DEFAULT_RECEIPT, RECEIPT_STYLES, printReceipt, receiptHtml } from '../pos/receipt'
 
 const rp = (n) => 'Rp ' + Number(n || 0).toLocaleString('id-ID')
 const METHODS = [['CASH', 'Cash'], ['QRIS', 'QRIS'], ['TRANSFER', 'Transfer'], ['EDC', 'EDC / Kartu'], ['OTHER', 'Lainnya']]
@@ -139,7 +139,7 @@ export default function PosCashier() {
   }, [cart, orderDiscountText])
 
   // ── Bayar ───────────────────────────────────────────────────────────────
-  const finishOrder = async ({ payments, cashReceived }) => {
+  const finishOrder = async ({ payments, cashReceived, customerName, customerPhone }) => {
     const seq = await nextSeq(eventId)
     const order = {
       clientOrderId: `${device}-${eventId}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
@@ -149,6 +149,7 @@ export default function PosCashier() {
       items: totals.lines.map(l => ({ ProductSKUId: l.skuId, qty: l.qty, unitPrice: l.unitPrice, discount: l.discount, name: l.name, variant: l.variant })),
       subtotal: totals.subtotal, itemDiscount: totals.itemDiscount, orderDiscount: totals.orderDiscount, total: totals.total,
       discountNote: discountNote || null,
+      customerName: customerName || null, customerPhone: customerPhone || null,
       payments, cashReceived,
       change: cashReceived != null ? cashReceived - payments.filter(p => p.method === 'CASH').reduce((s, p) => s + p.amount, 0) : 0,
     }
@@ -291,7 +292,7 @@ export default function PosCashier() {
             {recent.slice(0, 100).map(o => (
               <div key={o.clientOrderId} className="flex items-center justify-between py-2 gap-3">
                 <div>
-                  <p className="font-semibold">{o.orderNumber} <span className="text-xs font-normal text-slate-400">{new Date(o.soldAt).toLocaleTimeString('id-ID')}</span></p>
+                  <p className="font-semibold">{o.orderNumber} <span className="text-xs font-normal text-slate-400">{new Date(o.soldAt).toLocaleTimeString('id-ID')}{o.customerName ? ` · ${o.customerName}` : ''}</span></p>
                   <p className="text-xs text-slate-500">{o.items.map(i => `${i.qty}x ${i.name}${i.variant ? ` ${i.variant}` : ''}`).join(', ')}</p>
                   {o.error && <p className="text-xs text-danger">Ditolak: {o.error}</p>}
                   {o.server?.needsReview && <p className="text-xs text-amber-600">Perlu dicek: {o.server.reviewNote}</p>}
@@ -394,6 +395,7 @@ function OpenShift({ eventId, device, onOpened }) {
 function PayModal({ total, onClose, onPay }) {
   const [rows, setRows] = useState([{ method: 'CASH', amount: total }])
   const [received, setReceived] = useState('')
+  const [customer, setCustomer] = useState({ name: '', phone: '' })
   const [busy, setBusy] = useState(false)
   const paid = rows.reduce((s, r) => s + (Number(r.amount) || 0), 0)
   const cashPart = rows.filter(r => r.method === 'CASH').reduce((s, r) => s + (Number(r.amount) || 0), 0)
@@ -405,7 +407,11 @@ function PayModal({ total, onClose, onPay }) {
   const submit = async () => {
     if (!valid || busy) return
     setBusy(true)
-    await onPay({ payments: rows.filter(r => Number(r.amount) > 0).map(r => ({ method: r.method, amount: Number(r.amount) })), cashReceived: cashPart ? recv : null })
+    await onPay({
+      payments: rows.filter(r => Number(r.amount) > 0).map(r => ({ method: r.method, amount: Number(r.amount) })),
+      cashReceived: cashPart ? recv : null,
+      customerName: customer.name.trim(), customerPhone: customer.phone.trim(),
+    })
   }
   return (
     <Modal open onClose={onClose} title="Pembayaran">
@@ -437,6 +443,12 @@ function PayModal({ total, onClose, onPay }) {
             <p className={`text-lg font-bold ${change < 0 ? 'text-danger' : 'text-slate-800'}`}>Kembalian: {rp(Math.max(change, 0))}{change < 0 ? ' (uang kurang)' : ''}</p>
           </div>
         )}
+        <div className="grid grid-cols-2 gap-2 pt-1 border-t">
+          <div><label className="label">Atas nama (opsional)</label>
+            <input className="input" value={customer.name} onChange={e => setCustomer(c => ({ ...c, name: e.target.value }))} placeholder="dicetak di struk" /></div>
+          <div><label className="label">No. HP (opsional)</label>
+            <input className="input" inputMode="tel" value={customer.phone} onChange={e => setCustomer(c => ({ ...c, phone: e.target.value }))} placeholder="tidak dicetak" /></div>
+        </div>
         <button className="btn-primary w-full justify-center py-3 text-lg" disabled={!valid || busy} onClick={submit}>{busy ? 'Menyimpan…' : 'Selesai & cetak struk (Enter)'}</button>
       </div>
     </Modal>
@@ -450,11 +462,17 @@ function SettingsModal({ settings, onClose, onSave }) {
       <div className="space-y-3">
         <div><label className="label">Lebar kertas (mm)</label><input className="input" type="number" value={s.widthMm} onChange={e => setS({ ...s, widthMm: Number(e.target.value) })} />
           <p className="text-xs text-slate-400 mt-1">Standar kasir 80 mm. Pakai 58 mm kalau printernya model portabel kecil.</p></div>
+        <div><label className="label">Gaya struk</label>
+          <div className="flex gap-2">{RECEIPT_STYLES.map(([k, l]) => (
+            <button key={k} type="button" onClick={() => setS({ ...s, style: k })} className={`flex-1 justify-center ${s.style === k ? 'btn-primary' : 'btn-secondary'}`}>{l}</button>
+          ))}</div></div>
         <div><label className="label">Ukuran huruf (px)</label><input className="input" type="number" value={s.fontPx} onChange={e => setS({ ...s, fontPx: Number(e.target.value) })} /></div>
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={s.autoPrint} onChange={e => setS({ ...s, autoPrint: e.target.checked })} />Cetak struk otomatis setelah bayar</label>
+        <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={!!s.showCashier} onChange={e => setS({ ...s, showCashier: e.target.checked })} />Tampilkan nama kasir di struk</label>
         <button className="btn-secondary w-full justify-center" onClick={() => printReceipt(receiptHtml({
           orderNumber: 'TEST-0001', soldAt: new Date().toISOString(), subtotal: 300000, itemDiscount: 0, orderDiscount: 0, total: 300000,
           items: [{ name: 'Contoh produk', variant: 'M', qty: 1, unitPrice: 300000, discount: 0 }], payments: [{ method: 'CASH', amount: 300000 }], cashReceived: 300000, change: 0,
+          customerName: 'Pembeli',
         }, { event: { name: 'Tes printer' }, settings: s }))}><Printer size={14} />Cetak struk tes</button>
         <button className="btn-primary w-full justify-center" onClick={() => onSave(s)}>Simpan</button>
       </div>

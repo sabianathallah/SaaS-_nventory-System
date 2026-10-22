@@ -75,9 +75,10 @@ describe('Transaksi', () => {
   let firstOrder;
 
   test('transaksi mengurangi stok gudang event lewat Stock Out Penjualan', async () => {
-    firstOrder = order();
+    firstOrder = order({ customerName: '  Andi  ', customerPhone: '0812-3456-7890' });
     const res = await request(app).post('/pos/orders').set(auth()).send(firstOrder);
     expect(res.status).toBe(201);
+    expect(res.body.order).toMatchObject({ customerName: 'Andi', customerPhone: '081234567890' });
     expect(res.body.order).toMatchObject({ total: 600000, change: 100000, needsReview: false, status: 'PAID' });
     expect(await swsQty(skuA.id)).toBe(3);
     const so = await Stock_Out_Header.findByPk(res.body.order.StockOutHeaderId);

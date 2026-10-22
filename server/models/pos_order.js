@@ -26,6 +26,9 @@ module.exports = (sequelize, DataTypes) => {
     total:         { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
     cashReceived:  { type: DataTypes.INTEGER, allowNull: true },
     change:        { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
+    // opsional, diisi kasir; nomor HP disimpan untuk data pelanggan tapi tidak dicetak di struk
+    customerName:  { type: DataTypes.STRING(100), allowNull: true },
+    customerPhone: { type: DataTypes.STRING(30), allowNull: true },
     discountNote:  { type: DataTypes.STRING(200), allowNull: true },
     note:          { type: DataTypes.STRING(200), allowNull: true },
     status:        { type: DataTypes.STRING(10), allowNull: false, defaultValue: 'PAID' },

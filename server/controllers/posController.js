@@ -288,6 +288,8 @@ class PosController {
                     clientOrderId: b.clientOrderId, orderNumber: b.orderNumber, soldAt,
                     subtotal, itemDiscount, orderDiscount, total,
                     cashReceived, change: cashReceived != null ? cashReceived - cashPart : 0,
+                    customerName: String(b.customerName || '').trim().slice(0, 100) || null,
+                    customerPhone: String(b.customerPhone || '').replace(/[^\d+]/g, '').slice(0, 30) || null,
                     discountNote: b.discountNote || null, note: b.note || null, status: 'PAID',
                     needsReview: review.length > 0, reviewNote: review.join('; ') || null,
                     StockOutHeaderId: header.id,

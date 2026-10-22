@@ -116,7 +116,7 @@ export default function PosReport() {
               <tr key={o.id} className="border-t border-slate-100 align-top">
                 <td className="py-1.5 font-mono text-xs">{o.orderNumber}</td>
                 <td className="text-xs text-slate-500">{new Date(o.soldAt).toLocaleString('id-ID')}</td>
-                <td className="text-xs">{o.items.map(i => `${i.qty}x ${i.name}${i.variant ? ` ${i.variant}` : ''}`).join(', ')}{o.discountNote && <span className="text-slate-400"> · {o.discountNote}</span>}</td>
+                <td className="text-xs">{o.customerName && <b>{o.customerName}{o.customerPhone ? ` (${o.customerPhone})` : ''} · </b>}{o.items.map(i => `${i.qty}x ${i.name}${i.variant ? ` ${i.variant}` : ''}`).join(', ')}{o.discountNote && <span className="text-slate-400"> · {o.discountNote}</span>}</td>
                 <td className="text-right font-mono">{rp(o.total)}</td>
                 <td className="pl-3 text-xs">{o.status === 'VOID' ? <span className="text-danger">Batal: {o.voidReason}</span> : o.needsReview ? <span className="text-amber-600">Perlu dicek</span> : 'OK'}</td>
                 <td className="text-right">{canVoid && o.status === 'PAID' && <button className="text-xs text-slate-400 hover:text-danger" onClick={() => setVoidTarget(o)}>Batalkan</button>}</td>
