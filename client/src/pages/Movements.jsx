@@ -16,6 +16,9 @@ const TYPE_BADGE = {
   ADJUSTMENT: <span className="badge-amber">~ ADJ</span>,
 }
 
+// Item yang dihapus / qty dikurangi di Stock IN tercatat OUT ber-source STOCK_IN
+const isStockInCorrection = (m) => m.type === 'OUT' && m.source === 'STOCK_IN'
+
 function defaultDateFrom() {
   const d = new Date()
   d.setDate(d.getDate() - 29)
@@ -196,7 +199,7 @@ export default function Movements() {
           i + 1,
           new Date(m.date ?? m.createdAt).toLocaleString('id-ID'),
           m.type,
-          m.type === 'OUT' ? (m.purpose ?? '—') : '—',
+          isStockInCorrection(m) ? 'Koreksi Stock IN' : m.type === 'OUT' ? (m.purpose ?? '—') : '—',
           m.Product?.name ?? `#${m.ProductId}`,
           m.Product?.sku ?? '—',
           variant,
@@ -239,7 +242,9 @@ export default function Movements() {
     },
     {
       key: 'purpose', label: 'Tujuan', width: 130,
-      render: r => r.type === 'OUT' && r.purpose
+      render: r => isStockInCorrection(r)
+        ? <span className="inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-100 truncate max-w-[120px]">Koreksi Stock IN</span>
+        : r.type === 'OUT' && r.purpose
         ? <span className="inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-violet-50 text-violet-700 border border-violet-100 truncate max-w-[120px]">{r.purpose}</span>
         : <span className="text-xs text-slate-300">—</span>,
     },
@@ -267,13 +272,13 @@ export default function Movements() {
         if (r.source === 'TRANSFER') {
           path  = `/transfers/${r.ReferenceId}`
           label = 'Transfer'
-        } else if (r.type === 'IN') {
+        } else if (r.source === 'STOCK_IN' || (!r.source && r.type === 'IN')) {
           path  = `/stock-in/${r.ReferenceId}`
           label = 'Stock IN'
-        } else if (r.type === 'OUT') {
+        } else if (r.source === 'STOCK_OUT' || (!r.source && r.type === 'OUT')) {
           path  = `/stock-out/${r.ReferenceId}`
           label = 'Stock OUT'
-        } else if (r.type === 'ADJUSTMENT') {
+        } else if (r.source === 'OPNAME' || r.type === 'ADJUSTMENT') {
           path  = `/opname/${r.ReferenceId}`
           label = 'Opname'
         }
@@ -315,8 +320,9 @@ export default function Movements() {
       />
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
         <SummaryCard label="Total IN"    value={summary?.totalIn  ?? 0} color="text-success" />
+        <SummaryCard label="Koreksi Stock IN (sudah dikurangi dari IN)" value={summary?.totalKoreksi ?? 0} color="text-warning" />
         <SummaryCard label="Total OUT"   value={summary?.totalOut ?? 0} color="text-danger"  />
         <SummaryCard label="Adjustment"  value={summary?.totalAdj ?? 0} color="text-warning" />
         <SummaryCard label="Net Change"  value={net} color={netColor} prefix={net >= 0 ? '+' : ''} />

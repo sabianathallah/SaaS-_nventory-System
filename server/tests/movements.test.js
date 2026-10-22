@@ -4,7 +4,7 @@ process.env.NODE_ENV = 'test';
 const request = require('supertest');
 const app     = require('../app');
 const { initDb } = require('./setup');
-const { Product, ProductSKU, Stock_Movement, Stock_In_Header, Stock } = require('../models');
+const { Product, ProductSKU, Stock_Movement, Stock_In_Header, Stock_Out_Header, Stock } = require('../models');
 
 let state;
 let product, sku;
@@ -245,5 +245,59 @@ describe('GET /stock-movements/:id', () => {
       .get('/stock-movements/99999')
       .set(auth());
     expect(res.status).toBe(404);
+  });
+});
+
+describe('Koreksi Stock IN (item dihapus / qty dikurangi)', () => {
+  let kProduct, soh;
+
+  beforeAll(async () => {
+    kProduct = await Product.create({
+      name: 'Koreksi Test Product', CategoryId: state.category.id, unit: 'pcs', companyId: state.company.id,
+    });
+    const sih = await Stock_In_Header.create({ WarehouseId: state.warehouse.id, date: new Date(), companyId: state.company.id });
+    // Stock Out dengan nomor yang dipakai sebagai ReferenceId koreksi: dulu tujuannya ikut "terpinjam"
+    soh = await Stock_Out_Header.create({
+      WarehouseId: state.warehouse.id, date: new Date(), purpose: 'Penjualan', createdBy: state.admin.id, companyId: state.company.id,
+    });
+    await Stock_Movement.bulkCreate([
+      { ProductId: kProduct.id, WarehouseId: state.warehouse.id, type: 'IN',  quantity: 30, ReferenceId: sih.id, source: 'STOCK_IN',  companyId: state.company.id },
+      { ProductId: kProduct.id, WarehouseId: state.warehouse.id, type: 'OUT', quantity: 10, ReferenceId: soh.id, source: 'STOCK_IN',  note: 'Koreksi: item dihapus', companyId: state.company.id },
+      { ProductId: kProduct.id, WarehouseId: state.warehouse.id, type: 'OUT', quantity: 4,  ReferenceId: soh.id, source: 'STOCK_OUT', companyId: state.company.id },
+    ]);
+  });
+
+  afterAll(async () => {
+    await Stock_Movement.destroy({ where: { ProductId: kProduct.id } }).catch(() => {});
+    await Stock_Out_Header.destroy({ where: { id: soh.id } }).catch(() => {});
+    await Product.destroy({ where: { id: kProduct.id } }).catch(() => {});
+  });
+
+  test('summary mengurangi koreksi dari Total IN, bukan menambah Total OUT', async () => {
+    const res = await request(app).get(`/stock-movements/summary?ProductId=${kProduct.id}`).set(auth());
+    expect(res.status).toBe(200);
+    expect(res.body.totalIn).toBe(20);
+    expect(res.body.totalKoreksi).toBe(10);
+    expect(res.body.totalOut).toBe(4);
+    expect(res.body.net).toBe(16);
+  });
+
+  test('koreksi tidak meminjam tujuan dari Stock Out bernomor sama', async () => {
+    const res = await request(app).get(`/stock-movements?ProductId=${kProduct.id}`).set(auth());
+    const kor = res.body.data.find(m => m.source === 'STOCK_IN' && m.type === 'OUT');
+    const sale = res.body.data.find(m => m.source === 'STOCK_OUT');
+    expect(kor.purpose).toBeNull();
+    expect(sale.purpose).toBe('Penjualan');
+  });
+
+  test('filter tujuan Penjualan tidak ikut menghitung koreksi', async () => {
+    const res = await request(app).get(`/stock-movements/summary?ProductId=${kProduct.id}&purpose=Penjualan`).set(auth());
+    expect(res.body.totalOut).toBe(4);
+  });
+
+  test('chart mengurangi koreksi dari IN', async () => {
+    const res = await request(app).get(`/stock-movements/chart?ProductId=${kProduct.id}`).set(auth());
+    const tot = res.body.reduce((a, r) => ({ IN: a.IN + r.IN, OUT: a.OUT + r.OUT }), { IN: 0, OUT: 0 });
+    expect(tot).toEqual({ IN: 20, OUT: 4 });
   });
 });

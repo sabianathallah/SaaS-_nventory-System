@@ -306,7 +306,8 @@ class StockInHeaderController {
 
       const newQty   = req.body.quantity != null ? Number(req.body.quantity) : item.quantity;
       const newPrice = req.body.price    != null ? Number(req.body.price)    : item.price;
-      const delta    = newQty - item.quantity;
+      const oldQty   = item.quantity;
+      const delta    = newQty - oldQty;
 
       await item.update({ quantity: newQty, price: newPrice }, { transaction: t });
 
@@ -325,6 +326,7 @@ class StockInHeaderController {
             ProductId: sku.ProductId, ProductSKUId: item.ProductSKUId, WarehouseId: header.WarehouseId,
             type: delta > 0 ? 'IN' : 'OUT', quantity: Math.abs(delta),
             ReferenceId: header.id, source: 'STOCK_IN',
+            note: `Koreksi: qty item diubah di Stock IN #${header.id} (${oldQty} → ${newQty})`,
             date: header.date || new Date(),
             companyId: companyId(req),
           }, { transaction: t });

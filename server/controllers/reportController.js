@@ -151,8 +151,8 @@ class ReportController {
           sm."ReferenceId"::int                                     AS id,
           MIN(sm.date)                                              AS date,
           COUNT(DISTINCT sm."ProductSKUId")::int                   AS "skuCount",
-          COALESCE(SUM(sm.quantity), 0)::int                       AS "totalQty",
-          COALESCE(SUM(sm.quantity::numeric * COALESCE(ps.price,0)),0)::numeric AS "totalValue",
+          COALESCE(SUM(CASE WHEN sm.type = 'OUT' THEN -sm.quantity ELSE sm.quantity END), 0)::int AS "totalQty",
+          COALESCE(SUM(CASE WHEN sm.type = 'OUT' THEN -sm.quantity ELSE sm.quantity END::numeric * COALESCE(ps.price,0)),0)::numeric AS "totalValue",
           MIN(sih.note)                                            AS note,
           MIN(w.name)                                              AS "warehouseName",
           MIN(u.name)                                              AS "createdBy"

@@ -6,13 +6,20 @@ const { paginate, buildFilter, paginatedResponse } = require('../helpers/queryHe
 
 const ALLOWED_PURPOSES = ['Penjualan','Endorse','Photoshoot','R&D','Pemakaian Internal','Hadiah / Gift','Sample','Retur Vendor','Lainnya'];
 
+// Tujuan hanya milik baris dari dokumen Stock Out. Koreksi Stock IN dan transfer juga bertipe OUT
+// dengan ReferenceId milik dokumennya sendiri, jadi tanpa cek source ikut "meminjam" tujuan Stock Out lain.
+const PURPOSE_SQL = `(SELECT soh.purpose FROM "Stock_Out_Headers" soh WHERE soh.id = "Stock_Movement"."ReferenceId" AND "Stock_Movement"."type" = 'OUT' AND COALESCE("Stock_Movement"."source", 'STOCK_OUT') = 'STOCK_OUT')`;
+
+// Item yang dihapus / qty dikurangi di Stock IN dicatat sebagai OUT ber-source STOCK_IN (lihat stockInHeaderController).
+const isStockInCorrection = (m) => m.type === 'OUT' && m.source === 'STOCK_IN';
+
 function extraFilters(query) {
     const { ArticleId, CategoryId, purpose } = query;
     const productWhere = {};
     if (ArticleId)  productWhere.ArticleId  = ArticleId;
     if (CategoryId) productWhere.CategoryId = CategoryId;
     const purposeWhere = (purpose && ALLOWED_PURPOSES.includes(purpose))
-        ? [literal(`(SELECT soh.purpose FROM "Stock_Out_Headers" soh WHERE soh.id = "Stock_Movement"."ReferenceId" AND "Stock_Movement"."type" = 'OUT') = '${purpose.replace(/'/g, "''")}'`)]
+        ? [literal(`${PURPOSE_SQL} = '${purpose.replace(/'/g, "''")}'`)]
         : [];
     return { productWhere, purposeWhere };
 }
@@ -38,7 +45,7 @@ class StockMovementController {
                 attributes: {
                     include: [
                         [
-                            literal(`(SELECT soh.purpose FROM "Stock_Out_Headers" soh WHERE soh.id = "Stock_Movement"."ReferenceId" AND "Stock_Movement"."type" = 'OUT')`),
+                            literal(PURPOSE_SQL),
                             'purpose'
                         ],
                     ]
@@ -107,16 +114,19 @@ class StockMovementController {
                 ? { include: [{ model: Product, where: productWhere, attributes: [] }] }
                 : {};
 
-            const [inRow, outRow, adjRow] = await Promise.all([
+            const [inRow, outRow, adjRow, korRow] = await Promise.all([
                 Stock_Movement.sum('quantity', { where: { ...base, type: 'IN'  }, ...summaryOpts }),
                 Stock_Movement.sum('quantity', { where: { ...base, type: 'OUT' }, ...summaryOpts }),
                 Stock_Movement.sum('quantity', { where: { ...base, type: 'ADJUSTMENT' }, ...summaryOpts }),
+                Stock_Movement.sum('quantity', { where: { ...base, type: 'OUT', source: 'STOCK_IN' }, ...summaryOpts }),
             ]);
 
-            const totalIn  = inRow  || 0;
-            const totalOut = outRow || 0;
+            // Koreksi Stock IN mengurangi barang masuk, bukan barang keluar
+            const totalKoreksi = korRow || 0;
+            const totalIn  = (inRow  || 0) - totalKoreksi;
+            const totalOut = (outRow || 0) - totalKoreksi;
             const totalAdj = adjRow || 0;
-            res.json({ totalIn, totalOut, totalAdj, net: totalIn - totalOut });
+            res.json({ totalIn, totalOut, totalAdj, totalKoreksi, net: totalIn - totalOut });
         } catch (err) { next(err); }
     }
 
@@ -139,9 +149,10 @@ class StockMovementController {
                 attributes: [
                     [fn('DATE', col('date')), 'date'],
                     'type',
+                    'source',
                     [fn('SUM', col('quantity')), 'total'],
                 ],
-                group: [fn('DATE', col('date')), 'type'],
+                group: [fn('DATE', col('date')), 'type', 'source'],
                 order: [[fn('DATE', col('date')), 'ASC']],
                 raw: true,
             });
@@ -150,7 +161,8 @@ class StockMovementController {
             const map = {};
             for (const r of rows) {
                 if (!map[r.date]) map[r.date] = { date: r.date, IN: 0, OUT: 0, ADJUSTMENT: 0 };
-                map[r.date][r.type] = Number(r.total);
+                if (isStockInCorrection(r)) map[r.date].IN -= Number(r.total);
+                else map[r.date][r.type] += Number(r.total);
             }
             res.json(Object.values(map));
         } catch (err) { next(err); }
@@ -174,7 +186,7 @@ class StockMovementController {
                 attributes: {
                     include: [
                         [
-                            literal(`(SELECT soh.purpose FROM "Stock_Out_Headers" soh WHERE soh.id = "Stock_Movement"."ReferenceId" AND "Stock_Movement"."type" = 'OUT')`),
+                            literal(PURPOSE_SQL),
                             'purpose'
                         ],
                     ]
@@ -198,7 +210,7 @@ class StockMovementController {
                 return [
                     new Date(r.date ?? r.createdAt).toISOString(),
                     r.type,
-                    `"${r.type === 'OUT' ? (r.getDataValue?.('purpose') ?? r.purpose ?? '') : ''}"`,
+                    `"${isStockInCorrection(r) ? 'Koreksi Stock IN' : r.type === 'OUT' ? (r.getDataValue?.('purpose') ?? r.purpose ?? '') : ''}"`,
                     `"${r.Product?.name ?? ''}"`,
                     r.Product?.sku ?? '',
                     r.ProductSKU?.sku_code ?? '',
