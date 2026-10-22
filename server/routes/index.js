@@ -50,6 +50,7 @@ const hrisRouter                = require('./hris');
 const taskRouter                = require('./task');
 const projectRouter              = require('./project');
 const notificationRouter        = require('./notification');
+const posRouter                 = require('./pos');
 const { Role, RolePermission } = require('../models');
 const { Op } = require('sequelize');
 
@@ -122,6 +123,7 @@ router.use('/hris',          hrisRouter);
 router.use('/tasks',         taskRouter);
 router.use('/projects',      projectRouter);
 router.use('/notifications', notificationRouter);
+router.use('/pos',           posRouter);
 
 // Admin only
 router.use('/users',     isAdmin, userRouter);

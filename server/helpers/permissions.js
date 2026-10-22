@@ -65,6 +65,13 @@ const ALL_PERMISSIONS = [
   { key: 'shipping.manual.delete',          label: 'Hapus Shipping Manual',                    group: 'Shipping Manual',         parent: 'shipping.manual.manage',  desc: 'Hapus permanen transaksi shipping' },
   { key: 'shipping.manual.category.manage', label: 'Kelola Kategori Non-Sales',                group: 'Shipping Manual',         parent: 'shipping.manual.manage',  desc: 'Tambah, edit, hapus kategori pengiriman non-sales' },
 
+  // ── Kasir / POS (event pop up) ───────────────────────────────────────────────
+  { key: 'pos.manage',                label: 'Akses Penuh Kasir / POS',                    group: 'Kasir / POS',             isParent: true,  desc: 'Aktifkan semua fitur kasir event pop up' },
+  { key: 'pos.sell',                  label: 'Jualan di Kasir',                            group: 'Kasir / POS',             parent: 'pos.manage',             desc: 'Buka/tutup shift & buat transaksi di layar kasir' },
+  { key: 'pos.void',                  label: 'Batalkan Transaksi Kasir',                   group: 'Kasir / POS',             parent: 'pos.manage',             desc: 'Void transaksi & kembalikan stok ke gudang event' },
+  { key: 'pos.event.manage',          label: 'Kelola Event Pop Up',                        group: 'Kasir / POS',             parent: 'pos.manage',             desc: 'Buat event, pilih gudang & channel, buka/tutup event' },
+  { key: 'pos.report',                label: 'Lihat Laporan Event',                        group: 'Kasir / POS',             parent: 'pos.manage',             desc: 'Rekap penjualan, pembayaran, dan shift per event' },
+
   // ── Transfer Stok ────────────────────────────────────────────────────────────
   { key: 'stock.transfer.manage',     label: 'Akses Penuh Transfer Stok',                  group: 'Transfer Stok',           isParent: true,  desc: 'Aktifkan semua fitur transfer antar gudang' },
   { key: 'stock.transfer.view',       label: 'Lihat Transfer Stok',                        group: 'Transfer Stok',           parent: 'stock.transfer.manage',  desc: 'Lihat daftar & detail transfer stok antar gudang' },
