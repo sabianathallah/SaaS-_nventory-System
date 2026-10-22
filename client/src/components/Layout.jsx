@@ -16,7 +16,7 @@ import {
   PackageCheck, Link2, BarChart2, BookMarked, ChevronDown,
   SendHorizonal, FileText, PanelLeftClose, PanelLeftOpen, UserCog,
   Laptop, Wallet, CalendarClock, ShieldCheck, AlarmClock, Receipt, ListChecks,
-  Star, CheckCircle2, Home,
+  Star, CheckCircle2, Home, Store,
 } from 'lucide-react'
 import logoPreface from '../assets/logo-preface.jpeg'
 
@@ -50,6 +50,7 @@ const NAV_GROUPS = [
       { to: '/opname',          icon: ClipboardList,    label: 'Stock Opname',      pageKey: 'opname' },
       { to: '/handover',        icon: PackageCheck,     label: 'Handover',          pageKey: 'handover' },
       { to: '/shipping-manual', icon: SendHorizonal,    label: 'Shipping Manual',   pageKey: 'shipping-manual', requirePermission: 'shipping.manual.view' },
+      { to: '/pos/events',      icon: Store,            label: 'Event Pop Up',      pageKey: 'pos', requirePermission: ['pos.manage', 'pos.sell', 'pos.event.manage', 'pos.report'] },
     ],
   },
   {
@@ -185,7 +186,7 @@ const PAGE_TITLES = {
   '/stock-in': 'Penerimaan Stok', '/stock-in/new': 'Penerimaan Stok Baru', '/stock-out': 'Pengeluaran Stok', '/movements': 'Pergerakan',
   '/opname': 'Stock Opname', '/transfers': 'Transfer Stok', '/handover': 'Handover Pengiriman',
   '/shipping-manual': 'Shipping Manual', '/database-links': 'Database Links', '/users': 'Pengguna', '/roles': 'Roles & Permission', '/companies': 'Perusahaan',
-  '/vendors': 'Vendor', '/incoming-goods': 'Barang Masuk',
+  '/vendors': 'Vendor', '/incoming-goods': 'Barang Masuk', '/pos/events': 'Event Pop Up',
   '/packing-jobs': 'Pekerjaan Packing', '/form-anak-packing': 'Form Anak Packing',
   '/page-visibility': 'Visibilitas Halaman',
   '/laporan': 'Laporan Bulanan',

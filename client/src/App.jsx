@@ -53,6 +53,9 @@ import Handover from './pages/Handover'
 import HandoverDetail from './pages/HandoverDetail'
 import DatabaseLinks from './pages/DatabaseLinks'
 import Tasks from './pages/Tasks'
+import PosEvents from './pages/PosEvents'
+import PosCashier from './pages/PosCashier'
+import PosReport from './pages/PosReport'
 import Laporan from './pages/Laporan'
 import Transfers from './pages/Transfers'
 import TransferDetail from './pages/TransferDetail'
@@ -109,6 +112,8 @@ function AppRoutes() {
     <Routes>
       <Route path="/" element={<RootRoute />} />
       <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
+      {/* layar kasir penuh, di luar Layout; halaman ini tetap jalan saat offline */}
+      <Route path="/pos/kasir/:eventId" element={<PrivateRoute><PosCashier /></PrivateRoute>} />
       <Route path="/*" element={
         <PrivateRoute>
           <PageVisibilityProvider>
@@ -164,6 +169,8 @@ function AppRoutes() {
                 <Route path="/handover/:id"  element={<PageVisibleRoute pageKey="handover"><PermissionRoute permission="handover.view" page="Handover"><HandoverDetail /></PermissionRoute></PageVisibleRoute>} />
 
                 {/* ── Transfer Stok ── */}
+                <Route path="/pos/events"      element={<PageVisibleRoute pageKey="pos"><PermissionRoute permission={['pos.manage', 'pos.sell', 'pos.event.manage', 'pos.report']} page="Event Pop Up"><PosEvents /></PermissionRoute></PageVisibleRoute>} />
+                <Route path="/pos/events/:id/report" element={<PageVisibleRoute pageKey="pos"><PermissionRoute permission={['pos.manage', 'pos.report', 'pos.event.manage']} page="Laporan Event"><PosReport /></PermissionRoute></PageVisibleRoute>} />
                 <Route path="/transfers"     element={<PageVisibleRoute pageKey="transfers"><PermissionRoute permission="stock.transfer.view" page="Transfer Stok"><Transfers /></PermissionRoute></PageVisibleRoute>} />
                 <Route path="/transfers/:id" element={<PageVisibleRoute pageKey="transfers"><PermissionRoute permission="stock.transfer.view" page="Transfer Stok"><TransferDetail /></PermissionRoute></PageVisibleRoute>} />
 

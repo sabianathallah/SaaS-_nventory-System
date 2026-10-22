@@ -7,7 +7,7 @@ import {
   Package, BookOpen, Warehouse, Truck,
   ArrowDownToLine, ArrowUpFromLine, ArrowLeftRight,
   ClipboardList, PackageOpen, Layers,
-  ClipboardCheck, Users, Building2, Eye, EyeOff, Save, PackageCheck, Link2, BarChart2, UserCog,
+  ClipboardCheck, Users, Building2, Eye, EyeOff, Save, PackageCheck, Link2, BarChart2, UserCog, Store,
 } from 'lucide-react'
 
 const PAGE_GROUPS = [
@@ -34,6 +34,7 @@ const PAGE_GROUPS = [
       { key: 'movements',  label: 'Movements',      icon: ArrowLeftRight },
       { key: 'opname',     label: 'Stock Opname',   icon: ClipboardList },
       { key: 'handover',   label: 'Handover',       icon: PackageCheck },
+      { key: 'pos',        label: 'Event Pop Up',   icon: Store },
     ],
   },
   {

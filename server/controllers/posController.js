@@ -127,7 +127,7 @@ class PosController {
             const stockRows = await SkuWarehouseStock.findAll({ where: { WarehouseId: ev.WarehouseId }, attributes: ['ProductSKUId', 'qty'] });
             const stock = Object.fromEntries(stockRows.map(s => [s.ProductSKUId, s.qty]));
             res.json({
-                event: { id: ev.id, name: ev.name, status: ev.status, WarehouseId: ev.WarehouseId, receiptHeader: ev.receiptHeader, receiptFooter: ev.receiptFooter },
+                event: { id: ev.id, name: ev.name, location: ev.location, status: ev.status, WarehouseId: ev.WarehouseId, receiptHeader: ev.receiptHeader, receiptFooter: ev.receiptFooter },
                 generatedAt: new Date().toISOString(),
                 items: skus.filter(s => s.Product).map(s => ({
                     skuId: s.id,

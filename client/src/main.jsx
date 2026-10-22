@@ -15,6 +15,11 @@ const queryClient = new QueryClient({
   },
 })
 
+// Service worker hanya di build production (dev server Vite tidak butuh cache offline)
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}))
+}
+
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>

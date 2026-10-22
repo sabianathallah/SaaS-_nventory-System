@@ -432,3 +432,15 @@ export const profileApi = {
   changePassword: (currentPassword, newPassword) =>
     api.patch('/me/password', { currentPassword, newPassword }).then(r => r.data),
 }
+
+// ── Kasir / POS event pop up ──────────────────────────────────────────────────
+// (layar kasir memakai instance sendiri di src/pos/sync.js supaya tahan offline)
+export const posApi = {
+  events:      ()          => api.get('/pos/events').then(r => r.data),
+  event:       (id)        => api.get(`/pos/events/${id}`).then(r => r.data),
+  createEvent: (data)      => api.post('/pos/events', data).then(r => r.data),
+  updateEvent: (id, data)  => api.put(`/pos/events/${id}`, data).then(r => r.data),
+  report:      (id)        => api.get(`/pos/events/${id}/report`).then(r => r.data),
+  orders:      (params)    => api.get('/pos/orders', { params }).then(r => r.data),
+  voidOrder:   (id, reason) => api.post(`/pos/orders/${id}/void`, { reason }).then(r => r.data),
+}
