@@ -18,6 +18,8 @@ import {
   Laptop, Wallet, CalendarClock, ShieldCheck, AlarmClock, Receipt, ListChecks,
   Star, CheckCircle2, Home, Store,
 } from 'lucide-react'
+
+const POS_PERMS = ['pos.manage', 'pos.sell', 'pos.event.manage', 'pos.report', 'pos.fulfill']
 import logoPreface from '../assets/logo-preface.jpeg'
 
 const BRAND = '#C8102E'
@@ -50,7 +52,6 @@ const NAV_GROUPS = [
       { to: '/opname',          icon: ClipboardList,    label: 'Stock Opname',      pageKey: 'opname' },
       { to: '/handover',        icon: PackageCheck,     label: 'Handover',          pageKey: 'handover' },
       { to: '/shipping-manual', icon: SendHorizonal,    label: 'Shipping Manual',   pageKey: 'shipping-manual', requirePermission: 'shipping.manual.view' },
-      { to: '/pos/events',      icon: Store,            label: 'Event Pop Up',      pageKey: 'pos', requirePermission: ['pos.manage', 'pos.sell', 'pos.event.manage', 'pos.report'] },
     ],
   },
   {
@@ -125,6 +126,20 @@ const HANDBOOK_NAV_GROUPS = [
   },
 ]
 
+// POS module — kasir event pop up. Kasir sendiri layar penuh (/pos/kasir/:id, di luar Layout);
+// antrean pengambilan & riwayat dibuka staff lain supaya kasir fokus melayani pelanggan.
+const POS_NAV_GROUPS = [
+  {
+    label: 'POS / Kasir',
+    items: [
+      { to: '/pos',         icon: Store,         label: 'Kasir',               pageKey: 'pos', requirePermission: ['pos.manage', 'pos.sell', 'pos.fulfill'] },
+      { to: '/pos/pickup',  icon: PackageCheck,  label: 'Antrean Pengambilan', pageKey: 'pos', requirePermission: ['pos.manage', 'pos.sell', 'pos.fulfill'] },
+      { to: '/pos/history', icon: Receipt,       label: 'Riwayat Transaksi',   pageKey: 'pos', requirePermission: POS_PERMS },
+      { to: '/pos/events',  icon: CalendarClock, label: 'Event & Laporan',     pageKey: 'pos', requirePermission: ['pos.manage', 'pos.event.manage', 'pos.report'] },
+    ],
+  },
+]
+
 // HRIS module — presensi, cuti, lembur, dan pengaturan HR.
 const HRIS_NAV_GROUPS = [
   {
@@ -186,7 +201,7 @@ const PAGE_TITLES = {
   '/stock-in': 'Penerimaan Stok', '/stock-in/new': 'Penerimaan Stok Baru', '/stock-out': 'Pengeluaran Stok', '/movements': 'Pergerakan',
   '/opname': 'Stock Opname', '/transfers': 'Transfer Stok', '/handover': 'Handover Pengiriman',
   '/shipping-manual': 'Shipping Manual', '/database-links': 'Database Links', '/users': 'Pengguna', '/roles': 'Roles & Permission', '/companies': 'Perusahaan',
-  '/vendors': 'Vendor', '/incoming-goods': 'Barang Masuk', '/pos/events': 'Event Pop Up',
+  '/vendors': 'Vendor', '/incoming-goods': 'Barang Masuk', '/pos': 'POS / Kasir', '/pos/pickup': 'Antrean Pengambilan', '/pos/history': 'Riwayat Transaksi', '/pos/events': 'Event & Laporan',
   '/packing-jobs': 'Pekerjaan Packing', '/form-anak-packing': 'Form Anak Packing',
   '/page-visibility': 'Visibilitas Halaman',
   '/laporan': 'Laporan Bulanan',
@@ -233,6 +248,9 @@ function ModuleSwitcher({ collapsed, activeModule, tasksBadge }) {
       : []),
     { key: 'tasks',     label: 'Tugas',     icon: ListChecks, to: '/tasks',     active: activeModule === 'tasks', badge: tasksBadge },
     { key: 'inventory', label: 'Inventory', icon: Package,    to: '/dashboard', active: activeModule === 'inventory' },
+    ...(isSuperAdmin || POS_PERMS.some(hasPermission)
+      ? [{ key: 'pos', label: 'POS', icon: Store, to: '/pos', active: activeModule === 'pos' }]
+      : []),
     { key: 'handbook',  label: 'Handbook',   icon: BookOpen, to: '/handbook',  active: activeModule === 'handbook' },
     ...(isAdmin || hasPermission('admin.users')
       ? [{ key: 'admin', label: 'Admin', icon: ShieldCheck, to: '/users', active: activeModule === 'admin' }]
@@ -328,11 +346,12 @@ export default function Layout({ children }) {
   const isHandbook  = location.pathname.startsWith('/handbook')
   const isHRIS      = location.pathname.startsWith('/hris')
   const isTasksModule = location.pathname.startsWith('/tasks')
+  const isPos       = location.pathname === '/pos' || location.pathname.startsWith('/pos/')
   const isAdminModule = ['/users', '/roles', '/companies', '/page-visibility'].some(
     (p) => location.pathname === p || location.pathname.startsWith(p + '/')
   )
-  const activeModule = isHome ? 'home' : isHandbook ? 'handbook' : isHRIS ? 'hris' : isTasksModule ? 'tasks' : isAdminModule ? 'admin' : 'inventory'
-  const activeGroups = isHome ? HOME_NAV_GROUPS : isHandbook ? HANDBOOK_NAV_GROUPS : isHRIS ? HRIS_NAV_GROUPS : isTasksModule ? TASKS_NAV_GROUPS : isAdminModule ? ADMIN_NAV_GROUPS : NAV_GROUPS
+  const activeModule = isHome ? 'home' : isHandbook ? 'handbook' : isHRIS ? 'hris' : isTasksModule ? 'tasks' : isPos ? 'pos' : isAdminModule ? 'admin' : 'inventory'
+  const activeGroups = isHome ? HOME_NAV_GROUPS : isHandbook ? HANDBOOK_NAV_GROUPS : isHRIS ? HRIS_NAV_GROUPS : isTasksModule ? TASKS_NAV_GROUPS : isPos ? POS_NAV_GROUPS : isAdminModule ? ADMIN_NAV_GROUPS : NAV_GROUPS
   // Path yang punya "anak" (mis. /hris punya /hris/attendance, dst) butuh `end`
   // di NavLink, kalau tidak dia akan tetap ke-highlight walau lagi di sub-route.
   const allNavPaths = activeGroups.flatMap(g => g.items.map(i => i.to))
@@ -350,7 +369,7 @@ export default function Layout({ children }) {
 
   // Accordion groups (hanya relevan saat expanded) — default: buka semua group
   const [openGroups, setOpenGroups] = useState(() =>
-    new Set([...NAV_GROUPS, ...HOME_NAV_GROUPS, ...HANDBOOK_NAV_GROUPS, ...HRIS_NAV_GROUPS, ...TASKS_NAV_GROUPS, ...ADMIN_NAV_GROUPS].map(g => g.label))
+    new Set([...NAV_GROUPS, ...HOME_NAV_GROUPS, ...HANDBOOK_NAV_GROUPS, ...HRIS_NAV_GROUPS, ...TASKS_NAV_GROUPS, ...POS_NAV_GROUPS, ...ADMIN_NAV_GROUPS].map(g => g.label))
   )
 
   // Auto-open group saat navigasi
@@ -439,7 +458,7 @@ export default function Layout({ children }) {
           >
             <p className="font-bold text-sm text-slate-800 leading-tight whitespace-nowrap">Preface</p>
             <p className="text-[10px] text-slate-400 leading-tight whitespace-nowrap">
-              {isHome ? 'Personal Dashboard' : isHandbook ? 'Company Handbook' : isHRIS ? 'HRIS' : isTasksModule ? 'Task Management' : isAdminModule ? 'Administrasi' : 'Inventory System'}
+              {isHome ? 'Personal Dashboard' : isHandbook ? 'Company Handbook' : isHRIS ? 'HRIS' : isTasksModule ? 'Task Management' : isPos ? 'POS / Kasir' : isAdminModule ? 'Administrasi' : 'Inventory System'}
             </p>
           </div>
         </button>

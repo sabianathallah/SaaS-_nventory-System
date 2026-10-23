@@ -104,6 +104,9 @@ function minimal(order, { event, settings, cashierName }) {
     .for { font-size: ${f + 4}px; font-weight: 800; margin-top: 2px; }
     .foot { font-size: ${f - 2}px; white-space: pre-line; margin-top: 4px; }
     .bc { margin: 12px 6% 2px; } .bcn { font-size: ${f - 3}px; letter-spacing: .3em; }
+    .pick { margin: 10px 0 2px; padding: 7px 6px; border: 2px solid #000; text-align: center; }
+    .pick .code { display: block; font-size: ${f + 14}px; font-weight: 800; letter-spacing: .08em; line-height: 1.15; }
+    .pick .hint { display: block; font-size: ${f - 3}px; letter-spacing: .05em; }
   </style></head><body>
     <img class="logo" src="${logo}" alt="PREFACE">
     <div class="c handle">${HANDLE}</div>
@@ -111,6 +114,7 @@ function minimal(order, { event, settings, cashierName }) {
     ${event?.name ? `<div class="c event">${esc(event.name)}</div>` : ''}
     ${event?.location ? `<div class="c loc">${esc(event.location)}</div>` : ''}
     <div class="meta">${meta.map(([k, v]) => `<div><span class="k">${k}</span><span class="v">${esc(v)}</span></div>`).join('')}</div>
+    ${order.fulfillment === 'LATER' ? `<div class="pick"><span class="k">AMBIL DI BOOTH &middot; NOMOR AMBIL</span><span class="code">${esc(order.pickupCode || order.orderNumber)}</span><span class="hint">Tunjukkan struk ini saat mengambil barang</span></div>` : ''}
 
     <div class="label">PESANAN &middot; ${pcs} ITEM</div>
     ${items}
@@ -177,6 +181,9 @@ function street(order, { event, settings, cashierName }) {
     .ty .s { font-size: ${f - 3}px; font-weight: 800; letter-spacing: .35em; }
     .ty .big { font-family: Impact, "Arial Narrow", sans-serif; font-size: ${f + 20}px; line-height: .95; text-transform: uppercase; word-break: break-word; }
     .foot { font-size: ${f - 2}px; white-space: pre-line; margin-top: 6px; }
+    .pick { margin: 6px -4mm 4px; padding: 6px 4mm; background: #000; color: #fff; text-align: center; }
+    .pick .k { font-size: ${f - 3}px; font-weight: 800; letter-spacing: .3em; }
+    .pick .code { font-family: Impact, "Arial Narrow", sans-serif; font-size: ${f + 22}px; line-height: 1; letter-spacing: .04em; }
     .bc { margin: 10px 2% 0; } .bcn { display: flex; justify-content: space-between; font-size: ${f - 3}px; font-weight: 800; letter-spacing: .2em; margin-top: 2px; }
   </style></head><body>
     <img class="logo" src="${logo}" alt="PREFACE">
@@ -186,6 +193,7 @@ function street(order, { event, settings, cashierName }) {
       <div>${event?.name ? `<div class="ev cond">${esc(event.name)}</div>` : ''}${event?.location ? `<div class="loc">${esc(event.location)}</div>` : ''}</div>
       <div class="r">${date}<br>${time}${settings.showCashier && cashierName ? `<br>KASIR ${esc(firstName(cashierName)).toUpperCase()}` : ''}</div>
     </div>
+    ${order.fulfillment === 'LATER' ? `<div class="pick"><div class="k">PICKUP NO.</div><div class="code">${esc(order.pickupCode || order.orderNumber)}</div><div class="k">AMBIL DI BOOTH &middot; TUNJUKKAN STRUK INI</div></div>` : ''}
     <div class="bar"></div>
     <div class="label"><span>ORDER ${esc(order.orderNumber)}</span><span>${String(pcs).padStart(2, '0')} PCS</span></div>
     ${items}
@@ -209,6 +217,78 @@ function street(order, { event, settings, cashierName }) {
     <div class="bc">${code39Svg(order.orderNumber, 40)}</div>
     <div class="bcn"><span>${esc(order.orderNumber)}</span><span>${HANDLE.toUpperCase()}</span></div>
   </body></html>`
+}
+
+// ── Slip operasional (copy staff): dibawa runner ke gudang / arsip kasir ──────
+function slip(order, { event, settings, cashierName }) {
+  const { w, f, date, time, pcs, name } = ctx(order, event, settings)
+  const later = order.fulfillment === 'LATER'
+  const phone = String(order.customerPhone || '').replace(/\D/g, '')
+  const items = order.items.map(i => `
+    <div class="it"><span class="box"></span><span class="q">${i.qty}&times;</span><span class="nm">${esc(shortName(i.name))}</span><span class="sz">${esc(i.variant || '-')}</span></div>`).join('')
+  const paid = order.payments.map(p => METHOD[p.method] || p.method).join(' + ') || '-'
+  return `<!doctype html><html><head><meta charset="utf-8"><style>${pageCss(w, f, '"Helvetica Neue", Helvetica, Arial, sans-serif')}
+    body { padding: 4mm 4mm 7mm; }
+    .copy { display: flex; justify-content: space-between; font-size: ${f - 3}px; font-weight: 800; letter-spacing: .25em; border-bottom: 2px solid #000; padding-bottom: 3px; }
+    .mode { margin: 8px 0 6px; padding: 6px; text-align: center; font-size: ${f + 4}px; font-weight: 800; letter-spacing: .1em;
+            ${later ? 'background:#000;color:#fff;' : 'border:2px dashed #000;'} }
+    .code { text-align: center; font-family: Impact, "Arial Narrow", sans-serif; font-size: ${f + 26}px; line-height: 1; }
+    .k { font-size: ${f - 3}px; font-weight: 800; letter-spacing: .2em; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 8px; margin: 8px 0; font-size: ${f - 1}px; }
+    .grid div:nth-child(even) { text-align: right; } .v { font-weight: 800; display: block; }
+    .it { display: flex; align-items: center; gap: 6px; padding: 5px 0; border-bottom: 1px solid #000; }
+    .box { width: 14px; height: 14px; border: 2px solid #000; flex: none; }
+    .q { font-weight: 800; min-width: 22px; } .nm { flex: 1; font-weight: 700; text-transform: uppercase; }
+    .sz { font-weight: 800; border: 1.5px solid #000; padding: 0 5px; min-width: 26px; text-align: center; }
+    .sum { display: flex; justify-content: space-between; margin-top: 6px; font-weight: 800; }
+    .sign { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 18px; font-size: ${f - 3}px; text-align: center; }
+    .sign div { border-top: 1px solid #000; padding-top: 2px; }
+    .bc { margin: 10px 4% 0; }
+  </style></head><body>
+    <div class="copy"><span>SLIP OPERASIONAL</span><span>COPY STAFF</span></div>
+    <div class="mode">${later ? 'AMBIL DI GUDANG' : 'SUDAH DIBAWA PELANGGAN'}</div>
+    ${later ? `<div class="c k">NOMOR AMBIL</div><div class="code">${esc(order.pickupCode || order.orderNumber)}</div>` : ''}
+    <div class="grid">
+      <div><span class="k">ORDER</span><span class="v">${esc(order.orderNumber)}</span></div>
+      <div><span class="k">WAKTU</span><span class="v">${date} ${time}</span></div>
+      <div><span class="k">ATAS NAMA</span><span class="v">${esc(name || '-')}</span></div>
+      <div><span class="k">NO. HP</span><span class="v">${phone ? '&bull;&bull;&bull;&bull;' + esc(phone.slice(-4)) : '-'}</span></div>
+      <div><span class="k">KASIR</span><span class="v">${esc(cashierName || '-')}</span></div>
+      <div><span class="k">EVENT</span><span class="v">${esc(event?.name || '-')}</span></div>
+    </div>
+    <div class="k">BARANG &middot; ${pcs} PCS</div>
+    ${items}
+    <div class="sum"><span>LUNAS &middot; ${esc(paid)}</span><span>${rp(order.total)}</span></div>
+    ${later ? '<div class="sign"><div>Disiapkan</div><div>Diserahkan</div></div>' : ''}
+    <div class="bc">${code39Svg(order.orderNumber, 34)}</div>
+  </body></html>`
+}
+
+// Gabungkan beberapa dokumen struk jadi satu job print (tiap dokumen = 1 halaman / 1 potongan kertas).
+function combine(docs, w) {
+  const parts = docs.map((html, i) => {
+    const css = (html.match(/<style>([\s\S]*?)<\/style>/) || [])[1] || ''
+    const body = (html.match(/<body[^>]*>([\s\S]*?)<\/body>/) || [])[1] || ''
+    // CSS tiap dokumen di-scope ke <section> miliknya (CSS nesting); aturan body pindah ke section
+    const scoped = css.replace(/@page\s*{[^}]*}/g, '').replace(/(^|[\s}])body\s*{/g, '$1& {')
+    return { style: `.doc-${i} { ${scoped} }`, html: `<section class="doc doc-${i}">${body}</section>` }
+  })
+  return `<!doctype html><html><head><meta charset="utf-8"><style>
+    @page { size: ${w}mm auto; margin: 0; } body { margin: 0; }
+    .doc + .doc { break-before: page; }
+    ${parts.map(p => p.style).join('\n')}
+  </style></head><body>${parts.map(p => p.html).join('')}</body></html>`
+}
+
+export function staffSlipHtml(order, opts) {
+  return slip(order, { ...opts, settings: { ...DEFAULT_RECEIPT, ...(opts.settings || {}) } })
+}
+
+// Struk pelanggan + slip staff dalam satu kali print (printer sama, keluar 2 lembar).
+export function orderPrintHtml(order, opts, { customer = true, staff = true } = {}) {
+  const settings = { ...DEFAULT_RECEIPT, ...(opts.settings || {}) }
+  const docs = [customer && receiptHtml(order, opts), staff && staffSlipHtml(order, opts)].filter(Boolean)
+  return docs.length === 1 ? docs[0] : combine(docs, Number(settings.widthMm) || 80)
 }
 
 export function receiptHtml(order, opts) {

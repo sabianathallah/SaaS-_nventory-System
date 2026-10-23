@@ -56,6 +56,9 @@ import Tasks from './pages/Tasks'
 import PosEvents from './pages/PosEvents'
 import PosCashier from './pages/PosCashier'
 import PosReport from './pages/PosReport'
+import PosHome from './pages/PosHome'
+import PosPickup from './pages/PosPickup'
+import PosHistory from './pages/PosHistory'
 import Laporan from './pages/Laporan'
 import Transfers from './pages/Transfers'
 import TransferDetail from './pages/TransferDetail'
@@ -169,6 +172,9 @@ function AppRoutes() {
                 <Route path="/handover/:id"  element={<PageVisibleRoute pageKey="handover"><PermissionRoute permission="handover.view" page="Handover"><HandoverDetail /></PermissionRoute></PageVisibleRoute>} />
 
                 {/* ── Transfer Stok ── */}
+                <Route path="/pos"             element={<PageVisibleRoute pageKey="pos"><PermissionRoute permission={['pos.manage', 'pos.sell', 'pos.event.manage', 'pos.report', 'pos.fulfill']} page="POS"><PosHome /></PermissionRoute></PageVisibleRoute>} />
+                <Route path="/pos/pickup"      element={<PageVisibleRoute pageKey="pos"><PermissionRoute permission={['pos.manage', 'pos.sell', 'pos.fulfill']} page="Antrean Pengambilan"><PosPickup /></PermissionRoute></PageVisibleRoute>} />
+                <Route path="/pos/history"     element={<PageVisibleRoute pageKey="pos"><PermissionRoute permission={['pos.manage', 'pos.sell', 'pos.event.manage', 'pos.report', 'pos.fulfill']} page="Riwayat Transaksi"><PosHistory /></PermissionRoute></PageVisibleRoute>} />
                 <Route path="/pos/events"      element={<PageVisibleRoute pageKey="pos"><PermissionRoute permission={['pos.manage', 'pos.sell', 'pos.event.manage', 'pos.report']} page="Event Pop Up"><PosEvents /></PermissionRoute></PageVisibleRoute>} />
                 <Route path="/pos/events/:id/report" element={<PageVisibleRoute pageKey="pos"><PermissionRoute permission={['pos.manage', 'pos.report', 'pos.event.manage']} page="Laporan Event"><PosReport /></PermissionRoute></PageVisibleRoute>} />
                 <Route path="/transfers"     element={<PageVisibleRoute pageKey="transfers"><PermissionRoute permission="stock.transfer.view" page="Transfer Stok"><Transfers /></PermissionRoute></PageVisibleRoute>} />

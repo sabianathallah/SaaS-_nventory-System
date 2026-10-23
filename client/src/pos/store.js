@@ -2,14 +2,15 @@
 // - kv:    katalog per event, shift aktif, nomor urut transaksi, pengaturan struk
 // - queue: transaksi yang belum terkirim ke server (kunci = clientOrderId)
 // - sent:  transaksi yang sudah terkirim (untuk riwayat & cetak ulang struk)
+// - img:   foto produk ukuran kecil (Blob) supaya grid kasir tetap bergambar saat offline
 const DB_NAME = 'preface-pos'
-const STORES = ['kv', 'queue', 'sent']
+const STORES = ['kv', 'queue', 'sent', 'img']
 
 let dbPromise = null
 function db() {
   if (!dbPromise) {
     dbPromise = new Promise((resolve, reject) => {
-      const req = indexedDB.open(DB_NAME, 1)
+      const req = indexedDB.open(DB_NAME, 2)
       req.onupgradeneeded = () => {
         for (const s of STORES) if (!req.result.objectStoreNames.contains(s)) req.result.createObjectStore(s)
       }

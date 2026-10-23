@@ -444,3 +444,4 @@ export const posApi = {
   orders:      (params)    => api.get('/pos/orders', { params }).then(r => r.data),
   voidOrder:   (id, reason) => api.post(`/pos/orders/${id}/void`, { reason }).then(r => r.data),
 }
+posApi.setPickup = (id, status) => api.patch(`/pos/orders/${id}/pickup`, { status }).then(r => r.data)
