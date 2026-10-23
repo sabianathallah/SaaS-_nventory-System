@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import {
   ArrowLeft, Minus, Plus, Printer, RefreshCw, Settings, Trash2, Wifi, WifiOff, X, LogOut, History,
-  Search, ScanLine, ShoppingBag, CheckCircle2, PackageCheck, Banknote, QrCode, CreditCard, Landmark, Wallet, Tag, Store,
+  Search, ScanLine, Monitor, ShoppingBag, CheckCircle2, PackageCheck, Banknote, QrCode, CreditCard, Landmark, Wallet, Tag, Store,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import NoPermission from '../components/NoPermission'
@@ -12,6 +12,7 @@ import { allItems, delItem, deviceId, getItem, nextSeq, requestPersistence, setI
 import { enqueueOrder, onSyncChange, posHttp, startAutoSync, syncQueue, syncState } from '../pos/sync'
 import { DEFAULT_RECEIPT, RECEIPT_STYLES, orderPrintHtml, printReceipt } from '../pos/receipt'
 import { cacheImages, loadCachedImages } from '../pos/images'
+import { onScreensChange, openDisplayWindow, publishDisplay } from '../pos/display'
 
 const rp = (n) => 'Rp ' + Number(n || 0).toLocaleString('id-ID')
 const METHODS = [
@@ -67,6 +68,8 @@ export default function PosCashier() {
   const [lastOrder, setLastOrder] = useState(null)
   const [sync, setSync] = useState({ pending: 0, failed: 0, online: navigator.onLine })
   const [orders, setOrders] = useState({ queue: [], sent: [] })
+  const [lastAdd, setLastAdd] = useState(null)      // { skuId, at } untuk sorotan di layar pelanggan
+  const [payPreview, setPayPreview] = useState(null) // pilihan di layar bayar, dikirim ke layar pelanggan
   const scanRef = useRef(null)
 
   const refreshOrders = useCallback(async () => {
@@ -162,6 +165,7 @@ export default function PosCashier() {
   // ── Keranjang ───────────────────────────────────────────────────────────
   const addSku = (it) => {
     if (stockOf(it.skuId) <= 0) toast(`Stok sistem ${it.code} habis — tetap dijual & ditandai untuk dicek.`, { icon: '⚠️' })
+    setLastAdd({ skuId: it.skuId, at: Date.now() })
     setCart(c => {
       const ex = c.find(l => l.skuId === it.skuId)
       if (ex) return c.map(l => l.skuId === it.skuId ? { ...l, qty: l.qty + 1 } : l)
@@ -195,6 +199,38 @@ export default function PosCashier() {
     return { lines, subtotal, itemDiscount, orderDiscount, total: subtotal - itemDiscount - orderDiscount, pcs: lines.reduce((s, l) => s + l.qty, 0) }
   }, [cart, orderDiscountText])
 
+  // ── Layar pelanggan: kirim keadaan terbaru ke jendela kedua ──────────────
+  useEffect(() => {
+    if (!catalog) return
+    if (modal === 'done' && lastOrder) {
+      publishDisplay(eventId, { phase: 'done', done: {
+        customerName: lastOrder.customerName, total: lastOrder.total, change: lastOrder.change,
+        fulfillment: lastOrder.fulfillment, pickupCode: lastOrder.pickupCode,
+      } })
+      return
+    }
+    if (!cart.length) { publishDisplay(eventId, { phase: 'idle' }); return }
+    publishDisplay(eventId, {
+      phase: modal === 'pay' ? 'pay' : 'cart',
+      lines: totals.lines.map(l => ({ skuId: l.skuId, productId: l.productId, name: l.name, variant: l.variant, qty: l.qty, unitPrice: l.unitPrice, discount: l.discount, lineTotal: l.lineTotal })),
+      subtotal: totals.subtotal, discount: totals.itemDiscount + totals.orderDiscount, total: totals.total, pcs: totals.pcs,
+      lastSku: lastAdd?.skuId, lastAt: lastAdd?.at,
+      pay: modal === 'pay' ? payPreview || { methods: ['CASH'], fulfillment: 'NOW' } : null,
+    })
+  }, [catalog, eventId, cart.length, totals, modal, lastOrder, lastAdd, payPreview])
+
+  const openDisplay = async () => {
+    if (!(await openDisplayWindow(eventId))) toast.error('Jendela diblokir browser — izinkan pop-up untuk situs ini')
+  }
+  // layar eksternal / iPad baru dicolok -> tawarkan buka layar pelanggan di sana
+  useEffect(() => onScreensChange((extended) => {
+    if (extended) toast((t) => (
+      <span className="flex items-center gap-3">Layar kedua terdeteksi
+        <button className="btn-primary text-xs" onClick={() => { toast.dismiss(t.id); openDisplay() }}>Buka layar pelanggan</button>
+      </span>
+    ), { duration: 15000, icon: '🖥️' })
+  }), []) // eslint-disable-line react-hooks/exhaustive-deps
+
   const printOrder = (order, copies) => printReceipt(orderPrintHtml(order, { event: catalog?.event, settings, cashierName: user?.name }, copies))
 
   // ── Bayar ───────────────────────────────────────────────────────────────
@@ -216,7 +252,7 @@ export default function PosCashier() {
     }
     await enqueueOrder(order)
     if (settings.autoPrint) printOrder(order)
-    clearCart(); setLastOrder(order); setModal('done')
+    clearCart(); setPayPreview(null); setLastOrder(order); setModal('done')
     refreshOrders()
   }
 
@@ -258,6 +294,7 @@ export default function PosCashier() {
       right={<>
         <SyncBadge sync={sync} onClick={() => sync.failed ? setModal('queue') : syncQueue()} />
         <IconBtn icon={RefreshCw} label="Perbarui katalog & stok" onClick={() => loadCatalog()} />
+        <IconBtn icon={Monitor} label="Buka layar pelanggan (monitor / iPad)" onClick={openDisplay} text="Layar pelanggan" />
         <IconBtn icon={History} label="Riwayat" onClick={() => setModal('history')} text="Riwayat" />
         <IconBtn icon={Settings} label="Pengaturan struk" onClick={() => setModal('settings')} />
         <IconBtn icon={LogOut} label="Tutup shift" onClick={() => setModal('close')} text="Tutup shift" />
@@ -407,7 +444,7 @@ export default function PosCashier() {
           </div>
         </Modal>
       )}
-      {modal === 'pay' && <PayScreen totals={totals} onClose={() => setModal(null)} onPay={finishOrder} />}
+      {modal === 'pay' && <PayScreen totals={totals} onClose={() => { setModal(null); setPayPreview(null) }} onPay={finishOrder} onPreview={setPayPreview} />}
       {modal === 'done' && lastOrder && <DoneScreen order={lastOrder} onPrint={(c) => printOrder(lastOrder, c)} onNew={() => setModal(null)} />}
       {modal === 'history' && (
         <Modal open onClose={() => setModal(null)} title="Riwayat transaksi laptop ini" size="lg">
@@ -532,7 +569,7 @@ function SizePicker({ product, img, stockOf, onPick, onClose }) {
   )
 }
 
-function PayScreen({ totals, onClose, onPay }) {
+function PayScreen({ totals, onClose, onPay, onPreview }) {
   const total = totals.total
   const [method, setMethod] = useState('CASH')
   const [split, setSplit] = useState(null)              // null = 1 metode; [{method, amount}] = bayar campur
@@ -557,6 +594,9 @@ function PayScreen({ totals, onClose, onPay }) {
       customerName: customer.name.trim(), customerPhone: customer.phone.trim(), fulfillment,
     })
   }
+  useEffect(() => {
+    onPreview?.({ methods: [...new Set(rows.filter(r => Number(r.amount) > 0).map(r => r.method))], fulfillment, cashReceived: cashPart ? recv : 0, change: cashPart ? change : 0 })
+  }, [method, split, received, fulfillment, total]) // eslint-disable-line react-hooks/exhaustive-deps
   const setRow = (i, patch) => setSplit(rs => rs.map((r, j) => j === i ? { ...r, ...patch } : r))
 
   return (
@@ -766,9 +806,41 @@ function SettingsModal({ settings, event, userName, onClose, onSave }) {
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={s.autoPrint} onChange={e => setS({ ...s, autoPrint: e.target.checked })} />Cetak otomatis setelah bayar</label>
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={!!s.showCashier} onChange={e => setS({ ...s, showCashier: e.target.checked })} />Tampilkan nama kasir di struk pelanggan</label>
         <button className="btn-secondary w-full justify-center" onClick={() => printReceipt(orderPrintHtml(sample, { event, settings: s, cashierName: userName }))}><Printer size={14} />Cetak tes (2 lembar)</button>
+        <QrisSetting />
         <button className="btn-primary w-full justify-center" onClick={() => onSave(s)}>Simpan</button>
       </div>
     </Modal>
+  )
+}
+
+// Gambar QRIS statis toko, tampil besar di layar pelanggan saat metode QRIS dipilih. Disimpan di laptop ini.
+function QrisSetting() {
+  const [img, setImg] = useState(null)
+  useEffect(() => { getItem('kv', 'displaySettings').then(d => setImg(d?.qrisImage || null)) }, [])
+  const save = async (qrisImage) => {
+    const cur = (await getItem('kv', 'displaySettings')) || {}
+    await setItem('kv', 'displaySettings', { ...cur, qrisImage })
+    setImg(qrisImage)
+  }
+  const pick = (e) => {
+    const f = e.target.files?.[0]
+    if (!f) return
+    const r = new FileReader()
+    r.onload = () => save(r.result).then(() => toast.success('QRIS tersimpan untuk layar pelanggan'))
+    r.readAsDataURL(f)
+  }
+  return (
+    <div className="border-t border-slate-100 pt-4">
+      <label className="label">QRIS di layar pelanggan</label>
+      <div className="flex items-center gap-3">
+        {img ? <img src={img} alt="QRIS" className="w-16 h-16 object-contain rounded border border-slate-200" /> : <div className="w-16 h-16 rounded border border-dashed border-slate-300 flex items-center justify-center text-slate-300"><QrCode size={22} /></div>}
+        <div className="flex-1 text-xs text-slate-500">Unggah gambar QRIS statis toko. Muncul besar di layar pelanggan saat bayar QRIS.</div>
+      </div>
+      <div className="flex gap-2 mt-2">
+        <label className="btn-secondary text-xs cursor-pointer">{img ? 'Ganti gambar' : 'Unggah gambar'}<input type="file" accept="image/*" className="hidden" onChange={pick} /></label>
+        {img && <button type="button" className="btn-secondary text-xs text-danger" onClick={() => save(null)}>Hapus</button>}
+      </div>
+    </div>
   )
 }
 

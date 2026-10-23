@@ -55,6 +55,7 @@ import DatabaseLinks from './pages/DatabaseLinks'
 import Tasks from './pages/Tasks'
 import PosEvents from './pages/PosEvents'
 import PosCashier from './pages/PosCashier'
+import PosDisplay from './pages/PosDisplay'
 import PosReport from './pages/PosReport'
 import PosHome from './pages/PosHome'
 import PosPickup from './pages/PosPickup'
@@ -117,6 +118,7 @@ function AppRoutes() {
       <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
       {/* layar kasir penuh, di luar Layout; halaman ini tetap jalan saat offline */}
       <Route path="/pos/kasir/:eventId" element={<PrivateRoute><PosCashier /></PrivateRoute>} />
+      <Route path="/pos/display/:eventId" element={<PrivateRoute><PosDisplay /></PrivateRoute>} />
       <Route path="/*" element={
         <PrivateRoute>
           <PageVisibilityProvider>
