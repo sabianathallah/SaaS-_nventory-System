@@ -21,6 +21,7 @@ function parseDiscount(text, base) {
   return Number.isFinite(v) ? Math.min(Math.max(v, 0), base) : 0
 }
 const num = (s) => Number(String(s || '').replace(/[^\d]/g, '')) || 0
+const SIZE_WORDS = new Set(['xxs', 'xs', 's', 'm', 'l', 'xl', 'xxl', 'xxxl'])
 
 export default function PosCashier() {
   const { eventId } = useParams()
@@ -37,6 +38,7 @@ export default function PosCashier() {
   const [orderDiscountText, setOrderDiscountText] = useState('')
   const [discountNote, setDiscountNote] = useState('')
   const [scan, setScan] = useState('')
+  const [active, setActive] = useState(0)          // baris terpilih di dropdown pencarian
   const [modal, setModal] = useState(null)          // 'pay' | 'history' | 'settings' | 'close' | 'queue'
   const [sync, setSync] = useState({ pending: 0, failed: 0, online: navigator.onLine })
   const [orders, setOrders] = useState({ queue: [], sent: [] })
@@ -111,17 +113,35 @@ export default function PosCashier() {
     const left = stockOf(it.skuId) - (cart.find(l => l.skuId === it.skuId)?.qty || 0) - 1
     if (left < 0) toast(`Stok sistem ${it.code} habis. Tetap dijual & ditandai untuk dicek.`, { icon: '⚠️' })
   }
+  // Pencarian per kata: "tshirt queen m" cocok dengan "TSHIRT PREFACE - QUEENPIN" size M, urutan kata bebas
   const searchResults = useMemo(() => {
-    const q = scan.trim().toLowerCase()
-    if (q.length < 2 || !catalog) return []
-    return catalog.items.filter(i => i.name.toLowerCase().includes(q) || String(i.code).toLowerCase().includes(q)).slice(0, 8)
+    const words = scan.trim().toLowerCase().split(/\s+/).filter(Boolean)
+    if (!catalog || !words.length || scan.trim().length < 2) return []
+    return catalog.items
+      .filter(i => {
+        const hay = `${i.name} ${i.code}`.toLowerCase()
+        const size = String(i.variant || '').toLowerCase()
+        const codeSize = String(i.code).toLowerCase().split('-').pop()
+        // kata berupa size ("m", "xl") dicocokkan ke size-nya, bukan huruf di nama
+        return words.every(w => SIZE_WORDS.has(w) ? (size === w || codeSize === w) : (hay.includes(w) || size.includes(w)))
+      })
+      .slice(0, 12)
   }, [scan, catalog])
+  const exactHit = byCode.get(scan.trim().toLowerCase())
+  const showDropdown = scan.trim().length >= 2 && !exactHit
+  const pick = (it) => { addItem(it); setScan(''); setActive(0); focusScan() }
   const onScanEnter = () => {
     const code = scan.trim().toLowerCase()
     if (!code) { if (cart.length) setModal('pay'); return }
-    const hit = byCode.get(code) || (searchResults.length === 1 ? searchResults[0] : null)
-    if (hit) { addItem(hit); setScan('') }
-    else if (!searchResults.length) { toast.error(`Barcode "${scan.trim()}" tidak ada di katalog`); setScan('') }
+    const hit = exactHit || searchResults[active] || null
+    if (hit) pick(hit)
+    else { toast.error(`"${scan.trim()}" tidak ada di katalog`); setScan('') }
+  }
+  const onScanKey = (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); onScanEnter() }
+    else if (e.key === 'ArrowDown' && searchResults.length) { e.preventDefault(); setActive(a => (a + 1) % searchResults.length) }
+    else if (e.key === 'ArrowUp' && searchResults.length) { e.preventDefault(); setActive(a => (a - 1 + searchResults.length) % searchResults.length) }
+    else if (e.key === 'Escape' && scan) { e.stopPropagation(); setScan('') }
   }
   const updateLine = (skuId, patch) => setCart(c => c.map(l => l.skuId === skuId ? { ...l, ...patch } : l))
   const removeLine = (skuId) => setCart(c => c.filter(l => l.skuId !== skuId))
@@ -205,18 +225,29 @@ export default function PosCashier() {
         {/* kiri: scan + keranjang */}
         <div className="flex flex-col min-h-0 gap-3">
           <div className="relative">
-            <input ref={scanRef} value={scan} onChange={e => setScan(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); onScanEnter() } }}
-              className="input text-lg py-3" placeholder="Scan barcode atau ketik nama produk…  (Enter kosong / F2 = bayar)" autoFocus />
-            {searchResults.length > 0 && !byCode.get(scan.trim().toLowerCase()) && (
-              <div className="absolute z-10 left-0 right-0 mt-1 card divide-y divide-slate-100 shadow-lg">
-                {searchResults.map(it => (
-                  <button key={it.skuId} onMouseDown={e => e.preventDefault()} onClick={() => { addItem(it); setScan(''); focusScan() }}
-                    className="w-full text-left px-3 py-2 hover:bg-slate-50 flex justify-between text-sm">
-                    <span><b>{it.name}</b> {it.variant && <span className="text-slate-500">({it.variant})</span>} <span className="text-xs text-slate-400 font-mono">{it.code}</span></span>
-                    <span className="text-slate-500">{rp(it.price)} · stok {stockOf(it.skuId)}</span>
-                  </button>
-                ))}
+            <input ref={scanRef} value={scan} onChange={e => { setScan(e.target.value); setActive(0) }} onKeyDown={onScanKey}
+              className="input text-lg py-3" placeholder="Scan barcode atau cari produk: nama, size, kode…  (↑↓ pilih · Enter tambah · F2 bayar)" autoFocus />
+            {showDropdown && (
+              <div className="absolute z-20 left-0 right-0 mt-1 bg-white rounded-xl border border-slate-200 shadow-xl overflow-hidden max-h-[60vh] overflow-y-auto">
+                {!searchResults.length ? (
+                  <p className="px-4 py-3 text-sm text-slate-400">Tidak ada produk yang cocok dengan "{scan.trim()}"</p>
+                ) : searchResults.map((it, idx) => {
+                  const st = stockOf(it.skuId)
+                  return (
+                    <button key={it.skuId} onMouseDown={e => e.preventDefault()} onMouseEnter={() => setActive(idx)} onClick={() => pick(it)}
+                      className={`w-full text-left px-4 py-2.5 flex items-center gap-3 text-sm border-b border-slate-100 last:border-0 ${idx === active ? 'bg-brand/5' : 'hover:bg-slate-50'}`}>
+                      <span className="min-w-[44px] text-center text-xs font-bold px-2 py-1 rounded-md border border-slate-300 text-slate-700">{it.variant || '—'}</span>
+                      <span className="flex-1 min-w-0">
+                        <span className="block font-semibold text-slate-800 truncate">{it.name}</span>
+                        <span className="block text-xs text-slate-400 font-mono">{it.code}</span>
+                      </span>
+                      <span className="text-right shrink-0">
+                        <span className="block font-mono font-semibold text-slate-700">{rp(it.price)}</span>
+                        <span className={`block text-xs ${st > 0 ? 'text-slate-400' : 'text-danger font-semibold'}`}>{st > 0 ? `stok ${st}` : 'stok habis'}</span>
+                      </span>
+                    </button>
+                  )
+                })}
               </div>
             )}
           </div>
