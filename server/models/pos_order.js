@@ -6,6 +6,7 @@ module.exports = (sequelize, DataTypes) => {
       PosOrder.belongsTo(models.PosEvent, { foreignKey: 'eventId', as: 'event' });
       PosOrder.belongsTo(models.PosShift, { foreignKey: 'shiftId', as: 'shift' });
       PosOrder.belongsTo(models.User,     { foreignKey: 'cashierId', as: 'Cashier' });
+      PosOrder.belongsTo(models.User,     { foreignKey: 'pickedUpBy', as: 'PickedUpBy' });
       PosOrder.belongsTo(models.Stock_Out_Header, { foreignKey: 'StockOutHeaderId', as: 'stockOut' });
       PosOrder.hasMany(models.PosOrderItem, { foreignKey: 'orderId', as: 'items' });
       PosOrder.hasMany(models.PosPayment,   { foreignKey: 'orderId', as: 'payments' });
@@ -28,6 +29,12 @@ module.exports = (sequelize, DataTypes) => {
     change:        { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
     // opsional, diisi kasir; nomor HP disimpan untuk data pelanggan tapi tidak dicetak di struk
     customerName:  { type: DataTypes.STRING(100), allowNull: true },
+    // NOW = barang langsung dibawa; LATER = dibayar dulu, diambil nanti dari gudang (masuk Antrean Pengambilan)
+    fulfillment:   { type: DataTypes.STRING(10), allowNull: false, defaultValue: 'NOW' },
+    pickupCode:    { type: DataTypes.STRING(20), allowNull: true },
+    pickupStatus:  { type: DataTypes.STRING(10), allowNull: false, defaultValue: 'DONE' },
+    pickedUpAt:    { type: DataTypes.DATE, allowNull: true },
+    pickedUpBy:    { type: DataTypes.INTEGER, allowNull: true },
     customerPhone: { type: DataTypes.STRING(30), allowNull: true },
     discountNote:  { type: DataTypes.STRING(200), allowNull: true },
     note:          { type: DataTypes.STRING(200), allowNull: true },

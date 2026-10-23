@@ -58,6 +58,11 @@ module.exports = {
       cashReceived:  { type: Sequelize.INTEGER, allowNull: true },
       change:        { type: Sequelize.INTEGER, allowNull: false, defaultValue: 0 },
       customerName:  { type: Sequelize.STRING(100), allowNull: true },
+      fulfillment:   { type: Sequelize.STRING(10), allowNull: false, defaultValue: 'NOW' },
+      pickupCode:    { type: Sequelize.STRING(20), allowNull: true },
+      pickupStatus:  { type: Sequelize.STRING(10), allowNull: false, defaultValue: 'DONE' },
+      pickedUpAt:    { type: Sequelize.DATE, allowNull: true },
+      pickedUpBy:    fk('Users'),
       customerPhone: { type: Sequelize.STRING(30), allowNull: true },
       discountNote:  { type: Sequelize.STRING(200), allowNull: true },
       note:          { type: Sequelize.STRING(200), allowNull: true },
@@ -73,6 +78,7 @@ module.exports = {
     // kunci idempotensi: transaksi yang dikirim ulang dari laptop kasir tidak boleh tercatat dua kali
     await queryInterface.addIndex('PosOrders', ['companyId', 'clientOrderId'], { unique: true, name: 'pos_orders_company_client_uq' });
     await queryInterface.addIndex('PosOrders', ['eventId', 'soldAt']);
+    await queryInterface.addIndex('PosOrders', ['eventId', 'pickupStatus']);
 
     await queryInterface.createTable('PosOrderItems', {
       id:           { type: Sequelize.INTEGER, primaryKey: true, autoIncrement: true, allowNull: false },

@@ -2,7 +2,7 @@
 const {
     PosEvent, PosShift, PosOrder, PosOrderItem, PosPayment,
     Stock_Out_Header, Stock_Movement, Stock, SkuWarehouseStock,
-    Product, ProductSKU, ProductVariantOption, Warehouse, Channel, User, sequelize,
+    Product, ProductSKU, ProductVariantOption, Warehouse, Channel, User, Category, sequelize,
 } = require('../models');
 const { Op, UniqueConstraintError } = require('sequelize');
 const { companyFilter, companyId } = require('../helpers/tenancy');
@@ -18,6 +18,7 @@ const ORDER_INCLUDE = [
     { model: PosOrderItem, as: 'items' },
     { model: PosPayment,   as: 'payments' },
     { model: User,         as: 'Cashier', attributes: ['id', 'name'] },
+    { model: User,         as: 'PickedUpBy', attributes: ['id', 'name'] },
 ];
 
 async function findEvent(req, id, t) {
@@ -119,7 +120,7 @@ class PosController {
                 where: { companyId: ev.companyId },
                 attributes: ['id', 'sku_code', 'price', 'ProductId'],
                 include: [
-                    { model: Product, attributes: ['id', 'name'] },
+                    { model: Product, attributes: ['id', 'name', 'imageUrl'], include: [{ model: Category, attributes: ['id', 'name'] }] },
                     { model: ProductVariantOption, attributes: ['value'], through: { attributes: [] } },
                 ],
                 order: [['ProductId', 'ASC'], ['position', 'ASC']],
@@ -134,6 +135,8 @@ class PosController {
                     code: s.sku_code,
                     productId: s.ProductId,
                     name: s.Product.name,
+                    imageUrl: s.Product.imageUrl || null,
+                    category: s.Product.Category?.name || null,
                     variant: (s.ProductVariantOptions || []).map(o => o.value).join(' / ') || null,
                     price: Math.round(Number(s.price) || 0),
                     stock: stock[s.id] ?? 0,
@@ -252,6 +255,7 @@ class PosController {
             const cashPart = payments.filter(p => p.method === 'CASH').reduce((s, p) => s + Number(p.amount), 0);
             const cashReceived = b.cashReceived != null ? Number(b.cashReceived) : null;
             if (cashReceived != null && (!isInt(cashReceived) || cashReceived < cashPart)) return bad(res, 'Uang diterima kurang dari bagian cash');
+            const fulfillment = b.fulfillment === 'LATER' ? 'LATER' : 'NOW';
             const soldAt = b.soldAt ? new Date(b.soldAt) : new Date();
             if (Number.isNaN(soldAt.getTime())) return bad(res, 'soldAt tidak valid');
 
@@ -289,6 +293,9 @@ class PosController {
                     subtotal, itemDiscount, orderDiscount, total,
                     cashReceived, change: cashReceived != null ? cashReceived - cashPart : 0,
                     customerName: String(b.customerName || '').trim().slice(0, 100) || null,
+                    fulfillment, pickupCode: String(b.pickupCode || '').slice(0, 20) || null,
+                    pickupStatus: fulfillment === 'LATER' ? 'PENDING' : 'DONE',
+                    pickedUpAt: fulfillment === 'LATER' ? null : soldAt,
                     customerPhone: String(b.customerPhone || '').replace(/[^\d+]/g, '').slice(0, 30) || null,
                     discountNote: b.discountNote || null, note: b.note || null, status: 'PAID',
                     needsReview: review.length > 0, reviewNote: review.join('; ') || null,
@@ -320,11 +327,24 @@ class PosController {
         try {
             const { page, limit, offset } = paginate(req.query);
             const where = { ...companyFilter(req) };
-            for (const k of ['eventId', 'shiftId', 'status']) if (req.query[k]) where[k] = req.query[k];
+            for (const k of ['eventId', 'shiftId', 'status', 'fulfillment', 'pickupStatus']) if (req.query[k]) where[k] = req.query[k];
             if (req.query.needsReview === 'true') where.needsReview = true;
-            if (req.query.search) where.orderNumber = { [Op.iLike]: `%${req.query.search}%` };
+            // cari dari nomor struk / nomor ambil / nama / akhiran No. HP (mis. 4 digit terakhir)
+            const q = String(req.query.search || '').trim();
+            if (q) {
+                const digits = q.replace(/\D/g, '');
+                where[Op.or] = [
+                    { orderNumber:  { [Op.iLike]: `%${q}%` } },
+                    { pickupCode:   { [Op.iLike]: `%${q}%` } },
+                    { customerName: { [Op.iLike]: `%${q}%` } },
+                    ...(digits.length >= 3 ? [{ customerPhone: { [Op.like]: `%${digits}` } }] : []),
+                ];
+            }
             const { rows, count } = await PosOrder.findAndCountAll({
-                where, include: ORDER_INCLUDE, order: [['soldAt', 'DESC']], limit, offset, distinct: true,
+                where, include: [...ORDER_INCLUDE, { model: PosEvent, as: 'event', attributes: ['id', 'name'] }],
+                // antrean pengambilan: yang paling lama menunggu di atas
+                order: [['soldAt', req.query.pickupStatus === 'PENDING' ? 'ASC' : 'DESC']],
+                limit, offset, distinct: true,
             });
             res.json(paginatedResponse(rows, count, page, limit));
         } catch (err) { next(err); }
@@ -335,6 +355,20 @@ class PosController {
             const order = await PosOrder.findOne({ where: { id: req.params.id, ...companyFilter(req) }, include: ORDER_INCLUDE });
             if (!order) throw { name: 'NotFound', message: 'Transaksi tidak ditemukan' };
             res.json(order);
+        } catch (err) { next(err); }
+    }
+
+    // Tandai barang "ambil nanti" sudah / belum diambil pelanggan.
+    static async setPickup(req, res, next) {
+        try {
+            const order = await PosOrder.findOne({ where: { id: req.params.id, ...companyFilter(req) } });
+            if (!order) throw { name: 'NotFound', message: 'Transaksi tidak ditemukan' };
+            if (order.status === 'VOID') return bad(res, 'Transaksi sudah dibatalkan');
+            if (order.fulfillment !== 'LATER') return bad(res, 'Transaksi ini barangnya sudah dibawa langsung');
+            const done = req.body?.status === 'DONE';
+            if (!done && req.body?.status !== 'PENDING') return bad(res, "status harus 'DONE' atau 'PENDING'");
+            await order.update({ pickupStatus: done ? 'DONE' : 'PENDING', pickedUpAt: done ? new Date() : null, pickedUpBy: done ? req.user.id : null });
+            res.json(await PosOrder.findByPk(order.id, { include: ORDER_INCLUDE }));
         } catch (err) { next(err); }
     }
 
@@ -406,11 +440,16 @@ class PosController {
                     total: sum(paid, o => o.total),
                     voided: orders.length - paid.length,
                     needsReview: paid.filter(o => o.needsReview).length,
+                    pendingPickup: paid.filter(o => o.pickupStatus === 'PENDING').length,
                 },
                 byMethod,
                 byDay: Object.values(byDay),
                 byProduct: Object.values(byProduct).sort((a, b) => b.net - a.net),
                 shifts: await Promise.all(shifts.map(async s => ({ ...s.toJSON(), summary: await shiftSummary(s) }))),
+                pendingPickup: paid.filter(o => o.pickupStatus === 'PENDING').map(o => ({
+                    id: o.id, orderNumber: o.orderNumber, pickupCode: o.pickupCode, customerName: o.customerName, customerPhone: o.customerPhone,
+                    soldAt: o.soldAt, items: o.items.map(i => ({ name: i.name, variant: i.variant, qty: i.qty })),
+                })),
                 needsReview: paid.filter(o => o.needsReview).map(o => ({ id: o.id, orderNumber: o.orderNumber, soldAt: o.soldAt, reviewNote: o.reviewNote })),
             });
         } catch (err) { next(err); }

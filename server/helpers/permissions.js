@@ -68,6 +68,7 @@ const ALL_PERMISSIONS = [
   // ── Kasir / POS (event pop up) ───────────────────────────────────────────────
   { key: 'pos.manage',                label: 'Akses Penuh Kasir / POS',                    group: 'Kasir / POS',             isParent: true,  desc: 'Aktifkan semua fitur kasir event pop up' },
   { key: 'pos.sell',                  label: 'Jualan di Kasir',                            group: 'Kasir / POS',             parent: 'pos.manage',             desc: 'Buka/tutup shift & buat transaksi di layar kasir' },
+  { key: 'pos.fulfill',               label: 'Antrean Pengambilan',                        group: 'Kasir / POS',             parent: 'pos.manage',             desc: 'Lihat barang yang belum diambil pelanggan & tandai sudah diambil' },
   { key: 'pos.void',                  label: 'Batalkan Transaksi Kasir',                   group: 'Kasir / POS',             parent: 'pos.manage',             desc: 'Void transaksi & kembalikan stok ke gudang event' },
   { key: 'pos.event.manage',          label: 'Kelola Event Pop Up',                        group: 'Kasir / POS',             parent: 'pos.manage',             desc: 'Buat event, pilih gudang & channel, buka/tutup event' },
   { key: 'pos.report',                label: 'Lihat Laporan Event',                        group: 'Kasir / POS',             parent: 'pos.manage',             desc: 'Rekap penjualan, pembayaran, dan shift per event' },

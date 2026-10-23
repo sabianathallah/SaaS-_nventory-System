@@ -137,20 +137,51 @@ describe('Transaksi', () => {
   });
 });
 
+describe('Ambil nanti (antrean pengambilan)', () => {
+  let later;
+  test('transaksi ambil nanti masuk antrean dan bisa dicari dari 4 digit No. HP', async () => {
+    const res = await request(app).post('/pos/orders').set(auth()).send(order({
+      fulfillment: 'LATER', pickupCode: 'A-001', customerName: 'Budi', customerPhone: '081299998888',
+      items: [{ ProductSKUId: skuA.id, qty: 1, unitPrice: 300000 }], payments: [{ method: 'QRIS', amount: 300000 }], cashReceived: null,
+    }));
+    expect(res.status).toBe(201);
+    later = res.body.order;
+    expect(later).toMatchObject({ fulfillment: 'LATER', pickupStatus: 'PENDING', pickupCode: 'A-001', pickedUpAt: null });
+    const q = await request(app).get(`/pos/orders?eventId=${eventId}&pickupStatus=PENDING&search=8888`).set(auth());
+    expect(q.body.data.map(o => o.id)).toEqual([later.id]);
+  });
+
+  test('transaksi langsung dibawa tidak bisa ditandai pengambilan', async () => {
+    const now = (await PosOrder.findOne({ where: { eventId, fulfillment: 'NOW', status: 'PAID' } })).id;
+    const res = await request(app).patch(`/pos/orders/${now}/pickup`).set(auth()).send({ status: 'DONE' });
+    expect(res.status).toBe(400);
+  });
+
+  test('tandai sudah diambil lalu batalkan tanda', async () => {
+    const done = await request(app).patch(`/pos/orders/${later.id}/pickup`).set(auth()).send({ status: 'DONE' });
+    expect(done.body).toMatchObject({ pickupStatus: 'DONE' });
+    expect(done.body.pickedUpAt).not.toBeNull();
+    expect(done.body.PickedUpBy.id).toBe(state.admin.id);
+    const undo = await request(app).patch(`/pos/orders/${later.id}/pickup`).set(auth()).send({ status: 'PENDING' });
+    expect(undo.body).toMatchObject({ pickupStatus: 'PENDING', pickedUpAt: null });
+  });
+});
+
 describe('Tutup shift & laporan', () => {
   test('tutup shift menghitung kas yang seharusnya dan selisihnya', async () => {
     const res = await request(app).patch(`/pos/shifts/${shiftId}/close`).set(auth()).send({ countedCash: 1090000 });
     expect(res.status).toBe(200);
     // modal 500.000 + cash 600.000 (kembalian sudah keluar) = 1.100.000, dihitung 1.090.000
-    expect(res.body.summary).toMatchObject({ orderCount: 2, expectedCash: 1100000, cashDifference: -10000 });
-    expect(res.body.summary.byMethod).toMatchObject({ CASH: 600000, QRIS: 680000, EDC: 0 });
+    expect(res.body.summary).toMatchObject({ orderCount: 3, expectedCash: 1100000, cashDifference: -10000 });
+    expect(res.body.summary.byMethod).toMatchObject({ CASH: 600000, QRIS: 980000, EDC: 0 });
   });
 
   test('laporan event: total, metode bayar, produk, dan transaksi perlu dicek', async () => {
     const res = await request(app).get(`/pos/events/${eventId}/report`).set(auth());
     expect(res.status).toBe(200);
-    expect(res.body.totals).toMatchObject({ orders: 2, qty: 5, subtotal: 1350000, discount: 70000, total: 1280000, voided: 1, needsReview: 1 });
-    expect(res.body.byProduct.map(p => [p.name, p.variant, p.qty])).toEqual(expect.arrayContaining([['Tshirt POS', null, 2], ['Tshirt POS', null, 3]]));
+    expect(res.body.totals).toMatchObject({ orders: 3, qty: 6, subtotal: 1650000, discount: 70000, total: 1580000, voided: 1, needsReview: 1, pendingPickup: 1 });
+    expect(res.body.pendingPickup[0]).toMatchObject({ pickupCode: 'A-001', customerName: 'Budi' });
+    expect(res.body.byProduct.map(p => [p.name, p.variant, p.qty])).toEqual(expect.arrayContaining([['Tshirt POS', null, 3], ['Tshirt POS', null, 3]]));
     expect(res.body.needsReview).toHaveLength(1);
   });
 });

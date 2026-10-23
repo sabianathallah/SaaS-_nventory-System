@@ -9,7 +9,8 @@ const canSell   = rpAny('pos.manage', 'pos.sell');
 const canEvent  = rpAny('pos.manage', 'pos.event.manage');
 const canVoid   = rpAny('pos.manage', 'pos.void');
 const canReport = rpAny('pos.manage', 'pos.report', 'pos.event.manage');
-const canSee    = rpAny('pos.manage', 'pos.sell', 'pos.event.manage', 'pos.report');
+const canSee    = rpAny('pos.manage', 'pos.sell', 'pos.event.manage', 'pos.report', 'pos.fulfill');
+const canFulfill = rpAny('pos.manage', 'pos.sell', 'pos.fulfill');
 
 router.get('/events',             canSee,    C.listEvents);
 router.post('/events',            canEvent,  requireCompany, C.createEvent);
@@ -27,5 +28,6 @@ router.get('/orders',             canSee,    C.listOrders);
 router.post('/orders',            canSell,   C.createOrder);
 router.get('/orders/:id',         canSee,    C.getOrder);
 router.post('/orders/:id/void',   canVoid,   C.voidOrder);
+router.patch('/orders/:id/pickup', canFulfill, C.setPickup);
 
 module.exports = router;
