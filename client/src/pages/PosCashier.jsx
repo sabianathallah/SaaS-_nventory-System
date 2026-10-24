@@ -78,6 +78,7 @@ export default function PosCashier() {
   const [returns, setReturns] = useState([])
   const [exchangeOf, setExchangeOf] = useState(null) // { clientOrderId, orderNumber }
   const [held, setHeld] = useState([])              // keranjang yang ditahan (maks MAX_HELD)
+  const [exchangeNumber, setExchangeNumber] = useState('') // tukar yang dibuka dari riwayat
   const scanRef = useRef(null)
 
   const refreshOrders = useCallback(async () => {
@@ -210,7 +211,7 @@ export default function PosCashier() {
   const startExchange = (order, picks) => {
     setExchangeOf({ clientOrderId: order.clientOrderId, orderNumber: order.orderNumber })
     setReturns(picks)
-    setModal(null); focusScan()
+    setModal(null); setExchangeNumber(''); focusScan()
     toast.success('Scan barang pengganti')
   }
 
@@ -570,33 +571,11 @@ export default function PosCashier() {
         </Modal>
       )}
       {modal === 'pay' && <PayScreen totals={totals} exchange={!!exchangeOf} checkLimit={checkLimit} onClose={() => { setModal(null); setPayPreview(null) }} onPay={finishOrder} onPreview={setPayPreview} />}
-      {modal === 'exchange' && <ExchangeModal eventId={eventId} orders={orders} online={sync.online} skuById={skuById} onClose={() => setModal(null)} onStart={startExchange} />}
+      {modal === 'exchange' && <ExchangeModal initialNumber={exchangeNumber} eventId={eventId} orders={orders} online={sync.online} skuById={skuById} onClose={() => { setModal(null); setExchangeNumber('') }} onStart={startExchange} />}
       {modal === 'done' && lastOrder && <DoneScreen order={lastOrder} onPrint={(c) => printOrder(lastOrder, c)} onNew={() => setModal(null)} />}
       {modal === 'history' && (
-        <Modal open onClose={() => setModal(null)} title="Riwayat transaksi laptop ini" size="lg">
-          <p className="text-xs text-slate-400 mb-2">Riwayat lengkap semua kasir & antrean pengambilan ada di modul POS → Riwayat Transaksi.</p>
-          <div className="max-h-[60vh] overflow-auto divide-y divide-slate-100 text-sm">
-            {!recent.length && <p className="text-slate-400 p-4">Belum ada transaksi.</p>}
-            {recent.slice(0, 100).map(o => (
-              <div key={o.clientOrderId} className="flex items-center justify-between py-2.5 gap-3">
-                <div className="min-w-0">
-                  <p className="font-semibold">{o.orderNumber}
-                    <span className="text-xs font-normal text-slate-400"> · {new Date(o.soldAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}{o.customerName ? ` · ${o.customerName}` : ''}</span>
-                    {o.fulfillment === 'LATER' && <span className="ml-2 badge-amber">ambil nanti {o.pickupCode}</span>}
-                    {o.exchangeOfNumber && <span className="ml-2 text-[11px] font-semibold text-sky-700">tukar dari {o.exchangeOfNumber}</span>}
-                  </p>
-                  <p className="text-xs text-slate-500 truncate">{o.items.map(i => `${i.qty}× ${shortName(i.name)}${i.variant ? ` ${i.variant}` : ''}`).join(', ')}</p>
-                  {o.error && <p className="text-xs text-danger">Ditolak: {o.error}</p>}
-                </div>
-                <div className="text-right shrink-0">
-                  <p className="font-semibold">{rp(o.total)}</p>
-                  <p className={`text-[11px] ${o.pending ? 'text-amber-600' : 'text-emerald-600'}`}>{o.pending ? 'belum terkirim' : 'terkirim'}</p>
-                  <button className="text-xs text-brand inline-flex items-center gap-1" onClick={() => printOrder(o)}><Printer size={11} />Cetak ulang</button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </Modal>
+        <HistoryModal orders={recent} shift={shift} onClose={() => setModal(null)} onPrint={printOrder}
+          onExchange={(number) => { setExchangeNumber(number); setModal('exchange') }} />
       )}
       {modal === 'queue' && (
         <Modal open onClose={() => setModal(null)} title="Transaksi ditolak server" size="lg">
@@ -895,8 +874,11 @@ function DoneScreen({ order, onPrint, onNew }) {
 
 // Cari struk asal (scan barcode di struk / ketik nomor), lalu pilih barang yang dikembalikan.
 // Struk dari laptop ini bisa dicari offline; struk laptop lain butuh internet.
-function ExchangeModal({ eventId, orders, online, skuById, onClose, onStart }) {
-  const [number, setNumber] = useState('')
+function ExchangeModal({ initialNumber, eventId, orders, online, skuById, onClose, onStart }) {
+  const [number, setNumber] = useState(initialNumber || '')
+  const formRef = useRef(null)
+  // dibuka dari tombol Tukar di riwayat: langsung cari struknya
+  useEffect(() => { if (initialNumber) formRef.current?.requestSubmit() }, [initialNumber])
   const [found, setFound] = useState(null)   // { order, returned }
   const [pick, setPick] = useState({})       // skuId -> qty dikembalikan
   const [busy, setBusy] = useState(false)
@@ -945,7 +927,7 @@ function ExchangeModal({ eventId, orders, online, skuById, onClose, onStart }) {
 
   return (
     <Modal open onClose={onClose} title="Tukar barang" size="lg">
-      <form onSubmit={find} className="flex gap-2">
+      <form ref={formRef} onSubmit={find} className="flex gap-2">
         <input className="input flex-1 font-mono" autoFocus value={number} onChange={e => setNumber(e.target.value)} placeholder="Scan barcode di struk atau ketik nomor struk" />
         <button className="btn-primary" disabled={busy}>{busy ? 'Mencari…' : 'Cari'}</button>
       </form>
@@ -980,6 +962,106 @@ function ExchangeModal({ eventId, orders, online, skuById, onClose, onStart }) {
     </Modal>
   )
 }
+
+// Riwayat transaksi laptop ini (jalan offline): cari / scan struk, detail, cetak ulang, tukar, ringkasan shift.
+const METHOD_LABEL = Object.fromEntries(METHODS.map(m => [m.key, m.label]))
+function HistoryModal({ orders, shift, onClose, onPrint, onExchange }) {
+  const [q, setQ] = useState('')
+  const [open, setOpen] = useState(null)
+  const status = (o) => o.error ? 'rejected' : o.pending ? 'pending' : 'sent'
+  const review = (o) => o.server?.needsReview ? o.server.reviewNote : null
+
+  // ringkasan shift yang sedang buka di laptop ini (transaksi ditolak server tidak dihitung)
+  const mine = orders.filter(o => o.shiftId === shift.id && !o.error)
+  const byMethod = {}
+  for (const o of mine) for (const p of o.payments) byMethod[p.method] = (byMethod[p.method] || 0) + p.amount
+  const drawer = (shift.openingCash || 0) + (byMethod.CASH || 0)
+
+  const term = q.trim().toLowerCase(), digits = term.replace(/\D/g, '')
+  const list = !term ? orders : orders.filter(o =>
+    [o.orderNumber, o.pickupCode, o.customerName].some(v => String(v || '').toLowerCase().includes(term))
+    || (digits.length >= 3 && String(o.customerPhone || '').replace(/\D/g, '').endsWith(digits)))
+  // scan barcode struk = nomor persis + Enter -> langsung buka detailnya
+  const onEnter = () => {
+    const hit = orders.find(o => o.orderNumber.toLowerCase() === term)
+    if (hit) setOpen(hit.clientOrderId)
+    else if (list.length === 1) setOpen(list[0].clientOrderId)
+  }
+
+  return (
+    <Modal open onClose={onClose} title="Riwayat transaksi laptop ini" size="lg">
+      <div className="grid grid-cols-4 gap-2 mb-3">
+        <Stat label={`Shift #${shift.id} · transaksi`} value={mine.length} />
+        <Stat label="Total penjualan" value={rp(mine.reduce((s, o) => s + o.total, 0))} />
+        <Stat label="Tunai di laci" value={rp(drawer)} hint={`modal ${rp(shift.openingCash || 0)}`} />
+        <Stat label="Non-tunai" value={rp(Object.entries(byMethod).filter(([k]) => k !== 'CASH').reduce((s, [, v]) => s + v, 0))}
+          hint={Object.entries(byMethod).filter(([k, v]) => k !== 'CASH' && v).map(([k, v]) => `${METHOD_LABEL[k]} ${v.toLocaleString('id-ID')}`).join(' · ')} />
+      </div>
+      <div className="relative mb-2">
+        <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+        <input className="input pl-9" autoFocus value={q} onChange={e => setQ(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); onEnter() } }}
+          placeholder="Scan barcode struk, nomor struk / ambil, nama, atau 4 digit No. HP" />
+      </div>
+      <div className="max-h-[56vh] overflow-auto divide-y divide-slate-100 text-sm">
+        {!list.length && <p className="text-slate-400 p-4">{term ? `Tidak ada transaksi yang cocok dengan "${q}"` : 'Belum ada transaksi.'}</p>}
+        {list.slice(0, 200).map(o => {
+          const st = status(o), isOpen = open === o.clientOrderId, rv = review(o)
+          const sold = o.items.filter(i => i.qty > 0), back = o.items.filter(i => i.qty < 0)
+          return (
+            <div key={o.clientOrderId} className={isOpen ? 'bg-slate-50/80' : ''}>
+              <button className="w-full text-left flex items-center justify-between py-2.5 px-2 gap-3 hover:bg-slate-50" onClick={() => setOpen(isOpen ? null : o.clientOrderId)}>
+                <div className="min-w-0">
+                  <p className="font-semibold flex flex-wrap items-center gap-x-2 gap-y-0.5">{o.orderNumber}
+                    <span className="text-xs font-normal text-slate-400">{new Date(o.soldAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}{o.customerName ? ` · ${o.customerName}` : ''}</span>
+                    {o.exchangeOfNumber && <span className="text-[11px] font-semibold text-sky-700">tukar dari {o.exchangeOfNumber}</span>}
+                    {o.fulfillment === 'LATER' && <span className="badge-amber">ambil nanti {o.pickupCode}</span>}
+                    {o.total < 0 && <span className="text-[11px] font-semibold text-amber-700">uang kembali</span>}
+                    {rv && <span className="text-[11px] font-semibold text-amber-700">perlu dicek</span>}
+                  </p>
+                  <p className="text-xs text-slate-500 truncate">{[...back.map(i => `kembali ${-i.qty}× ${shortName(i.name)} ${i.variant || ''}`), ...sold.map(i => `${i.qty}× ${shortName(i.name)} ${i.variant || ''}`)].join(', ')}</p>
+                </div>
+                <div className="text-right shrink-0">
+                  <p className="font-semibold">{o.total < 0 ? `-${rp(-o.total)}` : rp(o.total)}</p>
+                  <p className={`text-[11px] ${st === 'rejected' ? 'text-danger' : st === 'pending' ? 'text-amber-600' : 'text-emerald-600'}`}>{st === 'rejected' ? 'ditolak server' : st === 'pending' ? 'belum terkirim' : 'terkirim'}</p>
+                </div>
+              </button>
+              {isOpen && (
+                <div className="px-3 pb-3 space-y-2">
+                  <div className="rounded-xl bg-white border border-slate-200 p-3 space-y-1">
+                    {back.map(i => <Line key={`b${i.ProductSKUId}`} label={<span className="text-sky-700">Kembali {-i.qty}× {shortName(i.name)} {i.variant}</span>} value={`-${rp(-i.qty * i.unitPrice)}`} />)}
+                    {sold.map(i => <Line key={i.ProductSKUId} label={<>{i.qty}× {shortName(i.name)} {i.variant && <b>{i.variant}</b>}{i.discount > 0 && <span className="text-emerald-600"> · diskon {rp(i.discount)}</span>}</>} value={rp(i.qty * i.unitPrice - (i.discount || 0))} />)}
+                    {o.orderDiscount > 0 && <Line label={`Diskon transaksi${o.discountNote ? ` · ${o.discountNote}` : ''}`} value={`-${rp(o.orderDiscount)}`} />}
+                    <div className="border-t border-slate-100 pt-1">
+                      {o.payments.map((p, k) => <Line key={k} label={METHOD_LABEL[p.method] || p.method} value={p.amount < 0 ? `-${rp(-p.amount)}` : rp(p.amount)} />)}
+                      {!o.payments.length && <Line label="Pembayaran" value="tidak ada (nilai sama)" />}
+                      {o.cashReceived != null && <Line label="Uang diterima · kembalian" value={`${rp(o.cashReceived)} · ${rp(o.change)}`} />}
+                    </div>
+                    {o.customerPhone && <p className="text-xs text-slate-400">No. HP ••••{String(o.customerPhone).replace(/\D/g, '').slice(-4)}</p>}
+                  </div>
+                  {rv && <p className="text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2">Perlu dicek: {rv}</p>}
+                  {o.error && <p className="text-xs text-danger bg-red-50 rounded-lg px-3 py-2">Ditolak server: {o.error}</p>}
+                  <div className="flex flex-wrap gap-2">
+                    <button className="btn-secondary text-xs" onClick={() => onPrint(o, { customer: true, staff: false })}><Printer size={12} />Struk pelanggan</button>
+                    <button className="btn-secondary text-xs" onClick={() => onPrint(o, { customer: false, staff: true })}><Printer size={12} />Slip staff</button>
+                    {!o.error && sold.length > 0 && <button className="btn-primary text-xs" onClick={() => onExchange(o.orderNumber)}><ArrowLeftRight size={12} />Tukar barang</button>}
+                  </div>
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+      <p className="text-[11px] text-slate-400 mt-2">Riwayat semua laptop, void & antrean pengambilan ada di modul POS → Riwayat Transaksi.</p>
+    </Modal>
+  )
+}
+const Stat = ({ label, value, hint }) => (
+  <div className="rounded-xl bg-slate-50 px-3 py-2.5 min-w-0">
+    <p className="text-[11px] text-slate-500 truncate">{label}</p>
+    <p className="font-bold text-slate-900">{value}</p>
+    {hint && <p className="text-[10px] text-slate-400 truncate" title={hint}>{hint}</p>}
+  </div>
+)
 
 function RemoveQueued({ order, onRemoved }) {
   const [confirm, setConfirm] = useState(false)
