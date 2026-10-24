@@ -22,6 +22,8 @@ module.exports = (sequelize, DataTypes) => {
     status:        { type: DataTypes.STRING(20), allowNull: false, defaultValue: 'PREP' },
     receiptHeader: { type: DataTypes.TEXT, allowNull: true },
     receiptFooter: { type: DataTypes.TEXT, allowNull: true },
+    // batas beli per orang: { qty, productIds: [] (kosong = semua produk), perPhone }
+    purchaseLimit: { type: DataTypes.JSONB, allowNull: true },
     createdBy:     { type: DataTypes.INTEGER, allowNull: true },
   }, { sequelize, modelName: 'PosEvent' });
   return PosEvent;

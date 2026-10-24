@@ -185,3 +185,71 @@ describe('Tutup shift & laporan', () => {
     expect(res.body.needsReview).toHaveLength(1);
   });
 });
+
+describe('Tukar barang & batas beli', () => {
+  let skuM, skuL, orig;
+  const send = (body) => request(app).post('/pos/orders').set(auth()).send(order({ shiftId: null, cashReceived: null, ...body }));
+  beforeAll(async () => {
+    const cid = state.company.id;
+    const p = await Product.create({ name: 'Hoodie Tukar', CategoryId: state.category.id, unit: 'pcs', companyId: cid });
+    skuM = await ProductSKU.create({ ProductId: p.id, sku_code: 'TKR-M', price: 400000, qty: 10, companyId: cid });
+    skuL = await ProductSKU.create({ ProductId: p.id, sku_code: 'TKR-L', price: 400000, qty: 10, companyId: cid });
+    await SkuWarehouseStock.bulkCreate([
+      { ProductSKUId: skuM.id, WarehouseId: wh.id, qty: 10, companyId: cid },
+      { ProductSKUId: skuL.id, WarehouseId: wh.id, qty: 10, companyId: cid },
+    ]);
+    // dibeli dengan diskon item 40.000 + diskon transaksi 10.000 -> nilai kembali 350.000
+    const res = await send({ items: [{ ProductSKUId: skuM.id, qty: 1, unitPrice: 400000, discount: 40000 }], orderDiscount: 10000, payments: [{ method: 'QRIS', amount: 350000 }] });
+    orig = res.body.order;
+  });
+
+  test('tukar size: barang lama masuk stok, barang baru keluar, selisih dibayar', async () => {
+    const res = await send({
+      exchangeOfClientId: orig.clientOrderId,
+      items: [{ ProductSKUId: skuM.id, qty: -1, unitPrice: 1 }, { ProductSKUId: skuL.id, qty: 1, unitPrice: 400000 }],
+      payments: [{ method: 'CASH', amount: 50000 }],
+    });
+    expect(res.status).toBe(201);
+    expect(res.body.order).toMatchObject({ returnTotal: 350000, total: 50000, exchangeOfOrderId: orig.id, needsReview: false });
+    expect(await swsQty(skuM.id)).toBe(10);
+    expect(await swsQty(skuL.id)).toBe(9);
+    const mv = await Stock_Movement.findOne({ where: { ReferenceId: res.body.order.id, source: 'POS_RETURN' } });
+    expect(mv).toMatchObject({ type: 'IN', quantity: 1, ProductSKUId: skuM.id });
+
+    const lookup = await request(app).get('/pos/orders/lookup').query({ number: orig.orderNumber }).set(auth());
+    expect(lookup.body.returned).toEqual({ [skuM.id]: 1 });
+
+    // transaksi asal tidak bisa di-void selama tukarnya masih ada; void tukar mengembalikan stok
+    expect((await request(app).post(`/pos/orders/${orig.id}/void`).set(auth()).send({ reason: 'x' })).status).toBe(400);
+    expect((await request(app).post(`/pos/orders/${res.body.order.id}/void`).set(auth()).send({ reason: 'x' })).status).toBe(200);
+    expect(await swsQty(skuM.id)).toBe(9);
+    expect(await swsQty(skuL.id)).toBe(10);
+  });
+
+  test('barang pengganti lebih murah: uang tunai dikembalikan & ditandai; retur berlebih ditandai', async () => {
+    const ok = await send({ exchangeOfClientId: orig.clientOrderId, items: [{ ProductSKUId: skuM.id, qty: -1, unitPrice: 1 }], payments: [{ method: 'CASH', amount: -350000 }] });
+    expect(ok.status).toBe(201);
+    expect(ok.body.order).toMatchObject({ total: -350000, needsReview: true });
+    const again = await send({ exchangeOfClientId: orig.clientOrderId, items: [{ ProductSKUId: skuM.id, qty: -1, unitPrice: 1 }], payments: [{ method: 'CASH', amount: -350000 }] });
+    expect(again.body.order.reviewNote).toMatch(/dikembalikan 2 pcs/);
+    const qris = await send({ exchangeOfClientId: orig.clientOrderId, items: [{ ProductSKUId: skuM.id, qty: -1, unitPrice: 1 }], payments: [{ method: 'QRIS', amount: -350000 }] });
+    expect(qris.status).toBe(400);
+    const noOrig = await send({ items: [{ ProductSKUId: skuM.id, qty: -1, unitPrice: 1 }], payments: [] });
+    expect(noOrig.status).toBe(400);
+  });
+
+  test('batas beli per No. HP ditandai saat terlewati', async () => {
+    const bad = await request(app).put(`/pos/events/${eventId}`).set(auth()).send({ purchaseLimit: { qty: 0.5 } });
+    expect(bad.status).toBe(400);
+    await request(app).put(`/pos/events/${eventId}`).set(auth()).send({ purchaseLimit: { qty: 1, productIds: [skuL.ProductId], perPhone: true } });
+    const cat = await request(app).get(`/pos/events/${eventId}/catalog`).set(auth());
+    expect(cat.body.event.purchaseLimit).toEqual({ qty: 1, productIds: [skuL.ProductId], perPhone: true });
+    const buy = (phone) => send({ customerPhone: phone, items: [{ ProductSKUId: skuL.id, qty: 1, unitPrice: 400000 }], payments: [{ method: 'QRIS', amount: 400000 }] });
+    expect((await buy('0811-111')).body.order.needsReview).toBe(false);
+    const second = await buy('0811111');
+    expect(second.body.order.needsReview).toBe(true);
+    expect(second.body.order.reviewNote).toMatch(/Lewat batas beli/);
+    expect((await buy('0822222')).body.order.needsReview).toBe(false);
+    await request(app).put(`/pos/events/${eventId}`).set(auth()).send({ purchaseLimit: null });
+  });
+});

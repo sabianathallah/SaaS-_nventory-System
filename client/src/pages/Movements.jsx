@@ -282,6 +282,7 @@ export default function Movements() {
           path  = `/opname/${r.ReferenceId}`
           label = 'Opname'
         }
+        if (r.source === 'POS_RETURN') return <span className="text-xs text-slate-500">Tukar POS</span>
         if (!path) return <span className="font-mono text-xs text-slate-400">#{r.ReferenceId}</span>
         return (
           <button

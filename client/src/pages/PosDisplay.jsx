@@ -24,6 +24,7 @@ export default function PosDisplay() {
   const [imgs, setImgs] = useState({})
   const [qris, setQris] = useState(null)
   const [full, setFull] = useState(!!document.fullscreenElement)
+  const [target, setTarget] = useState(null)   // layar eksternal tujuan (monitor / iPad)
   const doneAt = useRef(0)
   const holdTimer = useRef(null)
 
@@ -47,9 +48,25 @@ export default function PosDisplay() {
       else setShown(s)
       if (s.phase !== 'done' && wait <= 0) doneAt.current = 0
     })
+    // cari layar eksternal; tanpa izin "kelola jendela" -> layar penuh di layar tempat jendela ini berada
+    let details = null
+    const pickTarget = () => setTarget(details?.screens.find(x => !x.isPrimary) || null)
+    const findScreens = async () => {
+      if (!('getScreenDetails' in window) || !window.screen.isExtended) { setTarget(null); return }
+      const perm = await navigator.permissions.query({ name: 'window-management' }).catch(() => null)
+      if (perm?.state !== 'granted') return
+      details = await window.getScreenDetails().catch(() => null)
+      details?.addEventListener('screenschange', pickTarget)
+      pickTarget()
+    }
+    findScreens()
+    window.screen.addEventListener?.('change', findScreens)
     const fs = () => setFull(!!document.fullscreenElement)
     document.addEventListener('fullscreenchange', fs)
-    return () => { clearInterval(t); clearTimeout(holdTimer.current); off(); document.removeEventListener('fullscreenchange', fs) }
+    return () => {
+      clearInterval(t); clearTimeout(holdTimer.current); off(); document.removeEventListener('fullscreenchange', fs)
+      window.screen.removeEventListener?.('change', findScreens); details?.removeEventListener('screenschange', pickTarget)
+    }
   }, [eventId])
 
   useEffect(() => {
@@ -77,9 +94,18 @@ export default function PosDisplay() {
       {shown.phase === 'done' && <Done d={shown.done} />}
 
       {!full && (
-        <button onClick={() => document.documentElement.requestFullscreen?.().catch(() => {})}
+        <button onClick={async () => {
+          // izin belum ada -> minta sekarang (butuh klik), lalu tampil penuh di layar eksternal
+          let scr = target
+          if (!scr && window.screen.isExtended && 'getScreenDetails' in window) {
+            const d = await window.getScreenDetails().catch(() => null)
+            scr = d?.screens.find(x => !x.isPrimary) || null
+            setTarget(scr)
+          }
+          document.documentElement.requestFullscreen?.(scr ? { screen: scr } : undefined).catch(() => document.documentElement.requestFullscreen?.().catch(() => {}))
+        }}
           className="absolute bottom-4 right-4 z-50 inline-flex items-center gap-2 px-4 h-10 rounded-full bg-white/10 hover:bg-white/20 text-sm font-semibold cursor-pointer backdrop-blur">
-          <Maximize2 size={15} />Klik untuk layar penuh
+          <Maximize2 size={15} />{target ? `Tampilkan layar penuh di ${target.label || 'layar eksternal'}` : 'Klik untuk layar penuh'}
         </button>
       )}
     </div>
@@ -164,6 +190,23 @@ function Cart({ s, imgs, qris }) {
               <p className="text-2xl font-black tabular-nums">{rp(l.lineTotal)}</p>
             </div>
           ))}
+          {(s.returns || []).map(r => (
+            <div key={`ret-${r.skuId}`} className="flex items-center gap-5 rounded-2xl border border-dashed border-white/25 p-3 pr-5 text-white/70">
+              <span className="w-8 text-lg" style={HEAD}>↩</span>
+              {imgs[r.productId]
+                ? <img src={imgs[r.productId]} alt="" className="w-20 h-20 rounded-xl object-cover opacity-60" />
+                : <div className="w-20 h-20 rounded-xl bg-white/10 flex items-center justify-center text-center text-[11px] font-black tracking-wide text-white/40 uppercase p-1">{lineName(r.name)}</div>}
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-bold tracking-[.3em] text-white/50">DIKEMBALIKAN</p>
+                <p className="text-xl font-bold truncate">{shortName(r.name)}</p>
+                <div className="mt-1.5 flex items-center gap-2 text-sm">
+                  {r.variant && <span className="px-2 py-0.5 rounded-md border border-white/30 font-bold">SIZE {r.variant}</span>}
+                  <span className="text-white/50">{r.qty} × {rp(r.credit)}</span>
+                </div>
+              </div>
+              <p className="text-2xl font-black tabular-nums">-{rp(r.qty * r.credit)}</p>
+            </div>
+          ))}
         </div>
       </div>
 
@@ -187,6 +230,7 @@ function Cart({ s, imgs, qris }) {
               )}
               <Row label="Subtotal" value={rp(s.subtotal)} />
               {s.discount > 0 && <Row label="Diskon" value={`-${rp(s.discount)}`} className="text-emerald-600" />}
+              {s.returnTotal > 0 && <Row label="Barang dikembalikan" value={`-${rp(s.returnTotal)}`} />}
               {pay?.fulfillment === 'LATER' && <p className="rounded-xl bg-black/5 px-4 py-3 text-base">Barang <b>diambil nanti</b> — nomor ambil muncul setelah bayar.</p>}
               {pay && pay.cashReceived > 0 && (
                 <div className="pt-2 space-y-2">
@@ -199,10 +243,10 @@ function Cart({ s, imgs, qris }) {
         </div>
         <div className="bg-black text-white px-10 py-8">
           <div className="flex items-center justify-between">
-            <p className="text-sm font-bold tracking-[.3em] text-white/60">{pay ? 'TOTAL BAYAR' : 'TOTAL'}</p>
-            {pay && <p className="text-sm font-semibold text-white/70">{pay.methods.map(m => METHOD[m] || m).join(' + ')}</p>}
+            <p className="text-sm font-bold tracking-[.3em] text-white/60">{s.total < 0 ? 'UANG KEMBALI' : s.returnTotal > 0 ? 'SELISIH' : pay ? 'TOTAL BAYAR' : 'TOTAL'}</p>
+            {pay && pay.methods.length > 0 && <p className="text-sm font-semibold text-white/70">{pay.methods.map(m => METHOD[m] || m).join(' + ')}</p>}
           </div>
-          <p key={s.total} className="text-[clamp(44px,5.2vw,80px)] leading-none mt-2 tabular-nums whitespace-nowrap pd-pop" style={HEAD}>{rp(s.total)}</p>
+          <p key={s.total} className="text-[clamp(44px,5.2vw,80px)] leading-none mt-2 tabular-nums whitespace-nowrap pd-pop" style={HEAD}>{rp(Math.abs(s.total))}</p>
         </div>
       </div>
     </div>
@@ -222,10 +266,11 @@ function Done({ d }) {
       <Brand dark />
       <div className="flex-1 flex items-center px-10 gap-10">
         <div className="flex-1 pd-in">
-          <p className="text-sm font-bold tracking-[.4em] text-black/50">PEMBAYARAN BERHASIL</p>
+          <p className="text-sm font-bold tracking-[.4em] text-black/50">{d.exchange ? 'TUKAR BERHASIL' : 'PEMBAYARAN BERHASIL'}</p>
           <p className="text-[110px] leading-[.88] uppercase mt-3" style={HEAD}>Thank you{name ? <>,<br />{name}</> : ''}</p>
           <p className="text-3xl uppercase mt-4" style={HEAD}>for copping Preface ★</p>
           {d.change > 0 && <p className="mt-8 text-2xl">Kembalian <b className="tabular-nums">{rp(d.change)}</b></p>}
+          {d.refund > 0 && <p className="mt-8 text-2xl">Uang kembali <b className="tabular-nums">{rp(d.refund)}</b></p>}
           <p className="mt-3 text-lg text-black/60">Struk dicetak oleh kasir · follow <b className="text-black">@prefacewearhouse</b></p>
         </div>
         {later && (

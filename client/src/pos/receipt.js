@@ -46,12 +46,18 @@ function code39Svg(text, heightPx = 44) {
 
 function ctx(order, event, settings) {
   const d = new Date(order.soldAt)
+  const sold = order.items.filter(i => i.qty > 0)
+  const back = order.items.filter(i => i.qty < 0)
   return {
+    sold, back,
+    // tukar barang: nomor struk asal (offline: exchangeOfNumber, dari server: exchangeOf.orderNumber)
+    swapOf: order.exchangeOfNumber || order.exchangeOf?.orderNumber || '',
+    refund: order.total < 0 ? -order.total : 0,
     w: Number(settings.widthMm) || 80,
     f: Number(settings.fontPx) || 12,
     date: d.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }),
     time: d.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
-    pcs: order.items.reduce((s, i) => s + i.qty, 0),
+    pcs: sold.reduce((s, i) => s + i.qty, 0),
     name: String(order.customerName || '').trim(),
     // baris "Terima kasih" sudah dicetak tetap, jangan dobel dari catatan event
     foot: String(event?.receiptFooter || '').split('\n').filter(l => !/^\s*terima kasih!?\s*$/i.test(l)).join('\n').trim(),
@@ -67,15 +73,20 @@ const pageCss = (w, f, font) => `
 
 // ── Minimalis ────────────────────────────────────────────────────────────────
 function minimal(order, { event, settings, cashierName }) {
-  const { w, f, date, time, pcs, name, foot, pays } = ctx(order, event, settings)
-  const items = order.items.map(i => `
+  const { w, f, date, time, pcs, name, foot, pays, sold, back, swapOf, refund } = ctx(order, event, settings)
+  const backItems = back.map(i => `
+    <div class="item">
+      <div class="row top"><span class="nm">${esc(shortName(i.name))}</span><span class="amt">-${num(-i.qty * i.unitPrice)}</span></div>
+      <div class="sub">${i.variant ? `<span class="size">${esc(i.variant)}</span>` : ''}${-i.qty} &times; ${num(i.unitPrice)}</div>
+    </div>`).join('')
+  const items = sold.map(i => `
     <div class="item">
       <div class="row top"><span class="nm">${esc(shortName(i.name))}</span><span class="amt">${num(i.qty * i.unitPrice)}</span></div>
       <div class="sub">${i.variant ? `<span class="size">${esc(i.variant)}</span>` : ''}${i.qty} &times; ${num(i.unitPrice)}</div>
       ${i.discount ? `<div class="row sub"><span>&mdash; diskon</span><span>-${num(i.discount)}</span></div>` : ''}
     </div>`).join('')
   const meta = [['No. Struk', order.orderNumber], ['Tanggal', date], name && ['Atas nama', name], ['Jam', time],
-    settings.showCashier && cashierName && ['Kasir', cashierName]].filter(Boolean)
+    swapOf && ['Tukar dari', swapOf], settings.showCashier && cashierName && ['Kasir', cashierName]].filter(Boolean)
   return `<!doctype html><html><head><meta charset="utf-8"><style>${pageCss(w, f, '"Helvetica Neue", Helvetica, Arial, sans-serif')}
     body { padding: 6mm 5mm 8mm; }
     .logo { display: block; width: 54%; margin: 0 auto; image-rendering: pixelated; }
@@ -116,14 +127,15 @@ function minimal(order, { event, settings, cashierName }) {
     <div class="meta">${meta.map(([k, v]) => `<div><span class="k">${k}</span><span class="v">${esc(v)}</span></div>`).join('')}</div>
     ${order.fulfillment === 'LATER' ? `<div class="pick"><span class="k">AMBIL DI BOOTH &middot; NOMOR AMBIL</span><span class="code">${esc(order.pickupCode || order.orderNumber)}</span><span class="hint">Tunjukkan struk ini saat mengambil barang</span></div>` : ''}
 
-    <div class="label">PESANAN &middot; ${pcs} ITEM</div>
-    ${items}
+    ${back.length ? `<div class="label">DIKEMBALIKAN</div>${backItems}` : ''}
+    ${sold.length ? `<div class="label">${back.length ? 'PENGGANTI' : 'PESANAN'} &middot; ${pcs} ITEM</div>${items}` : ''}
     <div class="sum" style="margin-top:8px">
-      <div class="row"><span>Subtotal</span><span>${num(order.subtotal)}</span></div>
+      ${sold.length ? `<div class="row"><span>Subtotal</span><span>${num(order.subtotal)}</span></div>` : ''}
       ${order.itemDiscount ? `<div class="row"><span>Diskon item</span><span>-${num(order.itemDiscount)}</span></div>` : ''}
       ${order.orderDiscount ? `<div class="row"><span>Diskon tambahan</span><span>-${num(order.orderDiscount)}</span></div>` : ''}
+      ${order.returnTotal ? `<div class="row"><span>Barang dikembalikan</span><span>-${num(order.returnTotal)}</span></div>` : ''}
     </div>
-    <div class="grand"><span class="k">TOTAL</span><span class="big">${rp(order.total)}</span></div>
+    <div class="grand"><span class="k">${refund ? 'UANG KEMBALI' : swapOf ? 'SELISIH' : 'TOTAL'}</span><span class="big">${rp(refund || order.total)}</span></div>
     <div class="sum">
       ${pays}
       ${order.cashReceived != null ? `<div class="row"><span>Uang diterima</span><span>${num(order.cashReceived)}</span></div>
@@ -141,8 +153,16 @@ function minimal(order, { event, settings, cashierName }) {
 
 // ── Streetwear: blok hitam tebal, huruf condensed besar, nomor item 01/02, barcode ala hang tag ──
 function street(order, { event, settings, cashierName }) {
-  const { w, f, date, time, pcs, name, foot, pays } = ctx(order, event, settings)
-  const items = order.items.map((i, idx) => `
+  const { w, f, date, time, pcs, name, foot, pays, sold, back, swapOf, refund } = ctx(order, event, settings)
+  const backItems = back.map(i => `
+    <div class="item">
+      <div class="no">&#8617;</div>
+      <div class="body">
+        <div class="nm">${esc(shortName(i.name))}</div>
+        <div class="row tags"><span>${i.variant ? `<b class="chip">SIZE ${esc(i.variant)}</b>` : ''}<b class="chip">KEMBALI ${String(-i.qty).padStart(2, '0')}</b></span><span class="amt">-${num(-i.qty * i.unitPrice)}</span></div>
+      </div>
+    </div>`).join('')
+  const items = sold.map((i, idx) => `
     <div class="item">
       <div class="no">${String(idx + 1).padStart(2, '0')}</div>
       <div class="body">
@@ -196,13 +216,16 @@ function street(order, { event, settings, cashierName }) {
     ${order.fulfillment === 'LATER' ? `<div class="pick"><div class="k">PICKUP NO.</div><div class="code">${esc(order.pickupCode || order.orderNumber)}</div><div class="k">AMBIL DI BOOTH &middot; TUNJUKKAN STRUK INI</div></div>` : ''}
     <div class="bar"></div>
     <div class="label"><span>ORDER ${esc(order.orderNumber)}</span><span>${String(pcs).padStart(2, '0')} PCS</span></div>
+    ${swapOf ? `<div class="label" style="margin-top:3px"><span>TUKAR DARI ${esc(swapOf)}</span><span></span></div>` : ''}
+    ${backItems}
     ${items}
     <div class="sum">
-      <div class="row"><span>SUBTOTAL</span><span>${num(order.subtotal)}</span></div>
+      ${sold.length ? `<div class="row"><span>SUBTOTAL</span><span>${num(order.subtotal)}</span></div>` : ''}
       ${order.itemDiscount ? `<div class="row"><span>DISKON ITEM</span><span>-${num(order.itemDiscount)}</span></div>` : ''}
       ${order.orderDiscount ? `<div class="row"><span>DISKON TAMBAHAN</span><span>-${num(order.orderDiscount)}</span></div>` : ''}
+      ${order.returnTotal ? `<div class="row"><span>BARANG KEMBALI</span><span>-${num(order.returnTotal)}</span></div>` : ''}
     </div>
-    <div class="total"><span class="k">TOTAL</span><span class="big">${rp(order.total)}</span></div>
+    <div class="total"><span class="k">${refund ? 'UANG KEMBALI' : swapOf ? 'SELISIH' : 'TOTAL'}</span><span class="big">${rp(refund || order.total)}</span></div>
     <div class="sum up">
       ${pays}
       ${order.cashReceived != null ? `<div class="row"><span>UANG DITERIMA</span><span>${num(order.cashReceived)}</span></div>
@@ -221,11 +244,13 @@ function street(order, { event, settings, cashierName }) {
 
 // ── Slip operasional (copy staff): dibawa runner ke gudang / arsip kasir ──────
 function slip(order, { event, settings, cashierName }) {
-  const { w, f, date, time, pcs, name } = ctx(order, event, settings)
+  const { w, f, date, time, pcs, name, sold, back, swapOf, refund } = ctx(order, event, settings)
   const later = order.fulfillment === 'LATER'
   const phone = String(order.customerPhone || '').replace(/\D/g, '')
-  const items = order.items.map(i => `
+  const items = sold.map(i => `
     <div class="it"><span class="box"></span><span class="q">${i.qty}&times;</span><span class="nm">${esc(shortName(i.name))}</span><span class="sz">${esc(i.variant || '-')}</span></div>`).join('')
+  const backItems = back.map(i => `
+    <div class="it"><span class="box"></span><span class="q">${-i.qty}&times;</span><span class="nm">${esc(shortName(i.name))}</span><span class="sz">${esc(i.variant || '-')}</span></div>`).join('')
   const paid = order.payments.map(p => METHOD[p.method] || p.method).join(' + ') || '-'
   return `<!doctype html><html><head><meta charset="utf-8"><style>${pageCss(w, f, '"Helvetica Neue", Helvetica, Arial, sans-serif')}
     body { padding: 4mm 4mm 7mm; }
@@ -256,9 +281,9 @@ function slip(order, { event, settings, cashierName }) {
       <div><span class="k">KASIR</span><span class="v">${esc(cashierName || '-')}</span></div>
       <div><span class="k">EVENT</span><span class="v">${esc(event?.name || '-')}</span></div>
     </div>
-    <div class="k">BARANG &middot; ${pcs} PCS</div>
-    ${items}
-    <div class="sum"><span>LUNAS &middot; ${esc(paid)}</span><span>${rp(order.total)}</span></div>
+    ${swapOf ? `<div class="k" style="margin-bottom:2px">TUKAR DARI ${esc(swapOf)} &middot; BARANG KEMBALI MASUK STOK</div>${backItems}<div style="height:8px"></div>` : ''}
+    ${sold.length ? `<div class="k">BARANG &middot; ${pcs} PCS</div>${items}` : ''}
+    <div class="sum">${refund ? `<span>UANG DIKEMBALIKAN &middot; TUNAI</span><span>${rp(refund)}</span>` : `<span>LUNAS &middot; ${esc(paid)}</span><span>${rp(order.total)}</span>`}</div>
     ${later ? '<div class="sign"><div>Disiapkan</div><div>Diserahkan</div></div>' : ''}
     <div class="bc">${code39Svg(order.orderNumber, 34)}</div>
   </body></html>`

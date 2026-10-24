@@ -26,6 +26,7 @@ router.patch('/shifts/:id/close', canSell,   C.closeShift);
 
 router.get('/orders',             canSee,    C.listOrders);
 router.post('/orders',            canSell,   C.createOrder);
+router.get('/orders/lookup',      canSell,   C.lookupOrder);
 router.get('/orders/:id',         canSee,    C.getOrder);
 router.post('/orders/:id/void',   canVoid,   C.voidOrder);
 router.patch('/orders/:id/pickup', canFulfill, C.setPickup);

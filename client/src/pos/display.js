@@ -40,6 +40,7 @@ export async function openDisplayWindow(eventId) {
     }
   } catch { /* izin ditolak: buka biasa, geser manual */ }
   const w = window.open(url, 'preface-customer-display', feat)
+  w?.focus()
   return !!w
 }
 

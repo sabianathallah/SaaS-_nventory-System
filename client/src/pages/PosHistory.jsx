@@ -114,9 +114,9 @@ function FragmentRow({ o, open, onToggle, onPrint, onVoid }) {
     <>
       <tr className="border-t border-slate-100 hover:bg-slate-50/60 cursor-pointer align-top" onClick={onToggle}>
         <td className="px-4 py-2.5 text-xs text-slate-500 whitespace-nowrap">{new Date(o.soldAt).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' })}</td>
-        <td className="py-2.5 font-mono text-xs">{o.orderNumber}</td>
+        <td className="py-2.5 font-mono text-xs">{o.orderNumber}{o.exchangeOf && <span className="block font-sans text-[11px] text-sky-700">tukar dari {o.exchangeOf.orderNumber}</span>}</td>
         <td className="py-2.5">{o.customerName || <span className="text-slate-400">—</span>}{o.customerPhone && <span className="block text-xs text-slate-400">••••{String(o.customerPhone).slice(-4)}</span>}</td>
-        <td className="py-2.5 text-xs text-slate-600 max-w-[280px]">{o.items.map(i => `${i.qty}× ${shortName(i.name)}${i.variant ? ` ${i.variant}` : ''}`).join(', ')}</td>
+        <td className="py-2.5 text-xs text-slate-600 max-w-[280px]">{o.items.map(i => `${i.qty < 0 ? `kembali ${-i.qty}` : i.qty}× ${shortName(i.name)}${i.variant ? ` ${i.variant}` : ''}`).join(', ')}</td>
         <td className="py-2.5 text-xs">{o.payments.map(p => METHOD[p.method] || p.method).join(' + ') || '—'}</td>
         <td className="py-2.5 text-right font-semibold whitespace-nowrap">{rp(o.total)}</td>
         <td className="py-2.5 pl-4 text-xs">{status}{o.needsReview && <span className="block text-amber-600">perlu dicek</span>}</td>
@@ -128,8 +128,9 @@ function FragmentRow({ o, open, onToggle, onPrint, onVoid }) {
             <div className="flex flex-wrap items-start justify-between gap-4 text-sm">
               <div className="space-y-1">
                 {o.items.map(i => (
-                  <p key={i.id}>{i.qty}× {shortName(i.name)} {i.variant && <b>{i.variant}</b>} — {rp(i.lineTotal)}{i.discount ? <span className="text-emerald-600"> (diskon {rp(i.discount)})</span> : ''}</p>
+                  <p key={i.id} className={i.qty < 0 ? 'text-sky-700' : ''}>{i.qty < 0 ? `Dikembalikan ${-i.qty}` : i.qty}× {shortName(i.name)} {i.variant && <b>{i.variant}</b>} — {rp(i.lineTotal)}{i.discount ? <span className="text-emerald-600"> (diskon {rp(i.discount)})</span> : ''}</p>
                 ))}
+                {o.returnTotal > 0 && <p className="text-sky-700">Barang dikembalikan senilai {rp(o.returnTotal)}{o.total < 0 ? ` · uang dikembalikan ${rp(-o.total)}` : ''}</p>}
                 {o.orderDiscount > 0 && <p className="text-emerald-600">Diskon transaksi {rp(o.orderDiscount)}{o.discountNote ? ` · ${o.discountNote}` : ''}</p>}
                 <p className="text-xs text-slate-500">Kasir {o.Cashier?.name || '—'}{o.customerPhone ? ` · HP ${o.customerPhone}` : ''}</p>
                 {o.needsReview && <p className="text-xs text-amber-700">{o.reviewNote}</p>}

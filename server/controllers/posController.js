@@ -19,11 +19,48 @@ const ORDER_INCLUDE = [
     { model: PosPayment,   as: 'payments' },
     { model: User,         as: 'Cashier', attributes: ['id', 'name'] },
     { model: User,         as: 'PickedUpBy', attributes: ['id', 'name'] },
+    { model: PosOrder,     as: 'exchangeOf', attributes: ['id', 'orderNumber'] },
 ];
 
 async function findEvent(req, id, t) {
     return PosEvent.findOne({ where: { id, ...companyFilter(req) }, transaction: t });
 }
+
+// Nilai kembali per pcs tiap SKU di transaksi asal = harga setelah diskon item & bagian diskon transaksi.
+// Rumus yang sama dipakai kasir (client/src/pos/exchange.js) supaya total tukar yang dibuat offline cocok.
+function returnCredits(order) {
+    const sold = order.items.filter(i => i.qty > 0);
+    const lineNet = (i) => i.qty * i.unitPrice - (i.discount || 0);
+    const base = sold.reduce((s, i) => s + lineNet(i), 0);
+    const od = order.orderDiscount || 0;
+    const out = {};
+    for (const i of sold) {
+        if (out[i.ProductSKUId]) continue;
+        const net = lineNet(i) - (base ? Math.round(od * lineNet(i) / base) : 0);
+        out[i.ProductSKUId] = { credit: Math.round(net / i.qty), qty: i.qty };
+    }
+    return out;
+}
+
+// Jumlah pcs per SKU yang sudah dikembalikan lewat transaksi tukar (yang tidak dibatalkan).
+async function returnedQty(orderId, t) {
+    const rows = await PosOrder.findAll({
+        where: { exchangeOfOrderId: orderId, status: 'PAID' }, include: [{ model: PosOrderItem, as: 'items' }], transaction: t,
+    });
+    const out = {};
+    for (const o of rows) for (const i of o.items) if (i.qty < 0) out[i.ProductSKUId] = (out[i.ProductSKUId] || 0) - i.qty;
+    return out;
+}
+
+// Batas beli per orang: { qty, productIds: [] (kosong = semua produk), perPhone }
+function normLimit(v) {
+    if (!v || !Number(v.qty)) return null;
+    const qty = Number(v.qty);
+    if (!isInt(qty, 1)) return undefined;
+    const productIds = [...new Set((Array.isArray(v.productIds) ? v.productIds : []).map(Number).filter(n => isInt(n, 1)))];
+    return { qty, productIds, perPhone: !!v.perPhone };
+}
+const limited = (limit, productId) => !!limit?.qty && (!limit.productIds?.length || limit.productIds.includes(productId));
 
 // Ringkasan pembayaran sebuah shift; dipakai saat tutup shift & di layar kasir.
 async function shiftSummary(shift) {
@@ -73,13 +110,15 @@ class PosController {
         try {
             const { name, location, startDate, endDate, WarehouseId, ChannelId, receiptHeader, receiptFooter } = req.body;
             if (!name || !WarehouseId || !ChannelId) return bad(res, 'Nama event, gudang, dan channel wajib diisi');
+            const purchaseLimit = normLimit(req.body.purchaseLimit);
+            if (purchaseLimit === undefined) return bad(res, 'Batas beli harus angka bulat ≥ 1');
             const cid = companyId(req);
             const wh = await Warehouse.findOne({ where: { id: WarehouseId, ...(cid ? { companyId: cid } : {}) } });
             if (!wh) return bad(res, 'Gudang tidak ditemukan');
             const ch = await Channel.findOne({ where: { id: ChannelId, ...(cid ? { companyId: cid } : {}) } });
             if (!ch) return bad(res, 'Channel tidak ditemukan');
             const ev = await PosEvent.create({
-                name, location, startDate, endDate, WarehouseId, ChannelId, receiptHeader, receiptFooter,
+                name, location, startDate, endDate, WarehouseId, ChannelId, receiptHeader, receiptFooter, purchaseLimit,
                 status: 'PREP', createdBy: req.user.id, companyId: cid,
             });
             res.status(201).json(ev);
@@ -93,6 +132,11 @@ class PosController {
             const updates = {};
             for (const k of ['name', 'location', 'startDate', 'endDate', 'receiptHeader', 'receiptFooter']) {
                 if (req.body[k] !== undefined) updates[k] = req.body[k];
+            }
+            if (req.body.purchaseLimit !== undefined) {
+                const limit = normLimit(req.body.purchaseLimit);
+                if (limit === undefined) return bad(res, 'Batas beli harus angka bulat ≥ 1');
+                updates.purchaseLimit = limit;
             }
             if (req.body.status !== undefined) {
                 if (!EVENT_STATUS.includes(req.body.status)) return bad(res, `status harus salah satu dari ${EVENT_STATUS.join(', ')}`);
@@ -128,7 +172,7 @@ class PosController {
             const stockRows = await SkuWarehouseStock.findAll({ where: { WarehouseId: ev.WarehouseId }, attributes: ['ProductSKUId', 'qty'] });
             const stock = Object.fromEntries(stockRows.map(s => [s.ProductSKUId, s.qty]));
             res.json({
-                event: { id: ev.id, name: ev.name, location: ev.location, status: ev.status, WarehouseId: ev.WarehouseId, receiptHeader: ev.receiptHeader, receiptFooter: ev.receiptFooter },
+                event: { id: ev.id, name: ev.name, location: ev.location, status: ev.status, WarehouseId: ev.WarehouseId, receiptHeader: ev.receiptHeader, receiptFooter: ev.receiptFooter, purchaseLimit: ev.purchaseLimit || null },
                 generatedAt: new Date().toISOString(),
                 items: skus.filter(s => s.Product).map(s => ({
                     skuId: s.id,
@@ -214,6 +258,17 @@ class PosController {
 
             const items = Array.isArray(b.items) ? b.items : [];
             if (!items.length) return bad(res, 'Keranjang kosong');
+            // tukar barang: item qty negatif = barang dikembalikan dari transaksi asal
+            const hasReturn = items.some(i => Number(i.qty) < 0);
+            let orig = null, credits = {};
+            if (hasReturn || b.exchangeOfClientId) {
+                orig = b.exchangeOfClientId && await PosOrder.findOne({
+                    where: { companyId: cid, clientOrderId: b.exchangeOfClientId }, include: [{ model: PosOrderItem, as: 'items' }],
+                });
+                if (!orig) return bad(res, 'Transaksi asal tukar belum ada di server (kirim transaksi asalnya dulu)');
+                if (orig.eventId !== ev.id) return bad(res, 'Tukar hanya untuk transaksi di event yang sama');
+                credits = returnCredits(orig);
+            }
             const skuIds = [...new Set(items.map(i => Number(i.ProductSKUId)))];
             const skus = await ProductSKU.findAll({
                 where: { id: skuIds, companyId: ev.companyId },
@@ -224,12 +279,26 @@ class PosController {
             });
             const skuMap = Object.fromEntries(skus.map(s => [s.id, s]));
 
-            let subtotal = 0, itemDiscount = 0;
+            let subtotal = 0, itemDiscount = 0, returnTotal = 0;
             const lines = [];
             for (const i of items) {
                 const sku = skuMap[Number(i.ProductSKUId)];
-                const qty = Number(i.qty), unitPrice = Number(i.unitPrice), discount = Number(i.discount || 0);
+                const qty = Number(i.qty);
                 if (!sku) return bad(res, `SKU ${i.ProductSKUId} tidak ditemukan`);
+                if (Number.isInteger(qty) && qty < 0) {
+                    // nilai barang kembali dihitung server dari transaksi asal, bukan dari kiriman kasir
+                    const c = credits[sku.id];
+                    if (!c) return bad(res, `${sku.sku_code} tidak ada di transaksi asal ${orig.orderNumber}`);
+                    returnTotal += -qty * c.credit;
+                    lines.push({
+                        sku, qty, unitPrice: c.credit, discount: 0, lineTotal: qty * c.credit, isReturn: true,
+                        name: sku.Product?.name || sku.sku_code,
+                        variant: (sku.ProductVariantOptions || []).map(o => o.value).join(' / ') || null,
+                        listPrice: Math.round(Number(sku.price) || 0),
+                    });
+                    continue;
+                }
+                const unitPrice = Number(i.unitPrice), discount = Number(i.discount || 0);
                 if (!isInt(qty, 1) || !isInt(unitPrice) || !isInt(discount) || discount > qty * unitPrice) {
                     return bad(res, `Qty/harga/diskon tidak valid untuk ${sku.sku_code}`);
                 }
@@ -244,11 +313,14 @@ class PosController {
             }
             const orderDiscount = Number(b.orderDiscount || 0);
             if (!isInt(orderDiscount) || orderDiscount > subtotal - itemDiscount) return bad(res, 'Diskon transaksi tidak valid');
-            const total = subtotal - itemDiscount - orderDiscount;
+            const total = subtotal - itemDiscount - orderDiscount - returnTotal;
 
             const payments = Array.isArray(b.payments) ? b.payments : [];
             for (const p of payments) {
-                if (!PAY_METHODS.includes(p.method) || !isInt(Number(p.amount), 1)) return bad(res, 'Pembayaran tidak valid');
+                const amount = Number(p.amount);
+                // total negatif (barang baru lebih murah dari yang dikembalikan) = uang tunai dikembalikan ke pembeli
+                const refund = total < 0 && p.method === 'CASH' && isInt(-amount, 1);
+                if (!PAY_METHODS.includes(p.method) || !(isInt(amount, 1) || refund)) return bad(res, 'Pembayaran tidak valid');
             }
             const paid = payments.reduce((s, p) => s + Number(p.amount), 0);
             if (paid !== total) return bad(res, `Jumlah pembayaran (${paid}) harus sama dengan total (${total})`);
@@ -261,15 +333,45 @@ class PosController {
 
             const review = [];
             if (ev.status === 'CLOSED') review.push('Transaksi masuk setelah event ditutup');
+            if (orig) {
+                if (orig.status === 'VOID') review.push(`Tukar dari transaksi ${orig.orderNumber} yang sudah dibatalkan`);
+                const already = await returnedQty(orig.id);
+                for (const l of lines.filter(x => x.isReturn)) {
+                    const back = (already[l.sku.id] || 0) - l.qty;
+                    if (back > credits[l.sku.id].qty) review.push(`${l.sku.sku_code} dikembalikan ${back} pcs, padahal dibeli ${credits[l.sku.id].qty} di ${orig.orderNumber}`);
+                }
+            }
+            if (total < 0) review.push(`Uang dikembalikan ke pembeli ${-total}`);
+
+            // batas beli: dihitung bersih per artikel (barang baru - barang yang dikembalikan); tidak menolak, ditandai
+            const limit = ev.purchaseLimit;
+            if (limit?.qty) {
+                const net = {};
+                for (const l of lines) if (limited(limit, l.sku.ProductId)) net[l.sku.ProductId] = (net[l.sku.ProductId] || 0) + l.qty;
+                const phone = String(b.customerPhone || '').replace(/[^\d+]/g, '');
+                if (limit.perPhone && phone && Object.keys(net).length) {
+                    const prev = await PosOrder.findAll({
+                        where: { eventId: ev.id, status: 'PAID', customerPhone: phone }, include: [{ model: PosOrderItem, as: 'items' }],
+                    });
+                    for (const o of prev) for (const i of o.items) if (net[i.ProductId] != null) net[i.ProductId] += i.qty;
+                }
+                for (const [pid, q] of Object.entries(net)) {
+                    if (q > limit.qty) {
+                        const l = lines.find(x => x.sku.ProductId === Number(pid));
+                        review.push(`Lewat batas beli: ${l.name} ${q} pcs (maks ${limit.qty}${limit.perPhone && phone ? ' per No. HP' : ''})`);
+                    }
+                }
+            }
 
             const t = await sequelize.transaction();
             try {
-                const header = await Stock_Out_Header.create({
+                const sold = lines.filter(l => !l.isReturn);
+                const header = sold.length ? await Stock_Out_Header.create({
                     WarehouseId: ev.WarehouseId, date: soldAt, purpose: 'Penjualan', ChannelId: ev.ChannelId,
                     notes: `POS ${b.orderNumber} - ${ev.name}`, status: 'closed', createdBy: req.user.id, companyId: ev.companyId,
-                }, { transaction: t });
+                }, { transaction: t }) : null;
 
-                for (const l of lines) {
+                for (const l of sold) {
                     const ProductSKUId = l.sku.id, ProductId = l.sku.ProductId, WarehouseId = ev.WarehouseId;
                     const skuStock = await SkuWarehouseStock.findOne({ where: { ProductSKUId, WarehouseId }, transaction: t, lock: t.LOCK.UPDATE });
                     const available = skuStock ? Number(skuStock.qty) : 0;
@@ -290,7 +392,7 @@ class PosController {
                 const order = await PosOrder.create({
                     companyId: cid, eventId: ev.id, shiftId: b.shiftId || null, cashierId: req.user.id,
                     clientOrderId: b.clientOrderId, orderNumber: b.orderNumber, soldAt,
-                    subtotal, itemDiscount, orderDiscount, total,
+                    subtotal, itemDiscount, orderDiscount, returnTotal, total, exchangeOfOrderId: orig?.id || null,
                     cashReceived, change: cashReceived != null ? cashReceived - cashPart : 0,
                     customerName: String(b.customerName || '').trim().slice(0, 100) || null,
                     fulfillment, pickupCode: String(b.pickupCode || '').slice(0, 20) || null,
@@ -299,8 +401,22 @@ class PosController {
                     customerPhone: String(b.customerPhone || '').replace(/[^\d+]/g, '').slice(0, 30) || null,
                     discountNote: b.discountNote || null, note: b.note || null, status: 'PAID',
                     needsReview: review.length > 0, reviewNote: review.join('; ') || null,
-                    StockOutHeaderId: header.id,
+                    StockOutHeaderId: header?.id || null,
                 }, { transaction: t });
+                // barang yang dikembalikan masuk lagi ke gudang event
+                for (const l of lines.filter(x => x.isReturn)) {
+                    const ProductSKUId = l.sku.id, ProductId = l.sku.ProductId, WarehouseId = ev.WarehouseId, qty = -l.qty;
+                    await l.sku.increment('qty', { by: qty, transaction: t });
+                    await upsertSkuWarehouseStock(t, SkuWarehouseStock, { ProductSKUId, WarehouseId, delta: qty, companyId: ev.companyId });
+                    const [stock] = await Stock.findOrCreate({
+                        where: { ProductId, WarehouseId }, defaults: { quantity: 0, companyId: ev.companyId }, transaction: t,
+                    });
+                    await stock.increment('quantity', { by: qty, transaction: t });
+                    await Stock_Movement.create({
+                        ProductId, ProductSKUId, WarehouseId, type: 'IN', quantity: qty, ReferenceId: order.id, source: 'POS_RETURN',
+                        note: `Tukar POS ${b.orderNumber} (dari ${orig.orderNumber})`, date: soldAt, companyId: ev.companyId,
+                    }, { transaction: t });
+                }
                 await PosOrderItem.bulkCreate(lines.map(l => ({
                     orderId: order.id, ProductId: l.sku.ProductId, ProductSKUId: l.sku.id, name: l.name, variant: l.variant,
                     qty: l.qty, listPrice: l.listPrice, unitPrice: l.unitPrice, discount: l.discount, lineTotal: l.lineTotal,
@@ -320,6 +436,17 @@ class PosController {
                 }
                 throw err;
             }
+        } catch (err) { next(err); }
+    }
+
+    // Cari transaksi asal untuk tukar barang (scan barcode struk / ketik nomor struk).
+    static async lookupOrder(req, res, next) {
+        try {
+            const number = String(req.query.number || '').trim();
+            if (!number) return bad(res, 'Nomor struk wajib diisi');
+            const order = await PosOrder.findOne({ where: { orderNumber: { [Op.iLike]: number }, ...companyFilter(req) }, include: ORDER_INCLUDE });
+            if (!order) throw { name: 'NotFound', message: `Struk ${number} tidak ditemukan` };
+            res.json({ order, returned: await returnedQty(order.id) });
         } catch (err) { next(err); }
     }
 
@@ -380,6 +507,20 @@ class PosController {
             if (!order) { await t.rollback(); throw { name: 'NotFound', message: 'Transaksi tidak ditemukan' }; }
             if (order.status === 'VOID') { await t.rollback(); return bad(res, 'Transaksi sudah dibatalkan'); }
             if (!req.body?.reason) { await t.rollback(); return bad(res, 'Alasan pembatalan wajib diisi'); }
+            const swaps = await PosOrder.count({ where: { exchangeOfOrderId: order.id, status: 'PAID' }, transaction: t });
+            if (swaps) { await t.rollback(); return bad(res, 'Transaksi ini sudah pernah ditukar — batalkan transaksi tukarnya dulu'); }
+
+            // barang yang dikembalikan lewat tukar keluar lagi dari gudang
+            const returns = await Stock_Movement.findAll({ where: { ReferenceId: order.id, source: 'POS_RETURN', type: 'IN' }, transaction: t });
+            for (const mv of returns) {
+                const stock = await Stock.findOne({ where: { ProductId: mv.ProductId, WarehouseId: mv.WarehouseId }, transaction: t });
+                if (stock) await stock.update({ quantity: Math.max(0, Number(stock.quantity) - mv.quantity) }, { transaction: t });
+                if (mv.ProductSKUId) {
+                    await ProductSKU.decrement('qty', { by: mv.quantity, where: { id: mv.ProductSKUId }, transaction: t });
+                    await upsertSkuWarehouseStock(t, SkuWarehouseStock, { ProductSKUId: mv.ProductSKUId, WarehouseId: mv.WarehouseId, delta: -mv.quantity, companyId: mv.companyId });
+                }
+            }
+            if (returns.length) await Stock_Movement.destroy({ where: { ReferenceId: order.id, source: 'POS_RETURN' }, transaction: t });
 
             if (order.StockOutHeaderId) {
                 const movements = await Stock_Movement.findAll({
@@ -437,6 +578,8 @@ class PosController {
                     qty: sum(paid, o => sum(o.items, i => i.qty)),
                     subtotal: sum(paid, o => o.subtotal),
                     discount: sum(paid, o => o.itemDiscount + o.orderDiscount),
+                    returns: sum(paid, o => o.returnTotal),
+                    exchanges: paid.filter(o => o.exchangeOfOrderId).length,
                     total: sum(paid, o => o.total),
                     voided: orders.length - paid.length,
                     needsReview: paid.filter(o => o.needsReview).length,

@@ -48,7 +48,8 @@ export default function PosReport() {
 
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         {[['Omzet bersih', rp(t.total)], ['Transaksi', t.orders], ['Barang terjual', `${t.qty} pcs`], ['Total diskon', rp(t.discount)], ['Dibatalkan', t.voided]].map(([l, v]) => (
-          <div key={l} className="card p-4"><p className="text-xs text-slate-500">{l}</p><p className="text-2xl font-bold font-mono text-slate-800">{v}</p></div>
+          <div key={l} className="card p-4"><p className="text-xs text-slate-500">{l}</p><p className="text-2xl font-bold font-mono text-slate-800">{v}</p>
+            {l === 'Transaksi' && t.exchanges > 0 && <p className="text-xs text-slate-400 mt-1">{t.exchanges} tukar barang · senilai {rp(t.returns)}</p>}</div>
         ))}
       </div>
 

@@ -1,11 +1,11 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { posApi, warehousesApi, channelsApi } from '../api'
+import { posApi, warehousesApi, channelsApi, productsApi } from '../api'
 import PageHeader from '../components/PageHeader'
 import Modal from '../components/Modal'
 import toast from 'react-hot-toast'
-import { Plus, Pencil, Store, BarChart2, Repeat2, Play, Square } from 'lucide-react'
+import { Plus, Pencil, Store, BarChart2, Repeat2, Play, Square, X } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useCompanyGuard } from '../hooks/useCompanyGuard'
 
@@ -14,7 +14,7 @@ const STATUS = {
   OPEN:   { label: 'Berjalan',  cls: 'badge-green' },
   CLOSED: { label: 'Selesai',   cls: 'badge-muted' },
 }
-const EMPTY = { name: '', location: '', startDate: '', endDate: '', WarehouseId: '', ChannelId: '', receiptHeader: '', receiptFooter: 'Terima kasih!' }
+const EMPTY = { name: '', location: '', startDate: '', endDate: '', WarehouseId: '', ChannelId: '', receiptHeader: '', receiptFooter: 'Terima kasih!', purchaseLimit: null }
 
 export default function PosEvents() {
   const qc = useQueryClient()
@@ -44,7 +44,7 @@ export default function PosEvents() {
   })
 
   const openForm = (ev) => {
-    setForm(ev ? { ...EMPTY, ...Object.fromEntries(Object.keys(EMPTY).map(k => [k, ev[k] ?? ''])) } : EMPTY)
+    setForm(ev ? { ...EMPTY, ...Object.fromEntries(Object.keys(EMPTY).map(k => [k, ev[k] ?? ''])), purchaseLimit: ev.purchaseLimit || null } : EMPTY)
     setModal({ data: ev || null })
   }
   const submit = (e) => {
@@ -136,6 +136,7 @@ export default function PosEvents() {
               {(chs?.data ?? []).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
+          <LimitField value={form.purchaseLimit} onChange={(v) => setForm(f => ({ ...f, purchaseLimit: v }))} />
           <div><label className="label">Baris tambahan di struk (opsional)</label><input className="input" value={form.receiptHeader} onChange={set('receiptHeader')} placeholder="mis. IG @preface · preface.id" /></div>
           <div><label className="label">Catatan bawah struk</label><textarea className="input" rows={2} value={form.receiptFooter} onChange={set('receiptFooter')} /></div>
           <div className="flex gap-2 pt-1">
@@ -144,6 +145,61 @@ export default function PosEvents() {
           </div>
         </form>
       </Modal>
+    </div>
+  )
+}
+
+// Batas beli per orang untuk drop yang ramai: { qty, productIds: [] (kosong = semua produk), perPhone }
+function LimitField({ value, onChange }) {
+  const on = !!value?.qty
+  const [search, setSearch] = useState('')
+  const { data } = useQuery({ queryKey: ['products', { limit: 500 }], queryFn: () => productsApi.list({ limit: 500 }), enabled: on })
+  const products = data?.data ?? []
+  const ids = value?.productIds ?? []
+  const set = (patch) => onChange({ qty: 2, productIds: [], perPhone: false, ...value, ...patch })
+  const matches = search.trim() ? products.filter(p => !ids.includes(p.id) && p.name.toLowerCase().includes(search.trim().toLowerCase())).slice(0, 8) : []
+  return (
+    <div className="rounded-xl border border-slate-200 p-3 space-y-3">
+      <label className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+        <input type="checkbox" checked={on} onChange={e => onChange(e.target.checked ? { qty: 2, productIds: [], perPhone: false } : null)} />
+        Batas beli per orang
+      </label>
+      {on && (
+        <>
+          <div className="flex items-center gap-2 text-sm">
+            <span className="text-slate-600">Maks</span>
+            <input type="number" min={1} className="input w-20" value={value.qty} onChange={e => set({ qty: Math.max(1, Number(e.target.value) || 1) })} />
+            <span className="text-slate-600">pcs per artikel per pembeli</span>
+          </div>
+          <div>
+            <p className="text-xs text-slate-500 mb-1.5">Berlaku untuk: {ids.length ? `${ids.length} produk dipilih` : 'semua produk'}</p>
+            {!!ids.length && (
+              <div className="flex flex-wrap gap-1.5 mb-2">
+                {ids.map(id => (
+                  <span key={id} className="inline-flex items-center gap-1 rounded-full bg-slate-100 pl-2.5 pr-1 py-0.5 text-xs">
+                    {products.find(p => p.id === id)?.name || `Produk #${id}`}
+                    <button type="button" className="text-slate-400 hover:text-danger" onClick={() => set({ productIds: ids.filter(x => x !== id) })}><X size={12} /></button>
+                  </span>
+                ))}
+              </div>
+            )}
+            <input className="input" value={search} onChange={e => setSearch(e.target.value)} placeholder="Cari produk yang dibatasi (kosongkan = semua produk)…" />
+            {!!matches.length && (
+              <div className="mt-1 border border-slate-200 rounded-lg divide-y divide-slate-100 max-h-48 overflow-auto">
+                {matches.map(p => (
+                  <button type="button" key={p.id} className="block w-full text-left px-3 py-1.5 text-sm hover:bg-slate-50"
+                    onClick={() => { set({ productIds: [...ids, p.id] }); setSearch('') }}>{p.name}</button>
+                ))}
+              </div>
+            )}
+          </div>
+          <label className="flex items-start gap-2 text-sm text-slate-600">
+            <input type="checkbox" className="mt-0.5" checked={!!value.perPhone} onChange={e => set({ perPhone: e.target.checked })} />
+            <span>Hitung per No. HP selama event (No. HP jadi wajib untuk produk ini). Tanpa centang: batas per transaksi.</span>
+          </label>
+          <p className="text-xs text-slate-400">Kasir menolak saat batas terlewati. Transaksi offline dari laptop lain yang ternyata melewati batas ditandai "perlu dicek". Kasir perlu klik "Perbarui katalog" supaya aturan baru terpakai.</p>
+        </>
+      )}
     </div>
   )
 }

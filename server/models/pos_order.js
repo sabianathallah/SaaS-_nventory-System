@@ -10,6 +10,8 @@ module.exports = (sequelize, DataTypes) => {
       PosOrder.belongsTo(models.Stock_Out_Header, { foreignKey: 'StockOutHeaderId', as: 'stockOut' });
       PosOrder.hasMany(models.PosOrderItem, { foreignKey: 'orderId', as: 'items' });
       PosOrder.hasMany(models.PosPayment,   { foreignKey: 'orderId', as: 'payments' });
+      PosOrder.belongsTo(models.PosOrder, { foreignKey: 'exchangeOfOrderId', as: 'exchangeOf' });
+      PosOrder.hasMany(models.PosOrder,   { foreignKey: 'exchangeOfOrderId', as: 'exchanges' });
     }
   }
   PosOrder.init({
@@ -24,6 +26,8 @@ module.exports = (sequelize, DataTypes) => {
     subtotal:      { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
     itemDiscount:  { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
     orderDiscount: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
+    // tukar barang: item qty negatif = barang dikembalikan, dinilai sebesar yang dulu dibayar
+    returnTotal:   { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
     total:         { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
     cashReceived:  { type: DataTypes.INTEGER, allowNull: true },
     change:        { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
@@ -43,6 +47,7 @@ module.exports = (sequelize, DataTypes) => {
     needsReview:   { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     reviewNote:    { type: DataTypes.TEXT, allowNull: true },
     StockOutHeaderId: { type: DataTypes.INTEGER, allowNull: true },
+    exchangeOfOrderId: { type: DataTypes.INTEGER, allowNull: true },
     voidedAt:      { type: DataTypes.DATE, allowNull: true },
     voidedBy:      { type: DataTypes.INTEGER, allowNull: true },
     voidReason:    { type: DataTypes.STRING(200), allowNull: true },
