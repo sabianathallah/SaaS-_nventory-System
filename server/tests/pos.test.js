@@ -253,3 +253,22 @@ describe('Tukar barang & batas beli', () => {
     await request(app).put(`/pos/events/${eventId}`).set(auth()).send({ purchaseLimit: null });
   });
 });
+
+describe('Laporan lengkap', () => {
+  test('ringkasan, per jam, per artikel + sell-through, kasir, pelanggan, antar event', async () => {
+    const res = await request(app).get(`/pos/events/${eventId}/report`).set(auth());
+    expect(res.status).toBe(200);
+    const r = res.body;
+    expect(r.totals.exchanges).toBeGreaterThan(0);
+    expect(r.totals.refunds).toBeGreaterThan(0);
+    expect(r.totals.aov).toBeGreaterThan(0);
+    expect(r.totals.customers).toBeGreaterThan(0);
+    expect(r.totals.limitHits).toBe(1);
+    expect(r.byHour.reduce((s, h) => s + h.orders, 0)).toBe(r.totals.orders);
+    const hoodie = r.byArticle.find(a => a.name === 'Hoodie Tukar');
+    expect(hoodie.skus).toHaveLength(2);
+    expect(hoodie.returned).toBeGreaterThan(0);
+    expect(r.byCashier[0].orders).toBe(r.totals.orders);
+    expect(r.compare.find(c => c.id === eventId)).toMatchObject({ orders: r.totals.orders, total: r.totals.total });
+  });
+});

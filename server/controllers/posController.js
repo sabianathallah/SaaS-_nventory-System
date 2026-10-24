@@ -456,6 +456,7 @@ class PosController {
             const where = { ...companyFilter(req) };
             for (const k of ['eventId', 'shiftId', 'status', 'fulfillment', 'pickupStatus']) if (req.query[k]) where[k] = req.query[k];
             if (req.query.needsReview === 'true') where.needsReview = true;
+            if (req.query.exchange === 'true') where.exchangeOfOrderId = { [Op.ne]: null };
             // cari dari nomor struk / nomor ambil / nama / akhiran No. HP (mis. 4 digit terakhir)
             const q = String(req.query.search || '').trim();
             if (q) {
@@ -546,48 +547,138 @@ class PosController {
     }
 
     // ── Laporan event ────────────────────────────────────────────────────────
+    // Satu endpoint untuk semua tab laporan: ringkasan, waktu, produk (+ sell-through), kasir & bayar, pelanggan, antar event.
     static async report(req, res, next) {
         try {
             const ev = await findEvent(req, req.params.id);
             if (!ev) throw { name: 'NotFound', message: 'Event tidak ditemukan' };
             const orders = await PosOrder.findAll({ where: { eventId: ev.id }, include: ORDER_INCLUDE, order: [['soldAt', 'ASC']] });
             const paid = orders.filter(o => o.status === 'PAID');
+            const sales = paid.filter(o => !o.exchangeOfOrderId);   // transaksi jual biasa (tanpa tukar) untuk rata-rata belanja
             const sum = (arr, f) => arr.reduce((s, x) => s + f(x), 0);
+            const soldQty = (o) => sum(o.items.filter(i => i.qty > 0), i => i.qty);
+            // jam & tanggal lokal WIB supaya transaksi malam tidak pindah hari
+            const wib = (d) => new Date(new Date(d).getTime() + 7 * 3600e3);
 
             const byMethod = Object.fromEntries(PAY_METHODS.map(m => [m, 0]));
-            const byDay = {}, byProduct = {};
+            const methodOrders = Object.fromEntries(PAY_METHODS.map(m => [m, 0]));
+            const byDay = {}, byHour = {}, bySku = {}, byCashier = {}, byDevice = {}, customers = {};
+            const shifts = await PosShift.findAll({ where: { eventId: ev.id }, include: [{ model: User, as: 'Cashier', attributes: ['id', 'name'] }], order: [['openedAt', 'ASC']] });
+            const deviceOf = Object.fromEntries(shifts.map(s => [s.id, s.deviceName || `Shift #${s.id}`]));
+
             for (const o of paid) {
                 for (const p of o.payments) byMethod[p.method] += p.amount;
-                // tanggal lokal WIB supaya transaksi malam tidak pindah hari
-                const day = new Date(new Date(o.soldAt).getTime() + 7 * 3600e3).toISOString().slice(0, 10);
+                for (const m of new Set(o.payments.filter(p => p.amount > 0).map(p => p.method))) methodOrders[m] += 1;
+                const t = wib(o.soldAt), day = t.toISOString().slice(0, 10), hour = t.getUTCHours();
+                const pcs = soldQty(o);
                 byDay[day] = byDay[day] || { day, orders: 0, qty: 0, total: 0 };
-                byDay[day].orders += 1; byDay[day].total += o.total;
+                byDay[day].orders += 1; byDay[day].qty += pcs; byDay[day].total += o.total;
+                byHour[hour] = byHour[hour] || { hour, orders: 0, qty: 0, total: 0 };
+                byHour[hour].orders += 1; byHour[hour].qty += pcs; byHour[hour].total += o.total;
+                const cashier = o.Cashier?.name || '—';
+                byCashier[cashier] = byCashier[cashier] || { name: cashier, orders: 0, qty: 0, total: 0, exchanges: 0 };
+                const dev = deviceOf[o.shiftId] || 'Tanpa shift';
+                byDevice[dev] = byDevice[dev] || { name: dev, orders: 0, qty: 0, total: 0, exchanges: 0 };
+                for (const g of [byCashier[cashier], byDevice[dev]]) { g.orders += 1; g.qty += pcs; g.total += o.total; if (o.exchangeOfOrderId) g.exchanges += 1; }
                 for (const i of o.items) {
-                    byDay[day].qty += i.qty;
-                    const k = i.ProductSKUId || i.name;
-                    byProduct[k] = byProduct[k] || { ProductSKUId: i.ProductSKUId, name: i.name, variant: i.variant, qty: 0, gross: 0, discount: 0, net: 0 };
-                    const bp = byProduct[k];
-                    bp.qty += i.qty; bp.gross += i.qty * i.unitPrice; bp.discount += i.discount; bp.net += i.lineTotal;
+                    const k = i.ProductSKUId || `x-${i.name}-${i.variant}`;
+                    bySku[k] = bySku[k] || { ProductSKUId: i.ProductSKUId, ProductId: i.ProductId, name: i.name, variant: i.variant, sold: 0, returned: 0, gross: 0, discount: 0, net: 0 };
+                    const b = bySku[k];
+                    if (i.qty > 0) { b.sold += i.qty; b.gross += i.qty * i.unitPrice; b.discount += i.discount; } else b.returned -= i.qty;
+                    b.net += i.lineTotal;
+                }
+                const phone = o.customerPhone;
+                if (phone) {
+                    const c = customers[phone] = customers[phone] || { last4: phone.slice(-4), name: null, orders: 0, qty: 0, total: 0, firstAt: o.soldAt, lastAt: o.soldAt };
+                    if (o.customerName) c.name = o.customerName;
+                    if (!o.exchangeOfOrderId) c.orders += 1;
+                    c.qty += pcs; c.total += o.total; c.lastAt = o.soldAt;
                 }
             }
-            const shifts = await PosShift.findAll({ where: { eventId: ev.id }, include: [{ model: User, as: 'Cashier', attributes: ['id', 'name'] }], order: [['openedAt', 'ASC']] });
+
+            // stok: dibawa = barang masuk ke gudang event (transfer / stock in), sisa = stok gudang event sekarang
+            const [moves, left] = await Promise.all([
+                Stock_Movement.findAll({
+                    where: { WarehouseId: ev.WarehouseId, type: 'IN', source: ['TRANSFER', 'STOCK_IN'], ProductSKUId: { [Op.ne]: null } },
+                    attributes: ['ProductSKUId', [sequelize.fn('SUM', sequelize.col('quantity')), 'qty']], group: ['ProductSKUId'], raw: true,
+                }),
+                SkuWarehouseStock.findAll({ where: { WarehouseId: ev.WarehouseId }, attributes: ['ProductSKUId', 'qty'], raw: true }),
+            ]);
+            const brought = Object.fromEntries(moves.map(m => [m.ProductSKUId, Number(m.qty)]));
+            const leftQty = Object.fromEntries(left.map(m => [m.ProductSKUId, Number(m.qty)]));
+            // SKU yang dibawa tapi belum terjual tetap tampil (sell-through 0%)
+            const missing = Object.keys(brought).map(Number).filter(id => !bySku[id]);
+            if (missing.length) {
+                const skus = await ProductSKU.findAll({
+                    where: { id: missing }, attributes: ['id', 'ProductId'],
+                    include: [{ model: Product, attributes: ['name'] }, { model: ProductVariantOption, attributes: ['value'], through: { attributes: [] } }],
+                });
+                for (const k of skus) bySku[k.id] = { ProductSKUId: k.id, ProductId: k.ProductId, name: k.Product?.name || `SKU ${k.id}`, variant: (k.ProductVariantOptions || []).map(o => o.value).join(' / ') || null, sold: 0, returned: 0, gross: 0, discount: 0, net: 0 };
+            }
+            const skuRows = Object.values(bySku).map(b => ({ ...b, qty: b.sold - b.returned, brought: brought[b.ProductSKUId] ?? null, left: leftQty[b.ProductSKUId] ?? null }));
+            const byArticle = {};
+            for (const b of skuRows) {
+                const k = b.ProductId || b.name;
+                const a = byArticle[k] = byArticle[k] || { ProductId: b.ProductId, name: b.name, sold: 0, returned: 0, gross: 0, discount: 0, net: 0, brought: 0, left: 0, hasStock: false, skus: [] };
+                for (const f of ['sold', 'returned', 'gross', 'discount', 'net']) a[f] += b[f];
+                if (b.brought != null) { a.brought += b.brought; a.hasStock = true; }
+                a.left += b.left || 0;
+                a.skus.push(b);
+            }
+
+            // perbandingan dengan event lain di perusahaan yang sama
+            const [compare] = await sequelize.query(`
+                SELECT e.id, e.name, e."startDate", e."endDate", e.status,
+                       COALESCE(SUM(i.qty) FILTER (WHERE i.qty > 0), 0)::int AS qty
+                FROM "PosEvents" e
+                LEFT JOIN "PosOrders" o ON o."eventId" = e.id AND o.status = 'PAID'
+                LEFT JOIN "PosOrderItems" i ON i."orderId" = o.id
+                WHERE e."companyId" ${ev.companyId == null ? 'IS NULL' : '= :cid'}
+                GROUP BY e.id ORDER BY e."createdAt" DESC`, { replacements: { cid: ev.companyId } });
+            const totalsByEvent = await PosOrder.findAll({
+                where: { status: 'PAID', eventId: compare.map(c => c.id) },
+                attributes: ['eventId', [sequelize.fn('SUM', sequelize.col('total')), 'total'], [sequelize.fn('COUNT', sequelize.col('id')), 'orders']],
+                group: ['eventId'], raw: true,
+            });
+            const tbe = Object.fromEntries(totalsByEvent.map(r => [r.eventId, r]));
+
+            const customerList = Object.values(customers);
+            const soldPcs = sum(paid, soldQty);
             res.json({
                 event: ev,
                 totals: {
                     orders: paid.length,
+                    salesOrders: sales.length,
                     qty: sum(paid, o => sum(o.items, i => i.qty)),
+                    soldQty: soldPcs,
                     subtotal: sum(paid, o => o.subtotal),
                     discount: sum(paid, o => o.itemDiscount + o.orderDiscount),
                     returns: sum(paid, o => o.returnTotal),
+                    refunds: sum(paid.filter(o => o.total < 0), o => -o.total),
                     exchanges: paid.filter(o => o.exchangeOfOrderId).length,
                     total: sum(paid, o => o.total),
+                    aov: sales.length ? Math.round(sum(sales, o => o.total) / sales.length) : 0,
+                    upt: sales.length ? Math.round(sum(sales, soldQty) / sales.length * 100) / 100 : 0,
                     voided: orders.length - paid.length,
+                    voidedTotal: sum(orders.filter(o => o.status === 'VOID'), o => o.total),
                     needsReview: paid.filter(o => o.needsReview).length,
                     pendingPickup: paid.filter(o => o.pickupStatus === 'PENDING').length,
+                    later: paid.filter(o => o.fulfillment === 'LATER').length,
+                    customers: customerList.length,
+                    repeatCustomers: customerList.filter(c => c.orders >= 2).length,
+                    withPhone: sales.filter(o => o.customerPhone).length,
+                    limitHits: paid.filter(o => /Lewat batas beli/.test(o.reviewNote || '')).length,
+                    brought: sum(Object.values(brought), x => x),
                 },
-                byMethod,
+                byMethod, methodOrders,
                 byDay: Object.values(byDay),
-                byProduct: Object.values(byProduct).sort((a, b) => b.net - a.net),
+                byHour: Object.values(byHour).sort((a, b) => a.hour - b.hour),
+                byProduct: skuRows.sort((a, b) => b.net - a.net),
+                byArticle: Object.values(byArticle).sort((a, b) => b.net - a.net),
+                byCashier: Object.values(byCashier).sort((a, b) => b.total - a.total),
+                byDevice: Object.values(byDevice).sort((a, b) => b.total - a.total),
+                customers: customerList.sort((a, b) => b.total - a.total).slice(0, 50),
+                compare: compare.map(c => ({ id: c.id, name: c.name, startDate: c.startDate, endDate: c.endDate, status: c.status, qty: c.qty, orders: Number(tbe[c.id]?.orders || 0), total: Number(tbe[c.id]?.total || 0) })),
                 shifts: await Promise.all(shifts.map(async s => ({ ...s.toJSON(), summary: await shiftSummary(s) }))),
                 pendingPickup: paid.filter(o => o.pickupStatus === 'PENDING').map(o => ({
                     id: o.id, orderNumber: o.orderNumber, pickupCode: o.pickupCode, customerName: o.customerName, customerPhone: o.customerPhone,
