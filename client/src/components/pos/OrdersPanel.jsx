@@ -14,7 +14,7 @@ import { DEFAULT_RECEIPT, orderPrintHtml, printReceipt } from '../../pos/receipt
 const rp = (n) => 'Rp ' + Number(n || 0).toLocaleString('id-ID')
 const shortName = (n) => String(n || '').replace(/[\u200b-\u200d\u2060\ufeff]/g, '').replace(/\s+PREFACE\s+-\s+/i, ' · ').replace(/\s+PREFACE$/i, '').trim()
 const METHOD = { CASH: 'Tunai', QRIS: 'QRIS', TRANSFER: 'Transfer', EDC: 'Kartu', OTHER: 'Lainnya' }
-const FILTERS = [['', 'Semua'], ['LATER', 'Ambil nanti'], ['PENDING', 'Belum diambil'], ['SWAP', 'Tukar'], ['REVIEW', 'Perlu dicek'], ['VOID', 'Dibatalkan']]
+const FILTERS = [['', 'Semua'], ['LATER', 'Ambil nanti'], ['PENDING', 'Belum diambil'], ['REVIEW', 'Perlu dicek'], ['VOID', 'Dibatalkan']]
 
 export default function OrdersPanel({ eventId, event }) {
   const qc = useQueryClient()
@@ -32,7 +32,7 @@ export default function OrdersPanel({ eventId, event }) {
 
   const filterParams = {
     LATER: { fulfillment: 'LATER' }, PENDING: { fulfillment: 'LATER', pickupStatus: 'PENDING', status: 'PAID' },
-    SWAP: { exchange: 'true', status: 'PAID' }, REVIEW: { needsReview: 'true', status: 'PAID' }, VOID: { status: 'VOID' },
+    REVIEW: { needsReview: 'true', status: 'PAID' }, VOID: { status: 'VOID' },
   }[filter] || {}
   const { data, isLoading } = useQuery({
     queryKey: ['pos-orders', eventId, q, filter, page],
@@ -105,7 +105,7 @@ function FragmentRow({ o, open, onToggle, onPrint, onVoid }) {
       <tr className="border-t border-slate-100 hover:bg-slate-50/60 cursor-pointer align-top" onClick={onToggle}>
         <td className="px-4 py-2.5 text-xs text-slate-500 whitespace-nowrap">{new Date(o.soldAt).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' })}</td>
         <td className="py-2.5 font-mono text-xs">{o.orderNumber}{o.exchangeOf && <span className="block font-sans text-[11px] text-sky-700">tukar dari {o.exchangeOf.orderNumber}</span>}</td>
-        <td className="py-2.5">{o.customerName || <span className="text-slate-400">—</span>}{o.customerPhone && <span className="block text-xs text-slate-400">••••{String(o.customerPhone).slice(-4)}</span>}</td>
+        <td className="py-2.5">{o.customerName || <span className="text-slate-400">—</span>}{o.customerPhone && <span className="block text-xs text-slate-400">{o.customerPhone}</span>}</td>
         <td className="py-2.5 text-xs text-slate-600 max-w-[280px]">{o.items.map(i => `${i.qty < 0 ? `kembali ${-i.qty}` : i.qty}× ${shortName(i.name)}${i.variant ? ` ${i.variant}` : ''}`).join(', ')}</td>
         <td className="py-2.5 text-xs">{o.payments.map(p => METHOD[p.method] || p.method).join(' + ') || '—'}</td>
         <td className="py-2.5 text-right font-semibold whitespace-nowrap">{rp(o.total)}</td>

@@ -69,6 +69,27 @@ describe('Event & shift', () => {
     const a = res.body.items.find(i => i.code === 'POS-A');
     expect(a).toMatchObject({ skuId: skuA.id, price: 300000, stock: 5, name: 'Tshirt POS' });
   });
+
+  test('gudang cadangan: stoknya tampil di katalog, gudang tidak dikenal ditolak', async () => {
+    const cid = state.company.id;
+    const sewa = await Warehouse.create({ name: 'Gudang Sewa Test', location: 'Mall', companyId: cid });
+    await SkuWarehouseStock.create({ ProductSKUId: skuB.id, WarehouseId: sewa.id, qty: 4, companyId: cid });
+
+    const badRes = await request(app).put(`/pos/events/${eventId}`).set(auth()).send({ backupWarehouseIds: [999999] });
+    expect(badRes.status).toBe(400);
+
+    // gudang event sendiri & duplikat dibuang
+    const up = await request(app).put(`/pos/events/${eventId}`).set(auth()).send({ backupWarehouseIds: [sewa.id, sewa.id, wh.id] });
+    expect(up.status).toBe(200);
+    expect(up.body.backupWarehouseIds).toEqual([sewa.id]);
+
+    const res = await request(app).get(`/pos/events/${eventId}/catalog`).set(auth());
+    expect(res.body.event.backupWarehouses).toEqual([{ id: sewa.id, name: 'Gudang Sewa Test' }]);
+    const b = res.body.items.find(i => i.code === 'POS-B');
+    expect(b.stock).toBe(1);
+    expect(b.backupStock).toEqual({ [sewa.id]: 4 });
+    expect(res.body.items.find(i => i.code === 'POS-A').backupStock).toBeUndefined();
+  });
 });
 
 describe('Transaksi', () => {
@@ -174,6 +195,8 @@ describe('Tutup shift & laporan', () => {
     // modal 500.000 + cash 600.000 (kembalian sudah keluar) = 1.100.000, dihitung 1.090.000
     expect(res.body.summary).toMatchObject({ orderCount: 3, expectedCash: 1100000, cashDifference: -10000 });
     expect(res.body.summary.byMethod).toMatchObject({ CASH: 600000, QRIS: 980000, EDC: 0 });
+    // void tidak ikut dihitung penjualan, tapi tercatat di rekap
+    expect(res.body.summary).toMatchObject({ pcs: 6, laterCount: 1, voidCount: 1, voidTotal: 300000 });
   });
 
   test('laporan event: total, metode bayar, produk, dan transaksi perlu dicek', async () => {

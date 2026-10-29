@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Trash2, ArrowRight, AlertTriangle } from 'lucide-react'
+import { Plus, Trash2, ArrowRight, AlertTriangle, ScanLine } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { stockTransfersApi, warehousesApi, productsApi, productSkusApi, skuWarehouseStocksApi } from '../api'
 import PageHeader from '../components/PageHeader'
@@ -39,6 +39,7 @@ export default function TransferDetail() {
   })
   const [items, setItems] = useState([])
   const [itemRow, setItemRow] = useState({ productId: '', productSkuId: '', qty: 1 })
+  const [scan, setScan] = useState('')
 
   // ── existing transfer (view mode) ──────────────────────────────────────────
   const { data: existing, isLoading } = useQuery({
@@ -82,6 +83,10 @@ export default function TransferDetail() {
     const row = (skuWarehouseStocks ?? []).find(s => String(s.ProductSKUId) === String(itemRow.productSkuId))
     return row ? Number(row.qty) : 0
   }, [skuWarehouseStocks, itemRow.productSkuId])
+  // barcode di label = kode SKU -> baris stok gudang asal
+  const stockByCode = useMemo(() => new Map((skuWarehouseStocks ?? [])
+    .filter(s => s.ProductSKU?.sku_code)
+    .map(s => [s.ProductSKU.sku_code.toLowerCase(), s])), [skuWarehouseStocks])
 
   // ── mutations ──────────────────────────────────────────────────────────────
   const createTransfer = useMutation({
@@ -113,23 +118,48 @@ export default function TransferDetail() {
   })
 
   // ── item helpers ───────────────────────────────────────────────────────────
+  // SKU yang sama digabung jadi satu baris; total qty tidak boleh melebihi stok gudang asal
+  function pushItem({ productSkuId, qty, productName, variantLabel, available }) {
+    const already = items.find(i => i.productSkuId === productSkuId)?.qty || 0
+    if (already + qty > available) {
+      toast.error(`Stok tidak cukup (tersedia: ${available}${already ? `, sudah di daftar: ${already}` : ''})`)
+      return false
+    }
+    setItems(prev => already
+      ? prev.map(i => i.productSkuId === productSkuId ? { ...i, qty: i.qty + qty } : i)
+      : [...prev, { productSkuId, qty, _productName: productName, _variantLabel: variantLabel, _available: available }])
+    return true
+  }
+
   function addItem() {
     if (!itemRow.productSkuId) return toast.error('Pilih SKU produk')
     if (!itemRow.qty || Number(itemRow.qty) <= 0) return toast.error('Qty harus > 0')
-    if (Number(itemRow.qty) > availableStock) return toast.error(`Stok tidak cukup (tersedia: ${availableStock})`)
 
     const sku = skus.find(s => String(s.id) === String(itemRow.productSkuId))
     const product = products.find(p => String(p.id) === String(itemRow.productId))
     const variantLabel = sku?.ProductVariantOptions?.map(o => o.value).join(' / ') || sku?.sku_code || ''
 
-    setItems(prev => [...prev, {
-      productSkuId: Number(itemRow.productSkuId),
-      qty:          Number(itemRow.qty),
-      _productName: product?.name ?? '',
-      _variantLabel: variantLabel,
-      _available:   availableStock,
-    }])
-    setItemRow({ productId: '', productSkuId: '', qty: 1 })
+    if (pushItem({ productSkuId: Number(itemRow.productSkuId), qty: Number(itemRow.qty), productName: product?.name ?? '', variantLabel, available: availableStock }))
+      setItemRow({ productId: '', productSkuId: '', qty: 1 })
+  }
+
+  // Scanner barcode mengetik kode SKU lalu Enter: tiap scan = +1 pcs
+  function onScan(e) {
+    e.preventDefault()
+    const code = scan.trim()
+    setScan('')
+    if (!code) return
+    if (!form.fromWarehouseId) return toast.error('Pilih gudang asal terlebih dahulu')
+    const row = stockByCode.get(code.toLowerCase())
+    if (!row || Number(row.qty) <= 0) return toast.error(`${code} tidak ada stok di gudang asal`)
+    const variantLabel = row.ProductSKU.ProductVariantOptions?.map(o => o.value).join(' / ') || row.ProductSKU.sku_code
+    const productName = row.ProductSKU.Product?.name ?? ''
+    if (pushItem({ productSkuId: row.ProductSKUId, qty: 1, productName, variantLabel, available: Number(row.qty) }))
+      toast.success(`${productName} ${variantLabel} +1`, { id: 'transfer-scan' })
+  }
+
+  function setItemQty(idx, value) {
+    setItems(prev => prev.map((it, i) => i === idx ? { ...it, qty: Math.min(Math.max(Number(value) || 0, 0), it._available) } : it))
   }
 
   function removeItem(idx) {
@@ -142,6 +172,7 @@ export default function TransferDetail() {
     if (form.fromWarehouseId === form.toWarehouseId) return toast.error('Gudang asal dan tujuan tidak boleh sama')
     if (!form.date)            return toast.error('Isi tanggal')
     if (!items.length)         return toast.error('Tambahkan minimal satu item')
+    if (items.some(i => !i.qty)) return toast.error('Qty item tidak boleh 0 — hapus barisnya kalau tidak jadi')
     createTransfer.mutate()
   }
 
@@ -359,7 +390,7 @@ export default function TransferDetail() {
       <div className="card">
         <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/50 rounded-t-lg flex items-center justify-between">
           <p className="text-sm font-semibold text-slate-700">Item Transfer</p>
-          <span className="text-xs text-slate-400">{items.length} item ditambahkan</span>
+          <span className="text-xs text-slate-400">{items.length} item · {items.reduce((s, i) => s + i.qty, 0)} pcs</span>
         </div>
 
         {/* Add item row */}
@@ -369,6 +400,18 @@ export default function TransferDetail() {
               <AlertTriangle size={12} /> Pilih gudang asal terlebih dahulu untuk melihat stok tersedia
             </p>
           )}
+          <form onSubmit={onScan} className="relative mb-3">
+            <ScanLine size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              className="input w-full pl-9 font-mono"
+              value={scan}
+              onChange={e => setScan(e.target.value)}
+              disabled={!fromWh}
+              autoFocus
+              placeholder={fromWh ? 'Scan barcode / ketik kode SKU lalu Enter — tiap scan +1 pcs' : 'Pilih gudang asal untuk mulai scan'}
+            />
+          </form>
+          <p className="text-[11px] text-slate-400 mb-2">Atau pilih manual:</p>
           <div className="flex flex-wrap items-end gap-3">
             <div className="flex-1 min-w-[160px]">
               <label className="block text-xs text-slate-500 mb-1">Produk</label>
@@ -433,7 +476,15 @@ export default function TransferDetail() {
                   <tr key={i} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
                     <td className="px-4 py-3 text-sm font-medium text-slate-800">{item._productName}</td>
                     <td className="px-4 py-3 text-xs text-slate-500 font-mono">{item._variantLabel}</td>
-                    <td className="px-4 py-3 text-right font-mono font-bold text-slate-700">{item.qty}</td>
+                    <td className="px-4 py-3 text-right">
+                      <input
+                        type="number" min="1" max={item._available}
+                        className="input w-20 py-1 text-right font-mono font-bold"
+                        value={item.qty}
+                        onChange={e => setItemQty(i, e.target.value)}
+                        title={`Tersedia di gudang asal: ${item._available}`}
+                      />
+                    </td>
                     <td className="px-4 py-3 text-center">
                       <button onClick={() => removeItem(i)} className="text-slate-300 hover:text-red-500 transition-colors">
                         <Trash2 size={14} />

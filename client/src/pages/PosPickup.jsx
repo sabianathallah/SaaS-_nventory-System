@@ -108,7 +108,7 @@ export default function PosPickup() {
                 <div className="mt-3 flex items-center justify-between gap-2 rounded-xl bg-slate-50 px-3 py-2">
                   <div className="min-w-0">
                     <p className="font-semibold text-slate-800 truncate">{o.customerName || 'Tanpa nama'}</p>
-                    <p className="text-xs text-slate-500">{o.customerPhone ? `HP ••••${String(o.customerPhone).slice(-4)}` : 'No. HP tidak diisi'}</p>
+                    <p className="text-xs text-slate-500">{o.customerPhone ? `HP ${o.customerPhone}` : 'No. HP tidak diisi'}</p>
                   </div>
                   {phone && (
                     <a className="btn-secondary text-xs shrink-0" href={`https://wa.me/${phone}?text=${msg}`} target="_blank" rel="noreferrer"><MessageCircle size={13} />WhatsApp</a>

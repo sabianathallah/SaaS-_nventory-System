@@ -72,13 +72,11 @@ function Summary({ r, go }) {
     <div className="space-y-4">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <Kpi label="Omzet bersih" value={rp(t.total)} hint={`kotor ${rp(t.subtotal)} · diskon ${rp(t.discount)}`} big />
-        <Kpi label="Transaksi" value={t.orders} hint={t.exchanges ? `${t.salesOrders} jual · ${t.exchanges} tukar` : `${t.later} ambil nanti`} />
+        <Kpi label="Transaksi" value={t.orders} hint={`${t.later} ambil nanti`} />
         <Kpi label="Rata-rata belanja" value={rp(t.aov)} hint={`${t.upt.toLocaleString('id-ID')} pcs per transaksi`} />
         <Kpi label="Barang terjual" value={`${t.soldQty} pcs`} hint={brought ? `sell-through ${pct(sold, brought)}% dari ${brought} pcs dibawa` : 'stok bawaan belum tercatat'} />
       </div>
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <Kpi label="Tukar barang" value={t.exchanges} hint={t.returns ? `senilai ${rp(t.returns)}` : '—'} />
-        <Kpi label="Uang dikembalikan" value={rp(t.refunds)} hint="dari tukar ke barang lebih murah" />
+      <div className="grid grid-cols-2 gap-4">
         <Kpi label="Dibatalkan (void)" value={t.voided} hint={t.voided ? `senilai ${rp(t.voidedTotal)}` : '—'} />
         <Kpi label="Pembeli ber-No. HP" value={t.customers} hint={`${t.repeatCustomers} belanja lebih dari sekali`} />
       </div>
@@ -130,18 +128,17 @@ function Products({ r }) {
   const rows = useMemo(() => [...r.byArticle].sort((a, b) => sort === 'st'
     ? pct(b.sold - b.returned, b.brought) - pct(a.sold - a.returned, a.brought)
     : sort === 'qty' ? (b.sold - b.returned) - (a.sold - a.returned) : b[sort] - a[sort]), [r.byArticle, sort])
-  // size terlaris (gabungan semua artikel) & SKU yang paling sering ditukar
+  // size terlaris (gabungan semua artikel)
   const sizes = useMemo(() => {
     const m = {}
     for (const k of r.byProduct) { const v = k.variant || 'Tanpa size'; m[v] = (m[v] || 0) + k.sold - k.returned }
     return Object.entries(m).sort((a, b) => sizeRank(a[0]) - sizeRank(b[0])).map(([size, qty]) => ({ size, qty }))
   }, [r.byProduct])
-  const swapped = r.byProduct.filter(k => k.returned > 0).sort((a, b) => b.returned - a.returned).slice(0, 8)
   const unsold = r.byProduct.filter(k => k.brought > 0 && k.sold === 0).length
 
   return (
     <div className="space-y-4">
-      <div className="grid lg:grid-cols-3 gap-4">
+      <div className="grid lg:grid-cols-2 gap-4">
         <Card title="Terjual per size">
           {sizes.length ? <ResponsiveContainer width="100%" height={170}>
             <BarChart data={sizes} margin={{ top: 8, right: 4, left: -18, bottom: 0 }}>
@@ -152,9 +149,6 @@ function Products({ r }) {
               <Bar dataKey="qty" fill={INK} radius={[4, 4, 0, 0]} maxBarSize={36} />
             </BarChart>
           </ResponsiveContainer> : <Empty />}
-        </Card>
-        <Card title="Paling sering ditukar">
-          {swapped.length ? swapped.map(k => <Line key={k.ProductSKUId} l={<>{shortName(k.name)} <b>{k.variant}</b></>} v={`${k.returned}× ditukar`} />) : <p className="text-sm text-slate-400">Belum ada barang yang ditukar.</p>}
         </Card>
         <Card title="Stok">
           <Line l="Dibawa ke event" v={`${r.totals.brought} pcs`} />
@@ -169,12 +163,12 @@ function Products({ r }) {
         <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
           <p className="font-semibold">Per artikel <span className="text-xs font-normal text-slate-400">· klik untuk lihat per size</span></p>
           <select className="input w-auto text-sm" value={sort} onChange={e => setSort(e.target.value)}>
-            <option value="net">Urut: omzet</option><option value="qty">Urut: pcs terjual</option><option value="st">Urut: sell-through</option><option value="returned">Urut: paling sering ditukar</option>
+            <option value="net">Urut: omzet</option><option value="qty">Urut: pcs terjual</option><option value="st">Urut: sell-through</option>
           </select>
         </div>
         <table className="w-full text-sm min-w-[760px]">
           <thead className="bg-slate-50 text-xs uppercase text-slate-500">
-            <tr><th className="text-left px-4 py-2">Artikel</th><th className="text-right">Dibawa</th><th className="text-right">Terjual</th><th className="text-right">Ditukar</th><th className="text-right">Sisa</th><th className="text-left pl-6 w-44">Sell-through</th><th className="text-right">Diskon</th><th className="text-right pr-4">Omzet bersih</th></tr>
+            <tr><th className="text-left px-4 py-2">Artikel</th><th className="text-right">Dibawa</th><th className="text-right">Terjual</th><th className="text-right">Sisa</th><th className="text-left pl-6 w-44">Sell-through</th><th className="text-right">Diskon</th><th className="text-right pr-4">Omzet bersih</th></tr>
           </thead>
           <tbody>
             {rows.map(a => {
@@ -183,8 +177,7 @@ function Products({ r }) {
                 <tr key={k} className="border-t border-slate-100 hover:bg-slate-50/60 cursor-pointer" onClick={() => setOpen(o => ({ ...o, [k]: !o[k] }))}>
                   <td className="px-4 py-2 font-semibold text-slate-800">{isOpen ? <ChevronDown size={13} className="inline mr-1" /> : <ChevronRight size={13} className="inline mr-1" />}{shortName(a.name)}</td>
                   <td className="text-right">{a.hasStock ? a.brought : '—'}</td>
-                  <td className="text-right">{a.sold}</td>
-                  <td className="text-right">{a.returned || '—'}</td>
+                  <td className="text-right">{a.sold - a.returned}</td>
                   <td className="text-right">{a.hasStock ? a.left : '—'}</td>
                   <td className="pl-6"><StBar sold={a.sold - a.returned} brought={a.hasStock ? a.brought : 0} /></td>
                   <td className="text-right font-mono text-xs">{a.discount ? `-${rp(a.discount)}` : '—'}</td>
@@ -194,8 +187,7 @@ function Products({ r }) {
                   <tr key={`${k}-${s.ProductSKUId}`} className="bg-slate-50/50 text-slate-600">
                     <td className="pl-10 py-1.5">Size <b>{s.variant || '—'}</b></td>
                     <td className="text-right">{s.brought ?? '—'}</td>
-                    <td className="text-right">{s.sold}</td>
-                    <td className="text-right">{s.returned || '—'}</td>
+                    <td className="text-right">{s.sold - s.returned}</td>
                     <td className="text-right">{s.left ?? '—'}</td>
                     <td className="pl-6"><StBar sold={s.sold - s.returned} brought={s.brought || 0} /></td>
                     <td className="text-right font-mono text-xs">{s.discount ? `-${rp(s.discount)}` : '—'}</td>
@@ -290,12 +282,12 @@ function Payments({ r }) {
           {r.byMethod.CASH < 0 && <p className="text-xs text-slate-400 mt-2">Tunai negatif = uang dikembalikan lebih besar dari tunai masuk.</p>}
         </Card>
         <Card title="Per laptop kasir">
-          <SimpleTable cols={['Laptop', 'Transaksi', 'Pcs', 'Tukar', 'Omzet']} rows={r.byDevice.map(d => [d.name, d.orders, d.qty, d.exchanges || '—', rp(d.total)])} />
+          <SimpleTable cols={['Laptop', 'Transaksi', 'Pcs', 'Omzet']} rows={r.byDevice.map(d => [d.name, d.orders, d.qty, rp(d.total)])} />
         </Card>
       </div>
       <Card title="Per kasir">
-        <SimpleTable cols={['Kasir', 'Transaksi', 'Pcs', 'Tukar', 'Rata-rata', 'Omzet', 'Porsi']}
-          rows={r.byCashier.map(c => [c.name, c.orders, c.qty, c.exchanges || '—', rp(c.orders ? Math.round(c.total / c.orders) : 0), rp(c.total), `${pct(c.total, r.totals.total)}%`])} />
+        <SimpleTable cols={['Kasir', 'Transaksi', 'Pcs', 'Rata-rata', 'Omzet', 'Porsi']}
+          rows={r.byCashier.map(c => [c.name, c.orders, c.qty, rp(c.orders ? Math.round(c.total / c.orders) : 0), rp(c.total), `${pct(c.total, r.totals.total)}%`])} />
       </Card>
       <Card title="Shift & kas">
         <SimpleTable cols={['Shift', 'Kasir', 'Dibuka', 'Transaksi', 'Penjualan', 'Modal', 'Kas seharusnya', 'Kas dihitung', 'Selisih']}
@@ -438,24 +430,23 @@ async function exportReport(r) {
   }
   const sheets = {
     Ringkasan: [['Metrik', 'Nilai'],
-      ['Omzet bersih', t.total], ['Omzet kotor', t.subtotal], ['Diskon', t.discount], ['Transaksi', t.orders], ['Transaksi jual', t.salesOrders],
-      ['Tukar barang', t.exchanges], ['Nilai barang ditukar', t.returns], ['Uang dikembalikan', t.refunds], ['Rata-rata belanja', t.aov],
+      ['Omzet bersih', t.total], ['Omzet kotor', t.subtotal], ['Diskon', t.discount], ['Transaksi', t.orders], ['Rata-rata belanja', t.aov],
       ['Pcs per transaksi', t.upt], ['Pcs terjual', t.soldQty], ['Pcs dibawa', t.brought], ['Dibatalkan', t.voided], ['Pembeli ber-HP', t.customers], ['Pembeli berulang', t.repeatCustomers]],
-    'Per artikel': [['Artikel', 'Dibawa', 'Terjual', 'Ditukar', 'Sisa', 'Sell-through %', 'Kotor', 'Diskon', 'Bersih'],
-      ...r.byArticle.map(a => [a.name, a.hasStock ? a.brought : '', a.sold, a.returned, a.hasStock ? a.left : '', a.hasStock ? pct(a.sold - a.returned, a.brought) : '', a.gross, a.discount, a.net])],
-    'Per size': [['Artikel', 'Size', 'Dibawa', 'Terjual', 'Ditukar', 'Sisa', 'Bersih'],
-      ...r.byProduct.map(s => [s.name, s.variant || '', s.brought ?? '', s.sold, s.returned, s.left ?? '', s.net])],
+    'Per artikel': [['Artikel', 'Dibawa', 'Terjual', 'Sisa', 'Sell-through %', 'Kotor', 'Diskon', 'Bersih'],
+      ...r.byArticle.map(a => [a.name, a.hasStock ? a.brought : '', a.sold - a.returned, a.hasStock ? a.left : '', a.hasStock ? pct(a.sold - a.returned, a.brought) : '', a.gross, a.discount, a.net])],
+    'Per size': [['Artikel', 'Size', 'Dibawa', 'Terjual', 'Sisa', 'Bersih'],
+      ...r.byProduct.map(s => [s.name, s.variant || '', s.brought ?? '', s.sold - s.returned, s.left ?? '', s.net])],
     'Per jam': [['Jam', 'Transaksi', 'Pcs', 'Omzet'], ...r.byHour.map(h => [`${String(h.hour).padStart(2, '0')}.00`, h.orders, h.qty, h.total])],
     'Per hari': [['Tanggal', 'Transaksi', 'Pcs', 'Omzet'], ...r.byDay.map(d => [d.day, d.orders, d.qty, d.total])],
     'Metode bayar': [['Metode', 'Nominal', 'Transaksi'], ...Object.entries(r.byMethod).map(([k, v]) => [METHOD[k], v, r.methodOrders[k] || 0])],
-    Kasir: [['Kasir', 'Transaksi', 'Pcs', 'Tukar', 'Omzet'], ...r.byCashier.map(c => [c.name, c.orders, c.qty, c.exchanges, c.total])],
+    Kasir: [['Kasir', 'Transaksi', 'Pcs', 'Omzet'], ...r.byCashier.map(c => [c.name, c.orders, c.qty, c.total])],
     Shift: [['Shift', 'Laptop', 'Kasir', 'Dibuka', 'Ditutup', 'Transaksi', 'Penjualan', 'Modal', 'Kas seharusnya', 'Kas dihitung', 'Selisih'],
       ...r.shifts.map(s => [s.id, s.deviceName || '', s.Cashier?.name || '', s.openedAt, s.closedAt || '', s.summary.orderCount, s.summary.total, s.openingCash, s.summary.expectedCash, s.countedCash ?? '', s.summary.cashDifference ?? ''])],
     Pelanggan: [['Nama', 'HP (4 digit)', 'Transaksi', 'Pcs', 'Total'], ...r.customers.map(c => [c.name || '', c.last4, c.orders, c.qty, c.total])],
-    Transaksi: [['No. struk', 'Waktu', 'Status', 'Kasir', 'Pembeli', 'Barang', 'Tukar dari', 'Subtotal', 'Diskon', 'Barang kembali', 'Total', 'Bayar', 'Ambil', 'Catatan cek'],
+    Transaksi: [['No. struk', 'Waktu', 'Status', 'Kasir', 'Pembeli', 'Barang', 'Subtotal', 'Diskon', 'Total', 'Bayar', 'Ambil', 'Catatan cek'],
       ...all.map(o => [o.orderNumber, new Date(o.soldAt).toLocaleString('id-ID'), o.status, o.Cashier?.name || '', o.customerName || '',
-        o.items.map(i => `${i.qty}x ${i.name}${i.variant ? ` ${i.variant}` : ''}`).join('; '), o.exchangeOf?.orderNumber || '',
-        o.subtotal, o.itemDiscount + o.orderDiscount, o.returnTotal, o.total, o.payments.map(p => `${METHOD[p.method] || p.method} ${p.amount}`).join(' + '),
+        o.items.map(i => `${i.qty}x ${i.name}${i.variant ? ` ${i.variant}` : ''}`).join('; '),
+        o.subtotal, o.itemDiscount + o.orderDiscount, o.total, o.payments.map(p => `${METHOD[p.method] || p.method} ${p.amount}`).join(' + '),
         o.fulfillment === 'LATER' ? `${o.pickupCode} ${o.pickupStatus === 'PENDING' ? '(belum)' : '(sudah)'}` : '', o.reviewNote || ''])],
     'Antar event': [['Event', 'Tanggal', 'Transaksi', 'Pcs', 'Omzet'], ...r.compare.map(c => [c.name, c.startDate || '', c.orders, c.qty, c.total])],
   }

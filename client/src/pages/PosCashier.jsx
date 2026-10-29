@@ -4,17 +4,17 @@ import toast from 'react-hot-toast'
 import {
   ArrowLeft, Minus, Plus, Printer, RefreshCw, Settings, Trash2, Wifi, WifiOff, X, LogOut, History,
   Search, ScanLine, Monitor, ShoppingBag, CheckCircle2, PackageCheck, Banknote, QrCode, CreditCard, Landmark, Wallet, Tag, Store,
-  ArrowLeftRight, PauseCircle, Undo2,
+  PauseCircle,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import NoPermission from '../components/NoPermission'
 import Modal from '../components/Modal'
 import { allItems, delItem, deviceId, getItem, nextSeq, requestPersistence, setItem } from '../pos/store'
 import { enqueueOrder, onSyncChange, posHttp, startAutoSync, syncQueue, syncState } from '../pos/sync'
-import { DEFAULT_RECEIPT, RECEIPT_STYLES, orderPrintHtml, printReceipt } from '../pos/receipt'
+import { DEFAULT_RECEIPT, RECEIPT_STYLES, combinePrint, orderPrintHtml, printReceipt, receiptHtml, shiftRecapHtml, staffSlipHtml } from '../pos/receipt'
 import { cacheImages, loadCachedImages } from '../pos/images'
 import { onScreensChange, openDisplayWindow, publishDisplay } from '../pos/display'
-import { isLimited, limitedNet, returnCredits, returnedLocally } from '../pos/exchange'
+import { isLimited, limitedNet } from '../pos/limit'
 
 const rp = (n) => 'Rp ' + Number(n || 0).toLocaleString('id-ID')
 const METHODS = [
@@ -74,11 +74,7 @@ export default function PosCashier() {
   const [orders, setOrders] = useState({ queue: [], sent: [] })
   const [lastAdd, setLastAdd] = useState(null)      // { skuId, at } untuk sorotan di layar pelanggan
   const [payPreview, setPayPreview] = useState(null) // pilihan di layar bayar, dikirim ke layar pelanggan
-  // tukar barang: barang yang dikembalikan dari struk asal { skuId, productId, code, name, variant, qty, credit }
-  const [returns, setReturns] = useState([])
-  const [exchangeOf, setExchangeOf] = useState(null) // { clientOrderId, orderNumber }
   const [held, setHeld] = useState([])              // keranjang yang ditahan (maks MAX_HELD)
-  const [exchangeNumber, setExchangeNumber] = useState('') // tukar yang dibuka dari riwayat
   const scanRef = useRef(null)
 
   const refreshOrders = useCallback(async () => {
@@ -142,8 +138,16 @@ export default function PosCashier() {
   const skuById = useMemo(() => new Map((catalog?.items ?? []).map(i => [i.skuId, i])), [catalog])
   const byCode = useMemo(() => new Map((catalog?.items ?? []).map(i => [String(i.code).toLowerCase(), i])), [catalog])
   const inCart = (skuId) => cart.find(l => l.skuId === skuId)?.qty || 0
-  const inReturns = (skuId) => returns.find(r => r.skuId === skuId)?.qty || 0
-  const stockOf = (skuId) => (skuById.get(skuId)?.stock ?? 0) - (soldLocal[skuId] || 0) - inCart(skuId) + inReturns(skuId)
+  const stockOf = (skuId) => (skuById.get(skuId)?.stock ?? 0) - (soldLocal[skuId] || 0) - inCart(skuId)
+  // Stok gudang cadangan event (sewa / truck). Penjualan di luar stok booth membuat booth minus;
+  // minus itu diambil dari cadangan, jadi sisa cadangan = total cadangan + minus booth.
+  const backupWh = catalog?.event?.backupWarehouses ?? []
+  const backupOf = (skuId) => {
+    const b = skuById.get(skuId)?.backupStock
+    if (!b || !backupWh.length) return null
+    const total = backupWh.reduce((s, w) => s + (b[w.id] || 0), 0)
+    return { where: backupWh.filter(w => b[w.id] > 0).map(w => `${w.name} ${b[w.id]}`).join(' · '), left: total + Math.min(stockOf(skuId), 0) }
+  }
 
   // Produk = kumpulan SKU (size) dengan foto & nama yang sama
   const products = useMemo(() => {
@@ -174,16 +178,20 @@ export default function PosCashier() {
   }, [products, category, scan])
 
   // ── Keranjang ───────────────────────────────────────────────────────────
-  // batas beli per orang dari pengaturan event (dihitung bersih: barang baru - barang yang dikembalikan)
+  // batas beli per orang dari pengaturan event
   const limit = catalog?.event?.purchaseLimit
   const blockedByLimit = (productId, name) => {
-    if (!isLimited(limit, productId) || (limitedNet(limit, cart, returns)[productId] || 0) + 1 <= limit.qty) return false
+    if (!isLimited(limit, productId) || (limitedNet(limit, cart)[productId] || 0) + 1 <= limit.qty) return false
     toast.error(`Batas beli: maks ${limit.qty} pcs ${shortName(name)} per orang`)
     return true
   }
   const addSku = (it) => {
     if (blockedByLimit(it.productId, it.name)) return
-    if (stockOf(it.skuId) <= 0) toast(`Stok sistem ${it.code} habis — tetap dijual & ditandai untuk dicek.`, { icon: '⚠️' })
+    if (stockOf(it.skuId) <= 0) {
+      const bk = backupOf(it.skuId)
+      if (bk?.left > 0) toast(`Habis di booth — ada di ${bk.where}. Pilih "Ambil nanti" saat bayar.`, { icon: '📦', duration: 5000 })
+      else toast(`Stok sistem ${it.code} habis — tetap dijual & ditandai untuk dicek.`, { icon: '⚠️' })
+    }
     setLastAdd({ skuId: it.skuId, at: Date.now() })
     setCart(c => {
       const ex = c.find(l => l.skuId === it.skuId)
@@ -204,16 +212,8 @@ export default function PosCashier() {
   }
   const updateLine = (skuId, patch) => setCart(c => c.map(l => l.skuId === skuId ? { ...l, ...patch } : l))
   const removeLine = (skuId) => setCart(c => c.filter(l => l.skuId !== skuId))
-  const clearCart = () => { setCart([]); setOrderDiscountText(''); setDiscountNote(''); setEditLine(null); setReturns([]); setExchangeOf(null) }
-  const hasItems = cart.length > 0 || returns.length > 0
-
-  // ── Tukar: struk asal dipilih di modal, barang kembali masuk keranjang sebagai potongan ──
-  const startExchange = (order, picks) => {
-    setExchangeOf({ clientOrderId: order.clientOrderId, orderNumber: order.orderNumber })
-    setReturns(picks)
-    setModal(null); setExchangeNumber(''); focusScan()
-    toast.success('Scan barang pengganti')
-  }
+  const clearCart = () => { setCart([]); setOrderDiscountText(''); setDiscountNote(''); setEditLine(null) }
+  const hasItems = cart.length > 0
 
   const totals = useMemo(() => {
     const lines = cart.map(l => {
@@ -224,29 +224,28 @@ export default function PosCashier() {
     const subtotal = lines.reduce((s, l) => s + l.gross, 0)
     const itemDiscount = lines.reduce((s, l) => s + l.discount, 0)
     const orderDiscount = parseDiscount(orderDiscountText, subtotal - itemDiscount)
-    const returnTotal = returns.reduce((s, r) => s + r.qty * r.credit, 0)
     return {
-      lines, returns, subtotal, itemDiscount, orderDiscount, returnTotal,
-      total: subtotal - itemDiscount - orderDiscount - returnTotal, pcs: lines.reduce((s, l) => s + l.qty, 0),
+      lines, subtotal, itemDiscount, orderDiscount,
+      total: subtotal - itemDiscount - orderDiscount, pcs: lines.reduce((s, l) => s + l.qty, 0),
     }
-  }, [cart, returns, orderDiscountText])
+  }, [cart, orderDiscountText])
 
   // ── Tahan keranjang: pembeli masih mencoba / ambil size lain, kasir lanjut melayani yang lain ──
   const saveHeld = useCallback((list) => { setHeld(list); setItem('kv', `held:${eventId}`, list) }, [eventId])
   const snapshot = useCallback(() => ({
-    id: Date.now(), at: new Date().toISOString(), cart, returns, exchangeOf, orderDiscountText, discountNote, pcs: totals.pcs, total: totals.total,
-  }), [cart, returns, exchangeOf, orderDiscountText, discountNote, totals])
+    id: Date.now(), at: new Date().toISOString(), cart, orderDiscountText, discountNote, pcs: totals.pcs, total: totals.total,
+  }), [cart, orderDiscountText, discountNote, totals])
   const holdCart = useCallback(() => {
-    if (!cart.length && !returns.length) return
+    if (!cart.length) return
     if (held.length >= MAX_HELD) { toast.error(`Maksimal ${MAX_HELD} keranjang ditahan — lanjutkan salah satu dulu`); return }
     saveHeld([...held, snapshot()])
     clearCart(); setLastAdd(null); focusScan()
     toast.success('Keranjang ditahan')
-  }, [cart.length, returns.length, held, saveHeld, snapshot, focusScan])
+  }, [cart.length, held, saveHeld, snapshot, focusScan])
   const resumeHeld = (h) => {
     // keranjang yang sedang aktif ditukar posisinya dengan yang dilanjutkan
     saveHeld([...held.filter(x => x.id !== h.id), ...(hasItems ? [snapshot()] : [])])
-    setCart(h.cart); setReturns(h.returns || []); setExchangeOf(h.exchangeOf || null)
+    setCart(h.cart)
     setOrderDiscountText(h.orderDiscountText || ''); setDiscountNote(h.discountNote || ''); setEditLine(null)
     focusScan()
   }
@@ -259,21 +258,18 @@ export default function PosCashier() {
       publishDisplay(eventId, { phase: 'done', done: {
         customerName: lastOrder.customerName, total: lastOrder.total, change: lastOrder.change,
         fulfillment: lastOrder.fulfillment, pickupCode: lastOrder.pickupCode,
-        exchange: !!lastOrder.exchangeOfNumber, refund: lastOrder.total < 0 ? -lastOrder.total : 0,
       } })
       return
     }
-    if (!cart.length && !returns.length) { publishDisplay(eventId, { phase: 'idle' }); return }
+    if (!cart.length) { publishDisplay(eventId, { phase: 'idle' }); return }
     publishDisplay(eventId, {
       phase: modal === 'pay' ? 'pay' : 'cart',
       lines: totals.lines.map(l => ({ skuId: l.skuId, productId: l.productId, name: l.name, variant: l.variant, qty: l.qty, unitPrice: l.unitPrice, discount: l.discount, lineTotal: l.lineTotal })),
-      returns: totals.returns.map(r => ({ skuId: r.skuId, productId: r.productId, name: r.name, variant: r.variant, qty: r.qty, credit: r.credit })),
-      returnTotal: totals.returnTotal,
       subtotal: totals.subtotal, discount: totals.itemDiscount + totals.orderDiscount, total: totals.total, pcs: totals.pcs,
       lastSku: lastAdd?.skuId, lastAt: lastAdd?.at,
       pay: modal === 'pay' ? payPreview || { methods: ['CASH'], fulfillment: 'NOW' } : null,
     })
-  }, [catalog, eventId, cart.length, returns.length, totals, modal, lastOrder, lastAdd, payPreview])
+  }, [catalog, eventId, cart.length, totals, modal, lastOrder, lastAdd, payPreview])
 
   const openDisplay = async () => {
     if (!(await openDisplayWindow(eventId))) toast.error('Jendela diblokir browser — izinkan pop-up untuk situs ini')
@@ -299,19 +295,15 @@ export default function PosCashier() {
       pickupCode: fulfillment === 'LATER' ? `${device.slice(-2)}-${String(seq).padStart(3, '0')}` : null,
       eventId: Number(eventId), shiftId: shift?.id ?? null,
       soldAt: new Date().toISOString(),
-      items: [
-        ...totals.lines.map(l => ({ ProductSKUId: l.skuId, productId: l.productId, qty: l.qty, unitPrice: l.unitPrice, discount: l.discount, name: l.name, variant: l.variant })),
-        // barang dikembalikan: qty negatif, nilainya dihitung ulang server dari struk asal
-        ...totals.returns.map(r => ({ ProductSKUId: r.skuId, productId: r.productId, qty: -r.qty, unitPrice: r.credit, discount: 0, name: r.name, variant: r.variant })),
-      ],
-      subtotal: totals.subtotal, itemDiscount: totals.itemDiscount, orderDiscount: totals.orderDiscount, returnTotal: totals.returnTotal, total: totals.total,
-      exchangeOfClientId: exchangeOf?.clientOrderId || null, exchangeOfNumber: exchangeOf?.orderNumber || null,
+      items: totals.lines.map(l => ({ ProductSKUId: l.skuId, productId: l.productId, qty: l.qty, unitPrice: l.unitPrice, discount: l.discount, name: l.name, variant: l.variant })),
+      subtotal: totals.subtotal, itemDiscount: totals.itemDiscount, orderDiscount: totals.orderDiscount, total: totals.total,
       discountNote: discountNote || null,
       customerName: customerName || null, customerPhone: customerPhone || null, fulfillment,
       payments, cashReceived,
       change: cashReceived != null ? cashReceived - payments.filter(p => p.method === 'CASH').reduce((s, p) => s + p.amount, 0) : 0,
     }
     await enqueueOrder(order)
+    // struk pelanggan + slip operasional (diserahkan kasir ke tim gudang booth) di setiap transaksi
     if (settings.autoPrint) printOrder(order)
     clearCart(); setPayPreview(null); setLastOrder(order); setModal('done')
     refreshOrders()
@@ -320,7 +312,7 @@ export default function PosCashier() {
   // Batas beli per No. HP: gabungan transaksi di laptop ini (server ikut menandai transaksi dari laptop lain)
   const checkLimit = (phone) => {
     if (!limit?.qty) return null
-    const net = limitedNet(limit, cart, returns)
+    const net = limitedNet(limit, cart)
     const names = Object.fromEntries(cart.map(l => [l.productId, l.name]))
     if (limit.perPhone && Object.keys(net).length) {
       const p = digits(phone)
@@ -377,9 +369,8 @@ export default function PosCashier() {
         <SyncBadge sync={sync} onClick={() => sync.failed ? setModal('queue') : syncQueue()} />
         <IconBtn icon={RefreshCw} label="Perbarui katalog & stok" onClick={() => loadCatalog()} />
         <IconBtn icon={Monitor} label="Buka layar pelanggan (monitor / iPad)" onClick={openDisplay} text="Layar pelanggan" />
-        <IconBtn icon={ArrowLeftRight} label="Tukar barang (scan struk asal)" onClick={() => setModal('exchange')} text="Tukar" />
         <IconBtn icon={History} label="Riwayat" onClick={() => setModal('history')} text="Riwayat" />
-        <IconBtn icon={Settings} label="Pengaturan struk" onClick={() => setModal('settings')} />
+        <IconBtn icon={Settings} label="Pengaturan kasir" onClick={() => setModal('settings')} />
         <IconBtn icon={LogOut} label="Tutup shift" onClick={() => setModal('close')} text="Tutup shift" />
       </>}>
       <div className="flex h-[calc(100vh-60px)]">
@@ -408,6 +399,8 @@ export default function PosCashier() {
               <div className="grid gap-3 grid-cols-[repeat(auto-fill,minmax(168px,1fr))]">
                 {visible.map(p => {
                   const stock = p.skus.reduce((s, k) => s + Math.max(stockOf(k.skuId), 0), 0)
+                  // habis di booth: tampilkan sisa di gudang cadangan (bisa dijual sebagai ambil nanti)
+                  const elsewhere = stock > 0 ? 0 : p.skus.reduce((s, k) => s + Math.max(backupOf(k.skuId)?.left || 0, 0), 0)
                   return (
                     <button key={p.productId} onClick={() => pickProduct(p)}
                       className="group text-left bg-white rounded-2xl border border-slate-200 overflow-hidden hover:border-slate-400 hover:shadow-md active:scale-[.98] transition-all">
@@ -415,11 +408,11 @@ export default function PosCashier() {
                         {imgs[p.productId]
                           ? <img src={imgs[p.productId]} alt="" className="w-full h-full object-cover" />
                           : <div className="w-full h-full flex items-center justify-center p-3 text-center text-lg font-black tracking-wide text-slate-300 uppercase break-words">{lineName(p.name)}</div>}
-                        {stock <= 0 && <span className="absolute inset-0 bg-white/70 flex items-center justify-center text-xs font-bold text-slate-600 tracking-widest">STOK HABIS</span>}
+                        {stock <= 0 && <span className="absolute inset-0 bg-white/70 flex items-center justify-center text-xs font-bold text-slate-600 tracking-widest">{elsewhere ? 'HABIS DI BOOTH' : 'STOK HABIS'}</span>}
                         {p.skus.length > 1 && (
                           <span className="absolute bottom-2 left-2 right-2 flex flex-wrap gap-1">
                             {p.skus.map(k => (
-                              <span key={k.skuId} className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${stockOf(k.skuId) > 0 ? 'bg-white/90 text-slate-800' : 'bg-white/60 text-slate-400 line-through'}`}>{k.variant}</span>
+                              <span key={k.skuId} className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${stockOf(k.skuId) > 0 ? 'bg-white/90 text-slate-800' : backupOf(k.skuId)?.left > 0 ? 'bg-amber-100/90 text-amber-800' : 'bg-white/60 text-slate-400 line-through'}`}>{k.variant}</span>
                             ))}
                           </span>
                         )}
@@ -427,8 +420,10 @@ export default function PosCashier() {
                       <div className="p-3">
                         <p className="text-[13px] font-semibold text-slate-800 leading-snug line-clamp-2 min-h-[2.4em]">{shortName(p.name)}</p>
                         <div className="flex items-baseline justify-between mt-1.5">
-                          <span className="text-[14px] font-bold text-slate-900">{rp(p.price)}</span>
-                          <span className="text-[11px] text-slate-400">stok {stock}</span>
+                          <span className="text-[14px] font-bold text-slate-900 whitespace-nowrap">{rp(p.price)}</span>
+                          {elsewhere
+                            ? <span className="text-[11px] font-semibold text-amber-700 whitespace-nowrap" title="Stok di gudang cadangan">cadangan {elsewhere}</span>
+                            : <span className="text-[11px] text-slate-400">stok {stock}</span>}
                         </div>
                       </div>
                     </button>
@@ -467,35 +462,13 @@ export default function PosCashier() {
               ))}
             </div>
           )}
-          {exchangeOf && (
-            <div className="px-5 py-2.5 border-b border-slate-100 bg-sky-50 flex items-center justify-between text-xs">
-              <span className="text-sky-800"><ArrowLeftRight size={12} className="inline mr-1" />Tukar dari struk <b>{exchangeOf.orderNumber}</b></span>
-              <button className="font-semibold text-slate-400 hover:text-danger" onClick={() => { setReturns([]); setExchangeOf(null) }}>Batal tukar</button>
-            </div>
-          )}
 
           <div className="flex-1 overflow-y-auto">
-            {returns.map(r => (
-              <div key={`ret-${r.skuId}`} className="px-5 py-3 border-b border-slate-100 bg-sky-50/40 flex gap-3 items-center">
-                <div className="w-12 h-12 rounded-lg bg-slate-100 overflow-hidden shrink-0 flex items-center justify-center text-xs font-black text-slate-300 opacity-60">
-                  {imgs[r.productId] ? <img src={imgs[r.productId]} alt="" className="w-full h-full object-cover" /> : initials(r.name)}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-[11px] font-bold tracking-wide text-sky-700"><Undo2 size={11} className="inline mr-0.5" />DIKEMBALIKAN</p>
-                  <p className="text-[13px] font-semibold text-slate-800 truncate">{shortName(r.name)}</p>
-                  <p className="text-xs text-slate-500">{r.variant && <span className="inline-block px-1.5 rounded border border-slate-300 font-bold text-slate-700 mr-1.5">{r.variant}</span>}{r.qty} × {rp(r.credit)}</p>
-                </div>
-                <div className="text-right">
-                  <p className="font-bold text-sky-700">-{rp(r.qty * r.credit)}</p>
-                  <button className="text-[11px] text-slate-400 hover:text-danger" onClick={() => setReturns(rs => rs.filter(x => x.skuId !== r.skuId))}>hapus</button>
-                </div>
-              </div>
-            ))}
             {!cart.length ? (
-              <div className={`${returns.length ? 'py-10' : 'h-full'} flex flex-col items-center justify-center text-center px-8 text-slate-400`}>
+              <div className="h-full flex flex-col items-center justify-center text-center px-8 text-slate-400">
                 <ShoppingBag size={36} className="mb-3 text-slate-300" />
-                <p className="font-semibold text-slate-500">{returns.length ? 'Scan barang pengganti' : 'Belum ada barang'}</p>
-                <p className="text-sm">{returns.length ? 'Atau langsung selesaikan kalau barang hanya dikembalikan.' : 'Scan barcode atau klik produk di kiri.'}</p>
+                <p className="font-semibold text-slate-500">Belum ada barang</p>
+                <p className="text-sm">Scan barcode atau klik produk di kiri.</p>
               </div>
             ) : totals.lines.map(l => (
               <div key={l.skuId} className="px-5 py-3 border-b border-slate-100">
@@ -540,20 +513,19 @@ export default function PosCashier() {
             {totals.orderDiscount > 0
               ? <Line label={<button className="underline decoration-dotted" onClick={() => setModal('discount')}>Diskon transaksi</button>} value={`-${rp(totals.orderDiscount)}`} />
               : <button disabled={!cart.length} onClick={() => setModal('discount')} className="text-xs font-semibold text-brand inline-flex items-center gap-1 disabled:opacity-40"><Tag size={12} />Tambah diskon transaksi</button>}
-            {totals.returnTotal > 0 && <Line label="Barang dikembalikan" value={`-${rp(totals.returnTotal)}`} />}
             {limit?.qty > 0 && <p className="text-[11px] text-slate-400">Batas beli: maks {limit.qty} pcs per artikel{limit.productIds?.length ? ' (produk tertentu)' : ''}{limit.perPhone ? ' · per No. HP' : ''}</p>}
             <div className="flex items-end justify-between pt-2">
-              <span className="text-sm font-semibold text-slate-500">{totals.total < 0 ? 'Uang dikembalikan' : 'Total'}</span>
-              <span className="text-3xl font-black tracking-tight text-slate-900">{rp(Math.abs(totals.total))}</span>
+              <span className="text-sm font-semibold text-slate-500">Total</span>
+              <span className="text-3xl font-black tracking-tight text-slate-900">{rp(totals.total)}</span>
             </div>
             <button className="w-full h-14 rounded-xl bg-brand text-white text-lg font-bold shadow-sm hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed"
-              disabled={!hasItems} onClick={() => setModal('pay')}>{exchangeOf ? (totals.total > 0 ? 'Bayar selisih' : 'Selesaikan tukar') : 'Bayar'} <span className="text-sm font-medium opacity-70">(F2)</span></button>
+              disabled={!hasItems} onClick={() => setModal('pay')}>Bayar <span className="text-sm font-medium opacity-70">(F2)</span></button>
             <p className="text-[11px] text-slate-400 text-center">Laptop {device} · shift #{shift.id} · {user?.name}</p>
           </div>
         </aside>
       </div>
 
-      {sizeFor && <SizePicker product={sizeFor} img={imgs[sizeFor.productId]} stockOf={stockOf} onClose={() => setSizeFor(null)}
+      {sizeFor && <SizePicker product={sizeFor} img={imgs[sizeFor.productId]} stockOf={stockOf} backupOf={backupOf} onClose={() => setSizeFor(null)}
         onPick={(sku) => { addSku(sku); setSizeFor(null) }} />}
       {modal === 'discount' && (
         <Modal open onClose={() => setModal(null)} title="Diskon transaksi" size="sm">
@@ -570,13 +542,9 @@ export default function PosCashier() {
           </div>
         </Modal>
       )}
-      {modal === 'pay' && <PayScreen totals={totals} exchange={!!exchangeOf} checkLimit={checkLimit} onClose={() => { setModal(null); setPayPreview(null) }} onPay={finishOrder} onPreview={setPayPreview} />}
-      {modal === 'exchange' && <ExchangeModal initialNumber={exchangeNumber} eventId={eventId} orders={orders} online={sync.online} skuById={skuById} onClose={() => { setModal(null); setExchangeNumber('') }} onStart={startExchange} />}
+      {modal === 'pay' && <PayScreen totals={totals} defaultMethod={settings.defaultMethod} notInBooth={totals.lines.filter(l => stockOf(l.skuId) < 0)} checkLimit={checkLimit} onClose={() => { setModal(null); setPayPreview(null) }} onPay={finishOrder} onPreview={setPayPreview} />}
       {modal === 'done' && lastOrder && <DoneScreen order={lastOrder} onPrint={(c) => printOrder(lastOrder, c)} onNew={() => setModal(null)} />}
-      {modal === 'history' && (
-        <HistoryModal orders={recent} shift={shift} onClose={() => setModal(null)} onPrint={printOrder}
-          onExchange={(number) => { setExchangeNumber(number); setModal('exchange') }} />
-      )}
+      {modal === 'history' && <HistoryModal orders={recent} shift={shift} onClose={() => setModal(null)} onPrint={printOrder} />}
       {modal === 'queue' && (
         <Modal open onClose={() => setModal(null)} title="Transaksi ditolak server" size="lg">
           <p className="text-sm text-slate-500 mb-3">Transaksi ini tetap tersimpan di laptop. Biasanya karena data tidak valid (mis. event belum dibuka). Perbaiki di server lalu klik Kirim ulang.</p>
@@ -597,6 +565,7 @@ export default function PosCashier() {
       )}
       {modal === 'close' && (
         <CloseShift shift={shift} sync={sync} held={held.length} onClose={() => setModal(null)}
+          printRecap={(sh, summary, extra) => printReceipt(shiftRecapHtml(sh, summary, { event: catalog.event, settings, cashierName: user?.name, ...extra }))}
           onClosed={async () => { await delItem('kv', `shift:${eventId}`); setShift(null); setModal(null) }} />
       )}
     </Screen>
@@ -643,7 +612,8 @@ function SyncBadge({ sync, onClick }) {
   )
 }
 
-function SizePicker({ product, img, stockOf, onPick, onClose }) {
+function SizePicker({ product, img, stockOf, backupOf, onPick, onClose }) {
+  const elsewhere = product.skus.map(k => ({ k, st: stockOf(k.skuId), bk: backupOf(k.skuId) })).filter(x => x.st <= 0 && x.bk?.left > 0)
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/40 flex items-center justify-center p-4" onClick={onClose}>
       <div className="bg-white rounded-2xl w-full max-w-md overflow-hidden shadow-2xl" onClick={e => e.stopPropagation()}>
@@ -661,25 +631,33 @@ function SizePicker({ product, img, stockOf, onPick, onClose }) {
         <div className="grid grid-cols-3 gap-3 p-5">
           {product.skus.map(k => {
             const st = stockOf(k.skuId)
+            const bk = st > 0 ? null : backupOf(k.skuId)
+            const other = bk?.left > 0
             return (
               <button key={k.skuId} onClick={() => onPick(k)} autoFocus={st > 0}
-                className={`h-20 rounded-xl border-2 flex flex-col items-center justify-center transition-colors ${st > 0 ? 'border-slate-200 hover:border-slate-900 hover:bg-slate-50' : 'border-dashed border-slate-200 text-slate-400'}`}>
+                className={`h-20 rounded-xl border-2 flex flex-col items-center justify-center transition-colors ${st > 0 ? 'border-slate-200 hover:border-slate-900 hover:bg-slate-50' : other ? 'border-dashed border-amber-300 bg-amber-50/60 text-amber-900 hover:border-amber-500' : 'border-dashed border-slate-200 text-slate-400'}`}>
                 <span className="text-2xl font-black">{k.variant || '—'}</span>
-                <span className={`text-[11px] ${st > 0 ? 'text-slate-500' : 'text-danger'}`}>{st > 0 ? `stok ${st}` : 'stok habis'}</span>
+                <span className={`text-[11px] ${st > 0 ? 'text-slate-500' : other ? 'text-amber-700 font-semibold' : 'text-danger'}`}>{st > 0 ? `stok ${st}` : other ? `gudang lain ${bk.left}` : 'stok habis'}</span>
               </button>
             )
           })}
         </div>
+        {!!elsewhere.length && (
+          <div className="mx-5 mb-5 rounded-xl bg-amber-50 px-4 py-3 text-xs text-amber-800 space-y-1">
+            <p className="font-semibold">Habis di booth, ada di gudang lain — jual sebagai <b>Ambil nanti</b>:</p>
+            {elsewhere.map(({ k, bk }) => <p key={k.skuId}>Size <b>{k.variant || '—'}</b>: {bk.where}</p>)}
+          </div>
+        )}
       </div>
     </div>
   )
 }
 
-function PayScreen({ totals, exchange, checkLimit, onClose, onPay, onPreview }) {
+function PayScreen({ totals, defaultMethod, notInBooth = [], checkLimit, onClose, onPay, onPreview }) {
   const total = totals.total
-  // tukar tanpa selisih / barang baru lebih murah: tidak ada pembayaran, selisih dikembalikan tunai
+  // total 0 (diskon 100%): tidak ada pembayaran
   const noPay = total <= 0
-  const [method, setMethod] = useState('CASH')
+  const [method, setMethod] = useState(METHODS.some(m => m.key === defaultMethod) ? defaultMethod : 'CASH')
   const [split, setSplit] = useState(null)              // null = 1 metode; [{method, amount}] = bayar campur
   const [received, setReceived] = useState('')
   const [customer, setCustomer] = useState({ name: '', phone: '' })
@@ -691,14 +669,13 @@ function PayScreen({ totals, exchange, checkLimit, onClose, onPay, onPreview }) 
   const cashPart = noPay ? 0 : rows.filter(r => r.method === 'CASH').reduce((s, r) => s + (Number(r.amount) || 0), 0)
   const recv = received === '' ? cashPart : num(received)
   const change = recv - cashPart
-  // total 0 (diskon 100%) boleh tanpa pembayaran
   const limitErr = checkLimit?.(customer.phone)
   const valid = paid === total && (!cashPart || recv >= cashPart) && !limitErr
   const submit = async () => {
     if (!valid || busy) return
     setBusy(true)
     await onPay({
-      payments: total < 0 ? [{ method: 'CASH', amount: total }] : rows.filter(r => Number(r.amount) > 0).map(r => ({ method: r.method, amount: Number(r.amount) })),
+      payments: rows.filter(r => Number(r.amount) > 0).map(r => ({ method: r.method, amount: Number(r.amount) })),
       cashReceived: cashPart ? recv : null,
       customerName: customer.name.trim(), customerPhone: customer.phone.trim(), fulfillment,
     })
@@ -721,17 +698,10 @@ function PayScreen({ totals, exchange, checkLimit, onClose, onPay, onPreview }) 
                 <span className="font-semibold shrink-0">{(l.lineTotal).toLocaleString('id-ID')}</span>
               </div>
             ))}
-            {totals.returns.map(r => (
-              <div key={`ret-${r.skuId}`} className="flex justify-between gap-2 text-sm text-sky-700">
-                <span className="min-w-0"><b>{r.qty}×</b> {shortName(r.name)} {r.variant} <span className="text-[11px] font-bold">KEMBALI</span></span>
-                <span className="font-semibold shrink-0">-{(r.qty * r.credit).toLocaleString('id-ID')}</span>
-              </div>
-            ))}
           </div>
           <div className="border-t border-slate-200 pt-3 space-y-1 text-sm">
             <Line label="Subtotal" value={rp(totals.subtotal)} />
             {(totals.itemDiscount + totals.orderDiscount) > 0 && <Line label="Diskon" value={`-${rp(totals.itemDiscount + totals.orderDiscount)}`} />}
-            {totals.returnTotal > 0 && <Line label="Barang dikembalikan" value={`-${rp(totals.returnTotal)}`} />}
           </div>
         </div>
 
@@ -740,18 +710,14 @@ function PayScreen({ totals, exchange, checkLimit, onClose, onPay, onPreview }) 
         <div className="flex-1 p-7 overflow-y-auto space-y-5">
           <div className="flex items-start justify-between">
             <div>
-              <p className="text-sm text-slate-500">{total < 0 ? 'Uang dikembalikan ke pembeli' : exchange ? 'Selisih bayar' : 'Total bayar'}</p>
-              <p className="text-5xl font-black tracking-tight text-slate-900">{rp(Math.abs(total))}</p>
+              <p className="text-sm text-slate-500">Total bayar</p>
+              <p className="text-5xl font-black tracking-tight text-slate-900">{rp(total)}</p>
             </div>
             <button className="w-9 h-9 rounded-lg flex items-center justify-center text-slate-400 hover:bg-slate-100" onClick={onClose}><X size={18} /></button>
           </div>
 
           {noPay ? (
-            <div className={`rounded-2xl p-4 text-sm ${total < 0 ? 'bg-amber-50 text-amber-800' : 'bg-slate-50 text-slate-600'}`}>
-              {total < 0
-                ? <>Barang pengganti lebih murah. Serahkan <b>{rp(-total)}</b> tunai dari laci kasir ke pembeli — tercatat sebagai uang keluar di shift ini.</>
-                : 'Nilai barang sama — tidak ada pembayaran.'}
-            </div>
+            <div className="rounded-2xl p-4 text-sm bg-slate-50 text-slate-600">Total Rp 0 — tidak ada pembayaran.</div>
           ) : !split ? (
             <div>
               <p className="label">Metode pembayaran</p>
@@ -801,6 +767,12 @@ function PayScreen({ totals, exchange, checkLimit, onClose, onPay, onPreview }) 
               <input className="input" inputMode="tel" value={customer.phone} onChange={e => setCustomer(c => ({ ...c, phone: e.target.value }))} placeholder="untuk konfirmasi, tidak dicetak" /></div>
           </div>
           {fulfillment === 'LATER' && !customer.name.trim() && <p className="text-xs text-amber-600 -mt-3">Isi nama supaya gudang mudah mencocokkan saat pembeli kembali.</p>}
+          {!!notInBooth.length && (
+            <p className={`text-xs rounded-lg px-3 py-2 -mt-1 ${fulfillment === 'NOW' ? 'bg-red-50 text-danger font-semibold' : 'bg-amber-50 text-amber-800'}`}>
+              {notInBooth.map(l => `${shortName(l.name)} ${l.variant || ''}`.trim()).join(', ')} tidak ada di booth
+              {fulfillment === 'NOW' ? ' — pilih Ambil nanti kecuali barangnya memang sudah di tangan.' : ' — tim gudang mengambil dari gudang lain, isi No. HP supaya pembeli bisa dihubungi.'}
+            </p>
+          )}
           {limitErr && <p className="text-sm font-semibold text-danger -mt-2">{limitErr}</p>}
           {cashPart > 0 && (
             <div className="rounded-2xl bg-slate-50 p-4 space-y-3">
@@ -825,7 +797,7 @@ function PayScreen({ totals, exchange, checkLimit, onClose, onPay, onPreview }) 
         </div>
         <div className="px-7 py-4 border-t border-slate-100 bg-white">
           <button className="w-full h-14 rounded-xl bg-brand text-white text-lg font-bold hover:brightness-110 disabled:opacity-40" disabled={!valid || busy} onClick={submit} autoFocus={noPay}>
-            {busy ? 'Menyimpan…' : noPay ? (total < 0 ? `Selesaikan tukar · kembalikan ${rp(-total)}` : 'Selesaikan tukar') : `Selesaikan pembayaran · ${rp(total)}`}
+            {busy ? 'Menyimpan…' : noPay ? 'Selesaikan transaksi' : `Selesaikan pembayaran · ${rp(total)}`}
           </button>
           {!valid && !limitErr && <p className="text-xs text-center text-amber-600 mt-1.5">{paid !== total ? 'Jumlah pembayaran belum sama dengan total' : 'Uang diterima kurang dari total tunai'}</p>}
         </div>
@@ -841,13 +813,7 @@ function DoneScreen({ order, onPrint, onNew }) {
     <div className="fixed inset-0 z-50 bg-slate-900/50 flex items-center justify-center p-6">
       <div className="bg-white rounded-3xl w-full max-w-lg p-8 text-center shadow-2xl">
         <CheckCircle2 size={56} className="mx-auto text-emerald-500" />
-        <p className="mt-3 text-2xl font-black text-slate-900">{order.exchangeOfNumber ? 'Tukar berhasil' : 'Pembayaran berhasil'}</p>
-        {order.total < 0 && (
-          <div className="mt-5 rounded-2xl bg-amber-50 py-4">
-            <p className="text-xs font-semibold text-amber-700 tracking-wide">KEMBALIKAN TUNAI KE PEMBELI</p>
-            <p className="text-4xl font-black text-amber-700">{rp(-order.total)}</p>
-          </div>
-        )}
+        <p className="mt-3 text-2xl font-black text-slate-900">Pembayaran berhasil</p>
         <p className="text-sm text-slate-500">{order.orderNumber}{order.customerName ? ` · ${order.customerName}` : ''}</p>
         {order.change > 0 && (
           <div className="mt-5 rounded-2xl bg-emerald-50 py-4">
@@ -872,100 +838,9 @@ function DoneScreen({ order, onPrint, onNew }) {
   )
 }
 
-// Cari struk asal (scan barcode di struk / ketik nomor), lalu pilih barang yang dikembalikan.
-// Struk dari laptop ini bisa dicari offline; struk laptop lain butuh internet.
-function ExchangeModal({ initialNumber, eventId, orders, online, skuById, onClose, onStart }) {
-  const [number, setNumber] = useState(initialNumber || '')
-  const formRef = useRef(null)
-  // dibuka dari tombol Tukar di riwayat: langsung cari struknya
-  useEffect(() => { if (initialNumber) formRef.current?.requestSubmit() }, [initialNumber])
-  const [found, setFound] = useState(null)   // { order, returned }
-  const [pick, setPick] = useState({})       // skuId -> qty dikembalikan
-  const [busy, setBusy] = useState(false)
-  const [err, setErr] = useState(null)
-
-  const find = async (e) => {
-    e?.preventDefault()
-    const q = number.trim().toUpperCase()
-    if (!q) return
-    setBusy(true); setErr(null); setFound(null); setPick({})
-    const local = [...orders.queue, ...orders.sent].find(o => String(o.orderNumber).toUpperCase() === q)
-    let order = local || null, serverReturned = null
-    if (online || !local) {
-      try {
-        const { data } = await posHttp.get('/pos/orders/lookup', { params: { number: q } })
-        order = order || { ...data.order, items: data.order.items.map(i => ({ ...i, productId: i.ProductId })) }
-        serverReturned = data.returned
-      } catch (ex) {
-        if (!local) setErr(ex.response?.status === 404 ? `Struk ${q} tidak ditemukan` : 'Struk dari laptop lain butuh koneksi internet')
-      }
-    }
-    setBusy(false)
-    if (!order) return
-    if (String(order.eventId) !== String(eventId)) { setErr('Struk ini dari event lain'); return }
-    if (order.status === 'VOID') { setErr('Transaksi ini sudah dibatalkan'); return }
-    // yang sudah dikembalikan: hitungan server + tukar di laptop ini yang belum terkirim
-    const pendingLocal = returnedLocally(orders.queue, order.clientOrderId)
-    const returned = serverReturned
-      ? Object.fromEntries([...new Set([...Object.keys(serverReturned), ...Object.keys(pendingLocal)])].map(k => [k, (serverReturned[k] || 0) + (pendingLocal[k] || 0)]))
-      : returnedLocally([...orders.queue, ...orders.sent], order.clientOrderId)
-    setFound({ order, returned })
-  }
-
-  const credits = found ? returnCredits(found.order) : {}
-  const rows = found ? found.order.items.filter(i => i.qty > 0).map(i => ({
-    ...i, left: i.qty - (found.returned[i.ProductSKUId] || 0), credit: credits[i.ProductSKUId]?.credit ?? 0,
-  })) : []
-  const chosen = rows.filter(r => pick[r.ProductSKUId] > 0)
-  const start = () => onStart(found.order, chosen.map(r => {
-    const sku = skuById.get(r.ProductSKUId)
-    return {
-      skuId: r.ProductSKUId, productId: r.productId ?? sku?.productId, code: sku?.code, name: r.name, variant: r.variant,
-      qty: pick[r.ProductSKUId], credit: r.credit,
-    }
-  }))
-
-  return (
-    <Modal open onClose={onClose} title="Tukar barang" size="lg">
-      <form ref={formRef} onSubmit={find} className="flex gap-2">
-        <input className="input flex-1 font-mono" autoFocus value={number} onChange={e => setNumber(e.target.value)} placeholder="Scan barcode di struk atau ketik nomor struk" />
-        <button className="btn-primary" disabled={busy}>{busy ? 'Mencari…' : 'Cari'}</button>
-      </form>
-      {err && <p className="text-sm text-danger mt-3">{err}</p>}
-      {found && (
-        <div className="mt-4 space-y-3">
-          <p className="text-sm text-slate-500"><b className="text-slate-800">{found.order.orderNumber}</b> · {new Date(found.order.soldAt).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' })}{found.order.customerName ? ` · ${found.order.customerName}` : ''}</p>
-          <p className="label">Barang yang dikembalikan pembeli</p>
-          <div className="divide-y divide-slate-100 border border-slate-200 rounded-xl">
-            {rows.map(r => (
-              <div key={r.ProductSKUId} className={`flex items-center gap-3 px-4 py-3 ${r.left <= 0 ? 'opacity-50' : ''}`}>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-slate-800 truncate">{shortName(r.name)} {r.variant && <span className="inline-block px-1.5 rounded border border-slate-300 font-bold text-slate-700 text-xs ml-1">{r.variant}</span>}</p>
-                  <p className="text-xs text-slate-500">dibeli {r.qty} · dinilai {rp(r.credit)}/pcs{r.left < r.qty ? ` · sudah dikembalikan ${r.qty - r.left}` : ''}</p>
-                </div>
-                {r.left > 0 ? (
-                  <div className="flex items-center rounded-lg border border-slate-200">
-                    <button type="button" className="w-8 h-8 flex items-center justify-center text-slate-500" onClick={() => setPick(p => ({ ...p, [r.ProductSKUId]: Math.max((p[r.ProductSKUId] || 0) - 1, 0) }))}><Minus size={14} /></button>
-                    <span className="w-8 text-center font-bold text-sm">{pick[r.ProductSKUId] || 0}</span>
-                    <button type="button" className="w-8 h-8 flex items-center justify-center text-slate-500" onClick={() => setPick(p => ({ ...p, [r.ProductSKUId]: Math.min((p[r.ProductSKUId] || 0) + 1, r.left) }))}><Plus size={14} /></button>
-                  </div>
-                ) : <span className="text-xs text-slate-400">sudah dikembalikan semua</span>}
-              </div>
-            ))}
-          </div>
-          <p className="text-xs text-slate-400">Nilai kembali = harga yang dulu dibayar (sudah termasuk diskon). Barang kembali masuk stok gudang event.</p>
-          <button className="btn-primary w-full justify-center h-11" disabled={!chosen.length} onClick={start}>
-            Lanjut · pilih barang pengganti ({chosen.reduce((s, r) => s + pick[r.ProductSKUId], 0)} pcs kembali)
-          </button>
-        </div>
-      )}
-    </Modal>
-  )
-}
-
-// Riwayat transaksi laptop ini (jalan offline): cari / scan struk, detail, cetak ulang, tukar, ringkasan shift.
+// Riwayat transaksi laptop ini (jalan offline): cari / scan struk, detail, cetak ulang, ringkasan shift.
 const METHOD_LABEL = Object.fromEntries(METHODS.map(m => [m.key, m.label]))
-function HistoryModal({ orders, shift, onClose, onPrint, onExchange }) {
+function HistoryModal({ orders, shift, onClose, onPrint }) {
   const [q, setQ] = useState('')
   const [open, setOpen] = useState(null)
   const status = (o) => o.error ? 'rejected' : o.pending ? 'pending' : 'sent'
@@ -1036,14 +911,13 @@ function HistoryModal({ orders, shift, onClose, onPrint, onExchange }) {
                       {!o.payments.length && <Line label="Pembayaran" value="tidak ada (nilai sama)" />}
                       {o.cashReceived != null && <Line label="Uang diterima · kembalian" value={`${rp(o.cashReceived)} · ${rp(o.change)}`} />}
                     </div>
-                    {o.customerPhone && <p className="text-xs text-slate-400">No. HP ••••{String(o.customerPhone).replace(/\D/g, '').slice(-4)}</p>}
+                    {o.customerPhone && <p className="text-xs text-slate-500">No. HP {o.customerPhone}</p>}
                   </div>
                   {rv && <p className="text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2">Perlu dicek: {rv}</p>}
                   {o.error && <p className="text-xs text-danger bg-red-50 rounded-lg px-3 py-2">Ditolak server: {o.error}</p>}
                   <div className="flex flex-wrap gap-2">
                     <button className="btn-secondary text-xs" onClick={() => onPrint(o, { customer: true, staff: false })}><Printer size={12} />Struk pelanggan</button>
                     <button className="btn-secondary text-xs" onClick={() => onPrint(o, { customer: false, staff: true })}><Printer size={12} />Slip staff</button>
-                    {!o.error && sold.length > 0 && <button className="btn-primary text-xs" onClick={() => onExchange(o.orderNumber)}><ArrowLeftRight size={12} />Tukar barang</button>}
                   </div>
                 </div>
               )}
@@ -1111,8 +985,10 @@ function SettingsModal({ settings, event, userName, onClose, onSave }) {
     items: [{ name: 'Contoh produk', variant: 'M', qty: 1, unitPrice: 300000, discount: 0 }], payments: [{ method: 'CASH', amount: 300000 }],
     cashReceived: 300000, change: 0, customerName: 'Pembeli', fulfillment: 'LATER', pickupCode: 'TS-001',
   }
+  const sampleShift = { id: 'TEST', deviceName: 'Laptop tes', openedAt: new Date().toISOString(), openingCash: 500000 }
+  const sampleSummary = { orderCount: 1, laterCount: 1, pcs: 1, total: 300000, discount: 0, voidCount: 0, voidTotal: 0, byMethod: { CASH: 300000 }, expectedCash: 800000 }
   return (
-    <Modal open onClose={onClose} title="Pengaturan struk" size="sm">
+    <Modal open onClose={onClose} title="Pengaturan kasir" size="sm">
       <div className="space-y-4">
         <div><label className="label">Gaya struk</label>
           <div className="flex gap-2">{RECEIPT_STYLES.map(([k, l]) => (
@@ -1122,10 +998,20 @@ function SettingsModal({ settings, event, userName, onClose, onSave }) {
           <div><label className="label">Lebar kertas (mm)</label><input className="input" type="number" value={s.widthMm} onChange={e => setS({ ...s, widthMm: Number(e.target.value) })} /></div>
           <div><label className="label">Ukuran huruf (px)</label><input className="input" type="number" value={s.fontPx} onChange={e => setS({ ...s, fontPx: Number(e.target.value) })} /></div>
         </div>
-        <p className="text-xs text-slate-400 -mt-2">Standar kasir 80 mm. Setiap bayar tercetak 2 lembar: struk pelanggan + slip staff.</p>
+        <p className="text-xs text-slate-400 -mt-2">Standar kasir 80 mm. Setiap bayar tercetak struk pelanggan + slip operasional (untuk tim gudang booth). Rekap kasir tercetak saat tutup shift.</p>
+        <div><label className="label">Metode bayar default</label>
+          <select className="input" value={s.defaultMethod || 'CASH'} onChange={e => setS({ ...s, defaultMethod: e.target.value })}>
+            {METHODS.map(m => <option key={m.key} value={m.key}>{m.label}</option>)}
+          </select>
+          <p className="text-[11px] text-slate-400 mt-1">Langsung terpilih di layar bayar; tetap bisa diganti per transaksi.</p></div>
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={s.autoPrint} onChange={e => setS({ ...s, autoPrint: e.target.checked })} />Cetak otomatis setelah bayar</label>
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={!!s.showCashier} onChange={e => setS({ ...s, showCashier: e.target.checked })} />Tampilkan nama kasir di struk pelanggan</label>
-        <button className="btn-secondary w-full justify-center" onClick={() => printReceipt(orderPrintHtml(sample, { event, settings: s, cashierName: userName }))}><Printer size={14} />Cetak tes (2 lembar)</button>
+        <button className="btn-secondary w-full justify-center" onClick={() => printReceipt(combinePrint([
+          receiptHtml(sample, { event, settings: s, cashierName: userName }),
+          staffSlipHtml(sample, { event, settings: s, cashierName: userName }),
+          shiftRecapHtml(sampleShift, sampleSummary, { event, settings: s, cashierName: userName }),
+        ], s))}><Printer size={14} />Cetak tes (3 lembar)</button>
+        <p className="text-[11px] text-slate-400 -mt-2">Cek printer saja — tidak membuat transaksi & tidak memotong stok.</p>
         <QrisSetting />
         <button className="btn-primary w-full justify-center" onClick={() => onSave(s)}>Simpan</button>
       </div>
@@ -1164,7 +1050,7 @@ function QrisSetting() {
   )
 }
 
-function CloseShift({ shift, sync, held, onClose, onClosed }) {
+function CloseShift({ shift, sync, held, onClose, onClosed, printRecap }) {
   const [summary, setSummary] = useState(null)
   const [counted, setCounted] = useState('')
   const [err, setErr] = useState(null)
@@ -1175,7 +1061,13 @@ function CloseShift({ shift, sync, held, onClose, onClosed }) {
   }, [shift.id, sync.pending])
   const close = async () => {
     setBusy(true)
-    try { await posHttp.patch(`/pos/shifts/${shift.id}/close`, { countedCash: num(counted) }); toast.success('Shift ditutup'); onClosed() }
+    try {
+      const { data } = await posHttp.patch(`/pos/shifts/${shift.id}/close`, { countedCash: num(counted) })
+      // rekap kasir tercetak otomatis: lembar serah terima uang laci
+      printRecap(data, data.summary, { countedCash: data.countedCash, closedAt: data.closedAt })
+      toast.success('Shift ditutup — rekap kasir dicetak')
+      onClosed()
+    }
     catch (e) { toast.error(e.response?.data?.message || 'Gagal menutup shift') }
     finally { setBusy(false) }
   }
@@ -1193,7 +1085,8 @@ function CloseShift({ shift, sync, held, onClose, onClosed }) {
           <div className="flex justify-between font-bold"><span>Kas tunai seharusnya</span><span>{rp(summary.expectedCash)}</span></div>
           <div><label className="label">Hitungan kas fisik</label><input className="input text-lg text-right" value={counted ? num(counted).toLocaleString('id-ID') : ''} onChange={e => setCounted(e.target.value)} autoFocus placeholder="0" /></div>
           {counted !== '' && <p className={`font-semibold ${num(counted) === summary.expectedCash ? 'text-emerald-600' : 'text-danger'}`}>Selisih: {rp(num(counted) - summary.expectedCash)}</p>}
-          <button className="btn-primary w-full justify-center" disabled={counted === '' || busy} onClick={close}>{busy ? 'Menutup…' : 'Tutup shift'}</button>
+          <button className="btn-primary w-full justify-center" disabled={counted === '' || busy} onClick={close}>{busy ? 'Menutup…' : 'Tutup shift & cetak rekap'}</button>
+          <button className="btn-secondary w-full justify-center" disabled={busy} onClick={() => printRecap(shift, summary)}><Printer size={14} />Cetak rekap sementara (shift tetap buka)</button>
         </div>
       )}
     </Modal>

@@ -242,11 +242,10 @@ function street(order, { event, settings, cashierName }) {
   </body></html>`
 }
 
-// ── Slip operasional (copy staff): dibawa runner ke gudang / arsip kasir ──────
+// ── Slip operasional (copy staff): diserahkan kasir ke tim gudang booth, tiap transaksi ──
 function slip(order, { event, settings, cashierName }) {
   const { w, f, date, time, pcs, name, sold, back, swapOf, refund } = ctx(order, event, settings)
   const later = order.fulfillment === 'LATER'
-  const phone = String(order.customerPhone || '').replace(/\D/g, '')
   const items = sold.map(i => `
     <div class="it"><span class="box"></span><span class="q">${i.qty}&times;</span><span class="nm">${esc(shortName(i.name))}</span><span class="sz">${esc(i.variant || '-')}</span></div>`).join('')
   const backItems = back.map(i => `
@@ -271,20 +270,20 @@ function slip(order, { event, settings, cashierName }) {
     .bc { margin: 10px 4% 0; }
   </style></head><body>
     <div class="copy"><span>SLIP OPERASIONAL</span><span>COPY STAFF</span></div>
-    <div class="mode">${later ? 'AMBIL DI GUDANG' : 'SUDAH DIBAWA PELANGGAN'}</div>
+    <div class="mode">${later ? 'AMBIL NANTI' : 'SERAHKAN SEKARANG'}</div>
     ${later ? `<div class="c k">NOMOR AMBIL</div><div class="code">${esc(order.pickupCode || order.orderNumber)}</div>` : ''}
     <div class="grid">
       <div><span class="k">ORDER</span><span class="v">${esc(order.orderNumber)}</span></div>
       <div><span class="k">WAKTU</span><span class="v">${date} ${time}</span></div>
       <div><span class="k">ATAS NAMA</span><span class="v">${esc(name || '-')}</span></div>
-      <div><span class="k">NO. HP</span><span class="v">${phone ? '&bull;&bull;&bull;&bull;' + esc(phone.slice(-4)) : '-'}</span></div>
+      <div><span class="k">JUMLAH</span><span class="v">${pcs} PCS</span></div>
       <div><span class="k">KASIR</span><span class="v">${esc(cashierName || '-')}</span></div>
       <div><span class="k">EVENT</span><span class="v">${esc(event?.name || '-')}</span></div>
     </div>
     ${swapOf ? `<div class="k" style="margin-bottom:2px">TUKAR DARI ${esc(swapOf)} &middot; BARANG KEMBALI MASUK STOK</div>${backItems}<div style="height:8px"></div>` : ''}
     ${sold.length ? `<div class="k">BARANG &middot; ${pcs} PCS</div>${items}` : ''}
     <div class="sum">${refund ? `<span>UANG DIKEMBALIKAN &middot; TUNAI</span><span>${rp(refund)}</span>` : `<span>LUNAS &middot; ${esc(paid)}</span><span>${rp(order.total)}</span>`}</div>
-    ${later ? '<div class="sign"><div>Disiapkan</div><div>Diserahkan</div></div>' : ''}
+    <div class="sign"><div>Disiapkan</div><div>Diserahkan</div></div>
     <div class="bc">${code39Svg(order.orderNumber, 34)}</div>
   </body></html>`
 }
@@ -304,6 +303,54 @@ function combine(docs, w) {
     ${parts.map(p => p.style).join('\n')}
   </style></head><body>${parts.map(p => p.html).join('')}</body></html>`
 }
+
+// ── Rekap kasir: 1 lembar per shift untuk serah terima uang laci ─────────────
+// summary dari server (shiftSummary); countedCash/closedAt kosong = rekap sementara (shift masih buka).
+export function shiftRecapHtml(shift, summary, { event, settings, cashierName, countedCash, closedAt } = {}) {
+  const s = { ...DEFAULT_RECEIPT, ...(settings || {}) }
+  const w = Number(s.widthMm) || 80, f = Number(s.fontPx) || 12
+  const dt = (v) => v ? new Date(v).toLocaleString('id-ID', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '-'
+  const final = countedCash != null
+  const diff = final ? countedCash - summary.expectedCash : null
+  const row = (l, v, strong) => `<div class="row${strong ? ' b' : ''}"><span>${l}</span><span>${v}</span></div>`
+  const methods = Object.entries(summary.byMethod || {}).filter(([, v]) => v).map(([k, v]) => row(METHOD[k] || esc(k), rp(v))).join('') || row('Belum ada pembayaran', '-')
+  return `<!doctype html><html><head><meta charset="utf-8"><style>${pageCss(w, f, '"Helvetica Neue", Helvetica, Arial, sans-serif')}
+    body { padding: 4mm 4mm 7mm; }
+    .copy { display: flex; justify-content: space-between; font-size: ${f - 3}px; font-weight: 800; letter-spacing: .25em; border-bottom: 2px solid #000; padding-bottom: 3px; }
+    .mode { margin: 8px 0 6px; padding: 6px; text-align: center; font-size: ${f + 4}px; font-weight: 800; letter-spacing: .1em;
+            ${final ? 'background:#000;color:#fff;' : 'border:2px dashed #000;'} }
+    .k { font-size: ${f - 3}px; font-weight: 800; letter-spacing: .2em; margin-top: 8px; border-bottom: 1px solid #000; padding-bottom: 2px; }
+    .row { padding: 1px 0; } .b { font-weight: 800; }
+    .big { font-size: ${f + 4}px; font-weight: 800; border-top: 2px solid #000; margin-top: 4px; padding-top: 3px; }
+    .sign { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 26px; font-size: ${f - 3}px; text-align: center; }
+    .sign div { border-top: 1px solid #000; padding-top: 2px; }
+  </style></head><body>
+    <div class="copy"><span>REKAP KASIR</span><span>SHIFT #${esc(shift.id)}</span></div>
+    <div class="mode">${final ? 'TUTUP SHIFT' : 'REKAP SEMENTARA'}</div>
+    ${row('Event', esc(event?.name || '-'))}
+    ${row('Laptop', esc(shift.deviceName || '-'))}
+    ${row('Kasir', esc(cashierName || '-'))}
+    ${row('Dibuka', dt(shift.openedAt))}
+    ${row(final ? 'Ditutup' : 'Dicetak', dt(closedAt || new Date()))}
+    <div class="k">PENJUALAN</div>
+    ${row('Transaksi', `${summary.orderCount}${summary.laterCount ? ` (${summary.laterCount} ambil nanti)` : ''}`)}
+    ${row('Barang terjual', `${summary.pcs ?? '-'} pcs`)}
+    ${summary.discount ? row('Diskon diberikan', `-${rp(summary.discount)}`) : ''}
+    ${row('Total penjualan', rp(summary.total), true)}
+    ${summary.voidCount ? row(`Dibatalkan (${summary.voidCount})`, rp(summary.voidTotal)) : ''}
+    <div class="k">METODE BAYAR</div>
+    ${methods}
+    <div class="k">KAS TUNAI DI LACI</div>
+    ${row('Modal awal', rp(shift.openingCash))}
+    ${row('Tunai masuk (bersih)', rp(summary.byMethod?.CASH || 0))}
+    <div class="row big"><span>Seharusnya</span><span>${rp(summary.expectedCash)}</span></div>
+    ${final ? row('Dihitung', rp(countedCash), true) + row('Selisih', diff ? `${diff > 0 ? '+' : '-'}${rp(Math.abs(diff))}` : 'Rp0 (pas)', true) : row('Dihitung', '..................')}
+    <div class="sign"><div>Kasir</div><div>Supervisor</div></div>
+  </body></html>`
+}
+
+// Beberapa dokumen dalam satu kali print (tiap dokumen = 1 lembar)
+export const combinePrint = (docs, settings) => combine(docs, Number({ ...DEFAULT_RECEIPT, ...(settings || {}) }.widthMm) || 80)
 
 export function staffSlipHtml(order, opts) {
   return slip(order, { ...opts, settings: { ...DEFAULT_RECEIPT, ...(opts.settings || {}) } })

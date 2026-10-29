@@ -14,7 +14,7 @@ const STATUS = {
   OPEN:   { label: 'Berjalan',  cls: 'badge-green' },
   CLOSED: { label: 'Selesai',   cls: 'badge-muted' },
 }
-const EMPTY = { name: '', location: '', startDate: '', endDate: '', WarehouseId: '', ChannelId: '', receiptHeader: '', receiptFooter: 'Terima kasih!', purchaseLimit: null }
+const EMPTY = { name: '', location: '', startDate: '', endDate: '', WarehouseId: '', ChannelId: '', receiptHeader: '', receiptFooter: 'Terima kasih!', purchaseLimit: null, backupWarehouseIds: [] }
 
 export default function PosEvents() {
   const qc = useQueryClient()
@@ -44,7 +44,7 @@ export default function PosEvents() {
   })
 
   const openForm = (ev) => {
-    setForm(ev ? { ...EMPTY, ...Object.fromEntries(Object.keys(EMPTY).map(k => [k, ev[k] ?? ''])), purchaseLimit: ev.purchaseLimit || null } : EMPTY)
+    setForm(ev ? { ...EMPTY, ...Object.fromEntries(Object.keys(EMPTY).map(k => [k, ev[k] ?? ''])), purchaseLimit: ev.purchaseLimit || null, backupWarehouseIds: ev.backupWarehouseIds || [] } : EMPTY)
     setModal({ data: ev || null })
   }
   const submit = (e) => {
@@ -66,7 +66,8 @@ export default function PosEvents() {
       <div className="card p-4 text-sm text-slate-600 space-y-1">
         <p className="font-semibold text-slate-800">Alur event</p>
         <p>1. Buat gudang khusus event (menu Gudang) dan channel penjualan event (Data Master), lalu buat event di sini.</p>
-        <p>2. <b>Transfer Stok</b> dari Gudang Ready ke gudang event, lalu klik <b>Mulai</b>.</p>
+        <p>2. <b>Transfer Stok</b> dari Gudang Ready ke gudang event (dan gudang cadangan kalau ada), lalu klik <b>Mulai</b>.</p>
+        <p className="pl-4 text-slate-500">Barang habis di booth tapi ada di gudang cadangan: jual sebagai <b>Ambil nanti</b> → tim gudang transfer cadangan → gudang event → serahkan di booth.</p>
         <p>3. Kasir membuka <b>Kasir</b> di laptop saat masih online (katalog tersimpan untuk mode offline).</p>
         <p>4. Selesai event: tutup shift, <b>Stock Opname</b> gudang event, transfer sisa barang balik ke Ready, lalu klik <b>Selesai</b>.</p>
       </div>
@@ -127,8 +128,10 @@ export default function PosEvents() {
               <option value="">Pilih gudang…</option>
               {(whs?.data ?? []).map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
             </select>
-            <p className="text-xs text-slate-400 mt-1">Pakai gudang khusus event, jangan Gudang Ready.</p>
+            <p className="text-xs text-slate-400 mt-1">Pakai gudang khusus event (mis. gudang booth), jangan Gudang Ready. Stok kasir & penjualan dari gudang ini.</p>
           </div>
+          <BackupField warehouses={(whs?.data ?? []).filter(w => String(w.id) !== String(form.WarehouseId))}
+            value={form.backupWarehouseIds} onChange={(v) => setForm(f => ({ ...f, backupWarehouseIds: v }))} />
           <div>
             <label className="label">Channel penjualan</label>
             <select className="input" value={form.ChannelId} onChange={set('ChannelId')} required>
@@ -150,6 +153,26 @@ export default function PosEvents() {
 }
 
 // Batas beli per orang untuk drop yang ramai: { qty, productIds: [] (kosong = semua produk), perPhone }
+// Gudang cadangan (mis. gudang sewa & truck): stoknya tampil di kasir untuk penjualan "ambil nanti"
+function BackupField({ warehouses, value, onChange }) {
+  const ids = value ?? []
+  const toggle = (id) => onChange(ids.includes(id) ? ids.filter(x => x !== id) : [...ids, id])
+  return (
+    <div className="rounded-xl border border-slate-200 p-3 space-y-2">
+      <p className="text-sm font-semibold text-slate-700">Gudang cadangan <span className="font-normal text-slate-400">(opsional)</span></p>
+      <p className="text-xs text-slate-500">Stoknya tampil di kasir saat barang habis di gudang event, supaya tetap bisa dijual sebagai <b>Ambil nanti</b>.</p>
+      <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+        {warehouses.map(w => (
+          <label key={w.id} className="flex items-center gap-2 text-sm text-slate-700">
+            <input type="checkbox" checked={ids.includes(w.id)} onChange={() => toggle(w.id)} />{w.name}
+          </label>
+        ))}
+        {!warehouses.length && <p className="text-xs text-slate-400">Belum ada gudang lain.</p>}
+      </div>
+    </div>
+  )
+}
+
 function LimitField({ value, onChange }) {
   const on = !!value?.qty
   const [search, setSearch] = useState('')

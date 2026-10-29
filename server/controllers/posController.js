@@ -27,7 +27,7 @@ async function findEvent(req, id, t) {
 }
 
 // Nilai kembali per pcs tiap SKU di transaksi asal = harga setelah diskon item & bagian diskon transaksi.
-// Rumus yang sama dipakai kasir (client/src/pos/exchange.js) supaya total tukar yang dibuat offline cocok.
+// Kasir tidak lagi punya fitur tukar; server tetap menerimanya untuk transaksi tukar lama yang masih antre di laptop.
 function returnCredits(order) {
     const sold = order.items.filter(i => i.qty > 0);
     const lineNet = (i) => i.qty * i.unitPrice - (i.discount || 0);
@@ -60,24 +60,37 @@ function normLimit(v) {
     const productIds = [...new Set((Array.isArray(v.productIds) ? v.productIds : []).map(Number).filter(n => isInt(n, 1)))];
     return { qty, productIds, perPhone: !!v.perPhone };
 }
+// Gudang cadangan event: unik, milik company yang sama, bukan gudang event itu sendiri.
+// Mengembalikan null kalau ada gudang yang tidak valid.
+async function normBackups(ids, mainWarehouseId, cid) {
+    const list = [...new Set((Array.isArray(ids) ? ids : []).map(Number))].filter(id => id !== Number(mainWarehouseId));
+    if (list.some(id => !isInt(id, 1))) return null;
+    if (!list.length) return [];
+    const found = await Warehouse.count({ where: { id: list, ...(cid ? { companyId: cid } : {}) } });
+    return found === list.length ? list : null;
+}
 const limited = (limit, productId) => !!limit?.qty && (!limit.productIds?.length || limit.productIds.includes(productId));
 
 // Ringkasan pembayaran sebuah shift; dipakai saat tutup shift & di layar kasir.
 async function shiftSummary(shift) {
     const orders = await PosOrder.findAll({
-        where: { shiftId: shift.id, status: 'PAID' },
-        include: [{ model: PosPayment, as: 'payments' }],
+        where: { shiftId: shift.id, status: ['PAID', 'VOID'] },
+        include: [{ model: PosPayment, as: 'payments' }, { model: PosOrderItem, as: 'items', attributes: ['qty'] }],
     });
     const byMethod = Object.fromEntries(PAY_METHODS.map(m => [m, 0]));
-    let total = 0, discount = 0;
+    let total = 0, discount = 0, pcs = 0, laterCount = 0, orderCount = 0, voidCount = 0, voidTotal = 0;
     for (const o of orders) {
+        if (o.status === 'VOID') { voidCount += 1; voidTotal += o.total; continue; }
+        orderCount += 1;
         total += o.total;
         discount += o.itemDiscount + o.orderDiscount;
+        pcs += o.items.reduce((s, i) => s + i.qty, 0);
+        if (o.fulfillment === 'LATER') laterCount += 1;
         for (const p of o.payments) byMethod[p.method] = (byMethod[p.method] || 0) + p.amount;
     }
     const expectedCash = shift.openingCash + byMethod.CASH;
     return {
-        orderCount: orders.length, total, discount, byMethod, expectedCash,
+        orderCount, total, discount, pcs, laterCount, voidCount, voidTotal, byMethod, expectedCash,
         cashDifference: shift.countedCash == null ? null : shift.countedCash - expectedCash,
     };
 }
@@ -117,8 +130,10 @@ class PosController {
             if (!wh) return bad(res, 'Gudang tidak ditemukan');
             const ch = await Channel.findOne({ where: { id: ChannelId, ...(cid ? { companyId: cid } : {}) } });
             if (!ch) return bad(res, 'Channel tidak ditemukan');
+            const backupWarehouseIds = await normBackups(req.body.backupWarehouseIds, WarehouseId, cid);
+            if (!backupWarehouseIds) return bad(res, 'Gudang cadangan tidak ditemukan');
             const ev = await PosEvent.create({
-                name, location, startDate, endDate, WarehouseId, ChannelId, receiptHeader, receiptFooter, purchaseLimit,
+                name, location, startDate, endDate, WarehouseId, ChannelId, receiptHeader, receiptFooter, purchaseLimit, backupWarehouseIds,
                 status: 'PREP', createdBy: req.user.id, companyId: cid,
             });
             res.status(201).json(ev);
@@ -150,6 +165,13 @@ class PosController {
                     updates[k] = req.body[k];
                 }
             }
+            // gudang cadangan boleh diganti kapan saja (hanya untuk info stok di kasir)
+            if (req.body.backupWarehouseIds !== undefined || updates.WarehouseId !== undefined) {
+                const ids = req.body.backupWarehouseIds !== undefined ? req.body.backupWarehouseIds : ev.backupWarehouseIds;
+                const backups = await normBackups(ids, updates.WarehouseId ?? ev.WarehouseId, ev.companyId);
+                if (!backups) return bad(res, 'Gudang cadangan tidak ditemukan');
+                updates.backupWarehouseIds = backups;
+            }
             await ev.update(updates);
             res.json(ev);
         } catch (err) { next(err); }
@@ -171,8 +193,22 @@ class PosController {
             });
             const stockRows = await SkuWarehouseStock.findAll({ where: { WarehouseId: ev.WarehouseId }, attributes: ['ProductSKUId', 'qty'] });
             const stock = Object.fromEntries(stockRows.map(s => [s.ProductSKUId, s.qty]));
+            // stok gudang cadangan per SKU: { [skuId]: { [warehouseId]: qty } }, hanya yang > 0
+            const backupIds = ev.backupWarehouseIds || [];
+            const backupWarehouses = backupIds.length
+                ? await Warehouse.findAll({ where: { id: backupIds }, attributes: ['id', 'name'] })
+                : [];
+            const backupStock = {};
+            if (backupIds.length) {
+                const rows = await SkuWarehouseStock.findAll({ where: { WarehouseId: backupIds, qty: { [Op.gt]: 0 } }, attributes: ['ProductSKUId', 'WarehouseId', 'qty'] });
+                for (const r of rows) (backupStock[r.ProductSKUId] = backupStock[r.ProductSKUId] || {})[r.WarehouseId] = r.qty;
+            }
             res.json({
-                event: { id: ev.id, name: ev.name, location: ev.location, status: ev.status, WarehouseId: ev.WarehouseId, receiptHeader: ev.receiptHeader, receiptFooter: ev.receiptFooter, purchaseLimit: ev.purchaseLimit || null },
+                event: {
+                    id: ev.id, name: ev.name, location: ev.location, status: ev.status, WarehouseId: ev.WarehouseId, receiptHeader: ev.receiptHeader, receiptFooter: ev.receiptFooter, purchaseLimit: ev.purchaseLimit || null,
+                    // urut sesuai pengaturan event
+                    backupWarehouses: backupIds.map(id => backupWarehouses.find(w => w.id === id)).filter(Boolean).map(w => ({ id: w.id, name: w.name })),
+                },
                 generatedAt: new Date().toISOString(),
                 items: skus.filter(s => s.Product).map(s => ({
                     skuId: s.id,
@@ -184,6 +220,7 @@ class PosController {
                     variant: (s.ProductVariantOptions || []).map(o => o.value).join(' / ') || null,
                     price: Math.round(Number(s.price) || 0),
                     stock: stock[s.id] ?? 0,
+                    ...(backupStock[s.id] ? { backupStock: backupStock[s.id] } : {}),
                 })),
             });
         } catch (err) { next(err); }

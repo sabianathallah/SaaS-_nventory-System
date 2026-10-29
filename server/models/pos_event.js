@@ -24,6 +24,8 @@ module.exports = (sequelize, DataTypes) => {
     receiptFooter: { type: DataTypes.TEXT, allowNull: true },
     // batas beli per orang: { qty, productIds: [] (kosong = semua produk), perPhone }
     purchaseLimit: { type: DataTypes.JSONB, allowNull: true },
+    // gudang cadangan [id, ...]: stoknya tampil di kasir, penjualan tetap memotong gudang event
+    backupWarehouseIds: { type: DataTypes.JSONB, allowNull: true },
     createdBy:     { type: DataTypes.INTEGER, allowNull: true },
   }, { sequelize, modelName: 'PosEvent' });
   return PosEvent;
