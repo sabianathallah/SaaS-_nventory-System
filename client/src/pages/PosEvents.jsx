@@ -179,7 +179,7 @@ function LimitField({ value, onChange }) {
   const { data } = useQuery({ queryKey: ['products', { limit: 500 }], queryFn: () => productsApi.list({ limit: 500 }), enabled: on })
   const products = data?.data ?? []
   const ids = value?.productIds ?? []
-  const set = (patch) => onChange({ qty: 2, productIds: [], perPhone: false, ...value, ...patch })
+  const set = (patch) => onChange({ qty: 2, productIds: [], perPhone: false, per: 'PRODUCT', ...value, ...patch })
   const matches = search.trim() ? products.filter(p => !ids.includes(p.id) && p.name.toLowerCase().includes(search.trim().toLowerCase())).slice(0, 8) : []
   return (
     <div className="rounded-xl border border-slate-200 p-3 space-y-3">
@@ -192,7 +192,11 @@ function LimitField({ value, onChange }) {
           <div className="flex items-center gap-2 text-sm">
             <span className="text-slate-600">Maks</span>
             <input type="number" min={1} className="input w-20" value={value.qty} onChange={e => set({ qty: Math.max(1, Number(e.target.value) || 1) })} />
-            <span className="text-slate-600">pcs per artikel per pembeli</span>
+            <select className="input w-auto" value={value.per || 'PRODUCT'} onChange={e => set({ per: e.target.value })}>
+              <option value="SKU">pcs per size (SKU)</option>
+              <option value="PRODUCT">pcs per artikel</option>
+            </select>
+            <span className="text-slate-600">per pembeli</span>
           </div>
           <div>
             <p className="text-xs text-slate-500 mb-1.5">Berlaku untuk: {ids.length ? `${ids.length} produk dipilih` : 'semua produk'}</p>

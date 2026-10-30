@@ -4,7 +4,7 @@ import toast from 'react-hot-toast'
 import {
   ArrowLeft, Minus, Plus, Printer, RefreshCw, Settings, Trash2, Wifi, WifiOff, X, LogOut, History,
   Search, ScanLine, Monitor, ShoppingBag, CheckCircle2, PackageCheck, Banknote, QrCode, CreditCard, Landmark, Wallet, Tag, Store,
-  PauseCircle,
+  PauseCircle, Boxes,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import NoPermission from '../components/NoPermission'
@@ -14,7 +14,7 @@ import { enqueueOrder, onSyncChange, posHttp, startAutoSync, syncQueue, syncStat
 import { DEFAULT_RECEIPT, RECEIPT_STYLES, combinePrint, orderPrintHtml, printReceipt, receiptHtml, shiftRecapHtml, staffSlipHtml } from '../pos/receipt'
 import { cacheImages, loadCachedImages } from '../pos/images'
 import { onScreensChange, openDisplayWindow, publishDisplay } from '../pos/display'
-import { isLimited, limitedNet } from '../pos/limit'
+import { isLimited, limitKey, limitedNet } from '../pos/limit'
 
 const rp = (n) => 'Rp ' + Number(n || 0).toLocaleString('id-ID')
 const METHODS = [
@@ -22,6 +22,11 @@ const METHODS = [
   { key: 'TRANSFER', label: 'Transfer', icon: Landmark }, { key: 'EDC', label: 'Kartu (EDC)', icon: CreditCard },
   { key: 'OTHER', label: 'Lainnya', icon: Wallet },
 ]
+// Metode yang dicentang di pengaturan kasir (kosong/belum diatur = semua tampil)
+const activeMethods = (settings) => {
+  const on = METHODS.filter(m => settings?.enabledMethods?.includes(m.key))
+  return on.length ? on : METHODS
+}
 // Nominal tunai cepat: dibulatkan ke atas mengikuti pecahan uang yang biasa dibayar pembeli
 function quickCash(amount) {
   const out = new Set()
@@ -33,6 +38,8 @@ function quickCash(amount) {
 }
 const SIZE_ORDER = ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL']
 const SIZE_WORDS = new Set(SIZE_ORDER.map(s => s.toLowerCase()))
+// "Black / M" punya size "m": varian dipecah per kata supaya pencarian "hoodie m" ketemu
+const hasSize = (variant, w) => String(variant || '').toLowerCase().split(/[\s/]+/).includes(w)
 
 // "10%" -> persen dari base, "25000" / "25.000" -> rupiah. Dibatasi 0..base.
 function parseDiscount(text, base) {
@@ -54,6 +61,7 @@ export default function PosCashier() {
   const navigate = useNavigate()
   const { user, hasPermission } = useAuth()
   const allowed = hasPermission('pos.manage') || hasPermission('pos.sell')
+  const canSettings = hasPermission('pos.manage') || hasPermission('pos.settings')
 
   const [catalog, setCatalog] = useState(null)      // { event, generatedAt, items }
   const [catalogError, setCatalogError] = useState(null)
@@ -142,6 +150,10 @@ export default function PosCashier() {
   // Stok gudang cadangan event (sewa / truck). Penjualan di luar stok booth membuat booth minus;
   // minus itu diambil dari cadangan, jadi sisa cadangan = total cadangan + minus booth.
   const backupWh = catalog?.event?.backupWarehouses ?? []
+  // Gudang event untuk Cek stok: booth + cadangan, disaring sesuai pengaturan kasir (kosong = semua)
+  const eventPlaces = useMemo(() => catalog ? [{ id: 'BOOTH', name: catalog.event.warehouseName ? `${catalog.event.warehouseName} (booth)` : 'Gudang booth' }, ...(catalog.event.backupWarehouses ?? [])] : [], [catalog])
+  const peekPlaces = eventPlaces.filter(w => !settings.peekWarehouses?.length || settings.peekWarehouses.includes(w.id))
+  const [peekAt, setPeekAt] = useState(null)        // gudang yang dipilih dari menu Cek stok (null = semua)
   const backupOf = (skuId) => {
     const b = skuById.get(skuId)?.backupStock
     if (!b || !backupWh.length) return null
@@ -172,7 +184,7 @@ export default function PosCashier() {
       if (!words.length) return true
       const hay = `${p.name} ${p.skus.map(s => s.code).join(' ')}`.toLowerCase()
       return words.every(w => SIZE_WORDS.has(w)
-        ? p.skus.some(s => String(s.variant || '').toLowerCase() === w)
+        ? p.skus.some(s => hasSize(s.variant, w))
         : hay.includes(w))
     })
   }, [products, category, scan])
@@ -180,13 +192,13 @@ export default function PosCashier() {
   // ── Keranjang ───────────────────────────────────────────────────────────
   // batas beli per orang dari pengaturan event
   const limit = catalog?.event?.purchaseLimit
-  const blockedByLimit = (productId, name) => {
-    if (!isLimited(limit, productId) || (limitedNet(limit, cart)[productId] || 0) + 1 <= limit.qty) return false
-    toast.error(`Batas beli: maks ${limit.qty} pcs ${shortName(name)} per orang`)
+  const blockedByLimit = (it) => {
+    if (!isLimited(limit, it.productId) || (limitedNet(limit, cart)[limitKey(limit, it.productId, it.skuId)] || 0) + 1 <= limit.qty) return false
+    toast.error(`Batas beli: maks ${limit.qty} pcs ${shortName(it.name)}${limit.per === 'SKU' && it.variant ? ` size ${it.variant}` : ''} per orang`)
     return true
   }
   const addSku = (it) => {
-    if (blockedByLimit(it.productId, it.name)) return
+    if (blockedByLimit(it)) return
     if (stockOf(it.skuId) <= 0) {
       const bk = backupOf(it.skuId)
       if (bk?.left > 0) toast(`Habis di booth — ada di ${bk.where}. Pilih "Ambil nanti" saat bayar.`, { icon: '📦', duration: 5000 })
@@ -313,20 +325,20 @@ export default function PosCashier() {
   const checkLimit = (phone) => {
     if (!limit?.qty) return null
     const net = limitedNet(limit, cart)
-    const names = Object.fromEntries(cart.map(l => [l.productId, l.name]))
+    const names = Object.fromEntries(cart.map(l => [limitKey(limit, l.productId, l.skuId), limit.per === 'SKU' && l.variant ? `${shortName(l.name)} ${l.variant}` : shortName(l.name)]))
     if (limit.perPhone && Object.keys(net).length) {
       const p = digits(phone)
       if (!p) return 'Isi No. HP — produk ini dibatasi per orang'
-      for (const o of [...orders.queue, ...orders.sent]) {
+      for (const o of [...orders.queue, ...orders.sent.filter(x => !isVoided(x))]) {
         if (digits(o.customerPhone) !== p) continue
         for (const i of o.items) {
-          const pid = i.productId ?? skuById.get(i.ProductSKUId)?.productId
-          if (net[pid] != null) net[pid] += i.qty
+          const k = limitKey(limit, i.productId ?? skuById.get(i.ProductSKUId)?.productId, i.ProductSKUId)
+          if (net[k] != null) net[k] += i.qty
         }
       }
     }
     const over = Object.entries(net).find(([, q]) => q > limit.qty)
-    return over ? `${shortName(names[over[0]])}: sudah ${over[1]} pcs untuk No. HP ini (maks ${limit.qty})` : null
+    return over ? `${names[over[0]]}: sudah ${over[1]} pcs untuk No. HP ini (maks ${limit.qty})` : null
   }
 
   // Shortcut: F2 = bayar, F4 = tahan keranjang, Esc = tutup. Ketikan/scan saat tidak ada kolom aktif diarahkan ke kolom scan.
@@ -334,6 +346,7 @@ export default function PosCashier() {
     const h = (e) => {
       if (e.key === 'F2' && hasItems && !modal) { e.preventDefault(); setModal('pay') }
       if (e.key === 'F4' && hasItems && !modal) { e.preventDefault(); holdCart() }
+      if (e.key === 'F3' && !sizeFor && (!modal || modal === 'stock')) { e.preventDefault(); setPeekAt(null); setModal(modal ? null : 'stock') }
       if (e.key === 'Escape' && (modal || sizeFor)) { if (modal !== 'done') setModal(null); setSizeFor(null) }
       if (e.key === 'Enter' && modal === 'done') { e.preventDefault(); setModal(null) }
       const tag = document.activeElement?.tagName
@@ -369,8 +382,9 @@ export default function PosCashier() {
         <SyncBadge sync={sync} onClick={() => sync.failed ? setModal('queue') : syncQueue()} />
         <IconBtn icon={RefreshCw} label="Perbarui katalog & stok" onClick={() => loadCatalog()} />
         <IconBtn icon={Monitor} label="Buka layar pelanggan (monitor / iPad)" onClick={openDisplay} text="Layar pelanggan" />
+        <StockMenu places={peekPlaces} products={products} stockOf={stockOf} skuById={skuById} onOpen={(wh) => { setPeekAt(wh); setModal('stock') }} />
         <IconBtn icon={History} label="Riwayat" onClick={() => setModal('history')} text="Riwayat" />
-        <IconBtn icon={Settings} label="Pengaturan kasir" onClick={() => setModal('settings')} />
+        {canSettings && <IconBtn icon={Settings} label="Pengaturan kasir" onClick={() => setModal('settings')} />}
         <IconBtn icon={LogOut} label="Tutup shift" onClick={() => setModal('close')} text="Tutup shift" />
       </>}>
       <div className="flex h-[calc(100vh-60px)]">
@@ -489,7 +503,7 @@ export default function PosCashier() {
                       <div className="flex items-center rounded-lg border border-slate-200">
                         <button className="w-8 h-8 flex items-center justify-center text-slate-500 hover:bg-slate-50" onClick={() => l.qty > 1 ? updateLine(l.skuId, { qty: l.qty - 1 }) : removeLine(l.skuId)}>{l.qty > 1 ? <Minus size={14} /> : <Trash2 size={14} />}</button>
                         <span className="w-8 text-center font-bold text-sm">{l.qty}</span>
-                        <button className="w-8 h-8 flex items-center justify-center text-slate-500 hover:bg-slate-50" onClick={() => !blockedByLimit(l.productId, l.name) && updateLine(l.skuId, { qty: l.qty + 1 })}><Plus size={14} /></button>
+                        <button className="w-8 h-8 flex items-center justify-center text-slate-500 hover:bg-slate-50" onClick={() => !blockedByLimit(l) && updateLine(l.skuId, { qty: l.qty + 1 })}><Plus size={14} /></button>
                       </div>
                       <span className="font-bold text-slate-900">{rp(l.lineTotal)}</span>
                     </div>
@@ -513,7 +527,7 @@ export default function PosCashier() {
             {totals.orderDiscount > 0
               ? <Line label={<button className="underline decoration-dotted" onClick={() => setModal('discount')}>Diskon transaksi</button>} value={`-${rp(totals.orderDiscount)}`} />
               : <button disabled={!cart.length} onClick={() => setModal('discount')} className="text-xs font-semibold text-brand inline-flex items-center gap-1 disabled:opacity-40"><Tag size={12} />Tambah diskon transaksi</button>}
-            {limit?.qty > 0 && <p className="text-[11px] text-slate-400">Batas beli: maks {limit.qty} pcs per artikel{limit.productIds?.length ? ' (produk tertentu)' : ''}{limit.perPhone ? ' · per No. HP' : ''}</p>}
+            {limit?.qty > 0 && <p className="text-[11px] text-slate-400">Batas beli: maks {limit.qty} pcs {limit.per === 'SKU' ? 'per size' : 'per artikel'}{limit.productIds?.length ? ' (produk tertentu)' : ''}{limit.perPhone ? ' · per No. HP' : ''}</p>}
             <div className="flex items-end justify-between pt-2">
               <span className="text-sm font-semibold text-slate-500">Total</span>
               <span className="text-3xl font-black tracking-tight text-slate-900">{rp(totals.total)}</span>
@@ -542,9 +556,11 @@ export default function PosCashier() {
           </div>
         </Modal>
       )}
-      {modal === 'pay' && <PayScreen totals={totals} defaultMethod={settings.defaultMethod} notInBooth={totals.lines.filter(l => stockOf(l.skuId) < 0)} checkLimit={checkLimit} onClose={() => { setModal(null); setPayPreview(null) }} onPay={finishOrder} onPreview={setPayPreview} />}
+      {modal === 'pay' && <PayScreen totals={totals} methods={activeMethods(settings)} defaultMethod={settings.defaultMethod} notInBooth={totals.lines.filter(l => stockOf(l.skuId) < 0)} checkLimit={checkLimit} onClose={() => { setModal(null); setPayPreview(null) }} onPay={finishOrder} onPreview={setPayPreview} />}
       {modal === 'done' && lastOrder && <DoneScreen order={lastOrder} onPrint={(c) => printOrder(lastOrder, c)} onNew={() => setModal(null)} />}
-      {modal === 'history' && <HistoryModal orders={recent} shift={shift} onClose={() => setModal(null)} onPrint={printOrder} />}
+      {modal === 'stock' && <StockPeek products={products} imgs={imgs} stockOf={stockOf} skuById={skuById} places={peekPlaces} initial={peekAt}
+        onClose={() => setModal(null)} onAdd={(sku) => { addSku(sku); setModal(null); focusScan() }} />}
+      {modal === 'history' && <HistoryModal orders={recent} shift={shift} onClose={() => setModal(null)} onPrint={printOrder} onVoided={refreshOrders} />}
       {modal === 'queue' && (
         <Modal open onClose={() => setModal(null)} title="Transaksi ditolak server" size="lg">
           <p className="text-sm text-slate-500 mb-3">Transaksi ini tetap tersimpan di laptop. Biasanya karena data tidak valid (mis. event belum dibuka). Perbaiki di server lalu klik Kirim ulang.</p>
@@ -559,8 +575,13 @@ export default function PosCashier() {
           <button className="btn-primary mt-4" onClick={() => syncQueue()}><RefreshCw size={14} />Kirim ulang</button>
         </Modal>
       )}
-      {modal === 'settings' && (
-        <SettingsModal settings={settings} event={catalog.event} userName={user?.name} onClose={() => setModal(null)}
+      {modal === 'settings' && canSettings && (
+        <SettingsModal settings={settings} event={catalog.event} places={eventPlaces} userName={user?.name} onClose={() => setModal(null)}
+          onLimitSaved={(purchaseLimit) => setCatalog(c => {
+            const next = { ...c, event: { ...c.event, purchaseLimit } }
+            setItem('kv', `catalog:${eventId}`, next)
+            return next
+          })}
           onSave={async (s) => { await setItem('kv', 'receiptSettings', s); setSettings(s); setModal(null) }} />
       )}
       {modal === 'close' && (
@@ -612,6 +633,138 @@ function SyncBadge({ sync, onClick }) {
   )
 }
 
+// ── Cek stok: intip stok booth + gudang cadangan event (data katalog, jalan offline). Hanya baca;
+// klik size = masukkan ke keranjang (kalau cuma ada di gudang cadangan, kasir pilih "Ambil nanti" saat bayar).
+const peekQty = (stockOf, skuById, k, wh) => wh === 'BOOTH' ? stockOf(k.skuId) : (skuById.get(k.skuId)?.backupStock?.[wh] || 0)
+const peekTotal = (products, stockOf, skuById, wh) => products.reduce((s, p) => s + p.skus.reduce((t, k) => t + Math.max(peekQty(stockOf, skuById, k, wh), 0), 0), 0)
+
+// Tombol header "Cek stok": pop up menu berisi gudang-gudang event + total stoknya; pilih gudang -> panel stok
+function StockMenu({ places, products, stockOf, skuById, onOpen }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+  useEffect(() => {
+    if (!open) return
+    const close = (e) => { if (!ref.current?.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', close)
+    return () => document.removeEventListener('mousedown', close)
+  }, [open])
+  const pick = (wh) => { setOpen(false); onOpen(wh) }
+  return (
+    <div className="relative" ref={ref}>
+      <IconBtn icon={Boxes} label="Cek stok (F3)" onClick={() => setOpen(o => !o)} text="Cek stok" />
+      {open && (
+        <div className="absolute right-0 top-11 z-50 w-72 rounded-xl border border-slate-200 bg-white shadow-xl p-1.5">
+          <p className="px-2.5 pt-1.5 pb-1 text-[11px] font-semibold text-slate-400 tracking-wide">GUDANG EVENT</p>
+          {places.map(w => (
+            <button key={w.id} onClick={() => pick(w.id)} className="w-full flex items-center justify-between gap-3 px-2.5 py-2 rounded-lg text-left hover:bg-slate-50">
+              <span className="text-sm font-semibold text-slate-800 truncate">{w.name}</span>
+              <span className="text-xs text-slate-500 tabular-nums whitespace-nowrap">{peekTotal(products, stockOf, skuById, w.id).toLocaleString('id-ID')} pcs</span>
+            </button>
+          ))}
+          <div className="border-t border-slate-100 mt-1 pt-1">
+            <button onClick={() => pick(null)} className="w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-left text-sm font-semibold text-brand hover:bg-slate-50">
+              Lihat semua gudang<span className="text-[11px] font-normal text-slate-400">F3</span>
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function StockPeek({ products, imgs, stockOf, skuById, places, initial, onAdd, onClose }) {
+  const [q, setQ] = useState('')
+  const [only, setOnly] = useState(initial)  // null = semua; 'BOOTH' | id gudang cadangan = hanya yang ada stoknya di sana
+  const [hit, setHit] = useState(null)       // skuId hasil scan barcode
+  const qtyAt = (k, wh) => peekQty(stockOf, skuById, k, wh)
+  const totalAt = (wh) => peekTotal(products, stockOf, skuById, wh)
+
+  const words = q.trim().toLowerCase().split(/\s+/).filter(Boolean)
+  const list = products.filter(p => {
+    if (only && !p.skus.some(k => qtyAt(k, only) > 0)) return false
+    if (!words.length) return true
+    const hay = `${p.name} ${p.skus.map(s => s.code).join(' ')}`.toLowerCase()
+    return words.every(w => SIZE_WORDS.has(w) ? p.skus.some(s => hasSize(s.variant, w)) : hay.includes(w))
+  })
+  // scan barcode SKU + Enter -> sorot size-nya
+  const onEnter = () => {
+    const sku = [...skuById.values()].find(k => String(k.code).toLowerCase() === q.trim().toLowerCase())
+    if (sku) { setHit(sku.skuId); setQ(shortName(sku.name)) }
+  }
+  const cell = (n) => n > 0 ? 'text-slate-900 font-bold' : n < 0 ? 'text-danger font-bold' : 'text-slate-300'
+
+  return (
+    <div className="fixed inset-0 z-50 bg-slate-900/40 flex items-center justify-center p-6" onClick={onClose}>
+      <div className="bg-white rounded-2xl w-full max-w-5xl h-[86vh] flex flex-col overflow-hidden shadow-2xl" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center gap-4 px-5 py-4 border-b border-slate-100">
+          <div>
+            <p className="font-bold text-slate-900">Cek stok</p>
+            <p className="text-xs text-slate-400">{places.map(w => w.name).join(' · ')} · klik size untuk masuk keranjang</p>
+          </div>
+          {/* header kanan: total stok tiap gudang, sekaligus filter */}
+          <div className="ml-auto flex items-center gap-2">
+            {places.map(w => (
+              <button key={w.id} onClick={() => setOnly(only === w.id ? null : w.id)}
+                className={`px-3 py-1.5 rounded-xl border text-left transition-colors ${only === w.id ? 'border-slate-900 bg-slate-900 text-white' : w.id === 'BOOTH' ? 'border-slate-200 hover:border-slate-400' : 'border-amber-200 bg-amber-50/60 hover:border-amber-400'}`}>
+                <span className={`block text-[11px] ${only === w.id ? 'text-white/70' : 'text-slate-500'}`}>{w.name}</span>
+                <span className="block text-sm font-bold tabular-nums">{totalAt(w.id).toLocaleString('id-ID')} pcs</span>
+              </button>
+            ))}
+            <button className="w-9 h-9 rounded-lg flex items-center justify-center text-slate-400 hover:bg-slate-100" onClick={onClose}><X size={18} /></button>
+          </div>
+        </div>
+        <div className="px-5 py-3 border-b border-slate-100">
+          <div className="relative">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input className="input pl-9" autoFocus value={q} onChange={e => { setQ(e.target.value); setHit(null) }}
+              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); onEnter() } }}
+              placeholder="Cari produk / size (mis. hoodie m) atau scan barcode" />
+          </div>
+        </div>
+        <div className="flex-1 overflow-y-auto divide-y divide-slate-100">
+          {!list.length && <p className="p-8 text-center text-slate-400">{only ? 'Tidak ada produk dengan stok di gudang ini' : `Tidak ada produk yang cocok dengan "${q}"`}</p>}
+          {list.map(p => (
+            <div key={p.productId} className="flex gap-4 px-5 py-3">
+              <div className="w-20 h-20 rounded-xl bg-slate-100 overflow-hidden shrink-0 flex items-center justify-center text-lg font-black text-slate-300">
+                {imgs[p.productId] ? <img src={imgs[p.productId]} alt="" className="w-full h-full object-cover" /> : initials(p.name)}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-slate-900 truncate">{shortName(p.name)} <span className="text-sm font-normal text-slate-400">{rp(p.price)}</span></p>
+                <div className="overflow-x-auto mt-1.5">
+                  <table className="text-sm tabular-nums">
+                    <thead>
+                      <tr>
+                        <th className="pr-4 text-left text-[11px] font-medium text-slate-400" />
+                        {p.skus.map(k => (
+                          <th key={k.skuId} className="px-1 pb-1">
+                            <button onClick={() => onAdd(k)} title="Masukkan ke keranjang"
+                              className={`min-w-[44px] px-2 h-7 rounded-md border text-xs font-bold whitespace-nowrap hover:border-slate-900 hover:bg-slate-900 hover:text-white ${hit === k.skuId ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-300 text-slate-700'}`}>
+                              {k.variant || '—'}
+                            </button>
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {places.map(w => (
+                        <tr key={w.id} className={only === w.id ? 'bg-amber-50' : ''}>
+                          <td className="pr-4 text-xs text-slate-500 whitespace-nowrap">{w.name}</td>
+                          {p.skus.map(k => { const n = qtyAt(k, w.id); return <td key={k.skuId} className={`px-1 text-center ${cell(n)}`}>{n}</td> })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+        <p className="px-5 py-2 border-t border-slate-100 text-[11px] text-slate-400">Angka merah (minus) = sudah terjual di booth sebelum ditransfer. Stok gudang cadangan diperbarui saat katalog di-refresh. Esc / F3 untuk tutup.</p>
+      </div>
+    </div>
+  )
+}
+
 function SizePicker({ product, img, stockOf, backupOf, onPick, onClose }) {
   const elsewhere = product.skus.map(k => ({ k, st: stockOf(k.skuId), bk: backupOf(k.skuId) })).filter(x => x.st <= 0 && x.bk?.left > 0)
   return (
@@ -653,11 +806,11 @@ function SizePicker({ product, img, stockOf, backupOf, onPick, onClose }) {
   )
 }
 
-function PayScreen({ totals, defaultMethod, notInBooth = [], checkLimit, onClose, onPay, onPreview }) {
+function PayScreen({ totals, methods, defaultMethod, notInBooth = [], checkLimit, onClose, onPay, onPreview }) {
   const total = totals.total
   // total 0 (diskon 100%): tidak ada pembayaran
   const noPay = total <= 0
-  const [method, setMethod] = useState(METHODS.some(m => m.key === defaultMethod) ? defaultMethod : 'CASH')
+  const [method, setMethod] = useState(methods.some(m => m.key === defaultMethod) ? defaultMethod : methods[0].key)
   const [split, setSplit] = useState(null)              // null = 1 metode; [{method, amount}] = bayar campur
   const [received, setReceived] = useState('')
   const [customer, setCustomer] = useState({ name: '', phone: '' })
@@ -721,15 +874,15 @@ function PayScreen({ totals, defaultMethod, notInBooth = [], checkLimit, onClose
           ) : !split ? (
             <div>
               <p className="label">Metode pembayaran</p>
-              <div className="grid grid-cols-5 gap-2">
-                {METHODS.map(m => (
+              <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${Math.max(methods.length, 2)}, minmax(0, 1fr))` }}>
+                {methods.map(m => (
                   <button key={m.key} onClick={() => setMethod(m.key)}
                     className={`h-[72px] rounded-xl border-2 flex flex-col items-center justify-center gap-1 text-[13px] font-semibold transition-colors ${method === m.key ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 text-slate-600 hover:border-slate-400'}`}>
                     <m.icon size={20} />{m.label}
                   </button>
                 ))}
               </div>
-              <button className="text-xs font-semibold text-brand mt-2" onClick={() => setSplit([{ method, amount: total }, { method: method === 'CASH' ? 'QRIS' : 'CASH', amount: 0 }])}>+ Bayar pakai 2 metode</button>
+              {methods.length > 1 && <button className="text-xs font-semibold text-brand mt-2" onClick={() => setSplit([{ method, amount: total }, { method: methods.find(m => m.key !== method).key, amount: 0 }])}>+ Bayar pakai 2 metode</button>}
             </div>
           ) : (
             <div className="space-y-2">
@@ -737,7 +890,7 @@ function PayScreen({ totals, defaultMethod, notInBooth = [], checkLimit, onClose
               {split.map((r, i) => (
                 <div key={i} className="flex gap-2">
                   <select className="input w-44" value={r.method} onChange={e => setRow(i, { method: e.target.value })}>
-                    {METHODS.map(m => <option key={m.key} value={m.key}>{m.label}</option>)}
+                    {methods.map(m => <option key={m.key} value={m.key}>{m.label}</option>)}
                   </select>
                   <input className="input flex-1 text-right font-semibold" value={Number(r.amount || 0).toLocaleString('id-ID')} onChange={e => setRow(i, { amount: num(e.target.value) })} />
                   <button className="w-10 text-slate-400" onClick={() => split.length > 2 ? setSplit(s => s.filter((_, j) => j !== i)) : setSplit(null)}><X size={16} /></button>
@@ -830,7 +983,7 @@ function DoneScreen({ order, onPrint, onNew }) {
         )}
         <div className="grid grid-cols-2 gap-2 mt-6">
           <button className="btn-secondary justify-center" onClick={() => onPrint({ customer: true, staff: false })}><Printer size={14} />Struk pelanggan</button>
-          <button className="btn-secondary justify-center" onClick={() => onPrint({ customer: false, staff: true })}><Printer size={14} />Slip staff</button>
+          <button className="btn-secondary justify-center" onClick={() => onPrint({ customer: false, staff: true })}><Printer size={14} />Copy staff</button>
         </div>
         <button autoFocus className="w-full h-14 mt-3 rounded-xl bg-brand text-white text-lg font-bold hover:brightness-110" onClick={onNew}>Transaksi baru <span className="text-sm font-medium opacity-70">(Enter)</span></button>
       </div>
@@ -840,14 +993,15 @@ function DoneScreen({ order, onPrint, onNew }) {
 
 // Riwayat transaksi laptop ini (jalan offline): cari / scan struk, detail, cetak ulang, ringkasan shift.
 const METHOD_LABEL = Object.fromEntries(METHODS.map(m => [m.key, m.label]))
-function HistoryModal({ orders, shift, onClose, onPrint }) {
+function HistoryModal({ orders, shift, onClose, onPrint, onVoided }) {
   const [q, setQ] = useState('')
   const [open, setOpen] = useState(null)
+  const [voiding, setVoiding] = useState(null)   // clientOrderId yang sedang dibatalkan
   const status = (o) => o.error ? 'rejected' : o.pending ? 'pending' : 'sent'
   const review = (o) => o.server?.needsReview ? o.server.reviewNote : null
 
-  // ringkasan shift yang sedang buka di laptop ini (transaksi ditolak server tidak dihitung)
-  const mine = orders.filter(o => o.shiftId === shift.id && !o.error)
+  // ringkasan shift yang sedang buka di laptop ini (transaksi ditolak server & yang dibatalkan tidak dihitung)
+  const mine = orders.filter(o => o.shiftId === shift.id && !o.error && !isVoided(o))
   const byMethod = {}
   for (const o of mine) for (const p of o.payments) byMethod[p.method] = (byMethod[p.method] || 0) + p.amount
   const drawer = (shift.openingCash || 0) + (byMethod.CASH || 0)
@@ -892,11 +1046,12 @@ function HistoryModal({ orders, shift, onClose, onPrint }) {
                     {o.fulfillment === 'LATER' && <span className="badge-amber">ambil nanti {o.pickupCode}</span>}
                     {o.total < 0 && <span className="text-[11px] font-semibold text-amber-700">uang kembali</span>}
                     {rv && <span className="text-[11px] font-semibold text-amber-700">perlu dicek</span>}
+                    {isVoided(o) && <span className="badge-red">DIBATALKAN</span>}
                   </p>
                   <p className="text-xs text-slate-500 truncate">{[...back.map(i => `kembali ${-i.qty}× ${shortName(i.name)} ${i.variant || ''}`), ...sold.map(i => `${i.qty}× ${shortName(i.name)} ${i.variant || ''}`)].join(', ')}</p>
                 </div>
                 <div className="text-right shrink-0">
-                  <p className="font-semibold">{o.total < 0 ? `-${rp(-o.total)}` : rp(o.total)}</p>
+                  <p className={`font-semibold ${isVoided(o) ? 'line-through text-slate-400' : ''}`}>{o.total < 0 ? `-${rp(-o.total)}` : rp(o.total)}</p>
                   <p className={`text-[11px] ${st === 'rejected' ? 'text-danger' : st === 'pending' ? 'text-amber-600' : 'text-emerald-600'}`}>{st === 'rejected' ? 'ditolak server' : st === 'pending' ? 'belum terkirim' : 'terkirim'}</p>
                 </div>
               </button>
@@ -915,20 +1070,91 @@ function HistoryModal({ orders, shift, onClose, onPrint }) {
                   </div>
                   {rv && <p className="text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2">Perlu dicek: {rv}</p>}
                   {o.error && <p className="text-xs text-danger bg-red-50 rounded-lg px-3 py-2">Ditolak server: {o.error}</p>}
-                  <div className="flex flex-wrap gap-2">
-                    <button className="btn-secondary text-xs" onClick={() => onPrint(o, { customer: true, staff: false })}><Printer size={12} />Struk pelanggan</button>
-                    <button className="btn-secondary text-xs" onClick={() => onPrint(o, { customer: false, staff: true })}><Printer size={12} />Slip staff</button>
-                  </div>
+                  {isVoided(o) && <p className="text-xs text-danger bg-red-50 rounded-lg px-3 py-2">Dibatalkan: {o.server.voidReason}</p>}
+                  {voiding === o.clientOrderId ? (
+                    <VoidApproval order={o} onCancel={() => setVoiding(null)} onDone={() => { setVoiding(null); onVoided() }} />
+                  ) : (
+                    <div className="flex flex-wrap gap-2">
+                      <button className="btn-secondary text-xs" onClick={() => onPrint(o, { customer: true, staff: false })}><Printer size={12} />Struk pelanggan</button>
+                      <button className="btn-secondary text-xs" onClick={() => onPrint(o, { customer: false, staff: true })}><Printer size={12} />Copy staff</button>
+                      {st === 'sent' && o.server?.id && !isVoided(o) && (
+                        <button className="btn-secondary text-xs text-danger ml-auto" onClick={() => setVoiding(o.clientOrderId)}><X size={12} />Batalkan transaksi</button>
+                      )}
+                      {st === 'pending' && <span className="text-[11px] text-slate-400 ml-auto self-center">Bisa dibatalkan setelah terkirim ke server</span>}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
           )
         })}
       </div>
-      <p className="text-[11px] text-slate-400 mt-2">Riwayat semua laptop, void & antrean pengambilan ada di modul POS → Riwayat Transaksi.</p>
+      <p className="text-[11px] text-slate-400 mt-2">Pembatalan butuh password SPV. Riwayat semua laptop & antrean pengambilan ada di modul POS → Riwayat Transaksi.</p>
     </Modal>
   )
 }
+const isVoided = (o) => o.server?.status === 'VOID'
+const VOID_REASONS = ['Pembeli batal', 'Salah input', 'Salah size / produk', 'Pembayaran gagal']
+
+// Pembatalan di laptop kasir dengan persetujuan SPV: SPV pilih nama & ketik password, kasir tidak perlu logout.
+function VoidApproval({ order, onCancel, onDone }) {
+  const [approvers, setApprovers] = useState(null)
+  const [approverId, setApproverId] = useState('')
+  const [password, setPassword] = useState('')
+  const [reason, setReason] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+  useEffect(() => {
+    posHttp.get('/pos/approvers').then(r => setApprovers(r.data)).catch(() => setErr('Butuh internet untuk membatalkan transaksi'))
+  }, [])
+  const cash = order.payments.filter(p => p.method === 'CASH').reduce((s, p) => s + p.amount, 0)
+  const other = order.payments.filter(p => p.method !== 'CASH')
+  const submit = async (e) => {
+    e.preventDefault()
+    setBusy(true); setErr('')
+    try {
+      const { data } = await posHttp.post(`/pos/orders/${order.server.id}/void-approved`, { approverId: Number(approverId), password, reason })
+      await setItem('sent', order.clientOrderId, { ...order, server: data })
+      toast.success(`${order.orderNumber} dibatalkan — stok kembali`)
+      onDone()
+    } catch (er) {
+      setErr(er.response?.data?.message || 'Gagal membatalkan — cek internet')
+      setPassword('')
+    } finally { setBusy(false) }
+  }
+  return (
+    <form onSubmit={submit} className="rounded-xl border-2 border-red-200 bg-white p-3 space-y-2.5">
+      <p className="text-sm font-bold text-slate-800">Batalkan {order.orderNumber} — persetujuan SPV</p>
+      <div className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 space-y-0.5">
+        {cash > 0 && <p>Kembalikan <b>tunai {rp(cash)}</b> dari laci ke pembeli.</p>}
+        {other.map((p, i) => <p key={i}>Refund <b>{METHOD_LABEL[p.method] || p.method} {rp(p.amount)}</b> dilakukan di luar sistem (transfer balik / void di EDC).</p>)}
+        <p>Tarik struk pelanggan & copy staff, barang kembali ke rak booth.</p>
+      </div>
+      <div>
+        <p className="label">Alasan</p>
+        <div className="flex flex-wrap gap-1.5 mb-1.5">{VOID_REASONS.map(r => (
+          <button key={r} type="button" onClick={() => setReason(r)} className={`px-2.5 h-7 rounded-full text-xs border ${reason === r ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 text-slate-600'}`}>{r}</button>
+        ))}</div>
+        <input className="input" value={reason} onChange={e => setReason(e.target.value)} placeholder="atau tulis alasan lain" />
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <div><p className="label">SPV</p>
+          <select className="input" value={approverId} onChange={e => setApproverId(e.target.value)} disabled={!approvers}>
+            <option value="">{approvers ? 'Pilih nama SPV' : 'Memuat…'}</option>
+            {approvers?.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+          </select></div>
+        <div><p className="label">Password SPV</p>
+          <input className="input" type="password" autoComplete="new-password" value={password} onChange={e => setPassword(e.target.value)} placeholder="diketik oleh SPV" /></div>
+      </div>
+      {err && <p className="text-xs text-danger">{err}</p>}
+      <div className="flex gap-2">
+        <button type="button" className="btn-secondary flex-1 justify-center" onClick={onCancel}>Kembali</button>
+        <button className="btn-danger flex-1 justify-center" disabled={busy || !approverId || !password || !reason.trim()}>Batalkan transaksi</button>
+      </div>
+    </form>
+  )
+}
+
 const Stat = ({ label, value, hint }) => (
   <div className="rounded-xl bg-slate-50 px-3 py-2.5 min-w-0">
     <p className="text-[11px] text-slate-500 truncate">{label}</p>
@@ -978,8 +1204,14 @@ function OpenShift({ eventId, device, userName, onOpened }) {
   )
 }
 
-function SettingsModal({ settings, event, userName, onClose, onSave }) {
+function SettingsModal({ settings, event, places, userName, onClose, onSave, onLimitSaved }) {
   const [s, setS] = useState(settings)
+  const shown = activeMethods(s)
+  const toggleMethod = (key) => {
+    const cur = shown.map(m => m.key)
+    const next = cur.includes(key) ? cur.filter(k => k !== key) : [...cur, key]
+    if (next.length) setS({ ...s, enabledMethods: METHODS.map(m => m.key).filter(k => next.includes(k)) })
+  }
   const sample = {
     orderNumber: 'TEST-0001', soldAt: new Date().toISOString(), subtotal: 300000, itemDiscount: 0, orderDiscount: 0, total: 300000,
     items: [{ name: 'Contoh produk', variant: 'M', qty: 1, unitPrice: 300000, discount: 0 }], payments: [{ method: 'CASH', amount: 300000 }],
@@ -998,12 +1230,36 @@ function SettingsModal({ settings, event, userName, onClose, onSave }) {
           <div><label className="label">Lebar kertas (mm)</label><input className="input" type="number" value={s.widthMm} onChange={e => setS({ ...s, widthMm: Number(e.target.value) })} /></div>
           <div><label className="label">Ukuran huruf (px)</label><input className="input" type="number" value={s.fontPx} onChange={e => setS({ ...s, fontPx: Number(e.target.value) })} /></div>
         </div>
-        <p className="text-xs text-slate-400 -mt-2">Standar kasir 80 mm. Setiap bayar tercetak struk pelanggan + slip operasional (untuk tim gudang booth). Rekap kasir tercetak saat tutup shift.</p>
+        <p className="text-xs text-slate-400 -mt-2">Standar kasir 80 mm. Setiap bayar tercetak struk pelanggan + copy staff (isi sama, bertanda NOT A RECEIPT) untuk tim gudang booth. Rekap kasir tercetak saat tutup shift.</p>
+        <div><label className="label">Metode bayar yang tampil</label>
+          <div className="grid grid-cols-3 gap-1.5">{METHODS.map(m => {
+            const on = shown.some(x => x.key === m.key)
+            return (
+              <label key={m.key} className={`flex items-center gap-2 px-2.5 h-9 rounded-lg border text-sm cursor-pointer ${on ? 'border-slate-900 bg-slate-50 font-semibold' : 'border-slate-200 text-slate-500'}`}>
+                <input type="checkbox" checked={on} onChange={() => toggleMethod(m.key)} />{m.label}
+              </label>
+            )
+          })}</div>
+          <p className="text-[11px] text-slate-400 mt-1">Hanya metode yang dicentang muncul di layar bayar. Minimal satu.</p></div>
         <div><label className="label">Metode bayar default</label>
-          <select className="input" value={s.defaultMethod || 'CASH'} onChange={e => setS({ ...s, defaultMethod: e.target.value })}>
-            {METHODS.map(m => <option key={m.key} value={m.key}>{m.label}</option>)}
+          <select className="input" value={shown.some(m => m.key === s.defaultMethod) ? s.defaultMethod : shown[0].key} onChange={e => setS({ ...s, defaultMethod: e.target.value })}>
+            {shown.map(m => <option key={m.key} value={m.key}>{m.label}</option>)}
           </select>
           <p className="text-[11px] text-slate-400 mt-1">Langsung terpilih di layar bayar; tetap bisa diganti per transaksi.</p></div>
+        <div><label className="label">Gudang di Cek stok</label>
+          <div className="space-y-1">{places.map(w => {
+            const on = !s.peekWarehouses?.length || s.peekWarehouses.includes(w.id)
+            return (
+              <label key={w.id} className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={on} onChange={() => {
+                  const cur = places.map(x => x.id).filter(id => !s.peekWarehouses?.length || s.peekWarehouses.includes(id))
+                  const next = on ? cur.filter(id => id !== w.id) : [...cur, w.id]
+                  if (next.length) setS({ ...s, peekWarehouses: next.length === places.length ? [] : next })
+                }} />{w.name}
+              </label>
+            )
+          })}</div>
+          <p className="text-[11px] text-slate-400 mt-1">Gudang yang bisa diintip kasir lewat tombol Cek stok. Minimal satu.</p></div>
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={s.autoPrint} onChange={e => setS({ ...s, autoPrint: e.target.checked })} />Cetak otomatis setelah bayar</label>
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={!!s.showCashier} onChange={e => setS({ ...s, showCashier: e.target.checked })} />Tampilkan nama kasir di struk pelanggan</label>
         <button className="btn-secondary w-full justify-center" onClick={() => printReceipt(combinePrint([
@@ -1012,10 +1268,57 @@ function SettingsModal({ settings, event, userName, onClose, onSave }) {
           shiftRecapHtml(sampleShift, sampleSummary, { event, settings: s, cashierName: userName }),
         ], s))}><Printer size={14} />Cetak tes (3 lembar)</button>
         <p className="text-[11px] text-slate-400 -mt-2">Cek printer saja — tidak membuat transaksi & tidak memotong stok.</p>
+        <LimitSetting event={event} onSaved={onLimitSaved} />
         <QrisSetting />
-        <button className="btn-primary w-full justify-center" onClick={() => onSave(s)}>Simpan</button>
+        <button className="btn-primary w-full justify-center" onClick={() => onSave({ ...s, defaultMethod: shown.some(m => m.key === s.defaultMethod) ? s.defaultMethod : shown[0].key })}>Simpan</button>
       </div>
     </Modal>
+  )
+}
+
+// Batas beli per pembeli: disimpan di event (server), jadi berlaku di semua laptop kasir event ini.
+// Laptop lain memakai batas baru setelah katalognya diperbarui; server tetap menandai transaksi yang lewat batas.
+function LimitSetting({ event, onSaved }) {
+  const [v, setV] = useState(event.purchaseLimit || null)
+  const [busy, setBusy] = useState(false)
+  const set = (patch) => setV(cur => ({ ...cur, ...patch }))
+  const save = async () => {
+    setBusy(true)
+    try {
+      const { data } = await posHttp.put(`/pos/events/${event.id}/purchase-limit`, { purchaseLimit: v })
+      onSaved(data.purchaseLimit)
+      toast.success('Batas beli disimpan untuk semua kasir event ini')
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Gagal menyimpan — butuh internet')
+    } finally { setBusy(false) }
+  }
+  return (
+    <div className="rounded-xl border border-slate-200 p-3 space-y-2.5">
+      <label className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+        <input type="checkbox" checked={!!v?.qty} onChange={e => setV(e.target.checked ? { qty: 1, per: 'SKU', perPhone: true, productIds: event.purchaseLimit?.productIds || [] } : null)} />
+        Batas beli per pembeli
+      </label>
+      {!!v?.qty && (
+        <>
+          <div className="flex items-center gap-2 text-sm">
+            <span className="text-slate-600">Maks</span>
+            <input type="number" min={1} className="input w-16" value={v.qty} onChange={e => set({ qty: Math.max(1, Number(e.target.value) || 1) })} />
+            <span className="text-slate-600">pcs</span>
+            <div className="flex gap-1 ml-auto">
+              {[['SKU', 'per size'], ['PRODUCT', 'per artikel']].map(([k, l]) => (
+                <button key={k} type="button" onClick={() => set({ per: k })} className={`px-2.5 h-8 rounded-lg text-xs font-semibold border ${(v.per || 'PRODUCT') === k ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 text-slate-600'}`}>{l}</button>
+              ))}
+            </div>
+          </div>
+          <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={!!v.perPhone} onChange={e => set({ perPhone: e.target.checked })} />Hitung juga pembelian sebelumnya (wajib isi No. HP)</label>
+          <p className="text-[11px] text-slate-400">
+            {v.per === 'SKU' ? `Contoh: maks ${v.qty} pcs Hoodie size M dan ${v.qty} pcs size L per pembeli.` : `Contoh: maks ${v.qty} pcs Hoodie (semua size digabung) per pembeli.`}
+            {' '}{v.productIds?.length ? `Hanya untuk ${v.productIds.length} produk yang dipilih di form event.` : 'Berlaku untuk semua produk.'}
+          </p>
+        </>
+      )}
+      <button type="button" className="btn-secondary w-full justify-center" disabled={busy} onClick={save}>Simpan batas beli</button>
+    </div>
   )
 }
 

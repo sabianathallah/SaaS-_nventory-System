@@ -2,8 +2,9 @@
 const {
     PosEvent, PosShift, PosOrder, PosOrderItem, PosPayment,
     Stock_Out_Header, Stock_Movement, Stock, SkuWarehouseStock,
-    Product, ProductSKU, ProductVariantOption, Warehouse, Channel, User, Category, sequelize,
+    Product, ProductSKU, ProductVariantOption, Warehouse, Channel, User, Category, Role, RolePermission, sequelize,
 } = require('../models');
+const { compare } = require('../helpers/bcrypt');
 const { Op, UniqueConstraintError } = require('sequelize');
 const { companyFilter, companyId } = require('../helpers/tenancy');
 const { paginate, paginatedResponse } = require('../helpers/queryHelper');
@@ -58,7 +59,8 @@ function normLimit(v) {
     const qty = Number(v.qty);
     if (!isInt(qty, 1)) return undefined;
     const productIds = [...new Set((Array.isArray(v.productIds) ? v.productIds : []).map(Number).filter(n => isInt(n, 1)))];
-    return { qty, productIds, perPhone: !!v.perPhone };
+    // per: 'SKU' = dihitung per size (SKU), 'PRODUCT' = per artikel (semua size digabung)
+    return { qty, productIds, perPhone: !!v.perPhone, per: v.per === 'SKU' ? 'SKU' : 'PRODUCT' };
 }
 // Gudang cadangan event: unik, milik company yang sama, bukan gudang event itu sendiri.
 // Mengembalikan null kalau ada gudang yang tidak valid.
@@ -69,7 +71,27 @@ async function normBackups(ids, mainWarehouseId, cid) {
     const found = await Warehouse.count({ where: { id: list, ...(cid ? { companyId: cid } : {}) } });
     return found === list.length ? list : null;
 }
+// ── Persetujuan SPV di laptop kasir ─────────────────────────────────────────
+const VOID_KEYS = ['pos.manage', 'pos.void'];
+const ADMIN_ROLES = ['SUPER_ADMIN', 'COMPANY_ADMIN'];
+// Password salah berulang dikunci sementara per SPV (cegah tebak-tebakan dari laptop kasir)
+const approvalFails = new Map(); // approverId -> { count, until }
+const MAX_FAILS = 5, LOCK_MS = 10 * 60_000;
+
+// Id user (aktif, satu company) yang boleh void: admin, atau role-nya punya pos.manage / pos.void
+async function voidApproverIds(cid) {
+    const users = await User.findAll({ where: { companyId: cid, isActive: true }, attributes: ['id', 'name', 'role'], order: [['name', 'ASC']] });
+    const roles = await Role.findAll({
+        where: { name: [...new Set(users.map(u => u.role))], [Op.or]: [{ companyId: cid }, { companyId: null }] },
+        include: [{ model: RolePermission, as: 'rolePermissions', where: { permissionKey: VOID_KEYS }, required: true }],
+    });
+    const ok = new Set(roles.map(r => r.name));
+    return users.filter(u => ADMIN_ROLES.includes(u.role) || ok.has(u.role));
+}
+
 const limited = (limit, productId) => !!limit?.qty && (!limit.productIds?.length || limit.productIds.includes(productId));
+// Kunci hitungan batas beli: per SKU (size) atau per artikel
+const limitKey = (limit, ProductId, ProductSKUId) => limit.per === 'SKU' ? ProductSKUId : ProductId;
 
 // Ringkasan pembayaran sebuah shift; dipakai saat tutup shift & di layar kasir.
 async function shiftSummary(shift) {
@@ -140,6 +162,18 @@ class PosController {
         } catch (err) { next(err); }
     }
 
+    // Batas beli dari pengaturan kasir (izin pos.settings) — berlaku untuk semua laptop event ini
+    static async updatePurchaseLimit(req, res, next) {
+        try {
+            const ev = await findEvent(req, req.params.id);
+            if (!ev) throw { name: 'NotFound', message: 'Event tidak ditemukan' };
+            const limit = normLimit(req.body.purchaseLimit);
+            if (limit === undefined) return bad(res, 'Batas beli harus angka bulat ≥ 1');
+            await ev.update({ purchaseLimit: limit });
+            res.json({ purchaseLimit: ev.purchaseLimit });
+        } catch (err) { next(err); }
+    }
+
     static async updateEvent(req, res, next) {
         try {
             const ev = await findEvent(req, req.params.id);
@@ -195,6 +229,7 @@ class PosController {
             const stock = Object.fromEntries(stockRows.map(s => [s.ProductSKUId, s.qty]));
             // stok gudang cadangan per SKU: { [skuId]: { [warehouseId]: qty } }, hanya yang > 0
             const backupIds = ev.backupWarehouseIds || [];
+            const booth = await Warehouse.findByPk(ev.WarehouseId, { attributes: ['name'] });
             const backupWarehouses = backupIds.length
                 ? await Warehouse.findAll({ where: { id: backupIds }, attributes: ['id', 'name'] })
                 : [];
@@ -205,7 +240,7 @@ class PosController {
             }
             res.json({
                 event: {
-                    id: ev.id, name: ev.name, location: ev.location, status: ev.status, WarehouseId: ev.WarehouseId, receiptHeader: ev.receiptHeader, receiptFooter: ev.receiptFooter, purchaseLimit: ev.purchaseLimit || null,
+                    id: ev.id, name: ev.name, location: ev.location, status: ev.status, WarehouseId: ev.WarehouseId, warehouseName: booth?.name || null, receiptHeader: ev.receiptHeader, receiptFooter: ev.receiptFooter, purchaseLimit: ev.purchaseLimit || null,
                     // urut sesuai pengaturan event
                     backupWarehouses: backupIds.map(id => backupWarehouses.find(w => w.id === id)).filter(Boolean).map(w => ({ id: w.id, name: w.name })),
                 },
@@ -380,22 +415,30 @@ class PosController {
             }
             if (total < 0) review.push(`Uang dikembalikan ke pembeli ${-total}`);
 
-            // batas beli: dihitung bersih per artikel (barang baru - barang yang dikembalikan); tidak menolak, ditandai
+            // batas beli: dihitung bersih per artikel / per SKU (barang baru - barang yang dikembalikan); tidak menolak, ditandai
             const limit = ev.purchaseLimit;
             if (limit?.qty) {
                 const net = {};
-                for (const l of lines) if (limited(limit, l.sku.ProductId)) net[l.sku.ProductId] = (net[l.sku.ProductId] || 0) + l.qty;
+                for (const l of lines) {
+                    if (!limited(limit, l.sku.ProductId)) continue;
+                    const k = limitKey(limit, l.sku.ProductId, l.sku.id);
+                    net[k] = (net[k] || 0) + l.qty;
+                }
                 const phone = String(b.customerPhone || '').replace(/[^\d+]/g, '');
                 if (limit.perPhone && phone && Object.keys(net).length) {
                     const prev = await PosOrder.findAll({
                         where: { eventId: ev.id, status: 'PAID', customerPhone: phone }, include: [{ model: PosOrderItem, as: 'items' }],
                     });
-                    for (const o of prev) for (const i of o.items) if (net[i.ProductId] != null) net[i.ProductId] += i.qty;
+                    for (const o of prev) for (const i of o.items) {
+                        const k = limitKey(limit, i.ProductId, i.ProductSKUId);
+                        if (net[k] != null) net[k] += i.qty;
+                    }
                 }
-                for (const [pid, q] of Object.entries(net)) {
+                for (const [key, q] of Object.entries(net)) {
                     if (q > limit.qty) {
-                        const l = lines.find(x => x.sku.ProductId === Number(pid));
-                        review.push(`Lewat batas beli: ${l.name} ${q} pcs (maks ${limit.qty}${limit.perPhone && phone ? ' per No. HP' : ''})`);
+                        const l = lines.find(x => limitKey(limit, x.sku.ProductId, x.sku.id) === Number(key));
+                        const what = limit.per === 'SKU' ? `${l.name}${l.variant ? ` ${l.variant}` : ''}` : l.name;
+                        review.push(`Lewat batas beli: ${what} ${q} pcs (maks ${limit.qty}${limit.per === 'SKU' ? ' per size' : ''}${limit.perPhone && phone ? ' per No. HP' : ''})`);
                     }
                 }
             }
@@ -537,6 +580,38 @@ class PosController {
         } catch (err) { next(err); }
     }
 
+    // Daftar SPV yang bisa menyetujui pembatalan di laptop kasir
+    static async approvers(req, res, next) {
+        try {
+            const list = await voidApproverIds(companyId(req));
+            res.json(list.map(u => ({ id: u.id, name: u.name })));
+        } catch (err) { next(err); }
+    }
+
+    // Void dari laptop kasir: SPV memilih namanya & mengetik password; yang tercatat membatalkan = SPV
+    static async voidApproved(req, res, next) {
+        try {
+            const { approverId, password } = req.body || {};
+            if (!approverId || !password) return bad(res, 'Pilih SPV dan isi password');
+            const lock = approvalFails.get(Number(approverId));
+            if (lock?.until > Date.now()) return res.status(429).json({ message: 'Terlalu banyak password salah. Coba lagi 10 menit lagi.' });
+
+            const spv = (await voidApproverIds(companyId(req))).find(u => u.id === Number(approverId));
+            const user = spv && await User.findByPk(spv.id, { attributes: ['id', 'name', 'password'] });
+            if (!user || !compare(String(password), user.password)) {
+                if (spv) {
+                    const count = (lock?.count || 0) + 1;
+                    approvalFails.set(spv.id, count >= MAX_FAILS ? { count: 0, until: Date.now() + LOCK_MS } : { count, until: 0 });
+                }
+                return res.status(403).json({ message: 'Password SPV salah atau tidak punya izin membatalkan' });
+            }
+            approvalFails.delete(user.id);
+            req.voidBy = user.id;
+            req.body.reason = req.body.reason && `${req.body.reason} · disetujui ${user.name} di kasir ${req.user.name || req.user.email}`;
+            return PosController.voidOrder(req, res, next);
+        } catch (err) { next(err); }
+    }
+
     // Void: kembalikan stok & hapus Stock Out-nya; transaksi kasir tetap disimpan dengan status VOID.
     static async voidOrder(req, res, next) {
         const t = await sequelize.transaction();
@@ -576,7 +651,7 @@ class PosController {
                 await Stock_Out_Header.destroy({ where: { id: order.StockOutHeaderId }, transaction: t });
             }
             await order.update({
-                status: 'VOID', voidedAt: new Date(), voidedBy: req.user.id, voidReason: req.body.reason, StockOutHeaderId: null,
+                status: 'VOID', voidedAt: new Date(), voidedBy: req.voidBy || req.user.id, voidReason: req.body.reason, StockOutHeaderId: null,
             }, { transaction: t });
             await t.commit();
             res.json(await PosOrder.findByPk(order.id, { include: ORDER_INCLUDE }));

@@ -313,7 +313,7 @@ function Customers({ r }) {
         <Kpi label="Pembeli unik (No. HP)" value={t.customers} />
         <Kpi label="Belanja lebih dari sekali" value={t.repeatCustomers} hint={t.customers ? `${pct(t.repeatCustomers, t.customers)}% dari pembeli ber-HP` : '—'} />
         <Kpi label="Transaksi dengan No. HP" value={`${pct(t.withPhone, t.salesOrders)}%`} hint={`${t.withPhone} dari ${t.salesOrders} transaksi jual`} />
-        <Kpi label="Kena batas beli" value={t.limitHits} hint={limit?.qty ? `aturan: maks ${limit.qty} pcs/artikel${limit.perPhone ? ' per No. HP' : ''}` : 'batas beli tidak aktif'} />
+        <Kpi label="Kena batas beli" value={t.limitHits} hint={limit?.qty ? `aturan: maks ${limit.qty} pcs/${limit.per === 'SKU' ? 'size' : 'artikel'}${limit.perPhone ? ' per No. HP' : ''}` : 'batas beli tidak aktif'} />
       </div>
       <Card title="Pembeli teratas">
         {r.customers.length ? (

@@ -71,6 +71,7 @@ const ALL_PERMISSIONS = [
   { key: 'pos.fulfill',               label: 'Antrean Pengambilan',                        group: 'Kasir / POS',             parent: 'pos.manage',             desc: 'Lihat barang yang belum diambil pelanggan & tandai sudah diambil' },
   { key: 'pos.void',                  label: 'Batalkan Transaksi Kasir',                   group: 'Kasir / POS',             parent: 'pos.manage',             desc: 'Void transaksi & kembalikan stok ke gudang event' },
   { key: 'pos.event.manage',          label: 'Kelola Event Pop Up',                        group: 'Kasir / POS',             parent: 'pos.manage',             desc: 'Buat event, pilih gudang & channel, buka/tutup event' },
+  { key: 'pos.settings',              label: 'Atur Pengaturan Kasir',                      group: 'Kasir / POS',             parent: 'pos.manage',             desc: 'Buka pengaturan di layar kasir: printer & struk, metode bayar, gambar QRIS' },
   { key: 'pos.report',                label: 'Lihat Laporan Event',                        group: 'Kasir / POS',             parent: 'pos.manage',             desc: 'Rekap penjualan, pembayaran, dan shift per event' },
 
   // ── Transfer Stok ────────────────────────────────────────────────────────────
@@ -187,6 +188,9 @@ const DEFAULT_PERMISSIONS = {
     'db_link.view',
     'hris.view', 'hris.reports.view',
   ],
+
+  // Kasir event: jualan & antrean ambil saja — tanpa pengaturan kasir, void, laporan, atau kelola event
+  KASIR: ['pos.sell', 'pos.fulfill'],
 
   STAFF: ['inventory.view', 'db_link.view', 'request.create', 'hris.view'],
 

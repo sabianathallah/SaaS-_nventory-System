@@ -7,12 +7,13 @@ import { subscribeDisplay } from '../pos/display'
 import logo from '../assets/logo-preface-receipt.png?inline'
 
 // Layar pelanggan (jendela kedua di laptop kasir -> monitor / iPad). Hanya menampilkan, tidak ada input.
+// Semua teks yang dibaca pembeli berbahasa Inggris.
 // Keadaan datang dari kasir lewat BroadcastChannel, foto & QRIS dibaca dari IndexedDB -> jalan offline.
 const rp = (n) => 'Rp ' + Number(n || 0).toLocaleString('id-ID')
 const shortName = (n) => String(n || '').replace(/[\u200b-\u200d\u2060\ufeff]/g, '').replace(/\s+PREFACE\s+-\s+/i, ' · ').replace(/\s+PREFACE$/i, '').trim()
 const lineName = (n) => shortName(n).split('·').pop().trim()
 const firstName = (n) => String(n || '').trim().split(/\s+/)[0] || ''
-const METHOD = { CASH: 'Tunai', QRIS: 'QRIS', TRANSFER: 'Transfer', EDC: 'Kartu', OTHER: 'Lainnya' }
+const METHOD = { CASH: 'Cash', QRIS: 'QRIS', TRANSFER: 'Transfer', EDC: 'Card', OTHER: 'Other' }
 const HEAD = { fontFamily: 'Impact, Haettenschweiler, "Arial Narrow Bold", sans-serif', letterSpacing: '.02em' }
 const DONE_MIN_MS = 8000   // ucapan terima kasih tampil minimal selama ini walau kasir sudah lanjut
 const DONE_MAX_MS = 20000  // lalu kembali ke tampilan sambutan
@@ -29,7 +30,7 @@ export default function PosDisplay() {
   const holdTimer = useRef(null)
 
   useEffect(() => {
-    document.title = 'Layar Pelanggan · Preface'
+    document.title = 'Customer Display · Preface'
     const loadAssets = async () => {
       const cat = await getItem('kv', `catalog:${eventId}`).catch(() => null)
       if (cat) { setCatalog(cat); setImgs(await loadCachedImages(cat.items)) }
@@ -105,7 +106,7 @@ export default function PosDisplay() {
           document.documentElement.requestFullscreen?.(scr ? { screen: scr } : undefined).catch(() => document.documentElement.requestFullscreen?.().catch(() => {}))
         }}
           className="absolute bottom-4 right-4 z-50 inline-flex items-center gap-2 px-4 h-10 rounded-full bg-white/10 hover:bg-white/20 text-sm font-semibold cursor-pointer backdrop-blur">
-          <Maximize2 size={15} />{target ? `Tampilkan layar penuh di ${target.label || 'layar eksternal'}` : 'Klik untuk layar penuh'}
+          <Maximize2 size={15} />{target ? `Full screen on ${target.label || 'external display'}` : 'Click for full screen'}
         </button>
       )}
     </div>
@@ -148,7 +149,7 @@ function Idle({ catalog, imgs, event }) {
       <div className="relative mt-auto px-10 pb-14 pd-in">
         <p className="text-sm font-bold tracking-[.4em] text-white/60">{(event?.name || 'POP UP').toUpperCase()}</p>
         <p className="text-[120px] leading-[.9] uppercase" style={HEAD}>Welcome to<br />Preface ★</p>
-        <p className="mt-5 text-lg text-white/70">Pilih barang favoritmu, kasir siap membantu. <span className="text-white">Follow @prefacewearhouse</span></p>
+        <p className="mt-5 text-lg text-white/70">Pick your favorites, our cashier is ready to help. <span className="text-white">Follow @prefacewearhouse</span></p>
       </div>
     </div>
   )
@@ -168,8 +169,8 @@ function Cart({ s, imgs, qris }) {
       <div className="flex-1 min-w-0 flex flex-col">
         <Brand />
         <div className="px-10 mt-8 flex items-end justify-between">
-          <p className="text-5xl uppercase" style={HEAD}>Belanjaanmu</p>
-          <p className="text-white/50 font-semibold">{s.pcs} barang</p>
+          <p className="text-5xl uppercase" style={HEAD}>Your Cart</p>
+          <p className="text-white/50 font-semibold">{s.pcs} {s.pcs === 1 ? 'item' : 'items'}</p>
         </div>
         <div ref={listRef} className="flex-1 overflow-y-auto px-10 py-5 space-y-2.5">
           {s.lines.map((l, i) => (
@@ -184,7 +185,7 @@ function Cart({ s, imgs, qris }) {
                 <div className="mt-1.5 flex items-center gap-2 text-sm">
                   {l.variant && <span className="px-2 py-0.5 rounded-md border border-white/40 font-bold">SIZE {l.variant}</span>}
                   <span className="text-white/60">{l.qty} × {rp(l.unitPrice)}</span>
-                  {l.discount > 0 && <span className="text-emerald-400 font-semibold">hemat {rp(l.discount)}</span>}
+                  {l.discount > 0 && <span className="text-emerald-400 font-semibold">save {rp(l.discount)}</span>}
                 </div>
               </div>
               <p className="text-2xl font-black tabular-nums">{rp(l.lineTotal)}</p>
@@ -198,26 +199,26 @@ function Cart({ s, imgs, qris }) {
         <div className="flex-1 flex flex-col justify-center px-10">
           {showQris ? (
             <div className="text-center pd-pop">
-              <p className="text-sm font-bold tracking-[.3em] text-black/50">SCAN UNTUK BAYAR</p>
+              <p className="text-sm font-bold tracking-[.3em] text-black/50">SCAN TO PAY</p>
               {qris
                 ? <img src={qris} alt="QRIS" className="mx-auto mt-4 w-full max-w-[340px] aspect-square object-contain" />
-                : <div className="mx-auto mt-4 w-full max-w-[300px] aspect-square rounded-2xl border-4 border-dashed border-black/20 flex items-center justify-center text-black/40 text-sm p-6">Gambar QRIS belum diunggah di pengaturan kasir</div>}
+                : <div className="mx-auto mt-4 w-full max-w-[300px] aspect-square rounded-2xl border-4 border-dashed border-black/20 flex items-center justify-center text-black/40 text-sm p-6">QRIS code not available yet</div>}
             </div>
           ) : (
             <div className="space-y-3 text-lg">
               {!pay && (
                 <div className="mb-6">
-                  <p className="text-4xl uppercase leading-none" style={HEAD}>Cek lagi ya ★</p>
-                  <p className="mt-2 text-base text-black/60">Pastikan produk, size, dan jumlahnya sudah sesuai sebelum bayar.</p>
+                  <p className="text-4xl uppercase leading-none" style={HEAD}>Double-check ★</p>
+                  <p className="mt-2 text-base text-black/60">Make sure the items, sizes and quantities are right before you pay.</p>
                 </div>
               )}
               <Row label="Subtotal" value={rp(s.subtotal)} />
-              {s.discount > 0 && <Row label="Diskon" value={`-${rp(s.discount)}`} className="text-emerald-600" />}
-              {pay?.fulfillment === 'LATER' && <p className="rounded-xl bg-black/5 px-4 py-3 text-base">Barang <b>diambil nanti</b> — nomor ambil muncul setelah bayar.</p>}
+              {s.discount > 0 && <Row label="Discount" value={`-${rp(s.discount)}`} className="text-emerald-600" />}
+              {pay?.fulfillment === 'LATER' && <p className="rounded-xl bg-black/5 px-4 py-3 text-base">Your items will be <b>picked up later</b>. Your pickup number appears after payment.</p>}
               {pay && pay.cashReceived > 0 && (
                 <div className="pt-2 space-y-2">
-                  <Row label="Uang diterima" value={rp(pay.cashReceived)} />
-                  {pay.change >= 0 && <Row label="Kembalian" value={rp(pay.change)} bold />}
+                  <Row label="Cash received" value={rp(pay.cashReceived)} />
+                  {pay.change >= 0 && <Row label="Change" value={rp(pay.change)} bold />}
                 </div>
               )}
             </div>
@@ -225,7 +226,7 @@ function Cart({ s, imgs, qris }) {
         </div>
         <div className="bg-black text-white px-10 py-8">
           <div className="flex items-center justify-between">
-            <p className="text-sm font-bold tracking-[.3em] text-white/60">{pay ? 'TOTAL BAYAR' : 'TOTAL'}</p>
+            <p className="text-sm font-bold tracking-[.3em] text-white/60">{pay ? 'AMOUNT DUE' : 'TOTAL'}</p>
             {pay && pay.methods.length > 0 && <p className="text-sm font-semibold text-white/70">{pay.methods.map(m => METHOD[m] || m).join(' + ')}</p>}
           </div>
           <p key={s.total} className="text-[clamp(44px,5.2vw,80px)] leading-none mt-2 tabular-nums whitespace-nowrap pd-pop" style={HEAD}>{rp(s.total)}</p>
@@ -248,17 +249,17 @@ function Done({ d }) {
       <Brand dark />
       <div className="flex-1 flex items-center px-10 gap-10">
         <div className="flex-1 pd-in">
-          <p className="text-sm font-bold tracking-[.4em] text-black/50">PEMBAYARAN BERHASIL</p>
+          <p className="text-sm font-bold tracking-[.4em] text-black/50">PAYMENT SUCCESSFUL</p>
           <p className="text-[110px] leading-[.88] uppercase mt-3" style={HEAD}>Thank you{name ? <>,<br />{name}</> : ''}</p>
           <p className="text-3xl uppercase mt-4" style={HEAD}>for copping Preface ★</p>
-          {d.change > 0 && <p className="mt-8 text-2xl">Kembalian <b className="tabular-nums">{rp(d.change)}</b></p>}
-          <p className="mt-3 text-lg text-black/60">Struk dicetak oleh kasir · follow <b className="text-black">@prefacewearhouse</b></p>
+          {d.change > 0 && <p className="mt-8 text-2xl">Change <b className="tabular-nums">{rp(d.change)}</b></p>}
+          <p className="mt-3 text-lg text-black/60">Your receipt is printed by the cashier · follow <b className="text-black">@prefacewearhouse</b></p>
         </div>
         {later && (
           <div className="w-[38%] min-w-[320px] bg-black text-white rounded-3xl p-10 text-center pd-pop">
-            <p className="text-sm font-bold tracking-[.35em] text-white/60">NOMOR AMBIL</p>
+            <p className="text-sm font-bold tracking-[.35em] text-white/60">PICKUP NUMBER</p>
             <p className="text-[96px] leading-none mt-3" style={HEAD}>{d.pickupCode}</p>
-            <p className="mt-5 text-lg text-white/80 leading-snug">Barangmu sedang disiapkan.<br />Tunjukkan struk ini di bagian pengambilan.</p>
+            <p className="mt-5 text-lg text-white/80 leading-snug">Your items are being prepared.<br />Show your receipt at the pickup counter.</p>
           </div>
         )}
       </div>

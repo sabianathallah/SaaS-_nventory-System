@@ -242,50 +242,14 @@ function street(order, { event, settings, cashierName }) {
   </body></html>`
 }
 
-// ── Slip operasional (copy staff): diserahkan kasir ke tim gudang booth, tiap transaksi ──
-function slip(order, { event, settings, cashierName }) {
-  const { w, f, date, time, pcs, name, sold, back, swapOf, refund } = ctx(order, event, settings)
-  const later = order.fulfillment === 'LATER'
-  const items = sold.map(i => `
-    <div class="it"><span class="box"></span><span class="q">${i.qty}&times;</span><span class="nm">${esc(shortName(i.name))}</span><span class="sz">${esc(i.variant || '-')}</span></div>`).join('')
-  const backItems = back.map(i => `
-    <div class="it"><span class="box"></span><span class="q">${-i.qty}&times;</span><span class="nm">${esc(shortName(i.name))}</span><span class="sz">${esc(i.variant || '-')}</span></div>`).join('')
-  const paid = order.payments.map(p => METHOD[p.method] || p.method).join(' + ') || '-'
-  return `<!doctype html><html><head><meta charset="utf-8"><style>${pageCss(w, f, '"Helvetica Neue", Helvetica, Arial, sans-serif')}
-    body { padding: 4mm 4mm 7mm; }
-    .copy { display: flex; justify-content: space-between; font-size: ${f - 3}px; font-weight: 800; letter-spacing: .25em; border-bottom: 2px solid #000; padding-bottom: 3px; }
-    .mode { margin: 8px 0 6px; padding: 6px; text-align: center; font-size: ${f + 4}px; font-weight: 800; letter-spacing: .1em;
-            ${later ? 'background:#000;color:#fff;' : 'border:2px dashed #000;'} }
-    .code { text-align: center; font-family: Impact, "Arial Narrow", sans-serif; font-size: ${f + 26}px; line-height: 1; }
-    .k { font-size: ${f - 3}px; font-weight: 800; letter-spacing: .2em; }
-    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 8px; margin: 8px 0; font-size: ${f - 1}px; }
-    .grid div:nth-child(even) { text-align: right; } .v { font-weight: 800; display: block; }
-    .it { display: flex; align-items: center; gap: 6px; padding: 5px 0; border-bottom: 1px solid #000; }
-    .box { width: 14px; height: 14px; border: 2px solid #000; flex: none; }
-    .q { font-weight: 800; min-width: 22px; } .nm { flex: 1; font-weight: 700; text-transform: uppercase; }
-    .sz { font-weight: 800; border: 1.5px solid #000; padding: 0 5px; min-width: 26px; text-align: center; }
-    .sum { display: flex; justify-content: space-between; margin-top: 6px; font-weight: 800; }
-    .sign { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 18px; font-size: ${f - 3}px; text-align: center; }
-    .sign div { border-top: 1px solid #000; padding-top: 2px; }
-    .bc { margin: 10px 4% 0; }
-  </style></head><body>
-    <div class="copy"><span>SLIP OPERASIONAL</span><span>COPY STAFF</span></div>
-    <div class="mode">${later ? 'AMBIL NANTI' : 'SERAHKAN SEKARANG'}</div>
-    ${later ? `<div class="c k">NOMOR AMBIL</div><div class="code">${esc(order.pickupCode || order.orderNumber)}</div>` : ''}
-    <div class="grid">
-      <div><span class="k">ORDER</span><span class="v">${esc(order.orderNumber)}</span></div>
-      <div><span class="k">WAKTU</span><span class="v">${date} ${time}</span></div>
-      <div><span class="k">ATAS NAMA</span><span class="v">${esc(name || '-')}</span></div>
-      <div><span class="k">JUMLAH</span><span class="v">${pcs} PCS</span></div>
-      <div><span class="k">KASIR</span><span class="v">${esc(cashierName || '-')}</span></div>
-      <div><span class="k">EVENT</span><span class="v">${esc(event?.name || '-')}</span></div>
-    </div>
-    ${swapOf ? `<div class="k" style="margin-bottom:2px">TUKAR DARI ${esc(swapOf)} &middot; BARANG KEMBALI MASUK STOK</div>${backItems}<div style="height:8px"></div>` : ''}
-    ${sold.length ? `<div class="k">BARANG &middot; ${pcs} PCS</div>${items}` : ''}
-    <div class="sum">${refund ? `<span>UANG DIKEMBALIKAN &middot; TUNAI</span><span>${rp(refund)}</span>` : `<span>LUNAS &middot; ${esc(paid)}</span><span>${rp(order.total)}</span>`}</div>
-    <div class="sign"><div>Disiapkan</div><div>Diserahkan</div></div>
-    <div class="bc">${code39Svg(order.orderNumber, 34)}</div>
-  </body></html>`
+// ── Copy staff: isi sama persis dengan struk pelanggan + tanda "bukan struk" di atas & bawah ──
+// Diserahkan kasir ke tim gudang booth di setiap transaksi; tandanya mencegah lembar ini dipakai sebagai bukti bayar.
+function staffCopy(html, f) {
+  const css = `.nar { margin: 0 0 8px; padding: 5px 4px; background: #000; color: #fff; text-align: center; font: 800 ${f}px/1.25 "Helvetica Neue", Helvetica, Arial, sans-serif; letter-spacing: .12em; }
+    .nar small { display: block; font-size: ${f - 3}px; letter-spacing: .3em; }
+    .nar.end { margin: 10px 0 0; }`
+  const bar = (cls) => `<div class="${cls}">STAFF COPY &middot; NOT A RECEIPT<small>FOR BOOTH OPERATIONS ONLY</small></div>`
+  return html.replace('</style>', `${css}</style>`).replace(/<body([^>]*)>/, `<body$1>${bar('nar')}`).replace('</body>', `${bar('nar end')}</body>`)
 }
 
 // Gabungkan beberapa dokumen struk jadi satu job print (tiap dokumen = 1 halaman / 1 potongan kertas).
@@ -353,7 +317,8 @@ export function shiftRecapHtml(shift, summary, { event, settings, cashierName, c
 export const combinePrint = (docs, settings) => combine(docs, Number({ ...DEFAULT_RECEIPT, ...(settings || {}) }.widthMm) || 80)
 
 export function staffSlipHtml(order, opts) {
-  return slip(order, { ...opts, settings: { ...DEFAULT_RECEIPT, ...(opts.settings || {}) } })
+  const settings = { ...DEFAULT_RECEIPT, ...(opts.settings || {}) }
+  return staffCopy(receiptHtml(order, { ...opts, settings }), Number(settings.fontPx) || 12)
 }
 
 // Struk pelanggan + slip staff dalam satu kali print (printer sama, keluar 2 lembar).

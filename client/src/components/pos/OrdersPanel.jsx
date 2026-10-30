@@ -128,7 +128,7 @@ function FragmentRow({ o, open, onToggle, onPrint, onVoid }) {
               </div>
               <div className="flex gap-2" onClick={e => e.stopPropagation()}>
                 <button className="btn-secondary text-xs" onClick={() => onPrint({ customer: true, staff: false })}><Printer size={12} />Struk pelanggan</button>
-                <button className="btn-secondary text-xs" onClick={() => onPrint({ customer: false, staff: true })}><Printer size={12} />Slip staff</button>
+                <button className="btn-secondary text-xs" onClick={() => onPrint({ customer: false, staff: true })}><Printer size={12} />Copy staff</button>
                 {onVoid && <button className="btn-secondary text-xs text-danger" onClick={onVoid}>Batalkan</button>}
               </div>
             </div>

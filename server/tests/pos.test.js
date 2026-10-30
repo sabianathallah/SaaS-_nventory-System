@@ -266,7 +266,7 @@ describe('Tukar barang & batas beli', () => {
     expect(bad.status).toBe(400);
     await request(app).put(`/pos/events/${eventId}`).set(auth()).send({ purchaseLimit: { qty: 1, productIds: [skuL.ProductId], perPhone: true } });
     const cat = await request(app).get(`/pos/events/${eventId}/catalog`).set(auth());
-    expect(cat.body.event.purchaseLimit).toEqual({ qty: 1, productIds: [skuL.ProductId], perPhone: true });
+    expect(cat.body.event.purchaseLimit).toEqual({ qty: 1, productIds: [skuL.ProductId], perPhone: true, per: 'PRODUCT' });
     const buy = (phone) => send({ customerPhone: phone, items: [{ ProductSKUId: skuL.id, qty: 1, unitPrice: 400000 }], payments: [{ method: 'QRIS', amount: 400000 }] });
     expect((await buy('0811-111')).body.order.needsReview).toBe(false);
     const second = await buy('0811111');
@@ -274,6 +274,30 @@ describe('Tukar barang & batas beli', () => {
     expect(second.body.order.reviewNote).toMatch(/Lewat batas beli/);
     expect((await buy('0822222')).body.order.needsReview).toBe(false);
     await request(app).put(`/pos/events/${eventId}`).set(auth()).send({ purchaseLimit: null });
+  });
+
+  test('batas beli per size dari pengaturan kasir: role KASIR tidak bisa mengatur', async () => {
+    const { Role, RolePermission, User } = require('../models');
+    const { signToken } = require('../helpers/jwt');
+    const { DEFAULT_PERMISSIONS } = require('../helpers/permissions');
+    const role = await Role.create({ name: 'KASIR', displayName: 'Kasir', companyId: null });
+    await RolePermission.bulkCreate(DEFAULT_PERMISSIONS.KASIR.map(permissionKey => ({ roleId: role.id, permissionKey })));
+    const u = await User.create({ name: 'Kasir', email: 'kasir@test.com', password: 'password123', role: 'KASIR', companyId: state.company.id, isActive: true });
+    const kasir = { Authorization: `Bearer ${signToken({ id: u.id, email: u.email, role: 'KASIR', companyId: state.company.id })}` };
+    const limit = { qty: 1, per: 'SKU', perPhone: true };
+
+    expect((await request(app).get(`/pos/events/${eventId}/catalog`).set(kasir)).status).toBe(200);
+    expect((await request(app).put(`/pos/events/${eventId}/purchase-limit`).set(kasir).send({ purchaseLimit: limit })).status).toBe(403);
+    const ok = await request(app).put(`/pos/events/${eventId}/purchase-limit`).set(auth()).send({ purchaseLimit: limit });
+    expect(ok.body.purchaseLimit).toEqual({ ...limit, productIds: [] });
+
+    const buy = (sku) => send({ customerPhone: '0833333', items: [{ ProductSKUId: sku.id, qty: 1, unitPrice: 400000 }], payments: [{ method: 'QRIS', amount: 400000 }] });
+    expect((await buy(skuM)).body.order.needsReview).toBe(false);
+    expect((await buy(skuL)).body.order.needsReview).toBe(false); // size lain dari artikel yang sama boleh
+    const again = await buy(skuM);
+    expect(again.body.order.needsReview).toBe(true);
+    expect(again.body.order.reviewNote).toMatch(/Lewat batas beli: .* 2 pcs \(maks 1 per size per No\. HP\)/);
+    await request(app).put(`/pos/events/${eventId}/purchase-limit`).set(auth()).send({ purchaseLimit: null });
   });
 });
 
@@ -286,12 +310,41 @@ describe('Laporan lengkap', () => {
     expect(r.totals.refunds).toBeGreaterThan(0);
     expect(r.totals.aov).toBeGreaterThan(0);
     expect(r.totals.customers).toBeGreaterThan(0);
-    expect(r.totals.limitHits).toBe(1);
+    expect(r.totals.limitHits).toBe(2); // per No. HP + per size
     expect(r.byHour.reduce((s, h) => s + h.orders, 0)).toBe(r.totals.orders);
     const hoodie = r.byArticle.find(a => a.name === 'Hoodie Tukar');
     expect(hoodie.skus).toHaveLength(2);
     expect(hoodie.returned).toBeGreaterThan(0);
     expect(r.byCashier[0].orders).toBe(r.totals.orders);
     expect(r.compare.find(c => c.id === eventId)).toMatchObject({ orders: r.totals.orders, total: r.totals.total });
+  });
+});
+
+describe('Batalkan dari laptop kasir (password SPV)', () => {
+  test('kasir tidak bisa void langsung; bisa dengan password SPV, dan yang tercatat adalah SPV', async () => {
+    const { User } = require('../models');
+    const { signToken } = require('../helpers/jwt');
+    const u = await User.findOne({ where: { email: 'kasir@test.com' } });
+    const kasir = { Authorization: `Bearer ${signToken({ id: u.id, email: u.email, role: 'KASIR', companyId: state.company.id })}` };
+    const sold = await request(app).post('/pos/orders').set(kasir).send(order({ shiftId: null, cashReceived: null, items: [{ ProductSKUId: skuA.id, qty: 1, unitPrice: 300000 }], payments: [{ method: 'CASH', amount: 300000 }] }));
+    expect(sold.status).toBe(201);
+    const id = sold.body.order.id;
+    const before = await swsQty(skuA.id);
+
+    const list = await request(app).get('/pos/approvers').set(kasir);
+    expect(list.body.map(a => a.id)).toContain(state.admin.id);
+    expect(list.body.map(a => a.id)).not.toContain(u.id);
+
+    expect((await request(app).post(`/pos/orders/${id}/void`).set(kasir).send({ reason: 'x' })).status).toBe(403);
+    const wrong = await request(app).post(`/pos/orders/${id}/void-approved`).set(kasir).send({ approverId: state.admin.id, password: 'salah', reason: 'Pembeli batal' });
+    expect(wrong.status).toBe(403);
+    const notSpv = await request(app).post(`/pos/orders/${id}/void-approved`).set(kasir).send({ approverId: u.id, password: 'password123', reason: 'Pembeli batal' });
+    expect(notSpv.status).toBe(403);
+
+    const ok = await request(app).post(`/pos/orders/${id}/void-approved`).set(kasir).send({ approverId: state.admin.id, password: 'password123', reason: 'Pembeli batal' });
+    expect(ok.status).toBe(200);
+    expect(ok.body).toMatchObject({ status: 'VOID', voidedBy: state.admin.id });
+    expect(ok.body.voidReason).toMatch(/^Pembeli batal · disetujui .* di kasir Kasir$/);
+    expect(await swsQty(skuA.id)).toBe(before + 1);
   });
 });
