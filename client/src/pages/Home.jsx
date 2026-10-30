@@ -66,10 +66,12 @@ export default function Home() {
 
       {hasHris && <PresensiWidget />}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <MyDayToday />
-        <CompletedHistory />
-      </div>
+      {hasPermission('tasks.view') && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <MyDayToday />
+          <CompletedHistory />
+        </div>
+      )}
 
       <div>
         <p className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-2.5">Akses Cepat</p>
@@ -99,13 +101,15 @@ export default function Home() {
               accent="#3B82F6"
             />
           )}
-          <ModuleCard
-            icon={ListChecks}
-            title="Tugas"
-            desc="Kelola seluruh task — board, kalender, tabel"
-            to="/tasks"
-            accent="#7C3AED"
-          />
+          {hasPermission('tasks.view') && (
+            <ModuleCard
+              icon={ListChecks}
+              title="Tugas"
+              desc="Kelola seluruh task — board, kalender, tabel"
+              to="/tasks"
+              accent="#7C3AED"
+            />
+          )}
           {hasPermission('handbook.view') && (
             <ModuleCard
               icon={BookOpen}

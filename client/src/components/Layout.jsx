@@ -241,25 +241,15 @@ function NavTooltip({ label, children }) {
 // frekuensi pakai harian (Beranda & HRIS dulu, baru Inventory/Admin).
 function ModuleSwitcher({ collapsed, activeModule, tasksBadge }) {
   const navigate = useNavigate()
-  const { hasPermission, isSuperAdmin, isAdmin, canInventory } = useAuth()
+  // Semua modul selalu tampil; tanpa izin, halaman modulnya menampilkan "Akses Ditolak"
   const items = [
-    { key: 'home',      label: 'Beranda',  icon: Home,       to: '/home',      active: activeModule === 'home' },
-    ...(isSuperAdmin || hasPermission('hris.view')
-      ? [{ key: 'hris', label: 'HRIS', icon: UserCog, to: '/hris', active: activeModule === 'hris' }]
-      : []),
-    { key: 'tasks',     label: 'Tugas',     icon: ListChecks, to: '/tasks',     active: activeModule === 'tasks', badge: tasksBadge },
-    ...(isSuperAdmin || canInventory
-      ? [{ key: 'inventory', label: 'Inventory', icon: Package, to: '/dashboard', active: activeModule === 'inventory' }]
-      : []),
-    ...(isSuperAdmin || POS_PERMS.some(hasPermission)
-      ? [{ key: 'pos', label: 'POS', icon: Store, to: '/pos', active: activeModule === 'pos' }]
-      : []),
-    ...(isSuperAdmin || hasPermission('handbook.view')
-      ? [{ key: 'handbook', label: 'Handbook', icon: BookOpen, to: '/handbook', active: activeModule === 'handbook' }]
-      : []),
-    ...(isAdmin || hasPermission('admin.users')
-      ? [{ key: 'admin', label: 'Admin', icon: ShieldCheck, to: '/users', active: activeModule === 'admin' }]
-      : []),
+    { key: 'home',      label: 'Beranda',   icon: Home,        to: '/home',      active: activeModule === 'home' },
+    { key: 'hris',      label: 'HRIS',      icon: UserCog,     to: '/hris',      active: activeModule === 'hris' },
+    { key: 'tasks',     label: 'Tugas',     icon: ListChecks,  to: '/tasks',     active: activeModule === 'tasks', badge: tasksBadge },
+    { key: 'inventory', label: 'Inventory', icon: Package,     to: '/dashboard', active: activeModule === 'inventory' },
+    { key: 'pos',       label: 'POS',       icon: Store,       to: '/pos',       active: activeModule === 'pos' },
+    { key: 'handbook',  label: 'Handbook',  icon: BookOpen,    to: '/handbook',  active: activeModule === 'handbook' },
+    { key: 'admin',     label: 'Admin',     icon: ShieldCheck, to: '/users',     active: activeModule === 'admin' },
   ]
 
   if (collapsed) {
@@ -327,6 +317,7 @@ function ModuleSwitcher({ collapsed, activeModule, tasksBadge }) {
 
 export default function Layout({ children }) {
   const { user, signOut, isSuperAdmin, hasPermission, canInventory } = useAuth()
+  const canTasks = hasPermission('tasks.view')
   const { needsCompany } = useCompanyGuard()
   const { isPageVisible } = usePageVisibility()
   const navigate  = useNavigate()
@@ -338,7 +329,7 @@ export default function Layout({ children }) {
   const { data: taskStats } = useQuery({
     queryKey: ['tasks-stats-badge'],
     queryFn: tasksApi.stats,
-    enabled: !!user,
+    enabled: !!user && canTasks,
     staleTime: 60_000,
     refetchInterval: 60_000,
   })
@@ -356,7 +347,7 @@ export default function Layout({ children }) {
     (p) => location.pathname === p || location.pathname.startsWith(p + '/')
   )
   const activeModule = isHome ? 'home' : isHandbook ? 'handbook' : isHRIS ? 'hris' : isTasksModule ? 'tasks' : isPos ? 'pos' : isAdminModule ? 'admin' : 'inventory'
-  const activeGroups = isHome ? HOME_NAV_GROUPS : isHandbook ? HANDBOOK_NAV_GROUPS : isHRIS ? HRIS_NAV_GROUPS : isTasksModule ? TASKS_NAV_GROUPS : isPos ? POS_NAV_GROUPS : isAdminModule ? ADMIN_NAV_GROUPS : (isSuperAdmin || canInventory) ? NAV_GROUPS : HOME_NAV_GROUPS
+  const activeGroups = isHome ? HOME_NAV_GROUPS : isHandbook ? HANDBOOK_NAV_GROUPS : isHRIS ? HRIS_NAV_GROUPS : isTasksModule ? (canTasks ? TASKS_NAV_GROUPS : HOME_NAV_GROUPS) : isPos ? POS_NAV_GROUPS : isAdminModule ? ADMIN_NAV_GROUPS : (isSuperAdmin || canInventory) ? NAV_GROUPS : HOME_NAV_GROUPS
   // Path yang punya "anak" (mis. /hris punya /hris/attendance, dst) butuh `end`
   // di NavLink, kalau tidak dia akan tetap ke-highlight walau lagi di sub-route.
   const allNavPaths = activeGroups.flatMap(g => g.items.map(i => i.to))
@@ -476,7 +467,7 @@ export default function Layout({ children }) {
               biar nav-nya nggak cuma 1 baris kosong ("Papan Tugas") begitu
               masuk ke module ini. Pakai onClick+navigate (bukan NavLink)
               karena target-nya query string (?view=), bukan path baru. */}
-          {isTasksModule && !collapsed && (
+          {isTasksModule && canTasks && !collapsed && (
             <div className="mb-3 p-2.5 rounded-xl bg-white border border-slate-200/80 shadow-sm">
               <p className="px-0.5 pb-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Akses Cepat</p>
               <div className="space-y-0.5">

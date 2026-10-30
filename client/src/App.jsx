@@ -198,7 +198,7 @@ function AppRoutes() {
 
                 {/* ── Umum ── */}
                 <Route path="/database-links" element={<PageVisibleRoute pageKey="database-links"><PermissionRoute permission="db_link.view" page="Database Links"><DatabaseLinks /></PermissionRoute></PageVisibleRoute>} />
-                <Route path="/tasks" element={<PageVisibleRoute pageKey="tasks"><Tasks /></PageVisibleRoute>} />
+                <Route path="/tasks" element={<PageVisibleRoute pageKey="tasks"><PermissionRoute permission="tasks.view" page="Tugas"><Tasks /></PermissionRoute></PageVisibleRoute>} />
                 <Route path="/laporan"        element={<PageVisibleRoute pageKey="laporan"><PermissionRoute permission="reports.manage" page="Laporan"><Laporan /></PermissionRoute></PageVisibleRoute>} />
 
                 {/* ── Pengajuan ── */}
