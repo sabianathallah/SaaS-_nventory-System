@@ -17,10 +17,10 @@ export default function NoPermission({ page }) {
         Hubungi admin perusahaan untuk meminta akses.
       </p>
       <button
-        onClick={() => navigate('/dashboard')}
+        onClick={() => navigate('/home')}
         className="btn-secondary text-sm"
       >
-        Kembali ke Dashboard
+        Kembali ke Beranda
       </button>
     </div>
   )

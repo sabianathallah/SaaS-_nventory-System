@@ -1,6 +1,8 @@
 import { createContext, useContext, useState, useCallback, useEffect } from 'react'
 import { login as loginApi } from '../api'
 import api from '../api/axios'
+import { INVENTORY_ACCESS } from '../utils/access'
+
 
 const AuthContext = createContext(null)
 
@@ -50,6 +52,9 @@ export function AuthProvider({ children }) {
     return Array.isArray(user.permissions) && user.permissions.includes(key)
   }, [user])
 
+  // Modul Inventory (Dashboard dkk): butuh salah satu izin inventory/stok/dashboard
+  const canInventory = INVENTORY_ACCESS.some(hasPermission)
+
   const isSuperAdmin   = user?.role === 'SUPER_ADMIN'
   const isAdmin        = ['SUPER_ADMIN', 'COMPANY_ADMIN'].includes(user?.role)
   const isOperasional  = ['SUPER_ADMIN', 'COMPANY_ADMIN', 'OPERASIONAL'].includes(user?.role)
@@ -64,7 +69,7 @@ export function AuthProvider({ children }) {
 
   return (
     <AuthContext.Provider value={{
-      user, signIn, signOut, hasPermission,
+      user, signIn, signOut, hasPermission, canInventory,
       isSuperAdmin, isAdmin, isOperasional, isHeadPacking, isTimPacking, isHR, isStaff, canViewPacking,
     }}>
       {children}

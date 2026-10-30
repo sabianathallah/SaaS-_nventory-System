@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
+import { INVENTORY_ACCESS } from './utils/access'
 import { PageVisibilityProvider, usePageVisibility } from './context/PageVisibilityContext'
 import { SelectedCompanyProvider } from './context/SelectedCompanyContext'
 import Layout from './components/Layout'
@@ -101,13 +102,13 @@ function PermissionRoute({ permission, page, children }) {
 
 function SuperRoute({ children }) {
   const { isSuperAdmin } = useAuth()
-  return isSuperAdmin ? children : <Navigate to="/dashboard" replace />
+  return isSuperAdmin ? children : <Navigate to="/home" replace />
 }
 
 function PageVisibleRoute({ pageKey, children }) {
   const { isSuperAdmin } = useAuth()
   const { isPageVisible } = usePageVisibility()
-  if (!isSuperAdmin && !isPageVisible(pageKey)) return <Navigate to="/dashboard" replace />
+  if (!isSuperAdmin && !isPageVisible(pageKey)) return <Navigate to="/home" replace />
   return children
 }
 
@@ -126,9 +127,9 @@ function AppRoutes() {
               <ErrorBoundary>
               <Routes>
                 <Route path="/home"      element={<Home />} />
-                <Route path="/dashboard" element={<Dashboard />} />
-                <Route path="/sop"       element={<SOP />} />
-                <Route path="/handbook/*" element={<Handbook />} />
+                <Route path="/dashboard" element={<PermissionRoute permission={INVENTORY_ACCESS} page="Dashboard"><Dashboard /></PermissionRoute>} />
+                <Route path="/sop"       element={<PermissionRoute permission="sop.view" page="SOP"><SOP /></PermissionRoute>} />
+                <Route path="/handbook/*" element={<PermissionRoute permission="handbook.view" page="Company Handbook"><Handbook /></PermissionRoute>} />
                 <Route path="/hris"               element={<PageVisibleRoute pageKey="hris"><PermissionRoute permission="hris.view" page="HRIS"><HRIS /></PermissionRoute></PageVisibleRoute>} />
                 <Route path="/hris/attendance"     element={<PageVisibleRoute pageKey="hris"><PermissionRoute permission="hris.view" page="Presensi"><HrisAttendance /></PermissionRoute></PageVisibleRoute>} />
                 <Route path="/hris/leave"          element={<PageVisibleRoute pageKey="hris"><PermissionRoute permission="hris.view" page="Cuti"><HrisLeave /></PermissionRoute></PageVisibleRoute>} />

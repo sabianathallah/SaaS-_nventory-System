@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import ProfileModal from './ProfileModal'
 import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { INVENTORY_ACCESS } from '../utils/access'
 import { usePageVisibility } from '../context/PageVisibilityContext'
 import CompanySwitcher from './CompanySwitcher'
 import NotificationBell from './NotificationBell'
@@ -28,9 +29,9 @@ const NAV_GROUPS = [
   {
     label: 'Ringkasan',
     items: [
-      { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-      { to: '/sop',       icon: BookMarked,      label: 'SOP' },
-      { to: '/laporan',   icon: BarChart2,        label: 'Laporan', pageKey: 'laporan' },
+      { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', requirePermission: INVENTORY_ACCESS },
+      { to: '/sop',       icon: BookMarked,      label: 'SOP', requirePermission: 'sop.view' },
+      { to: '/laporan',   icon: BarChart2,        label: 'Laporan', pageKey: 'laporan', requirePermission: 'reports.manage' },
     ],
   },
   {
@@ -240,18 +241,22 @@ function NavTooltip({ label, children }) {
 // frekuensi pakai harian (Beranda & HRIS dulu, baru Inventory/Admin).
 function ModuleSwitcher({ collapsed, activeModule, tasksBadge }) {
   const navigate = useNavigate()
-  const { hasPermission, isSuperAdmin, isAdmin } = useAuth()
+  const { hasPermission, isSuperAdmin, isAdmin, canInventory } = useAuth()
   const items = [
     { key: 'home',      label: 'Beranda',  icon: Home,       to: '/home',      active: activeModule === 'home' },
     ...(isSuperAdmin || hasPermission('hris.view')
       ? [{ key: 'hris', label: 'HRIS', icon: UserCog, to: '/hris', active: activeModule === 'hris' }]
       : []),
     { key: 'tasks',     label: 'Tugas',     icon: ListChecks, to: '/tasks',     active: activeModule === 'tasks', badge: tasksBadge },
-    { key: 'inventory', label: 'Inventory', icon: Package,    to: '/dashboard', active: activeModule === 'inventory' },
+    ...(isSuperAdmin || canInventory
+      ? [{ key: 'inventory', label: 'Inventory', icon: Package, to: '/dashboard', active: activeModule === 'inventory' }]
+      : []),
     ...(isSuperAdmin || POS_PERMS.some(hasPermission)
       ? [{ key: 'pos', label: 'POS', icon: Store, to: '/pos', active: activeModule === 'pos' }]
       : []),
-    { key: 'handbook',  label: 'Handbook',   icon: BookOpen, to: '/handbook',  active: activeModule === 'handbook' },
+    ...(isSuperAdmin || hasPermission('handbook.view')
+      ? [{ key: 'handbook', label: 'Handbook', icon: BookOpen, to: '/handbook', active: activeModule === 'handbook' }]
+      : []),
     ...(isAdmin || hasPermission('admin.users')
       ? [{ key: 'admin', label: 'Admin', icon: ShieldCheck, to: '/users', active: activeModule === 'admin' }]
       : []),

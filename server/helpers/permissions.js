@@ -103,6 +103,10 @@ const ALL_PERMISSIONS = [
   { key: 'admin.users',               label: 'Kelola Pengguna',                            group: 'Administrasi',            parent: 'admin.manage',           desc: 'Tambah, edit, nonaktifkan user & atur role' },
 
   // ── HRIS ─────────────────────────────────────────────────────────────────────
+  // ── Konten Perusahaan ────────────────────────────────────────────────────────
+  { key: 'sop.view',                  label: 'Lihat SOP Operasional',                      group: 'Konten Perusahaan',       desc: 'Buka halaman SOP di modul Inventory' },
+  { key: 'handbook.view',             label: 'Lihat Company Handbook',                     group: 'Konten Perusahaan',       desc: 'Buka modul Handbook: kebijakan & struktur organisasi' },
+
   { key: 'hris.manage',               label: 'Akses Penuh HRIS',                           group: 'HRIS',                    isParent: true,  desc: 'Aktifkan semua fitur HRIS sekaligus' },
   { key: 'hris.view',                 label: 'Gunakan HRIS (Self-Service)',                group: 'HRIS',                    parent: 'hris.manage',            desc: 'Check-in/out presensi, ajukan cuti & lembur, lihat riwayat sendiri' },
   { key: 'hris.attendance.edit',      label: 'Edit Data Absensi',                          group: 'HRIS',                    parent: 'hris.manage',            desc: 'Koreksi data check-in/out milik siapa pun' },
@@ -147,6 +151,7 @@ const DEFAULT_PERMISSIONS = {
     'db_link.manage',
     'request.manage', 'request.view', 'request.create', 'request.process',
     'hris.view',
+    'sop.view', 'handbook.view',
   ],
 
   HEAD_PACKING: [
@@ -158,15 +163,17 @@ const DEFAULT_PERMISSIONS = {
     'reports.manage',
     'db_link.view',
     'hris.view',
+    'sop.view', 'handbook.view',
   ],
 
-  TIM_PACKING: ['packing.view', 'packing.incoming', 'packing.jobs', 'hris.view'],
+  TIM_PACKING: ['packing.view', 'packing.incoming', 'packing.jobs', 'hris.view', 'sop.view', 'handbook.view'],
 
   HR: [
     'admin.manage', 'admin.users', 'reports.manage', 'db_link.view',
     'hris.manage', 'hris.view', 'hris.attendance.edit', 'hris.attendance.review', 'hris.leave.review',
     'hris.wfa.review', 'hris.overtime.review', 'hris.shift.manage', 'hris.location.manage', 'hris.reports.view',
     'hris.payslip.manage', 'hris.salary.manage',
+    'sop.view', 'handbook.view',
   ],
 
   FINANCE: [
@@ -175,6 +182,7 @@ const DEFAULT_PERMISSIONS = {
     'shipping.manual.view', 'shipping.manual.approve_payment',
     'reports.dashboard',
     'hris.view', 'hris.reports.view', 'hris.salary.manage',
+    'sop.view', 'handbook.view',
   ],
 
   CEO: [
@@ -187,16 +195,17 @@ const DEFAULT_PERMISSIONS = {
     'reports.manage',
     'db_link.view',
     'hris.view', 'hris.reports.view',
+    'sop.view', 'handbook.view',
   ],
 
   // Kasir event: jualan & antrean ambil saja — tanpa pengaturan kasir, void, laporan, atau kelola event
-  KASIR: ['pos.sell', 'pos.fulfill'],
+  KASIR: ['pos.sell', 'pos.fulfill', 'hris.view'],
 
-  STAFF: ['inventory.view', 'db_link.view', 'request.create', 'hris.view'],
+  STAFF: ['inventory.view', 'db_link.view', 'request.create', 'hris.view', 'sop.view', 'handbook.view'],
 
-  MARKETING:         ['inventory.view', 'channel.manage', 'db_link.view', 'request.create', 'request.view', 'hris.view'],
-  PRODUKSI:          ['inventory.view', 'channel.manage', 'db_link.view', 'request.create', 'hris.view'],
-  PRODUK_DEVELOPMENT:['inventory.view', 'db_link.view', 'request.create', 'hris.view'],
+  MARKETING:         ['inventory.view', 'channel.manage', 'db_link.view', 'request.create', 'request.view', 'hris.view', 'sop.view', 'handbook.view'],
+  PRODUKSI:          ['inventory.view', 'channel.manage', 'db_link.view', 'request.create', 'hris.view', 'sop.view', 'handbook.view'],
+  PRODUK_DEVELOPMENT:['inventory.view', 'db_link.view', 'request.create', 'hris.view', 'sop.view', 'handbook.view'],
 };
 
 const EDITABLE_ROLES = ['COMPANY_ADMIN', 'OPERASIONAL', 'TIM_PACKING', 'STAFF'];

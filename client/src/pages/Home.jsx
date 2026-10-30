@@ -1,19 +1,12 @@
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { Package, UserCog, BookOpen, ShieldCheck, ListChecks, ChevronRight } from 'lucide-react'
+import { Package, UserCog, BookOpen, ShieldCheck, ListChecks, ChevronRight, Store } from 'lucide-react'
 import MyDayToday from '../components/tasks/MyDayToday'
 import CompletedHistory from '../components/tasks/CompletedHistory'
 import PresensiWidget from '../components/hris/PresensiWidget'
 
 const BRAND = '#C8102E'
 
-const INVENTORY_PERMISSIONS = [
-  'inventory.view', 'inventory.manage', 'inventory.product.create', 'inventory.product.edit',
-  'stock.in.view', 'stock.out.view', 'stock.view', 'stock.opname.view', 'stock.transfer.view',
-  'shipping.manual.view', 'shipping.manual.create', 'shipping.manual.edit',
-  'packing.manage', 'packing.incoming', 'packing.jobs', 'packing.view',
-  'handover.view', 'db_link.view', 'reports.manage',
-]
 
 const GREETINGS = ['Selamat pagi', 'Selamat siang', 'Selamat sore', 'Selamat malam']
 function greeting() {
@@ -52,9 +45,11 @@ function ModuleCard({ icon: Icon, title, desc, to, accent = BRAND }) {
 // riwayat selesai, presensi, dan quick access ke modul yang dipunya user.
 // Ringkasan data inventaris murni ada di /dashboard, terpisah dari sini.
 export default function Home() {
-  const { user, isAdmin, hasPermission } = useAuth()
+  const { user, isAdmin, hasPermission, canInventory } = useAuth()
 
-  const hasInventory = isAdmin || INVENTORY_PERMISSIONS.some((p) => hasPermission(p))
+  const hasInventory = isAdmin || canInventory
+  // kasir tanpa akses inventory tetap butuh jalan masuk ke POS
+  const hasPosOnly   = !hasInventory && ['pos.manage', 'pos.sell', 'pos.fulfill', 'pos.event.manage', 'pos.report'].some(hasPermission)
   const hasHris       = isAdmin || hasPermission('hris.view')
   const hasAdminModule = isAdmin || hasPermission('admin.users')
 
@@ -87,6 +82,14 @@ export default function Home() {
               to="/dashboard"
             />
           )}
+          {hasPosOnly && (
+            <ModuleCard
+              icon={Store}
+              title="Kasir / POS"
+              desc="Jualan di event, antrean pengambilan, riwayat"
+              to="/pos"
+            />
+          )}
           {hasHris && (
             <ModuleCard
               icon={UserCog}
@@ -103,13 +106,15 @@ export default function Home() {
             to="/tasks"
             accent="#7C3AED"
           />
-          <ModuleCard
-            icon={BookOpen}
-            title="Company Handbook"
-            desc="Kebijakan dan struktur organisasi perusahaan"
-            to="/handbook"
-            accent="#10B981"
-          />
+          {hasPermission('handbook.view') && (
+            <ModuleCard
+              icon={BookOpen}
+              title="Company Handbook"
+              desc="Kebijakan dan struktur organisasi perusahaan"
+              to="/handbook"
+              accent="#10B981"
+            />
+          )}
           {hasAdminModule && (
             <ModuleCard
               icon={ShieldCheck}
