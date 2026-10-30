@@ -326,7 +326,7 @@ function ModuleSwitcher({ collapsed, activeModule, tasksBadge }) {
 }
 
 export default function Layout({ children }) {
-  const { user, signOut, isSuperAdmin, hasPermission } = useAuth()
+  const { user, signOut, isSuperAdmin, hasPermission, canInventory } = useAuth()
   const { needsCompany } = useCompanyGuard()
   const { isPageVisible } = usePageVisibility()
   const navigate  = useNavigate()
@@ -356,7 +356,7 @@ export default function Layout({ children }) {
     (p) => location.pathname === p || location.pathname.startsWith(p + '/')
   )
   const activeModule = isHome ? 'home' : isHandbook ? 'handbook' : isHRIS ? 'hris' : isTasksModule ? 'tasks' : isPos ? 'pos' : isAdminModule ? 'admin' : 'inventory'
-  const activeGroups = isHome ? HOME_NAV_GROUPS : isHandbook ? HANDBOOK_NAV_GROUPS : isHRIS ? HRIS_NAV_GROUPS : isTasksModule ? TASKS_NAV_GROUPS : isPos ? POS_NAV_GROUPS : isAdminModule ? ADMIN_NAV_GROUPS : NAV_GROUPS
+  const activeGroups = isHome ? HOME_NAV_GROUPS : isHandbook ? HANDBOOK_NAV_GROUPS : isHRIS ? HRIS_NAV_GROUPS : isTasksModule ? TASKS_NAV_GROUPS : isPos ? POS_NAV_GROUPS : isAdminModule ? ADMIN_NAV_GROUPS : (isSuperAdmin || canInventory) ? NAV_GROUPS : HOME_NAV_GROUPS
   // Path yang punya "anak" (mis. /hris punya /hris/attendance, dst) butuh `end`
   // di NavLink, kalau tidak dia akan tetap ke-highlight walau lagi di sub-route.
   const allNavPaths = activeGroups.flatMap(g => g.items.map(i => i.to))
