@@ -100,9 +100,9 @@ function PermissionRoute({ permission, page, children }) {
   return perms.some(hasPermission) ? children : <NoPermission page={page} />
 }
 
-function SuperRoute({ children }) {
+function SuperRoute({ page, children }) {
   const { isSuperAdmin } = useAuth()
-  return isSuperAdmin ? children : <Navigate to="/home" replace />
+  return isSuperAdmin ? children : <NoPermission page={page} />
 }
 
 function PageVisibleRoute({ pageKey, children }) {
@@ -209,8 +209,8 @@ function AppRoutes() {
                 {/* ── Administrasi ── */}
                 <Route path="/users"           element={<PageVisibleRoute pageKey="users"><PermissionRoute permission="admin.users" page="Pengguna"><Users /></PermissionRoute></PageVisibleRoute>} />
                 <Route path="/roles"           element={<PageVisibleRoute pageKey="users"><PermissionRoute permission="admin.users" page="Roles & Permission"><Roles /></PermissionRoute></PageVisibleRoute>} />
-                <Route path="/companies"       element={<SuperRoute><PageVisibleRoute pageKey="companies"><Companies /></PageVisibleRoute></SuperRoute>} />
-                <Route path="/page-visibility" element={<SuperRoute><PageVisibility /></SuperRoute>} />
+                <Route path="/companies"       element={<SuperRoute page="Perusahaan"><PageVisibleRoute pageKey="companies"><Companies /></PageVisibleRoute></SuperRoute>} />
+                <Route path="/page-visibility" element={<SuperRoute page="Visibilitas Halaman"><PageVisibility /></SuperRoute>} />
               </Routes>
               </ErrorBoundary>
             </Layout>

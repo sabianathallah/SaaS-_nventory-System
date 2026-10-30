@@ -42,16 +42,12 @@ function ModuleCard({ icon: Icon, title, desc, to, accent = BRAND }) {
 
 // Personal Dashboard — landing universal buat semua user setelah login
 // (lihat RootRoute di App.jsx). Isinya khusus kepentingan personal: My Day +
-// riwayat selesai, presensi, dan quick access ke modul yang dipunya user.
+// riwayat selesai, presensi, dan quick access ke semua modul.
 // Ringkasan data inventaris murni ada di /dashboard, terpisah dari sini.
 export default function Home() {
-  const { user, isAdmin, hasPermission, canInventory } = useAuth()
+  const { user, isAdmin, hasPermission } = useAuth()
 
-  const hasInventory = isAdmin || canInventory
-  // kasir tanpa akses inventory tetap butuh jalan masuk ke POS
-  const hasPosOnly   = !hasInventory && ['pos.manage', 'pos.sell', 'pos.fulfill', 'pos.event.manage', 'pos.report'].some(hasPermission)
-  const hasHris       = isAdmin || hasPermission('hris.view')
-  const hasAdminModule = isAdmin || hasPermission('admin.users')
+  const hasHris = isAdmin || hasPermission('hris.view')
 
   return (
     <div className="px-4 md:px-6 py-6 max-w-4xl mx-auto space-y-6">
@@ -73,61 +69,50 @@ export default function Home() {
         </div>
       )}
 
+      {/* Semua modul selalu tampil; tanpa izin, halamannya menampilkan "Akses Ditolak" */}
       <div>
         <p className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-2.5">Akses Cepat</p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {hasInventory && (
-            <ModuleCard
-              icon={Package}
-              title="Inventory System"
-              desc="Produk, gudang, stok, transaksi, dan laporan"
-              to="/dashboard"
-            />
-          )}
-          {hasPosOnly && (
-            <ModuleCard
-              icon={Store}
-              title="Kasir / POS"
-              desc="Jualan di event, antrean pengambilan, riwayat"
-              to="/pos"
-            />
-          )}
-          {hasHris && (
-            <ModuleCard
-              icon={UserCog}
-              title="HRIS"
-              desc="Presensi, cuti, WFA, dan pengaturan HR"
-              to="/hris"
-              accent="#3B82F6"
-            />
-          )}
-          {hasPermission('tasks.view') && (
-            <ModuleCard
-              icon={ListChecks}
-              title="Tugas"
-              desc="Kelola seluruh task — board, kalender, tabel"
-              to="/tasks"
-              accent="#7C3AED"
-            />
-          )}
-          {hasPermission('handbook.view') && (
-            <ModuleCard
-              icon={BookOpen}
-              title="Company Handbook"
-              desc="Kebijakan dan struktur organisasi perusahaan"
-              to="/handbook"
-              accent="#10B981"
-            />
-          )}
-          {hasAdminModule && (
-            <ModuleCard
-              icon={ShieldCheck}
-              title="Administrasi"
-              desc="Pengguna, roles & permission, perusahaan, visibilitas halaman"
-              to="/users"
-              accent="#8B5CF6"
-            />
-          )}
+          <ModuleCard
+            icon={Package}
+            title="Inventory System"
+            desc="Produk, gudang, stok, transaksi, dan laporan"
+            to="/dashboard"
+          />
+          <ModuleCard
+            icon={Store}
+            title="Kasir / POS"
+            desc="Jualan di event, antrean pengambilan, riwayat"
+            to="/pos"
+          />
+          <ModuleCard
+            icon={UserCog}
+            title="HRIS"
+            desc="Presensi, cuti, WFA, dan pengaturan HR"
+            to="/hris"
+            accent="#3B82F6"
+          />
+          <ModuleCard
+            icon={ListChecks}
+            title="Tugas"
+            desc="Kelola seluruh task — board, kalender, tabel"
+            to="/tasks"
+            accent="#7C3AED"
+          />
+          <ModuleCard
+            icon={BookOpen}
+            title="Company Handbook"
+            desc="Kebijakan dan struktur organisasi perusahaan"
+            to="/handbook"
+            accent="#10B981"
+          />
+          <ModuleCard
+            icon={ShieldCheck}
+            title="Administrasi"
+            desc="Pengguna, roles & permission, perusahaan, visibilitas halaman"
+            to="/users"
+            accent="#8B5CF6"
+          />
         </div>
       </div>
     </div>
