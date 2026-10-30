@@ -301,3 +301,29 @@ describe('Koreksi Stock IN (item dihapus / qty dikurangi)', () => {
     expect(tot).toEqual({ IN: 20, OUT: 4 });
   });
 });
+
+describe('Hapus Stock Out susulan dari shipping', () => {
+  const { ManualShipment } = require('../models');
+  let ms, soh;
+
+  beforeAll(async () => {
+    ms = await ManualShipment.create({
+      invoiceNumber: 'INV/TEST/SO-DEL', type: 'non_sales', status: 'pending', skippedStockOut: false, companyId: state.company.id,
+    });
+    soh = await Stock_Out_Header.create({
+      WarehouseId: state.warehouse.id, date: new Date(), purpose: 'Endorse', manualShipmentId: ms.id, createdBy: state.admin.id, companyId: state.company.id,
+    });
+  });
+
+  afterAll(async () => {
+    await Stock_Out_Header.destroy({ where: { manualShipmentId: ms.id } }).catch(() => {});
+    await ManualShipment.destroy({ where: { id: ms.id } }).catch(() => {});
+  });
+
+  test('shipping kembali ke "belum stock out" setelah Stock Out-nya dihapus', async () => {
+    const res = await request(app).delete(`/stock-out-headers/${soh.id}`).set(auth());
+    expect(res.status).toBe(200);
+    await ms.reload();
+    expect(ms.skippedStockOut).toBe(true);
+  });
+});

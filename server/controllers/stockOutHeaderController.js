@@ -1,6 +1,6 @@
 'use strict';
 const { Op } = require('sequelize');
-const { sequelize, Stock_Out_Header, Stock_Movement, Stock, SkuWarehouseStock, User, Product, ProductSKU, ProductVariantOption, Warehouse, Vendor, VendorDelivery, Channel } = require('../models');
+const { sequelize, Stock_Out_Header, Stock_Movement, Stock, SkuWarehouseStock, User, Product, ProductSKU, ProductVariantOption, Warehouse, Vendor, VendorDelivery, Channel, ManualShipment } = require('../models');
 const { companyFilter, companyId } = require('../helpers/tenancy');
 const { upsertSkuWarehouseStock } = require('../helpers/skuStock');
 const { paginate, buildFilter, paginatedResponse } = require('../helpers/queryHelper');
@@ -436,6 +436,12 @@ class StockOutHeaderController {
             }
             await Stock_Movement.destroy({ where: { ReferenceId: header.id }, transaction: t });
             await header.destroy({ transaction: t });
+            // Stock out susulan dari shipping dibatalkan → shipping balik ke "belum stock out"
+            // supaya bisa di-stock out lagi nanti lewat tombol di shipping.
+            if (header.manualShipmentId) {
+                const other = await Stock_Out_Header.count({ where: { manualShipmentId: header.manualShipmentId }, transaction: t });
+                if (!other) await ManualShipment.update({ skippedStockOut: true }, { where: { id: header.manualShipmentId }, transaction: t });
+            }
             await t.commit();
             res.status(200).json({ message: 'Stock out header deleted successfully' });
         } catch (err) { await t.rollback(); next(err); }
