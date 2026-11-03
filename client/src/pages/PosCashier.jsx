@@ -3,8 +3,8 @@ import { useNavigate, useParams } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import {
   ArrowLeft, Minus, Plus, Printer, RefreshCw, Settings, Trash2, Wifi, WifiOff, X, LogOut, History,
-  Search, ScanLine, Monitor, ShoppingBag, CheckCircle2, PackageCheck, Banknote, QrCode, CreditCard, Landmark, Wallet, Tag, Store,
-  PauseCircle, Boxes,
+  Search, Monitor, ShoppingBag, CheckCircle2, PackageCheck, Banknote, QrCode, CreditCard, Landmark, Wallet, Tag, Store,
+  PauseCircle, Boxes, ScanBarcode,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import NoPermission from '../components/NoPermission'
@@ -84,6 +84,8 @@ export default function PosCashier() {
   const [payPreview, setPayPreview] = useState(null) // pilihan di layar bayar, dikirim ke layar pelanggan
   const [held, setHeld] = useState([])              // keranjang yang ditahan (maks MAX_HELD)
   const scanRef = useRef(null)
+  const [scannerOn, setScannerOn] = useState(false) // scanner USB (HID) terhubung: kolom scan selalu fokus
+  const keyGap = useRef({ at: 0, slow: false })      // deteksi ketikan cepat scanner vs ketikan manual
 
   const refreshOrders = useCallback(async () => {
     const [queue, sent] = await Promise.all([allItems('queue'), allItems('sent')])
@@ -115,6 +117,7 @@ export default function PosCashier() {
     getItem('kv', 'receiptSettings').then(s => s && setSettings(v => ({ ...v, ...s })))
     getItem('kv', `shift:${eventId}`).then(s => setShift(s || null))
     getItem('kv', `held:${eventId}`).then(h => setHeld(h || []))
+    getItem('kv', 'scannerConnected').then(v => setScannerOn(!!v))
     requestPersistence().finally(() => { loadCatalog(true); refreshOrders() })
     const stop = startAutoSync()
     const off = onSyncChange((st) => { setSync(st); refreshOrders() })
@@ -133,6 +136,24 @@ export default function PosCashier() {
 
   const focusScan = useCallback(() => setTimeout(() => scanRef.current?.focus(), 0), [])
   useEffect(() => { if (!modal && !sizeFor) focusScan() }, [modal, sizeFor, focusScan])
+  // Scanner terhubung: kolom scan direbut kembali setiap kali lepas fokus (kecuali ada jendela terbuka)
+  useEffect(() => {
+    if (!scannerOn || modal || sizeFor) return
+    const input = scanRef.current
+    if (!input) return
+    const onBlur = () => requestAnimationFrame(() => {
+      const el = document.activeElement
+      if (!el || el === document.body || el.tagName === 'BUTTON') input.focus()
+    })
+    input.addEventListener('blur', onBlur)
+    return () => input.removeEventListener('blur', onBlur)
+  }, [scannerOn, modal, sizeFor, catalog, shift])
+  const toggleScanner = () => {
+    const on = !scannerOn
+    setScannerOn(on); setItem('kv', 'scannerConnected', on)
+    if (on) { toast.success('Scanner terhubung — langsung scan barcode produk', { icon: '🔌' }); focusScan() }
+    else toast('Scanner diputus', { icon: '🔌' })
+  }
 
   // ── Stok tampil = stok katalog - penjualan yang belum ada di server saat katalog dibuat ──
   const soldLocal = useMemo(() => {
@@ -214,13 +235,24 @@ export default function PosCashier() {
   const pickProduct = (p) => {
     if (p.skus.length === 1) { addSku(p.skus[0]); focusScan() } else setSizeFor(p)
   }
+  // Ketikan scanner: semua karakter masuk < 50 ms. Satu jeda lebih lama = diketik manual.
+  const onScanKey = (e) => {
+    if (e.key.length !== 1) return
+    const now = Date.now(), g = keyGap.current
+    if (!scan) g.slow = false
+    else if (now - g.at > 50) g.slow = true
+    g.at = now
+  }
   const onScanEnter = () => {
     const q = scan.trim()
     if (!q) { if (hasItems) setModal('pay'); return }
-    const hit = byCode.get(q.toLowerCase())
+    const fromScanner = !keyGap.current.slow && q.length > 2
+    const hit = byCode.get(q.toLowerCase()) || byCode.get(q.replace(/\s+/g, '').toLowerCase())
     if (hit) { addSku(hit); setScan(''); return }
+    if (fromScanner) { toast.error(`Barcode "${q}" tidak ada di katalog event ini. Perbarui katalog kalau SKU-nya baru.`, { duration: 5000 }); setScan(''); return }
     if (visible.length === 1) { pickProduct(visible[0]); setScan(''); return }
-    if (!visible.length) { toast.error(`"${q}" tidak ada di katalog`); setScan('') }
+    if (!visible.length) { toast.error(`"${q}" tidak ada di katalog`); setScan(''); return }
+    toast(`${visible.length} produk cocok dengan "${q}" — pilih di daftar`, { icon: '🔎' })
   }
   const updateLine = (skuId, patch) => setCart(c => c.map(l => l.skuId === skuId ? { ...l, ...patch } : l))
   const removeLine = (skuId) => setCart(c => c.filter(l => l.skuId !== skuId))
@@ -394,10 +426,13 @@ export default function PosCashier() {
             <div className="relative">
               <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
               <input ref={scanRef} value={scan} onChange={e => setScan(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); onScanEnter() } else if (e.key === 'Escape' && scan) { e.stopPropagation(); setScan('') } }}
-                className="w-full h-12 pl-11 pr-28 rounded-xl bg-white border border-slate-200 text-[15px] shadow-sm focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand"
+                onKeyDown={e => { onScanKey(e); if (e.key === 'Enter') { e.preventDefault(); onScanEnter() } else if (e.key === 'Escape' && scan) { e.stopPropagation(); setScan('') } }}
+                className="w-full h-12 pl-11 pr-44 rounded-xl bg-white border border-slate-200 text-[15px] shadow-sm focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand"
                 placeholder="Scan barcode atau cari produk / size…" autoFocus />
-              <span className="absolute right-3 top-1/2 -translate-y-1/2 inline-flex items-center gap-1 text-[11px] text-slate-400"><ScanLine size={13} />siap scan</span>
+              <button type="button" onClick={toggleScanner} title={scannerOn ? 'Klik untuk memutus scanner' : 'Sambungkan scanner barcode USB'}
+                className={`absolute right-2 top-1/2 -translate-y-1/2 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-semibold transition-colors ${scannerOn ? 'bg-green-50 border-green-300 text-green-700 hover:bg-green-100' : 'bg-white border-slate-200 text-slate-500 hover:border-slate-400 hover:text-slate-700'}`}>
+                {scannerOn ? <><span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />Scanner terhubung</> : <><ScanBarcode size={14} />Hubungkan scanner</>}
+              </button>
             </div>
             <div className="flex gap-2 overflow-x-auto pb-1">
               {['', ...categories].map(c => (

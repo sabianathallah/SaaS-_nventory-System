@@ -6,7 +6,7 @@ const app     = require('../app');
 const { initDb } = require('./setup');
 const {
   Product, ProductSKU, SkuWarehouseStock, Stock, Stock_Movement, Stock_Out_Header,
-  Warehouse, Channel, PosOrder,
+  Warehouse, Channel, PosOrder, Article,
 } = require('../models');
 
 let state, wh, channel, product, skuA, skuB, eventId, shiftId;
@@ -89,6 +89,45 @@ describe('Event & shift', () => {
     expect(b.stock).toBe(1);
     expect(b.backupStock).toEqual({ [sewa.id]: 4 });
     expect(res.body.items.find(i => i.code === 'POS-A').backupStock).toBeUndefined();
+  });
+
+  test('koleksi event: katalog hanya berisi SKU koleksi terpilih, kosong = semua', async () => {
+    const cid = state.company.id;
+    const koleksi = await Article.create({ name: 'After Class Test', companyId: cid });
+    const lain    = await Article.create({ name: 'Koleksi Lain', companyId: cid });
+    const asing   = await Article.create({ name: 'Koleksi Company Lain', companyId: null });
+    await product.update({ ArticleId: koleksi.id });
+    const other = await Product.create({ name: 'Hoodie Lain', CategoryId: state.category.id, unit: 'pcs', ArticleId: lain.id, companyId: cid });
+    await ProductSKU.create({ ProductId: other.id, sku_code: 'POS-OTHER', price: 100000, qty: 0, companyId: cid });
+    const codes = async () => (await request(app).get(`/pos/events/${eventId}/catalog`).set(auth())).body.items.map(i => i.code).sort();
+
+    expect(await codes()).toEqual(['POS-A', 'POS-B', 'POS-OTHER']);
+
+    // id tidak dikenal / milik company lain ditolak
+    expect((await request(app).put(`/pos/events/${eventId}`).set(auth()).send({ articleIds: [999999] })).status).toBe(400);
+    expect((await request(app).put(`/pos/events/${eventId}`).set(auth()).send({ articleIds: [asing.id] })).status).toBe(400);
+
+    const up = await request(app).put(`/pos/events/${eventId}`).set(auth()).send({ articleIds: [koleksi.id, koleksi.id] });
+    expect(up.status).toBe(200);
+    expect(up.body.articleIds).toEqual([koleksi.id]);
+    const res = await request(app).get(`/pos/events/${eventId}/catalog`).set(auth());
+    expect(res.body.event.articleIds).toEqual([koleksi.id]);
+    expect(await codes()).toEqual(['POS-A', 'POS-B']);
+
+    expect((await request(app).put(`/pos/events/${eventId}`).set(auth()).send({ articleIds: [koleksi.id, lain.id] })).status).toBe(200);
+    expect(await codes()).toEqual(['POS-A', 'POS-B', 'POS-OTHER']);
+
+    // dikosongkan lagi = semua produk
+    expect((await request(app).put(`/pos/events/${eventId}`).set(auth()).send({ articleIds: [] })).status).toBe(200);
+    expect(await codes()).toEqual(['POS-A', 'POS-B', 'POS-OTHER']);
+  });
+
+  test('event baru bisa langsung diberi koleksi', async () => {
+    const koleksi = await Article.create({ name: 'Koleksi Event Baru', companyId: state.company.id });
+    const res = await request(app).post('/pos/events').set(auth())
+      .send({ name: 'Pop Up Koleksi', WarehouseId: wh.id, ChannelId: channel.id, articleIds: [koleksi.id] });
+    expect(res.status).toBe(201);
+    expect(res.body.articleIds).toEqual([koleksi.id]);
   });
 });
 

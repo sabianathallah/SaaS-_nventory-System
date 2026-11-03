@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { posApi, warehousesApi, channelsApi, productsApi } from '../api'
+import { posApi, warehousesApi, channelsApi, productsApi, articlesApi } from '../api'
 import PageHeader from '../components/PageHeader'
 import Modal from '../components/Modal'
 import toast from 'react-hot-toast'
@@ -14,7 +14,7 @@ const STATUS = {
   OPEN:   { label: 'Berjalan',  cls: 'badge-green' },
   CLOSED: { label: 'Selesai',   cls: 'badge-muted' },
 }
-const EMPTY = { name: '', location: '', startDate: '', endDate: '', WarehouseId: '', ChannelId: '', receiptHeader: '', receiptFooter: 'Terima kasih!', purchaseLimit: null, backupWarehouseIds: [] }
+const EMPTY = { name: '', location: '', startDate: '', endDate: '', WarehouseId: '', ChannelId: '', receiptHeader: '', receiptFooter: 'Terima kasih!', purchaseLimit: null, backupWarehouseIds: [], articleIds: [] }
 
 export default function PosEvents() {
   const qc = useQueryClient()
@@ -44,7 +44,7 @@ export default function PosEvents() {
   })
 
   const openForm = (ev) => {
-    setForm(ev ? { ...EMPTY, ...Object.fromEntries(Object.keys(EMPTY).map(k => [k, ev[k] ?? ''])), purchaseLimit: ev.purchaseLimit || null, backupWarehouseIds: ev.backupWarehouseIds || [] } : EMPTY)
+    setForm(ev ? { ...EMPTY, ...Object.fromEntries(Object.keys(EMPTY).map(k => [k, ev[k] ?? ''])), purchaseLimit: ev.purchaseLimit || null, backupWarehouseIds: ev.backupWarehouseIds || [], articleIds: ev.articleIds || [] } : EMPTY)
     setModal({ data: ev || null })
   }
   const submit = (e) => {
@@ -132,6 +132,7 @@ export default function PosEvents() {
           </div>
           <BackupField warehouses={(whs?.data ?? []).filter(w => String(w.id) !== String(form.WarehouseId))}
             value={form.backupWarehouseIds} onChange={(v) => setForm(f => ({ ...f, backupWarehouseIds: v }))} />
+          <ArticleField value={form.articleIds} onChange={(v) => setForm(f => ({ ...f, articleIds: v }))} />
           <div>
             <label className="label">Channel penjualan</label>
             <select className="input" value={form.ChannelId} onChange={set('ChannelId')} required>
@@ -168,6 +169,27 @@ function BackupField({ warehouses, value, onChange }) {
           </label>
         ))}
         {!warehouses.length && <p className="text-xs text-slate-400">Belum ada gudang lain.</p>}
+      </div>
+    </div>
+  )
+}
+
+function ArticleField({ value, onChange }) {
+  const ids = value ?? []
+  const { data } = useQuery({ queryKey: ['articles', { limit: 500 }], queryFn: () => articlesApi.list({ limit: 500 }) })
+  const articles = data?.data ?? []
+  const toggle = (id) => onChange(ids.includes(id) ? ids.filter(x => x !== id) : [...ids, id])
+  return (
+    <div className="rounded-xl border border-slate-200 p-3 space-y-2">
+      <p className="text-sm font-semibold text-slate-700">Koleksi yang dijual <span className="font-normal text-slate-400">(opsional)</span></p>
+      <p className="text-xs text-slate-500">Kasir hanya menampilkan produk dari koleksi yang dicentang. Kosongkan = semua produk. Setelah diubah, klik <b>Perbarui katalog</b> di laptop kasir.</p>
+      <div className="flex flex-wrap gap-x-4 gap-y-1.5 max-h-40 overflow-y-auto">
+        {articles.map(a => (
+          <label key={a.id} className="flex items-center gap-2 text-sm text-slate-700">
+            <input type="checkbox" checked={ids.includes(a.id)} onChange={() => toggle(a.id)} />{a.name}
+          </label>
+        ))}
+        {!articles.length && <p className="text-xs text-slate-400">Belum ada koleksi (Article).</p>}
       </div>
     </div>
   )

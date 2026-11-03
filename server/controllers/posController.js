@@ -2,7 +2,7 @@
 const {
     PosEvent, PosShift, PosOrder, PosOrderItem, PosPayment,
     Stock_Out_Header, Stock_Movement, Stock, SkuWarehouseStock,
-    Product, ProductSKU, ProductVariantOption, Warehouse, Channel, User, Category, Role, RolePermission, sequelize,
+    Product, ProductSKU, ProductVariantOption, Warehouse, Channel, User, Category, Role, RolePermission, Article, sequelize,
 } = require('../models');
 const { compare } = require('../helpers/bcrypt');
 const { Op, UniqueConstraintError } = require('sequelize');
@@ -69,6 +69,14 @@ async function normBackups(ids, mainWarehouseId, cid) {
     if (list.some(id => !isInt(id, 1))) return null;
     if (!list.length) return [];
     const found = await Warehouse.count({ where: { id: list, ...(cid ? { companyId: cid } : {}) } });
+    return found === list.length ? list : null;
+}
+// Koleksi (Article) event: unik, milik company yang sama. null kalau ada yang tidak valid.
+async function normArticles(ids, cid) {
+    const list = [...new Set((Array.isArray(ids) ? ids : []).map(Number))];
+    if (list.some(id => !isInt(id, 1))) return null;
+    if (!list.length) return [];
+    const found = await Article.count({ where: { id: list, ...(cid ? { companyId: cid } : {}) } });
     return found === list.length ? list : null;
 }
 // ── Persetujuan SPV di laptop kasir ─────────────────────────────────────────
@@ -154,8 +162,10 @@ class PosController {
             if (!ch) return bad(res, 'Channel tidak ditemukan');
             const backupWarehouseIds = await normBackups(req.body.backupWarehouseIds, WarehouseId, cid);
             if (!backupWarehouseIds) return bad(res, 'Gudang cadangan tidak ditemukan');
+            const articleIds = await normArticles(req.body.articleIds, cid);
+            if (!articleIds) return bad(res, 'Koleksi tidak ditemukan');
             const ev = await PosEvent.create({
-                name, location, startDate, endDate, WarehouseId, ChannelId, receiptHeader, receiptFooter, purchaseLimit, backupWarehouseIds,
+                name, location, startDate, endDate, WarehouseId, ChannelId, receiptHeader, receiptFooter, purchaseLimit, backupWarehouseIds, articleIds,
                 status: 'PREP', createdBy: req.user.id, companyId: cid,
             });
             res.status(201).json(ev);
@@ -206,21 +216,31 @@ class PosController {
                 if (!backups) return bad(res, 'Gudang cadangan tidak ditemukan');
                 updates.backupWarehouseIds = backups;
             }
+            // koleksi boleh diganti kapan saja; kasir mengambilnya saat katalog diperbarui
+            if (req.body.articleIds !== undefined) {
+                const articleIds = await normArticles(req.body.articleIds, ev.companyId);
+                if (!articleIds) return bad(res, 'Koleksi tidak ditemukan');
+                updates.articleIds = articleIds;
+            }
             await ev.update(updates);
             res.json(ev);
         } catch (err) { next(err); }
     }
 
-    // Katalog untuk disimpan di laptop kasir (mode offline): semua SKU + stok di gudang event.
+    // Katalog untuk disimpan di laptop kasir (mode offline): SKU (koleksi event, kosong = semua) + stok di gudang event.
     static async catalog(req, res, next) {
         try {
             const ev = await findEvent(req, req.params.id);
             if (!ev) throw { name: 'NotFound', message: 'Event tidak ditemukan' };
+            const articleIds = ev.articleIds || [];
             const skus = await ProductSKU.findAll({
                 where: { companyId: ev.companyId },
                 attributes: ['id', 'sku_code', 'price', 'ProductId'],
                 include: [
-                    { model: Product, attributes: ['id', 'name', 'imageUrl'], include: [{ model: Category, attributes: ['id', 'name'] }] },
+                    {
+                        model: Product, attributes: ['id', 'name', 'imageUrl'], include: [{ model: Category, attributes: ['id', 'name'] }],
+                        ...(articleIds.length ? { where: { ArticleId: articleIds }, required: true } : {}),
+                    },
                     { model: ProductVariantOption, attributes: ['value'], through: { attributes: [] } },
                 ],
                 order: [['ProductId', 'ASC'], ['position', 'ASC']],
@@ -243,6 +263,7 @@ class PosController {
                     id: ev.id, name: ev.name, location: ev.location, status: ev.status, WarehouseId: ev.WarehouseId, warehouseName: booth?.name || null, receiptHeader: ev.receiptHeader, receiptFooter: ev.receiptFooter, purchaseLimit: ev.purchaseLimit || null,
                     // urut sesuai pengaturan event
                     backupWarehouses: backupIds.map(id => backupWarehouses.find(w => w.id === id)).filter(Boolean).map(w => ({ id: w.id, name: w.name })),
+                    articleIds,
                 },
                 generatedAt: new Date().toISOString(),
                 items: skus.filter(s => s.Product).map(s => ({
