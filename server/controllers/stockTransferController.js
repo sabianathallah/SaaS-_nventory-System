@@ -6,6 +6,7 @@ const {
 } = require('../models');
 const { companyFilter, companyId: getCompanyId } = require('../helpers/tenancy');
 const { moveSkuWarehouseStock } = require('../helpers/skuStock');
+const { Op } = require('sequelize');
 
 const VALID_TYPES = ['TRANSFER', 'QC_REJECT_SEMENTARA', 'QC_REJECT_PERMANEN', 'LAINNYA'];
 
@@ -14,7 +15,7 @@ const SKU_INCLUDE = {
   as: 'ProductSKU',
   attributes: ['id', 'sku_code', 'qty'],
   include: [
-    { model: Product, attributes: ['id', 'name', 'unit'] },
+    { model: Product, attributes: ['id', 'name', 'unit', 'imageUrl'] },
     {
       model: ProductVariantOption,
       attributes: ['value'],
@@ -102,19 +103,46 @@ async function reverseItem(t, { cid, fromWarehouseId, toWarehouseId, productSkuI
   }
 }
 
+// Filter: q (no. transfer TRF-xxx / produk / kode SKU / catatan), warehouseId (asal atau tujuan),
+// fromWarehouseId, toWarehouseId, transferType, dateFrom, dateTo (YYYY-MM-DD)
 exports.list = async (req, res, next) => {
   try {
-    const { page = 1, limit = 15 } = req.query;
+    const { page = 1, limit = 15, q, warehouseId, fromWarehouseId, toWarehouseId, transferType, dateFrom, dateTo } = req.query;
     const offset = (Number(page) - 1) * Number(limit);
+    const and = [companyFilter(req)];
+    if (transferType) and.push({ transferType });
+    if (fromWarehouseId) and.push({ fromWarehouseId: Number(fromWarehouseId) });
+    if (toWarehouseId) and.push({ toWarehouseId: Number(toWarehouseId) });
+    if (warehouseId) and.push({ [Op.or]: [{ fromWarehouseId: Number(warehouseId) }, { toWarehouseId: Number(warehouseId) }] });
+    if (dateFrom || dateTo) and.push({ date: { ...(dateFrom && { [Op.gte]: dateFrom }), ...(dateTo && { [Op.lte]: dateTo }) } });
+    const term = String(q || '').trim();
+    if (term) {
+      const like = { [Op.iLike]: `%${term}%` };
+      const hits = await StockTransferItem.findAll({
+        attributes: ['transferId'],
+        include: [{ model: ProductSKU, as: 'ProductSKU', attributes: [], required: true, include: [{ model: Product, attributes: [], required: true }] }],
+        where: { [Op.or]: [{ '$ProductSKU.sku_code$': like }, { '$ProductSKU.Product.name$': like }] },
+        raw: true,
+      });
+      const or = [{ note: like }, { id: [...new Set(hits.map(h => h.transferId))] }];
+      const num = term.match(/^(?:TRF-?)?0*(\d{1,9})$/i);
+      if (num) or.push({ id: Number(num[1]) });
+      and.push({ [Op.or]: or });
+    }
     const { rows, count } = await StockTransfer.findAndCountAll({
-      where: companyFilter(req),
-      include: [...HEADER_INCLUDE, { model: StockTransferItem, as: 'items', attributes: ['id'] }],
+      where: { [Op.and]: and },
+      include: [...HEADER_INCLUDE, { model: StockTransferItem, as: 'items', attributes: ['id', 'quantity'] }],
       order: [['date', 'DESC'], ['createdAt', 'DESC']],
       limit: Number(limit),
       offset,
       distinct: true,
     });
-    const data = rows.map(r => ({ ...r.toJSON(), itemCount: r.items?.length ?? 0, items: undefined }));
+    const data = rows.map(r => ({
+      ...r.toJSON(),
+      itemCount: r.items?.length ?? 0,
+      totalQty: (r.items ?? []).reduce((s, i) => s + (i.quantity || 0), 0),
+      items: undefined,
+    }));
     res.json({ data, pagination: { total: count, page: Number(page), limit: Number(limit), totalPages: Math.ceil(count / Number(limit)) } });
   } catch (err) { next(err); }
 };

@@ -6,21 +6,9 @@ import toast from 'react-hot-toast'
 import { stockTransfersApi, warehousesApi, productsApi, productSkusApi, skuWarehouseStocksApi } from '../api'
 import PageHeader from '../components/PageHeader'
 import SearchableSelect from '../components/SearchableSelect'
+import TransferView from '../components/TransferView'
+import { TRANSFER_TYPES } from './transferShared'
 import { useAuth } from '../context/AuthContext'
-
-const TRANSFER_TYPES = [
-  { value: 'TRANSFER',            label: 'Transfer Biasa' },
-  { value: 'QC_REJECT_SEMENTARA', label: 'QC Reject → Gudang Sementara' },
-  { value: 'QC_REJECT_PERMANEN',  label: 'QC Reject → Tidak Bisa Diperbaiki' },
-  { value: 'LAINNYA',             label: 'Lainnya' },
-]
-
-const TYPE_STYLE = {
-  TRANSFER:              'bg-blue-50 text-blue-700 border-blue-100',
-  QC_REJECT_SEMENTARA:   'bg-amber-50 text-amber-700 border-amber-100',
-  QC_REJECT_PERMANEN:    'bg-red-50 text-red-700 border-red-100',
-  LAINNYA:               'bg-slate-50 text-slate-600 border-slate-200',
-}
 
 export default function TransferDetail() {
   const { id } = useParams()
@@ -198,109 +186,16 @@ export default function TransferDetail() {
 
   if (!isNew && !transfer) {
     return (
-      <div className="px-6 py-6 text-center text-slate-400">Transfer tidak ditemukan.</div>
+      <div className="px-6 py-16 text-center space-y-3">
+        <p className="text-slate-500">Transfer tidak ditemukan atau sudah dihapus.</p>
+        <button className="btn-secondary mx-auto" onClick={() => navigate('/transfers')}>Kembali ke Transfer Stok</button>
+      </div>
     )
   }
 
   // ── VIEW MODE ──────────────────────────────────────────────────────────────
   if (!isNew) {
-    const typeStyle = TYPE_STYLE[transfer.transferType] ?? TYPE_STYLE.LAINNYA
-    const typeLabel = TRANSFER_TYPES.find(t => t.value === transfer.transferType)?.label ?? transfer.transferType
-
-    return (
-      <div className="px-6 py-6 space-y-6">
-        <PageHeader
-          title="Detail Transfer Stok"
-          subtitle={`#${transfer.id} · ${new Date(transfer.date).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })}`}
-          action={
-            canDelete && (
-              <button
-                onClick={() => { if (window.confirm('Hapus transfer ini? Semua perubahan stok akan dikembalikan.')) deleteTransfer.mutate() }}
-                disabled={deleteTransfer.isPending}
-                className="btn-danger flex items-center gap-2"
-              >
-                <Trash2 size={14} />
-                {deleteTransfer.isPending ? 'Menghapus…' : 'Hapus Transfer'}
-              </button>
-            )
-          }
-        />
-
-        <div className="card p-5 space-y-4">
-          <div className="flex flex-wrap gap-6">
-            <div>
-              <p className="text-xs text-slate-400 mb-1">Tipe Transfer</p>
-              <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold border ${typeStyle}`}>
-                {typeLabel}
-              </span>
-            </div>
-            <div>
-              <p className="text-xs text-slate-400 mb-1">Tanggal</p>
-              <p className="text-sm font-semibold text-slate-800">
-                {new Date(transfer.date).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-slate-400 mb-1">Dibuat oleh</p>
-              <p className="text-sm text-slate-700">{transfer.Creator?.name ?? '—'}</p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <div className="flex-1 bg-slate-50 border border-slate-200 rounded-lg px-4 py-3 text-center">
-              <p className="text-[10px] text-slate-400 uppercase tracking-wider mb-1">Gudang Asal</p>
-              <p className="text-sm font-bold text-slate-800">{transfer.FromWarehouse?.name ?? '—'}</p>
-            </div>
-            <ArrowRight size={20} className="text-slate-400 flex-shrink-0" />
-            <div className="flex-1 bg-slate-50 border border-slate-200 rounded-lg px-4 py-3 text-center">
-              <p className="text-[10px] text-slate-400 uppercase tracking-wider mb-1">Gudang Tujuan</p>
-              <p className="text-sm font-bold text-slate-800">{transfer.ToWarehouse?.name ?? '—'}</p>
-            </div>
-          </div>
-
-          {transfer.note && (
-            <div>
-              <p className="text-xs text-slate-400 mb-1">Catatan</p>
-              <p className="text-sm text-slate-600">{transfer.note}</p>
-            </div>
-          )}
-        </div>
-
-        <div className="card overflow-hidden">
-          <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/50">
-            <p className="text-sm font-semibold text-slate-700">Item Transfer ({transfer.items?.length ?? 0})</p>
-          </div>
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-slate-100 bg-slate-50/30">
-                <th className="px-4 py-2.5 text-left text-xs font-semibold text-slate-500">Produk</th>
-                <th className="px-4 py-2.5 text-left text-xs font-semibold text-slate-500">Varian / SKU</th>
-                <th className="px-4 py-2.5 text-right text-xs font-semibold text-slate-500 w-24">Qty</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(transfer.items ?? []).map(item => {
-                const opts  = item.ProductSKU?.ProductVariantOptions ?? []
-                const variant = opts.map(o => o.value).join(' / ') || item.ProductSKU?.sku_code || '—'
-                return (
-                  <tr key={item.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
-                    <td className="px-4 py-3">
-                      <p className="text-sm font-medium text-slate-800">{item.ProductSKU?.Product?.name ?? '—'}</p>
-                    </td>
-                    <td className="px-4 py-3">
-                      <p className="text-xs text-slate-500 font-mono">{variant}</p>
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <span className="font-mono font-bold text-slate-700">{item.quantity}</span>
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    )
+    return <TransferView key={transfer.id} transfer={transfer} canDelete={canDelete} onDelete={() => deleteTransfer.mutate()} deleting={deleteTransfer.isPending} />
   }
 
   // ── CREATE MODE ────────────────────────────────────────────────────────────

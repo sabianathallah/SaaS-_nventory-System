@@ -3,7 +3,10 @@ import { useSearchParams } from 'react-router-dom'
 
 const BRAND = '#C8102E'
 
-export function Table({ columns, data, loading, emptyText = 'No data found' }) {
+// Klik di tombol / link / input di dalam baris tidak ikut membuka baris
+const isInteractive = (el) => !!el.closest('a, button, input, select, textarea, label')
+
+export function Table({ columns, data, loading, emptyText = 'No data found', onRowClick }) {
   return (
     <div className="overflow-x-auto">
       <table className="w-full">
@@ -33,7 +36,13 @@ export function Table({ columns, data, loading, emptyText = 'No data found' }) {
               </td>
             </tr>
           ) : data.map((row, i) => (
-            <tr key={row.id ?? i} className="tr">
+            <tr key={row.id ?? i}
+              className={onRowClick ? 'tr group cursor-pointer focus:outline-none focus-visible:bg-slate-50 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-red-200' : 'tr'}
+              {...(onRowClick && {
+                tabIndex: 0,
+                onClick: (e) => { if (!isInteractive(e.target)) onRowClick(row, e) },
+                onKeyDown: (e) => { if (e.key === 'Enter' && e.target === e.currentTarget) onRowClick(row, e) },
+              })}>
               {columns.map((col) => (
                 <td key={col.key} className="td">
                   {col.render ? col.render(row) : row[col.key]}
