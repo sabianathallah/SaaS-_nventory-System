@@ -222,6 +222,13 @@ class PosController {
                 if (!articleIds) return bad(res, 'Koleksi tidak ditemukan');
                 updates.articleIds = articleIds;
             }
+            // produk yang fotonya tidak ikut di slideshow layar pelanggan (hanya tampilan)
+            if (req.body.displayHiddenProductIds !== undefined) {
+                const raw = req.body.displayHiddenProductIds;
+                if (raw !== null && !Array.isArray(raw)) return bad(res, 'displayHiddenProductIds harus berupa daftar');
+                const ids = [...new Set((raw || []).map(Number).filter(n => Number.isInteger(n) && n > 0))];
+                updates.displayHiddenProductIds = ids.length ? ids : null;
+            }
             await ev.update(updates);
             res.json(ev);
         } catch (err) { next(err); }
@@ -264,6 +271,7 @@ class PosController {
                     // urut sesuai pengaturan event
                     backupWarehouses: backupIds.map(id => backupWarehouses.find(w => w.id === id)).filter(Boolean).map(w => ({ id: w.id, name: w.name })),
                     articleIds,
+                    displayHiddenProductIds: ev.displayHiddenProductIds || [],
                 },
                 generatedAt: new Date().toISOString(),
                 items: skus.filter(s => s.Product).map(s => ({

@@ -28,6 +28,8 @@ module.exports = (sequelize, DataTypes) => {
     backupWarehouseIds: { type: DataTypes.JSONB, allowNull: true },
     // koleksi (Article) yang dijual [id, ...]: katalog kasir hanya berisi SKU koleksi ini (kosong = semua)
     articleIds:    { type: DataTypes.JSONB, allowNull: true },
+    // produk yang fotonya disembunyikan dari slideshow layar pelanggan [productId, ...]
+    displayHiddenProductIds: { type: DataTypes.JSONB, allowNull: true },
     createdBy:     { type: DataTypes.INTEGER, allowNull: true },
   }, { sequelize, modelName: 'PosEvent' });
   return PosEvent;

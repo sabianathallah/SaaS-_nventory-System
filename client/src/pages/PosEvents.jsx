@@ -14,7 +14,7 @@ const STATUS = {
   OPEN:   { label: 'Berjalan',  cls: 'badge-green' },
   CLOSED: { label: 'Selesai',   cls: 'badge-muted' },
 }
-const EMPTY = { name: '', location: '', startDate: '', endDate: '', WarehouseId: '', ChannelId: '', receiptHeader: '', receiptFooter: 'Terima kasih!', purchaseLimit: null, backupWarehouseIds: [], articleIds: [] }
+const EMPTY = { name: '', location: '', startDate: '', endDate: '', WarehouseId: '', ChannelId: '', receiptHeader: '', receiptFooter: 'Terima kasih!', purchaseLimit: null, backupWarehouseIds: [], articleIds: [], displayHiddenProductIds: [] }
 
 export default function PosEvents() {
   const qc = useQueryClient()
@@ -44,7 +44,7 @@ export default function PosEvents() {
   })
 
   const openForm = (ev) => {
-    setForm(ev ? { ...EMPTY, ...Object.fromEntries(Object.keys(EMPTY).map(k => [k, ev[k] ?? ''])), purchaseLimit: ev.purchaseLimit || null, backupWarehouseIds: ev.backupWarehouseIds || [], articleIds: ev.articleIds || [] } : EMPTY)
+    setForm(ev ? { ...EMPTY, ...Object.fromEntries(Object.keys(EMPTY).map(k => [k, ev[k] ?? ''])), purchaseLimit: ev.purchaseLimit || null, backupWarehouseIds: ev.backupWarehouseIds || [], articleIds: ev.articleIds || [], displayHiddenProductIds: ev.displayHiddenProductIds || [] } : EMPTY)
     setModal({ data: ev || null })
   }
   const submit = (e) => {
@@ -133,6 +133,7 @@ export default function PosEvents() {
           <BackupField warehouses={(whs?.data ?? []).filter(w => String(w.id) !== String(form.WarehouseId))}
             value={form.backupWarehouseIds} onChange={(v) => setForm(f => ({ ...f, backupWarehouseIds: v }))} />
           <ArticleField value={form.articleIds} onChange={(v) => setForm(f => ({ ...f, articleIds: v }))} />
+          <DisplayHiddenField articleIds={form.articleIds} value={form.displayHiddenProductIds} onChange={(v) => setForm(f => ({ ...f, displayHiddenProductIds: v }))} />
           <div>
             <label className="label">Channel penjualan</label>
             <select className="input" value={form.ChannelId} onChange={set('ChannelId')} required>
@@ -191,6 +192,34 @@ function ArticleField({ value, onChange }) {
         ))}
         {!articles.length && <p className="text-xs text-slate-400">Belum ada koleksi (Article).</p>}
       </div>
+    </div>
+  )
+}
+
+// Produk yang fotonya tidak ikut di slideshow sambutan layar pelanggan (tetap bisa dijual di kasir)
+function DisplayHiddenField({ articleIds, value, onChange }) {
+  const ids = value ?? []
+  const [open, setOpen] = useState(ids.length > 0)
+  const { data } = useQuery({ queryKey: ['products', { limit: 500 }], queryFn: () => productsApi.list({ limit: 500 }), enabled: open })
+  const arts = articleIds ?? []
+  const products = (data?.data ?? []).filter(p => !arts.length || arts.includes(p.ArticleId))
+  const toggle = (id) => onChange(ids.includes(id) ? ids.filter(x => x !== id) : [...ids, id])
+  return (
+    <div className="rounded-xl border border-slate-200 p-3 space-y-2">
+      <button type="button" className="w-full text-left" onClick={() => setOpen(o => !o)}>
+        <p className="text-sm font-semibold text-slate-700">Sembunyikan foto di layar pelanggan <span className="font-normal text-slate-400">({ids.length ? `${ids.length} produk` : 'opsional'})</span></p>
+        <p className="text-xs text-slate-500">Produk yang dicentang tidak ikut di slideshow sambutan layar pelanggan, tapi tetap bisa dijual di kasir.</p>
+      </button>
+      {open && (
+        <div className="max-h-48 overflow-y-auto space-y-1">
+          {products.map(p => (
+            <label key={p.id} className="flex items-center gap-2 text-sm text-slate-700">
+              <input type="checkbox" checked={ids.includes(p.id)} onChange={() => toggle(p.id)} />{p.name}
+            </label>
+          ))}
+          {!products.length && <p className="text-xs text-slate-400">Memuat produk…</p>}
+        </div>
+      )}
     </div>
   )
 }

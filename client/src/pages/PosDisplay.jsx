@@ -249,7 +249,8 @@ function Brand({ dark }) {
 function Idle({ catalog, imgs, event }) {
   const photos = useMemo(() => {
     const seen = new Set(), out = []
-    for (const it of catalog?.items ?? []) if (imgs[it.productId] && !seen.has(it.productId)) { seen.add(it.productId); out.push({ src: imgs[it.productId], name: lineName(it.name) }) }
+    const hidden = new Set(catalog?.event?.displayHiddenProductIds ?? []) // diatur di Edit Event
+    for (const it of catalog?.items ?? []) if (imgs[it.productId] && !seen.has(it.productId) && !hidden.has(it.productId)) { seen.add(it.productId); out.push({ src: imgs[it.productId], name: lineName(it.name) }) }
     return out
   }, [catalog, imgs])
   const rows = [0, 1, 2].map(r => {
