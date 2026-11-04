@@ -25,16 +25,23 @@ const CODE_KEY = 'posDisplayCode'
 // Layar penuh lintas browser: Safari iPad memakai versi webkit; dari ikon Home Screen sudah tampil penuh (standalone)
 const fsElement = () => document.fullscreenElement || document.webkitFullscreenElement || null
 const isStandalone = () => window.navigator.standalone === true || window.matchMedia?.('(display-mode: standalone)').matches
+// true hanya kalau benar-benar jadi layar penuh: Safari iPad bisa diam-diam menolak tanpa error
 async function enterFullscreen(opts) {
   const el = document.documentElement
-  try {
-    if (el.requestFullscreen) { await el.requestFullscreen(opts); return true }
-  } catch {
-    try { if (opts && el.requestFullscreen) { await el.requestFullscreen(); return true } } catch { /* lanjut ke webkit */ }
+  const tries = [
+    () => el.requestFullscreen?.(opts),
+    () => (opts ? el.requestFullscreen?.() : undefined),
+    () => el.webkitRequestFullscreen?.(),
+  ]
+  for (const t of tries) {
+    try {
+      const p = t()
+      if (p?.then) await Promise.race([p, new Promise(r => setTimeout(r, 1500))])
+    } catch { /* coba cara berikutnya */ }
+    if (fsElement()) return true
+    await new Promise(r => setTimeout(r, 400)) // beri waktu animasi masuk layar penuh
+    if (fsElement()) return true
   }
-  try {
-    if (el.webkitRequestFullscreen) { el.webkitRequestFullscreen(); return true }
-  } catch { /* tidak didukung */ }
   return false
 }
 const readCode = () => { try { return localStorage.getItem(CODE_KEY) || '' } catch { return '' } }
@@ -64,6 +71,7 @@ function CodeEntry({ onSubmit, error }) {
           className="mt-6 w-full h-20 rounded-2xl bg-white/10 text-center text-5xl font-black tracking-[.5em] pl-[.5em] outline-none focus:ring-2 focus:ring-white/50" placeholder="····" />
         {msg && <p className="mt-3 text-sm text-red-400">{msg}</p>}
         <button disabled={v.length !== 4} className="mt-5 w-full h-14 rounded-2xl bg-white text-black font-bold disabled:opacity-30">Sambungkan</button>
+        <a href="/pos" className="mt-6 inline-block text-sm text-white/50 hover:text-white">← Kembali ke POS</a>
       </form>
     </div>
   )
@@ -181,7 +189,7 @@ export default function PosDisplay({ remoteCode, onRemoteError }) {
 
   const event = catalog?.event
   return (
-    <div className="fixed inset-0 bg-[#0c0c0c] text-white overflow-hidden select-none cursor-none" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}
+    <div onScroll={e => { if (e.currentTarget.scrollLeft || e.currentTarget.scrollTop) e.currentTarget.scrollTo(0, 0) }} className="fixed inset-0 bg-[#0c0c0c] text-white overflow-hidden select-none cursor-none" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}
       onMouseMove={e => { e.currentTarget.style.cursor = 'default'; clearTimeout(e.currentTarget._t); const el = e.currentTarget; el._t = setTimeout(() => { el.style.cursor = 'none' }, 2000) }}>
       <style>{`
         @keyframes pd-marquee { from { transform: translateX(0) } to { transform: translateX(-50%) } }
@@ -220,8 +228,14 @@ export default function PosDisplay({ remoteCode, onRemoteError }) {
         </button>
       )}
 
+      {remoteCode && !full && (
+        <button onClick={() => onRemoteError?.(null)} className="absolute bottom-4 left-4 z-50 inline-flex items-center gap-2 px-4 h-10 rounded-full bg-white/10 hover:bg-white/20 text-sm font-semibold cursor-pointer backdrop-blur">
+          Ganti kode · {remoteCode}
+        </button>
+      )}
+
       {fsHelp && !full && (
-        <div className="absolute inset-0 z-[60] bg-black/80 flex items-center justify-center p-6" onClick={() => setFsHelp(false)}>
+        <div className="fixed inset-0 z-[60] bg-black/80 flex items-center justify-center p-6" onClick={() => setFsHelp(false)}>
           <div className="max-w-md rounded-3xl bg-white text-black p-8 text-center" onClick={e => e.stopPropagation()}>
             <p className="text-xl font-bold">Layar penuh di iPad</p>
             <p className="mt-3 text-sm text-black/70 leading-relaxed">Browser ini tidak mengizinkan layar penuh. Pakai cara ini:<br />
@@ -262,7 +276,7 @@ function Idle({ catalog, imgs, event }) {
   return (
     <div className="absolute inset-0 flex flex-col">
       <Brand />
-      <div className="absolute inset-0 top-24 flex flex-col justify-center gap-4 opacity-45">
+      <div className="absolute inset-0 top-24 flex flex-col justify-center gap-4 opacity-45 overflow-hidden">
         {rows.map((row, r) => row.length > 0 && (
           <div key={r} className="flex gap-4 w-max" style={{ animation: `pd-marquee ${60 + r * 15}s linear infinite`, animationDirection: r % 2 ? 'reverse' : 'normal' }}>
             {[...row, ...row].map((p, i) => <img key={i} src={p.src} alt="" className="w-52 h-52 rounded-2xl object-cover grayscale-[30%]" />)}

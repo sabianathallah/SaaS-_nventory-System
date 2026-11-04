@@ -18,6 +18,7 @@ import {
   SendHorizonal, FileText, PanelLeftClose, PanelLeftOpen, UserCog,
   Laptop, Wallet, CalendarClock, ShieldCheck, AlarmClock, Receipt, ListChecks,
   Star, CheckCircle2, Home, Store,
+  Tablet,
 } from 'lucide-react'
 
 const POS_PERMS = ['pos.manage', 'pos.sell', 'pos.event.manage', 'pos.report', 'pos.fulfill']
@@ -136,6 +137,7 @@ const POS_NAV_GROUPS = [
       { to: '/pos',         icon: Store,         label: 'Kasir',               pageKey: 'pos', requirePermission: ['pos.manage', 'pos.sell', 'pos.fulfill'] },
       { to: '/pos/pickup',  icon: PackageCheck,  label: 'Antrean Pengambilan', pageKey: 'pos', requirePermission: ['pos.manage', 'pos.sell', 'pos.fulfill'] },
       { to: '/pos/history', icon: Receipt,       label: 'Riwayat Transaksi',   pageKey: 'pos', requirePermission: POS_PERMS },
+      { to: '/pos/layar',   icon: Tablet,        label: 'Layar Pelanggan (iPad)', pageKey: 'pos', requirePermission: POS_PERMS },
       { to: '/pos/events',  icon: CalendarClock, label: 'Event & Laporan',     pageKey: 'pos', requirePermission: ['pos.manage', 'pos.event.manage', 'pos.report'] },
     ],
   },
@@ -202,7 +204,7 @@ const PAGE_TITLES = {
   '/stock-in': 'Penerimaan Stok', '/stock-in/new': 'Penerimaan Stok Baru', '/stock-out': 'Pengeluaran Stok', '/movements': 'Pergerakan',
   '/opname': 'Stock Opname', '/transfers': 'Transfer Stok', '/handover': 'Handover Pengiriman',
   '/shipping-manual': 'Shipping Manual', '/database-links': 'Database Links', '/users': 'Pengguna', '/roles': 'Roles & Permission', '/companies': 'Perusahaan',
-  '/vendors': 'Vendor', '/incoming-goods': 'Barang Masuk', '/pos': 'POS / Kasir', '/pos/pickup': 'Antrean Pengambilan', '/pos/history': 'Riwayat Transaksi', '/pos/events': 'Event & Laporan',
+  '/vendors': 'Vendor', '/incoming-goods': 'Barang Masuk', '/pos': 'POS / Kasir', '/pos/pickup': 'Antrean Pengambilan', '/pos/history': 'Riwayat Transaksi', '/pos/layar': 'Layar Pelanggan', '/pos/events': 'Event & Laporan',
   '/packing-jobs': 'Pekerjaan Packing', '/form-anak-packing': 'Form Anak Packing',
   '/page-visibility': 'Visibilitas Halaman',
   '/laporan': 'Laporan Bulanan',

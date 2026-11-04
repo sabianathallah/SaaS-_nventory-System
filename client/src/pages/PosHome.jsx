@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { Store, PackageCheck, Receipt, CalendarClock, ArrowRight } from 'lucide-react'
+import { Store, PackageCheck, Receipt, CalendarClock, ArrowRight, Tablet } from 'lucide-react'
 import { posApi } from '../api'
 import PageHeader from '../components/PageHeader'
 import { useAuth } from '../context/AuthContext'
@@ -17,6 +17,16 @@ export default function PosHome() {
   return (
     <div className="px-6 py-6 space-y-6">
       <PageHeader title="POS / Kasir" subtitle="Pilih event yang sedang berjalan untuk mulai jualan" />
+
+      {/* iPad / tablet di depan kasir: buka layar pelanggan lalu masukkan kode dari laptop kasir */}
+      <button onClick={() => navigate('/pos/layar')} className="card w-full p-4 flex items-center gap-4 text-left hover:border-slate-400 transition-colors">
+        <div className="w-11 h-11 rounded-xl bg-slate-900 text-white flex items-center justify-center shrink-0"><Tablet size={20} /></div>
+        <div className="flex-1 min-w-0">
+          <p className="font-semibold text-slate-800">Jadikan perangkat ini layar pelanggan</p>
+          <p className="text-sm text-slate-500">Untuk iPad / tablet di depan kasir. Buka ini, lalu masukkan kode 4 digit dari laptop kasir (tombol <b>Layar pelanggan</b> → <b>iPad / perangkat lain</b>).</p>
+        </div>
+        <ArrowRight size={18} className="text-slate-400 shrink-0" />
+      </button>
 
       {isLoading ? <p className="text-sm text-slate-400">Memuat…</p> : !open.length ? (
         <div className="card p-8 text-center">
