@@ -4,7 +4,32 @@ import { allItems, delItem, getItem, setItem } from './store'
 // Instance terpisah dari api/axios: kasir tidak boleh dilempar ke halaman login
 // atau dibanjiri toast hanya karena internet putus-nyambung.
 export const posHttp = axios.create({ baseURL: import.meta.env.VITE_API_URL || '/api', timeout: 15_000 })
-posHttp.interceptors.request.use((config) => {
+
+// Token login berlaku 8 jam; event bisa lebih lama. Selama kasir / layar pelanggan terbuka,
+// token diperpanjang otomatis sebelum habis supaya transaksi tetap terkirim.
+const REFRESH_BEFORE_MS = 3 * 3600_000 // perpanjang kalau sisa < 3 jam
+let refreshing = null
+const tokenExp = (t) => { try { return JSON.parse(atob(t.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))).exp * 1000 } catch { return 0 } }
+export function sessionExpired() {
+  const t = localStorage.getItem('token')
+  return !t || tokenExp(t) <= Date.now()
+}
+export async function ensureFreshToken() {
+  const t = localStorage.getItem('token')
+  if (!t) return
+  const exp = tokenExp(t)
+  if (!exp || exp <= Date.now() || exp - Date.now() > REFRESH_BEFORE_MS) return // sudah habis (harus login) / masih lama
+  if (!refreshing) {
+    refreshing = axios.post(`${import.meta.env.VITE_API_URL || '/api'}/refresh-token`, null, { headers: { Authorization: `Bearer ${t}` }, timeout: 15_000 })
+      .then(({ data }) => { if (data?.access_token && localStorage.getItem('token') === t) localStorage.setItem('token', data.access_token) })
+      .catch(() => { /* offline: dicoba lagi di permintaan berikutnya */ })
+      .finally(() => { refreshing = null })
+  }
+  await refreshing
+}
+
+posHttp.interceptors.request.use(async (config) => {
+  if (!config.url?.includes('refresh-token')) await ensureFreshToken()
   const token = localStorage.getItem('token')
   if (token) config.headers.Authorization = `Bearer ${token}`
   try {
@@ -54,7 +79,7 @@ export async function syncState(authError = false) {
   return {
     pending: queue.length,
     failed: queue.filter(o => o.error).length,
-    authError,
+    authError: authError || sessionExpired(),
     lastSync: (await getItem('kv', 'lastSync')) || null,
     online: navigator.onLine,
   }
@@ -72,7 +97,7 @@ export function startAutoSync() {
   if (timer) return () => {}
   const kick = () => syncQueue()
   window.addEventListener('online', kick)
-  timer = setInterval(kick, 20_000)
+  timer = setInterval(() => { ensureFreshToken(); kick() }, 20_000)
   kick()
   return () => { window.removeEventListener('online', kick); clearInterval(timer); timer = null }
 }

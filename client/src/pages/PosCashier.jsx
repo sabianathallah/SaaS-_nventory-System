@@ -60,7 +60,7 @@ const MAX_HELD = 5
 export default function PosCashier() {
   const { eventId } = useParams()
   const navigate = useNavigate()
-  const { user, hasPermission } = useAuth()
+  const { user, hasPermission, signOut } = useAuth()
   const allowed = hasPermission('pos.manage') || hasPermission('pos.sell')
   const canSettings = hasPermission('pos.manage') || hasPermission('pos.settings')
 
@@ -418,7 +418,11 @@ export default function PosCashier() {
   return (
     <Screen onBack={back} title={catalog.event.name}
       right={<>
-        <SyncBadge sync={sync} onClick={() => sync.failed ? setModal('queue') : syncQueue()} />
+        <SyncBadge sync={sync} onClick={() => {
+          // sesi login habis: transaksi tetap aman di laptop; login ulang lalu kembali ke kasir ini
+          if (sync.authError && sync.online) { toast('Login ulang — transaksi yang menunggu tetap tersimpan di laptop ini', { icon: '🔐', duration: 6000 }); signOut(); navigate(`/login?next=${encodeURIComponent(window.location.pathname)}`); return }
+          sync.failed ? setModal('queue') : syncQueue()
+        }} />
         <IconBtn icon={RefreshCw} label="Perbarui katalog & stok" onClick={() => loadCatalog()} />
         <IconBtn icon={Monitor} label="Buka layar pelanggan (monitor / iPad)" onClick={() => setModal('display')} text="Layar pelanggan" />
         {remote && <span title={remote.viewers ? 'iPad tersambung' : 'Belum ada iPad yang tersambung'} className={`-ml-1 mr-1 w-2 h-2 rounded-full ${remote.viewers && remote.online ? 'bg-green-500' : 'bg-amber-400'}`} />}
@@ -725,8 +729,9 @@ const Line = ({ label, value }) => <div className="flex justify-between text-sm"
 
 function SyncBadge({ sync, onClick }) {
   const off = !sync.online
-  const cls = sync.failed ? 'bg-red-50 text-danger border-red-200' : off || sync.pending ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200'
-  const text = sync.failed ? `${sync.failed} ditolak` : off ? `Offline · ${sync.pending} menunggu` : sync.pending ? `${sync.pending} menunggu` : 'Online'
+  const auth = sync.authError && !off
+  const cls = sync.failed || auth ? 'bg-red-50 text-danger border-red-200' : off || sync.pending ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+  const text = auth ? `Sesi habis — login ulang${sync.pending ? ` · ${sync.pending} menunggu` : ''}` : sync.failed ? `${sync.failed} ditolak` : off ? `Offline · ${sync.pending} menunggu` : sync.pending ? `${sync.pending} menunggu` : 'Online'
   return (
     <button onClick={onClick} className={`h-9 text-xs font-semibold px-3 rounded-lg border inline-flex items-center gap-1.5 mr-1 ${cls}`} title="Status kirim transaksi — klik untuk kirim sekarang">
       {off ? <WifiOff size={14} /> : <Wifi size={14} />}{text}

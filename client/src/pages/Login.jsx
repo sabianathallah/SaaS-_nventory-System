@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { useNavigate, Link } from 'react-router-dom'
+import { useNavigate, Link, useSearchParams } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { Loader2, ArrowRight, Eye, EyeOff, ArrowLeft } from 'lucide-react'
 import logoPreface from '../assets/logo-preface.jpeg'
@@ -18,6 +18,9 @@ const modules = [
 export default function Login() {
   const { signIn }  = useAuth()
   const navigate    = useNavigate()
+  const [params]    = useSearchParams()
+  // kembali ke halaman asal (mis. kasir yang sesinya habis); hanya path internal
+  const next = (() => { const n = params.get('next') || ''; return n.startsWith('/') && !n.startsWith('//') ? n : '/' })()
   const [form, setForm]       = useState({ email: '', password: '' })
   const [loading, setLoading] = useState(false)
   const [showPwd, setShowPwd] = useState(false)
@@ -27,7 +30,7 @@ export default function Login() {
     setLoading(true)
     try {
       await signIn(form.email, form.password)
-      navigate('/')
+      navigate(next)
     } catch (err) {
       toast.error(err.response?.data?.message || 'Invalid email or password')
     } finally {

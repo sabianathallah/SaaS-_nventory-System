@@ -76,7 +76,7 @@ function snapshot(s, qrisVersion) {
 }
 
 // Layar pelanggan menunggu versi yang lebih baru dari `since`.
-function wait(code, companyId, { since, qrisVersion, viewerId }, req) {
+function wait(code, companyId, { since, qrisVersion, viewerId }, res) {
   const s = sessions.get(code);
   if (!s || (companyId && s.companyId && Number(s.companyId) !== Number(companyId))) return Promise.resolve(null);
   if (viewerId) s.viewers.set(String(viewerId).slice(0, 64), now());
@@ -92,7 +92,8 @@ function wait(code, companyId, { since, qrisVersion, viewerId }, req) {
     };
     const timer = setTimeout(finish, WAIT_MS);
     s.waiters.add(finish);
-    req?.on?.('close', () => { if (!done) { done = true; clearTimeout(timer); s.waiters.delete(finish); resolve(undefined); } });
+    // layar menutup koneksi sebelum dijawab (pindah halaman / internet putus): lepaskan penunggu
+    res?.on?.('close', () => { if (!done && !res.writableEnded) { done = true; clearTimeout(timer); s.waiters.delete(finish); resolve(undefined); } });
   });
 }
 

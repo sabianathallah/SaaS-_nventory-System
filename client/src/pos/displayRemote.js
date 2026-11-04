@@ -124,7 +124,8 @@ export function watchRemote(code, { onState, onQris, onConn }) {
         // 404 setelah pernah tersambung = server baru restart: tunggu kasir mendaftarkan ulang kodenya (heartbeat 20 dtk)
         if (e.response?.status === 404 && !connected) { onConn?.({ online: true, error: 'notfound' }); return }
         if (e.response?.status === 404) { since = undefined; qv = '' }
-        if (e.response?.status === 401 || e.response?.status === 403) { onConn?.({ online: true, error: 'auth' }); return }
+        if (e.response?.status === 401) { onConn?.({ online: true, error: 'session' }); return }
+        if (e.response?.status === 403) { onConn?.({ online: true, error: 'auth' }); return }
         onConn?.({ online: false, error: null })
         await new Promise(r => setTimeout(r, e.response?.status === 404 ? 3000 : 2000))
       }

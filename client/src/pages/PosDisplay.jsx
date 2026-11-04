@@ -60,7 +60,8 @@ export function PosRemoteDisplay() {
 function CodeEntry({ onSubmit, error }) {
   const [v, setV] = useState('')
   const msg = error === 'notfound' ? 'Kode tidak ditemukan. Cek kode di laptop kasir (tombol Layar pelanggan → iPad).'
-    : error === 'auth' ? 'Akun ini tidak punya akses POS. Login dengan akun kasir.' : null
+    : error === 'auth' ? 'Akun ini tidak punya akses POS. Login dengan akun kasir.'
+    : error === 'session' ? 'Sesi login habis. Login ulang, lalu masukkan kode lagi.' : null
   return (
     <div className="fixed inset-0 bg-[#0c0c0c] text-white flex items-center justify-center p-6" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
       <form className="w-full max-w-sm text-center" onSubmit={e => { e.preventDefault(); if (/^\d{4}$/.test(v)) onSubmit(v) }}>
@@ -70,6 +71,7 @@ function CodeEntry({ onSubmit, error }) {
         <input autoFocus inputMode="numeric" pattern="[0-9]*" maxLength={4} value={v} onChange={e => setV(e.target.value.replace(/\D/g, '').slice(0, 4))}
           className="mt-6 w-full h-20 rounded-2xl bg-white/10 text-center text-5xl font-black tracking-[.5em] pl-[.5em] outline-none focus:ring-2 focus:ring-white/50" placeholder="····" />
         {msg && <p className="mt-3 text-sm text-red-400">{msg}</p>}
+        {error === 'session' && <a href="/login?next=/pos/layar" onClick={() => { try { localStorage.removeItem('token'); localStorage.removeItem('user') } catch { /* */ } }} className="mt-2 inline-block text-sm font-semibold underline">Login ulang</a>}
         <button disabled={v.length !== 4} className="mt-5 w-full h-14 rounded-2xl bg-white text-black font-bold disabled:opacity-30">Sambungkan</button>
         <a href="/pos" className="mt-6 inline-block text-sm text-white/50 hover:text-white">← Kembali ke POS</a>
       </form>

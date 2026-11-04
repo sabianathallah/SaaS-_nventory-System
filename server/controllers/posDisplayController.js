@@ -29,7 +29,7 @@ class PosDisplayController {
   static async watch(req, res, next) {
     try {
       const { since, qv, viewer } = req.query;
-      const snap = await hub.wait(String(req.params.code), companyId(req), { since, qrisVersion: qv, viewerId: viewer }, req);
+      const snap = await hub.wait(String(req.params.code), companyId(req), { since, qrisVersion: qv, viewerId: viewer }, res);
       if (snap === undefined) return; // koneksi ditutup layar
       if (!snap) return res.status(404).json({ message: 'Kode layar tidak ditemukan. Cek kode di laptop kasir.' });
       res.set('Cache-Control', 'no-store').json(snap);
