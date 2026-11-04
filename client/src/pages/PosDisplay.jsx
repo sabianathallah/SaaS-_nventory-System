@@ -22,6 +22,21 @@ const HEAD = { fontFamily: 'Impact, Haettenschweiler, "Arial Narrow Bold", sans-
 const DONE_MIN_MS = 8000   // ucapan terima kasih tampil minimal selama ini walau kasir sudah lanjut
 const DONE_MAX_MS = 20000  // lalu kembali ke tampilan sambutan
 const CODE_KEY = 'posDisplayCode'
+// Layar penuh lintas browser: Safari iPad memakai versi webkit; dari ikon Home Screen sudah tampil penuh (standalone)
+const fsElement = () => document.fullscreenElement || document.webkitFullscreenElement || null
+const isStandalone = () => window.navigator.standalone === true || window.matchMedia?.('(display-mode: standalone)').matches
+async function enterFullscreen(opts) {
+  const el = document.documentElement
+  try {
+    if (el.requestFullscreen) { await el.requestFullscreen(opts); return true }
+  } catch {
+    try { if (opts && el.requestFullscreen) { await el.requestFullscreen(); return true } } catch { /* lanjut ke webkit */ }
+  }
+  try {
+    if (el.webkitRequestFullscreen) { el.webkitRequestFullscreen(); return true }
+  } catch { /* tidak didukung */ }
+  return false
+}
 const readCode = () => { try { return localStorage.getItem(CODE_KEY) || '' } catch { return '' } }
 const writeCode = (c) => { try { c ? localStorage.setItem(CODE_KEY, c) : localStorage.removeItem(CODE_KEY) } catch { /* mode privat */ } }
 
@@ -63,7 +78,8 @@ export default function PosDisplay({ remoteCode, onRemoteError }) {
   const [catalog, setCatalog] = useState(null)
   const [imgs, setImgs] = useState({})
   const [qris, setQris] = useState(null)
-  const [full, setFull] = useState(!!document.fullscreenElement)
+  const [full, setFull] = useState(() => !!fsElement() || isStandalone())
+  const [fsHelp, setFsHelp] = useState(false)
   const [target, setTarget] = useState(null)   // layar eksternal tujuan (monitor / iPad)
   const doneAt = useRef(0)
   const holdTimer = useRef(null)
@@ -143,13 +159,19 @@ export default function PosDisplay({ remoteCode, onRemoteError }) {
     }
     findScreens()
     window.screen.addEventListener?.('change', findScreens)
-    const fs = () => setFull(!!document.fullscreenElement)
-    document.addEventListener('fullscreenchange', fs)
     return () => {
-      clearInterval(t); clearTimeout(holdTimer.current); off(); document.removeEventListener('fullscreenchange', fs)
+      clearInterval(t); clearTimeout(holdTimer.current); off()
       window.screen.removeEventListener?.('change', findScreens); details?.removeEventListener('screenschange', pickTarget)
     }
   }, [eventId, remoteCode, apply])
+
+  // status layar penuh (lokal & iPad)
+  useEffect(() => {
+    const fs = () => setFull(!!fsElement() || isStandalone())
+    document.addEventListener('fullscreenchange', fs)
+    document.addEventListener('webkitfullscreenchange', fs)
+    return () => { document.removeEventListener('fullscreenchange', fs); document.removeEventListener('webkitfullscreenchange', fs) }
+  }, [])
 
   useEffect(() => {
     if (shown.phase !== 'done') return
@@ -190,11 +212,25 @@ export default function PosDisplay({ remoteCode, onRemoteError }) {
             scr = d?.screens.find(x => !x.isPrimary) || null
             setTarget(scr)
           }
-          document.documentElement.requestFullscreen?.(scr ? { screen: scr } : undefined).catch(() => document.documentElement.requestFullscreen?.().catch(() => {}))
+          const ok = await enterFullscreen(scr ? { screen: scr } : undefined)
+          if (!ok) setFsHelp(true)
         }}
           className="absolute bottom-4 right-4 z-50 inline-flex items-center gap-2 px-4 h-10 rounded-full bg-white/10 hover:bg-white/20 text-sm font-semibold cursor-pointer backdrop-blur">
-          <Maximize2 size={15} />{target ? `Full screen on ${target.label || 'external display'}` : 'Click for full screen'}
+          <Maximize2 size={15} />{target ? `Full screen on ${target.label || 'external display'}` : 'Tap for full screen'}
         </button>
+      )}
+
+      {fsHelp && !full && (
+        <div className="absolute inset-0 z-[60] bg-black/80 flex items-center justify-center p-6" onClick={() => setFsHelp(false)}>
+          <div className="max-w-md rounded-3xl bg-white text-black p-8 text-center" onClick={e => e.stopPropagation()}>
+            <p className="text-xl font-bold">Layar penuh di iPad</p>
+            <p className="mt-3 text-sm text-black/70 leading-relaxed">Browser ini tidak mengizinkan layar penuh. Pakai cara ini:<br />
+              1. Tap tombol <b>Share</b> (kotak panah ke atas) di Safari<br />
+              2. Pilih <b>Add to Home Screen</b> → <b>Add</b><br />
+              3. Buka <b>Preface</b> dari ikon di Home Screen — tampil penuh tanpa bar Safari</p>
+            <button className="mt-6 h-11 px-6 rounded-full bg-black text-white font-semibold" onClick={() => setFsHelp(false)}>Mengerti</button>
+          </div>
+        </div>
       )}
     </div>
   )
