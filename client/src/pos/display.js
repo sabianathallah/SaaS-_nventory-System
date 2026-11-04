@@ -1,3 +1,5 @@
+import { pushRemote } from './displayRemote'
+
 // Layar pelanggan: kasir mengirim keadaan transaksi ke jendela kedua di laptop yang sama
 // (layar eksternal / iPad lewat Duet/Splashtop) lewat BroadcastChannel — tanpa server, jalan offline.
 const CHANNEL = 'preface-pos-display'
@@ -17,6 +19,7 @@ const ch = () => {
 export function publishDisplay(eventId, state) {
   last = { type: 'state', eventId: String(eventId), state, at: Date.now() }
   ch()?.postMessage(last)
+  pushRemote(eventId, state) // iPad / perangkat lain lewat server (kalau sudah dipasangkan)
 }
 
 // dipanggil halaman layar pelanggan

@@ -1,14 +1,18 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { useParams } from 'react-router-dom'
-import { Maximize2 } from 'lucide-react'
-import { getItem } from '../pos/store'
-import { loadCachedImages } from '../pos/images'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useParams, useSearchParams } from 'react-router-dom'
+import { Maximize2, WifiOff } from 'lucide-react'
+import { getItem, setItem } from '../pos/store'
+import { cacheImages, loadCachedImages } from '../pos/images'
 import { subscribeDisplay } from '../pos/display'
+import { watchRemote } from '../pos/displayRemote'
+import { posHttp } from '../pos/sync'
 import logo from '../assets/logo-preface-receipt.png?inline'
 
 // Layar pelanggan (jendela kedua di laptop kasir -> monitor / iPad). Hanya menampilkan, tidak ada input.
 // Semua teks yang dibaca pembeli berbahasa Inggris.
-// Keadaan datang dari kasir lewat BroadcastChannel, foto & QRIS dibaca dari IndexedDB -> jalan offline.
+// Lokal (/pos/display/:eventId): keadaan dari kasir lewat BroadcastChannel, foto & QRIS dari IndexedDB -> jalan offline.
+// Perangkat lain (/pos/layar, iPad): masukkan kode dari laptop kasir, keadaan di-relay server (butuh internet);
+// katalog & foto diunduh sendiri lalu disimpan di perangkat ini.
 const rp = (n) => 'Rp ' + Number(n || 0).toLocaleString('id-ID')
 const shortName = (n) => String(n || '').replace(/[\u200b-\u200d\u2060\ufeff]/g, '').replace(/\s+PREFACE\s+-\s+/i, ' · ').replace(/\s+PREFACE$/i, '').trim()
 const lineName = (n) => shortName(n).split('·').pop().trim()
@@ -17,9 +21,44 @@ const METHOD = { CASH: 'Cash', QRIS: 'QRIS', TRANSFER: 'Transfer', EDC: 'Card', 
 const HEAD = { fontFamily: 'Impact, Haettenschweiler, "Arial Narrow Bold", sans-serif', letterSpacing: '.02em' }
 const DONE_MIN_MS = 8000   // ucapan terima kasih tampil minimal selama ini walau kasir sudah lanjut
 const DONE_MAX_MS = 20000  // lalu kembali ke tampilan sambutan
+const CODE_KEY = 'posDisplayCode'
+const readCode = () => { try { return localStorage.getItem(CODE_KEY) || '' } catch { return '' } }
+const writeCode = (c) => { try { c ? localStorage.setItem(CODE_KEY, c) : localStorage.removeItem(CODE_KEY) } catch { /* mode privat */ } }
 
-export default function PosDisplay() {
-  const { eventId } = useParams()
+// iPad: belum ada kode -> form kode; sudah -> layar pelanggan lewat server
+export function PosRemoteDisplay() {
+  const [params] = useSearchParams()
+  const [code, setCode] = useState(() => params.get('code') || readCode())
+  const [error, setError] = useState(null)
+  useEffect(() => { document.title = 'Customer Display · Preface' }, [])
+  if (!code) return <CodeEntry error={error} onSubmit={(c) => { writeCode(c); setError(null); setCode(c) }} />
+  return <PosDisplay remoteCode={code} onRemoteError={(e) => { writeCode(''); setError(e); setCode('') }} />
+}
+
+function CodeEntry({ onSubmit, error }) {
+  const [v, setV] = useState('')
+  const msg = error === 'notfound' ? 'Kode tidak ditemukan. Cek kode di laptop kasir (tombol Layar pelanggan → iPad).'
+    : error === 'auth' ? 'Akun ini tidak punya akses POS. Login dengan akun kasir.' : null
+  return (
+    <div className="fixed inset-0 bg-[#0c0c0c] text-white flex items-center justify-center p-6" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
+      <form className="w-full max-w-sm text-center" onSubmit={e => { e.preventDefault(); if (/^\d{4}$/.test(v)) onSubmit(v) }}>
+        <img src={logo} alt="PREFACE" className="h-9 mx-auto" style={{ filter: 'invert(1)' }} />
+        <p className="mt-8 text-2xl font-bold">Layar pelanggan</p>
+        <p className="mt-2 text-sm text-white/60">Di laptop kasir klik <b className="text-white">Layar pelanggan</b> → <b className="text-white">iPad / perangkat lain</b>, lalu ketik kode 4 digit di sini.</p>
+        <input autoFocus inputMode="numeric" pattern="[0-9]*" maxLength={4} value={v} onChange={e => setV(e.target.value.replace(/\D/g, '').slice(0, 4))}
+          className="mt-6 w-full h-20 rounded-2xl bg-white/10 text-center text-5xl font-black tracking-[.5em] pl-[.5em] outline-none focus:ring-2 focus:ring-white/50" placeholder="····" />
+        {msg && <p className="mt-3 text-sm text-red-400">{msg}</p>}
+        <button disabled={v.length !== 4} className="mt-5 w-full h-14 rounded-2xl bg-white text-black font-bold disabled:opacity-30">Sambungkan</button>
+      </form>
+    </div>
+  )
+}
+
+export default function PosDisplay({ remoteCode, onRemoteError }) {
+  const params = useParams()
+  const [remoteEventId, setRemoteEventId] = useState(null)
+  const eventId = remoteCode ? remoteEventId : params.eventId
+  const [conn, setConn] = useState({ online: true })
   const [shown, setShown] = useState({ phase: 'idle' })
   const [catalog, setCatalog] = useState(null)
   const [imgs, setImgs] = useState({})
@@ -29,8 +68,56 @@ export default function PosDisplay() {
   const doneAt = useRef(0)
   const holdTimer = useRef(null)
 
+  // "done" ditahan minimal DONE_MIN_MS supaya pembeli sempat baca nomor ambil & ucapan
+  const apply = useCallback((s) => {
+    clearTimeout(holdTimer.current)
+    if (s.phase === 'done') doneAt.current = Date.now()
+    const wait = s.phase === 'idle' && doneAt.current ? DONE_MIN_MS - (Date.now() - doneAt.current) : 0
+    if (wait > 0) holdTimer.current = setTimeout(() => setShown(s), wait)
+    else setShown(s)
+    if (s.phase !== 'done' && wait <= 0) doneAt.current = 0
+  }, [])
+
+  // iPad: dengarkan kasir lewat server
+  useEffect(() => {
+    if (!remoteCode) return
+    let first = true
+    return watchRemote(remoteCode, {
+      onState: (d) => {
+        setRemoteEventId(d.eventId)
+        // baru tersambung saat kasir di layar "terima kasih" yang sudah lama -> mulai dari sambutan
+        if (first && d.state?.phase === 'done') apply({ phase: 'idle' }); else apply(d.state || { phase: 'idle' })
+        first = false
+      },
+      onQris: (q) => setQris(q || null),
+      onConn: (c) => { setConn(c); if (c.error) onRemoteError?.(c.error) },
+    })
+  }, [remoteCode, apply]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // iPad: katalog & foto diunduh sendiri (disimpan, jadi tetap bergambar kalau internet sempat putus)
+  useEffect(() => {
+    if (!remoteCode || !eventId) return
+    let live = true
+    const load = async () => {
+      let cat = await getItem('kv', `catalog:${eventId}`).catch(() => null)
+      if (cat && live) { setCatalog(cat); setImgs(await loadCachedImages(cat.items)) }
+      try {
+        const { data } = await posHttp.get(`/pos/events/${eventId}/catalog`, { timeout: 30_000 })
+        cat = data
+        await setItem('kv', `catalog:${eventId}`, data).catch(() => {})
+        if (!live) return
+        setCatalog(data)
+        setImgs(await cacheImages(data.items))
+      } catch { /* offline: pakai simpanan */ }
+    }
+    load()
+    const t = setInterval(load, 10 * 60_000)
+    return () => { live = false; clearInterval(t) }
+  }, [remoteCode, eventId])
+
   useEffect(() => {
     document.title = 'Customer Display · Preface'
+    if (remoteCode) return
     const loadAssets = async () => {
       const cat = await getItem('kv', `catalog:${eventId}`).catch(() => null)
       if (cat) { setCatalog(cat); setImgs(await loadCachedImages(cat.items)) }
@@ -39,15 +126,9 @@ export default function PosDisplay() {
     }
     loadAssets()
     const t = setInterval(loadAssets, 60_000)
-    // "done" ditahan minimal DONE_MIN_MS supaya pembeli sempat baca nomor ambil & ucapan
     const off = subscribeDisplay(eventId, (s) => {
       if (s.phase === 'pay') loadAssets()
-      clearTimeout(holdTimer.current)
-      if (s.phase === 'done') doneAt.current = Date.now()
-      const wait = s.phase === 'idle' && doneAt.current ? DONE_MIN_MS - (Date.now() - doneAt.current) : 0
-      if (wait > 0) holdTimer.current = setTimeout(() => setShown(s), wait)
-      else setShown(s)
-      if (s.phase !== 'done' && wait <= 0) doneAt.current = 0
+      apply(s)
     })
     // cari layar eksternal; tanpa izin "kelola jendela" -> layar penuh di layar tempat jendela ini berada
     let details = null
@@ -68,7 +149,7 @@ export default function PosDisplay() {
       clearInterval(t); clearTimeout(holdTimer.current); off(); document.removeEventListener('fullscreenchange', fs)
       window.screen.removeEventListener?.('change', findScreens); details?.removeEventListener('screenschange', pickTarget)
     }
-  }, [eventId])
+  }, [eventId, remoteCode, apply])
 
   useEffect(() => {
     if (shown.phase !== 'done') return
@@ -93,6 +174,12 @@ export default function PosDisplay() {
       {shown.phase === 'idle' && <Idle catalog={catalog} imgs={imgs} event={event} />}
       {(shown.phase === 'cart' || shown.phase === 'pay') && <Cart s={shown} imgs={imgs} qris={qris} />}
       {shown.phase === 'done' && <Done d={shown.done} />}
+
+      {remoteCode && !conn.online && (
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 inline-flex items-center gap-2 px-4 h-9 rounded-full bg-red-600/90 text-sm font-semibold">
+          <WifiOff size={15} />Terputus dari kasir — menyambung ulang…
+        </div>
+      )}
 
       {!full && (
         <button onClick={async () => {

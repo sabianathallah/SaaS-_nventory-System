@@ -36,6 +36,8 @@ app.get('/health', (_req, res) => res.json({ ok: true }));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 app.use(express.urlencoded({ extended: true }));
+// gambar QRIS layar pelanggan (data URL) lebih besar dari batas default 100 kb
+app.use('/pos/display', express.json({ limit: '3mb' }));
 app.use(express.json());
 
 app.use('/', router);

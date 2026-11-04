@@ -4,7 +4,7 @@ import toast from 'react-hot-toast'
 import {
   ArrowLeft, Minus, Plus, Printer, RefreshCw, Settings, Trash2, Wifi, WifiOff, X, LogOut, History,
   Search, Monitor, ShoppingBag, CheckCircle2, PackageCheck, Banknote, QrCode, CreditCard, Landmark, Wallet, Tag, Store,
-  PauseCircle, Boxes, ScanBarcode,
+  PauseCircle, Boxes, ScanBarcode, Tablet, Laptop,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import NoPermission from '../components/NoPermission'
@@ -14,6 +14,7 @@ import { enqueueOrder, onSyncChange, posHttp, startAutoSync, syncQueue, syncStat
 import { DEFAULT_RECEIPT, RECEIPT_STYLES, combinePrint, orderPrintHtml, printReceipt, receiptHtml, shiftRecapHtml, staffSlipHtml } from '../pos/receipt'
 import { cacheImages, loadCachedImages } from '../pos/images'
 import { onScreensChange, openDisplayWindow, publishDisplay } from '../pos/display'
+import { pairRemote, resendQris, resumeRemote, stopRemote } from '../pos/displayRemote'
 import { isLimited, limitKey, limitedNet } from '../pos/limit'
 
 const rp = (n) => 'Rp ' + Number(n || 0).toLocaleString('id-ID')
@@ -318,6 +319,12 @@ export default function PosCashier() {
   const openDisplay = async () => {
     if (!(await openDisplayWindow(eventId))) toast.error('Jendela diblokir browser — izinkan pop-up untuk situs ini')
   }
+  // iPad / perangkat lain: relay lewat server; kode yang pernah dipakai di laptop ini dilanjutkan otomatis
+  const [remote, setRemote] = useState(null) // { code, online, viewers, error }
+  useEffect(() => {
+    resumeRemote(eventId, setRemote)
+    return () => stopRemote(false)
+  }, [eventId])
   // layar eksternal / iPad baru dicolok -> tawarkan buka layar pelanggan di sana
   useEffect(() => onScreensChange((extended) => {
     if (extended) toast((t) => (
@@ -413,7 +420,8 @@ export default function PosCashier() {
       right={<>
         <SyncBadge sync={sync} onClick={() => sync.failed ? setModal('queue') : syncQueue()} />
         <IconBtn icon={RefreshCw} label="Perbarui katalog & stok" onClick={() => loadCatalog()} />
-        <IconBtn icon={Monitor} label="Buka layar pelanggan (monitor / iPad)" onClick={openDisplay} text="Layar pelanggan" />
+        <IconBtn icon={Monitor} label="Buka layar pelanggan (monitor / iPad)" onClick={() => setModal('display')} text="Layar pelanggan" />
+        {remote && <span title={remote.viewers ? 'iPad tersambung' : 'Belum ada iPad yang tersambung'} className={`-ml-1 mr-1 w-2 h-2 rounded-full ${remote.viewers && remote.online ? 'bg-green-500' : 'bg-amber-400'}`} />}
         <StockMenu places={peekPlaces} products={products} stockOf={stockOf} skuById={skuById} onOpen={(wh) => { setPeekAt(wh); setModal('stock') }} />
         <IconBtn icon={History} label="Riwayat" onClick={() => setModal('history')} text="Riwayat" />
         {canSettings && <IconBtn icon={Settings} label="Pengaturan kasir" onClick={() => setModal('settings')} />}
@@ -596,6 +604,13 @@ export default function PosCashier() {
       {modal === 'stock' && <StockPeek products={products} imgs={imgs} stockOf={stockOf} skuById={skuById} places={peekPlaces} initial={peekAt}
         onClose={() => setModal(null)} onAdd={(sku) => { addSku(sku); setModal(null); focusScan() }} />}
       {modal === 'history' && <HistoryModal orders={recent} shift={shift} onClose={() => setModal(null)} onPrint={printOrder} onVoided={refreshOrders} />}
+      {modal === 'display' && (
+        <DisplayModal remote={remote} onClose={() => setModal(null)}
+          onLocal={() => { setModal(null); openDisplay() }}
+          onPair={async () => { try { await pairRemote(eventId, setRemote) } catch (e) { toast.error(e.response?.data?.message || 'Gagal membuat kode — cek internet') } }}
+          onNewCode={async () => { try { await pairRemote(eventId, setRemote, { fresh: true }) } catch { toast.error('Gagal membuat kode — cek internet') } }}
+          onStop={() => { stopRemote(true); setRemote(null) }} />
+      )}
       {modal === 'queue' && (
         <Modal open onClose={() => setModal(null)} title="Transaksi ditolak server" size="lg">
           <p className="text-sm text-slate-500 mb-3">Transaksi ini tetap tersimpan di laptop. Biasanya karena data tidak valid (mis. event belum dibuka). Perbaiki di server lalu klik Kirim ulang.</p>
@@ -643,6 +658,57 @@ function Screen({ children, onBack, title, right }) {
       </div>
       {children}
     </div>
+  )
+}
+
+// Pilih tempat layar pelanggan: jendela di laptop ini (monitor / Sidecar) atau iPad lewat internet (kode 4 digit)
+function DisplayModal({ remote, onClose, onLocal, onPair, onNewCode, onStop }) {
+  const [busy, setBusy] = useState(false)
+  const run = async (fn) => { setBusy(true); try { await fn() } finally { setBusy(false) } }
+  const host = window.location.host
+  return (
+    <Modal open onClose={onClose} title="Layar pelanggan" size="md">
+      <div className="space-y-3">
+        <button onClick={onLocal} className="w-full text-left rounded-xl border border-slate-200 p-4 hover:border-slate-400 flex gap-3">
+          <Laptop size={22} className="text-slate-500 shrink-0 mt-0.5" />
+          <span><span className="block font-semibold text-slate-800">Di laptop ini / monitor / Sidecar</span>
+            <span className="block text-xs text-slate-500 mt-0.5">Buka jendela layar pelanggan di laptop ini (pindah otomatis ke layar kedua). Tetap jalan tanpa internet.</span></span>
+        </button>
+
+        <div className="rounded-xl border border-slate-200 p-4">
+          <div className="flex gap-3">
+            <Tablet size={22} className="text-slate-500 shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <p className="font-semibold text-slate-800">iPad / perangkat lain</p>
+              <p className="text-xs text-slate-500 mt-0.5">Lewat internet — laptop & iPad harus online. Kasir tetap jalan kalau internet putus, layar iPad menyusul begitu tersambung lagi.</p>
+            </div>
+          </div>
+          {!remote ? (
+            <button disabled={busy} className="btn-primary mt-4 w-full justify-center" onClick={() => run(onPair)}><Tablet size={14} />{busy ? 'Membuat kode…' : 'Buat kode untuk iPad'}</button>
+          ) : (
+            <div className="mt-4">
+              <div className="rounded-xl bg-slate-900 text-white text-center py-4">
+                <p className="text-[11px] font-semibold tracking-[.3em] text-white/50">KODE LAYAR</p>
+                <p className="text-5xl font-black tracking-[.3em] pl-[.3em] tabular-nums">{remote.code}</p>
+              </div>
+              <ol className="mt-3 text-xs text-slate-600 space-y-1 list-decimal pl-4">
+                <li>Di iPad buka <b>{host}/pos/layar</b> (Safari, login akun POS).</li>
+                <li>Ketik kode di atas, lalu tap <b>Sambungkan</b>.</li>
+              </ol>
+              <p className={`mt-3 text-xs font-semibold flex items-center gap-1.5 ${!remote.online ? 'text-danger' : remote.viewers ? 'text-green-600' : 'text-amber-600'}`}>
+                <span className={`w-2 h-2 rounded-full ${!remote.online ? 'bg-red-500' : remote.viewers ? 'bg-green-500' : 'bg-amber-400'}`} />
+                {!remote.online ? 'Laptop offline — layar iPad belum ter-update' : remote.viewers ? `${remote.viewers} layar tersambung` : 'Menunggu iPad tersambung…'}
+              </p>
+              {remote.error && <p className="mt-1 text-xs text-danger">{remote.error}</p>}
+              <div className="mt-3 flex gap-2">
+                <button disabled={busy} className="btn-secondary text-xs" onClick={() => run(onNewCode)}><RefreshCw size={13} />Kode baru</button>
+                <button className="btn-secondary text-xs" onClick={onStop}><X size={13} />Putuskan iPad</button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </Modal>
   )
 }
 
@@ -1365,6 +1431,7 @@ function QrisSetting() {
     const cur = (await getItem('kv', 'displaySettings')) || {}
     await setItem('kv', 'displaySettings', { ...cur, qrisImage })
     setImg(qrisImage)
+    resendQris()
   }
   const pick = (e) => {
     const f = e.target.files?.[0]

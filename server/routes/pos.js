@@ -2,6 +2,7 @@
 const express = require('express');
 const router  = express.Router();
 const C       = require('../controllers/posController');
+const D       = require('../controllers/posDisplayController');
 const { requireAnyPermission: rpAny } = require('../middlewares/requirePermission');
 const requireCompany = require('../middlewares/requireCompany');
 
@@ -34,5 +35,10 @@ router.post('/orders/:id/void',   canVoid,   C.voidOrder);
 router.get('/approvers',          canSell,   C.approvers);
 router.post('/orders/:id/void-approved', canSell, C.voidApproved);
 router.patch('/orders/:id/pickup', canFulfill, C.setPickup);
+
+// layar pelanggan di perangkat lain (iPad) — relay lewat server
+router.post('/display/pair',      canSell,   D.pair);
+router.put('/display/:code',      canSell,   D.publish);
+router.get('/display/:code',      canSee,    D.watch);
 
 module.exports = router;
