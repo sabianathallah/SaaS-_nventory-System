@@ -4,7 +4,7 @@ import toast from 'react-hot-toast'
 import {
   ArrowLeft, Minus, Plus, Printer, RefreshCw, Settings, Trash2, Wifi, WifiOff, X, LogOut, History,
   Search, Monitor, ShoppingBag, CheckCircle2, PackageCheck, Banknote, QrCode, CreditCard, Landmark, Wallet, Tag, Store,
-  PauseCircle, Boxes, ScanBarcode, Tablet, Laptop,
+  PauseCircle, Boxes, ScanBarcode, Tablet, Laptop, Ticket,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import NoPermission from '../components/NoPermission'
@@ -22,6 +22,8 @@ const METHODS = [
   { key: 'CASH', label: 'Tunai', icon: Banknote }, { key: 'QRIS', label: 'QRIS', icon: QrCode },
   { key: 'TRANSFER', label: 'Transfer', icon: Landmark }, { key: 'EDC', label: 'Kartu (EDC)', icon: CreditCard },
   { key: 'OTHER', label: 'Lainnya', icon: Wallet },
+  // kupon dari penyelenggara event: nilainya ditagih balik ke penyelenggara, kode kupon dicatat untuk klaim
+  { key: 'VOUCHER', label: 'Kupon Event', icon: Ticket },
 ]
 // Metode yang dicentang di pengaturan kasir (kosong/belum diatur = semua tampil)
 const activeMethods = (settings) => {
@@ -917,13 +919,15 @@ function PayScreen({ totals, methods, defaultMethod, notInBooth = [], checkLimit
   // total 0 (diskon 100%): tidak ada pembayaran
   const noPay = total <= 0
   const [method, setMethod] = useState(methods.some(m => m.key === defaultMethod) ? defaultMethod : methods[0].key)
-  const [split, setSplit] = useState(null)              // null = 1 metode; [{method, amount}] = bayar campur
+  const [split, setSplit] = useState(null)              // null = 1 metode; [{method, amount, reference}] = bayar campur
+  const [voucherRef, setVoucherRef] = useState('')      // kode kupon saat seluruh total dibayar 1 kupon
+  const hasVoucher = methods.some(m => m.key === 'VOUCHER')
   const [received, setReceived] = useState('')
   const [customer, setCustomer] = useState({ name: '', phone: '' })
   const [fulfillment, setFulfillment] = useState('NOW')
   const [busy, setBusy] = useState(false)
 
-  const rows = noPay ? [{ method: 'CASH', amount: total }] : split || [{ method, amount: total }]
+  const rows = noPay ? [{ method: 'CASH', amount: total }] : split || [{ method, amount: total, reference: method === 'VOUCHER' ? voucherRef : '' }]
   const paid = rows.reduce((s, r) => s + (Number(r.amount) || 0), 0)
   const cashPart = noPay ? 0 : rows.filter(r => r.method === 'CASH').reduce((s, r) => s + (Number(r.amount) || 0), 0)
   const recv = received === '' ? cashPart : num(received)
@@ -934,7 +938,7 @@ function PayScreen({ totals, methods, defaultMethod, notInBooth = [], checkLimit
     if (!valid || busy) return
     setBusy(true)
     await onPay({
-      payments: rows.filter(r => Number(r.amount) > 0).map(r => ({ method: r.method, amount: Number(r.amount) })),
+      payments: rows.filter(r => Number(r.amount) > 0).map(r => ({ method: r.method, amount: Number(r.amount), ...(r.method === 'VOUCHER' && String(r.reference || '').trim() ? { reference: String(r.reference).trim() } : {}) })),
       cashReceived: cashPart ? recv : null,
       customerName: customer.name.trim(), customerPhone: customer.phone.trim(), fulfillment,
     })
@@ -942,7 +946,14 @@ function PayScreen({ totals, methods, defaultMethod, notInBooth = [], checkLimit
   useEffect(() => {
     onPreview?.({ methods: noPay ? [] : [...new Set(rows.filter(r => Number(r.amount) > 0).map(r => r.method))], fulfillment, cashReceived: cashPart ? recv : 0, change: cashPart ? change : 0 })
   }, [method, split, received, fulfillment, total]) // eslint-disable-line react-hooks/exhaustive-deps
-  const setRow = (i, patch) => setSplit(rs => rs.map((r, j) => j === i ? { ...r, ...patch } : r))
+  // 2 baris: ubah nominal satu baris -> baris lain otomatis sisa total (mis. kupon 100rb -> EDC sisanya)
+  const setRow = (i, patch) => setSplit(rs => {
+    const next = rs.map((r, j) => j === i ? { ...r, ...patch } : r)
+    if ('amount' in patch && next.length === 2) next[1 - i] = { ...next[1 - i], amount: Math.max(total - (Number(patch.amount) || 0), 0) }
+    return next
+  })
+  const otherMethod = (k) => (methods.find(m => m.key !== k && m.key !== 'VOUCHER') || methods.find(m => m.key !== k)).key
+  const useVoucher = () => setSplit([{ method: 'VOUCHER', amount: 0, reference: '' }, { method: method === 'VOUCHER' ? otherMethod('VOUCHER') : method, amount: total }])
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/50 flex items-center justify-center p-6" onKeyDown={e => { if (e.key === 'Enter' && e.target.tagName !== 'BUTTON') { e.preventDefault(); submit() } }}>
@@ -988,20 +999,35 @@ function PayScreen({ totals, methods, defaultMethod, notInBooth = [], checkLimit
                   </button>
                 ))}
               </div>
-              {methods.length > 1 && <button className="text-xs font-semibold text-brand mt-2" onClick={() => setSplit([{ method, amount: total }, { method: methods.find(m => m.key !== method).key, amount: 0 }])}>+ Bayar pakai 2 metode</button>}
+              {method === 'VOUCHER' && (
+                <input className="input mt-2" value={voucherRef} onChange={e => setVoucherRef(e.target.value)} placeholder="Kode / nomor kupon (opsional, untuk klaim ke penyelenggara)" />
+              )}
+              <div className="flex gap-4 mt-2">
+                {methods.length > 1 && <button className="text-xs font-semibold text-brand" onClick={() => setSplit([{ method, amount: total, reference: method === 'VOUCHER' ? voucherRef : '' }, { method: otherMethod(method), amount: 0, reference: '' }])}>+ Bayar pakai 2 metode</button>}
+                {hasVoucher && method !== 'VOUCHER' && <button className="text-xs font-semibold text-brand inline-flex items-center gap-1" onClick={useVoucher}><Ticket size={12} />Pakai kupon event</button>}
+              </div>
             </div>
           ) : (
             <div className="space-y-2">
               <p className="label">Bayar campur</p>
               {split.map((r, i) => (
-                <div key={i} className="flex gap-2">
-                  <select className="input w-44" value={r.method} onChange={e => setRow(i, { method: e.target.value })}>
-                    {methods.map(m => <option key={m.key} value={m.key}>{m.label}</option>)}
-                  </select>
-                  <input className="input flex-1 text-right font-semibold" value={Number(r.amount || 0).toLocaleString('id-ID')} onChange={e => setRow(i, { amount: num(e.target.value) })} />
-                  <button className="w-10 text-slate-400" onClick={() => split.length > 2 ? setSplit(s => s.filter((_, j) => j !== i)) : setSplit(null)}><X size={16} /></button>
+                <div key={i} className="space-y-1.5">
+                  <div className="flex gap-2">
+                    <select className="input w-44" value={r.method} onChange={e => setRow(i, { method: e.target.value })}>
+                      {methods.map(m => <option key={m.key} value={m.key}>{m.label}</option>)}
+                    </select>
+                    <input className="input flex-1 text-right font-semibold" autoFocus={r.method === 'VOUCHER' && !r.amount} value={Number(r.amount || 0).toLocaleString('id-ID')} onChange={e => setRow(i, { amount: num(e.target.value) })} />
+                    <button className="w-10 text-slate-400" onClick={() => split.length > 2 ? setSplit(s => s.filter((_, j) => j !== i)) : setSplit(null)}><X size={16} /></button>
+                  </div>
+                  {r.method === 'VOUCHER' && (
+                    <input className="input py-1.5 text-sm ml-0 w-[calc(100%-3rem)]" value={r.reference || ''} onChange={e => setRow(i, { reference: e.target.value })} placeholder="Kode / nomor kupon (opsional)" />
+                  )}
                 </div>
               ))}
+              <div className="flex gap-4">
+                <button className="text-xs font-semibold text-brand" onClick={() => setSplit(s => [...s, { method: otherMethod(''), amount: 0, reference: '' }])}>+ Tambah baris</button>
+                {hasVoucher && <button className="text-xs font-semibold text-brand inline-flex items-center gap-1" onClick={() => setSplit(s => [{ method: 'VOUCHER', amount: 0, reference: '' }, ...s])}><Ticket size={12} />Tambah kupon</button>}
+              </div>
               {paid !== total && <p className={`text-sm font-semibold ${paid > total ? 'text-danger' : 'text-amber-600'}`}>{paid > total ? `Lebih ${rp(paid - total)}` : `Kurang ${rp(total - paid)}`}</p>}
             </div>
           )}
@@ -1168,7 +1194,7 @@ function HistoryModal({ orders, shift, onClose, onPrint, onVoided }) {
                     {sold.map(i => <Line key={i.ProductSKUId} label={<>{i.qty}× {shortName(i.name)} {i.variant && <b>{i.variant}</b>}{i.discount > 0 && <span className="text-emerald-600"> · diskon {rp(i.discount)}</span>}</>} value={rp(i.qty * i.unitPrice - (i.discount || 0))} />)}
                     {o.orderDiscount > 0 && <Line label={`Diskon transaksi${o.discountNote ? ` · ${o.discountNote}` : ''}`} value={`-${rp(o.orderDiscount)}`} />}
                     <div className="border-t border-slate-100 pt-1">
-                      {o.payments.map((p, k) => <Line key={k} label={METHOD_LABEL[p.method] || p.method} value={p.amount < 0 ? `-${rp(-p.amount)}` : rp(p.amount)} />)}
+                      {o.payments.map((p, k) => <Line key={k} label={`${METHOD_LABEL[p.method] || p.method}${p.reference ? ` · ${p.reference}` : ''}`} value={p.amount < 0 ? `-${rp(-p.amount)}` : rp(p.amount)} />)}
                       {!o.payments.length && <Line label="Pembayaran" value="tidak ada (nilai sama)" />}
                       {o.cashReceived != null && <Line label="Uang diterima · kembalian" value={`${rp(o.cashReceived)} · ${rp(o.change)}`} />}
                     </div>

@@ -10,7 +10,8 @@ const { companyFilter, companyId } = require('../helpers/tenancy');
 const { paginate, paginatedResponse } = require('../helpers/queryHelper');
 const { upsertSkuWarehouseStock } = require('../helpers/skuStock');
 
-const PAY_METHODS   = ['CASH', 'QRIS', 'TRANSFER', 'EDC', 'OTHER'];
+// VOUCHER = kupon dari penyelenggara event; nilainya ditagih balik ke penyelenggara (reference = kode kupon)
+const PAY_METHODS   = ['CASH', 'QRIS', 'TRANSFER', 'EDC', 'OTHER', 'VOUCHER'];
 const EVENT_STATUS  = ['PREP', 'OPEN', 'CLOSED'];
 const isInt = (v, min = 0) => Number.isInteger(v) && v >= min;
 const bad = (res, message) => res.status(400).json({ message });
@@ -531,7 +532,7 @@ class PosController {
                     qty: l.qty, listPrice: l.listPrice, unitPrice: l.unitPrice, discount: l.discount, lineTotal: l.lineTotal,
                 })), { transaction: t });
                 await PosPayment.bulkCreate(payments.map(p => ({
-                    orderId: order.id, method: p.method, amount: Number(p.amount), reference: p.reference || null,
+                    orderId: order.id, method: p.method, amount: Number(p.amount), reference: String(p.reference || '').trim().slice(0, 100) || null,
                 })), { transaction: t });
                 await t.commit();
                 const full = await PosOrder.findByPk(order.id, { include: ORDER_INCLUDE });
@@ -812,6 +813,11 @@ class PosController {
                     brought: sum(Object.values(brought), x => x),
                 },
                 byMethod, methodOrders,
+                // daftar klaim kupon event: satu baris per kupon yang dipakai (transaksi dibatalkan tidak ikut)
+                vouchers: paid.flatMap(o => o.payments.filter(p => p.method === 'VOUCHER').map(p => ({
+                    orderId: o.id, orderNumber: o.orderNumber, soldAt: o.soldAt, reference: p.reference, amount: p.amount,
+                    orderTotal: o.total, customerName: o.customerName, cashier: o.Cashier?.name || null, device: deviceOf[o.shiftId] || null,
+                }))).sort((a, b) => new Date(a.soldAt) - new Date(b.soldAt)),
                 byDay: Object.values(byDay),
                 byHour: Object.values(byHour).sort((a, b) => a.hour - b.hour),
                 byProduct: skuRows.sort((a, b) => b.net - a.net),

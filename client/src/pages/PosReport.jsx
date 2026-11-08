@@ -19,7 +19,7 @@ const rpShort = (n) => {
 }
 const pct = (a, b) => (b ? Math.round(a / b * 100) : 0)
 const shortName = (n) => String(n || '').replace(/[\u200b-\u200d\u2060\ufeff]/g, '').replace(/\s+PREFACE\s+-\s+/i, ' · ').replace(/\s+PREFACE$/i, '').trim()
-const METHOD = { CASH: 'Tunai', QRIS: 'QRIS', TRANSFER: 'Transfer', EDC: 'Kartu (EDC)', OTHER: 'Lainnya' }
+const METHOD = { CASH: 'Tunai', QRIS: 'QRIS', TRANSFER: 'Transfer', EDC: 'Kartu (EDC)', OTHER: 'Lainnya', VOUCHER: 'Kupon Event' }
 const SIZE_ORDER = ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL']
 const sizeRank = (v) => { const i = SIZE_ORDER.indexOf(v); return i < 0 ? 99 : i }
 // satu warna untuk besaran (omzet/qty); sorotan = event / jam yang sedang dilihat
@@ -285,6 +285,13 @@ function Payments({ r }) {
           <SimpleTable cols={['Laptop', 'Transaksi', 'Pcs', 'Omzet']} rows={r.byDevice.map(d => [d.name, d.orders, d.qty, rp(d.total)])} />
         </Card>
       </div>
+      {!!r.vouchers?.length && (
+        <Card title={`Klaim kupon event · ${r.vouchers.length} kupon · ${rp(r.vouchers.reduce((s, v) => s + v.amount, 0))}`}>
+          <p className="text-xs text-slate-500 -mt-1 mb-2">Total ini ditagihkan ke penyelenggara event. Transaksi yang dibatalkan tidak ikut. Unduh Excel → sheet "Klaim kupon".</p>
+          <SimpleTable cols={['No. struk', 'Waktu', 'Kode kupon', 'Nilai kupon', 'Total struk', 'Kasir', 'Laptop']}
+            rows={r.vouchers.map(v => [v.orderNumber, new Date(v.soldAt).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' }), v.reference || <span className="text-slate-400">—</span>, rp(v.amount), rp(v.orderTotal), v.cashier || '—', v.device || '—'])} />
+        </Card>
+      )}
       <Card title="Per kasir">
         <SimpleTable cols={['Kasir', 'Transaksi', 'Pcs', 'Rata-rata', 'Omzet', 'Porsi']}
           rows={r.byCashier.map(c => [c.name, c.orders, c.qty, rp(c.orders ? Math.round(c.total / c.orders) : 0), rp(c.total), `${pct(c.total, r.totals.total)}%`])} />
@@ -439,6 +446,9 @@ async function exportReport(r) {
     'Per jam': [['Jam', 'Transaksi', 'Pcs', 'Omzet'], ...r.byHour.map(h => [`${String(h.hour).padStart(2, '0')}.00`, h.orders, h.qty, h.total])],
     'Per hari': [['Tanggal', 'Transaksi', 'Pcs', 'Omzet'], ...r.byDay.map(d => [d.day, d.orders, d.qty, d.total])],
     'Metode bayar': [['Metode', 'Nominal', 'Transaksi'], ...Object.entries(r.byMethod).map(([k, v]) => [METHOD[k], v, r.methodOrders[k] || 0])],
+    'Klaim kupon': [['No. struk', 'Waktu', 'Kode kupon', 'Nilai kupon', 'Total struk', 'Pembeli', 'Kasir', 'Laptop'],
+      ...(r.vouchers || []).map(v => [v.orderNumber, new Date(v.soldAt).toLocaleString('id-ID'), v.reference || '', v.amount, v.orderTotal, v.customerName || '', v.cashier || '', v.device || '']),
+      ['TOTAL', '', '', (r.vouchers || []).reduce((s, v) => s + v.amount, 0)]],
     Kasir: [['Kasir', 'Transaksi', 'Pcs', 'Omzet'], ...r.byCashier.map(c => [c.name, c.orders, c.qty, c.total])],
     Shift: [['Shift', 'Laptop', 'Kasir', 'Dibuka', 'Ditutup', 'Transaksi', 'Penjualan', 'Modal', 'Kas seharusnya', 'Kas dihitung', 'Selisih'],
       ...r.shifts.map(s => [s.id, s.deviceName || '', s.Cashier?.name || '', s.openedAt, s.closedAt || '', s.summary.orderCount, s.summary.total, s.openingCash, s.summary.expectedCash, s.countedCash ?? '', s.summary.cashDifference ?? ''])],
@@ -446,7 +456,7 @@ async function exportReport(r) {
     Transaksi: [['No. struk', 'Waktu', 'Status', 'Kasir', 'Pembeli', 'Barang', 'Subtotal', 'Diskon', 'Total', 'Bayar', 'Ambil', 'Catatan cek'],
       ...all.map(o => [o.orderNumber, new Date(o.soldAt).toLocaleString('id-ID'), o.status, o.Cashier?.name || '', o.customerName || '',
         o.items.map(i => `${i.qty}x ${i.name}${i.variant ? ` ${i.variant}` : ''}`).join('; '),
-        o.subtotal, o.itemDiscount + o.orderDiscount, o.total, o.payments.map(p => `${METHOD[p.method] || p.method} ${p.amount}`).join(' + '),
+        o.subtotal, o.itemDiscount + o.orderDiscount, o.total, o.payments.map(p => `${METHOD[p.method] || p.method}${p.reference ? ` (${p.reference})` : ''} ${p.amount}`).join(' + '),
         o.fulfillment === 'LATER' ? `${o.pickupCode} ${o.pickupStatus === 'PENDING' ? '(belum)' : '(sudah)'}` : '', o.reviewNote || ''])],
     'Antar event': [['Event', 'Tanggal', 'Transaksi', 'Pcs', 'Omzet'], ...r.compare.map(c => [c.name, c.startDate || '', c.orders, c.qty, c.total])],
   }

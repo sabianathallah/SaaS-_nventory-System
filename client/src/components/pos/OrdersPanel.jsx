@@ -13,7 +13,7 @@ import { DEFAULT_RECEIPT, orderPrintHtml, printReceipt } from '../../pos/receipt
 // Dipakai di halaman Riwayat Transaksi dan tab Transaksi di Laporan event.
 const rp = (n) => 'Rp ' + Number(n || 0).toLocaleString('id-ID')
 const shortName = (n) => String(n || '').replace(/[\u200b-\u200d\u2060\ufeff]/g, '').replace(/\s+PREFACE\s+-\s+/i, ' · ').replace(/\s+PREFACE$/i, '').trim()
-const METHOD = { CASH: 'Tunai', QRIS: 'QRIS', TRANSFER: 'Transfer', EDC: 'Kartu', OTHER: 'Lainnya' }
+const METHOD = { CASH: 'Tunai', QRIS: 'QRIS', TRANSFER: 'Transfer', EDC: 'Kartu', OTHER: 'Lainnya', VOUCHER: 'Kupon' }
 const FILTERS = [['', 'Semua'], ['LATER', 'Ambil nanti'], ['PENDING', 'Belum diambil'], ['REVIEW', 'Perlu dicek'], ['VOID', 'Dibatalkan']]
 
 export default function OrdersPanel({ eventId, event }) {
@@ -107,7 +107,7 @@ function FragmentRow({ o, open, onToggle, onPrint, onVoid }) {
         <td className="py-2.5 font-mono text-xs">{o.orderNumber}{o.exchangeOf && <span className="block font-sans text-[11px] text-sky-700">tukar dari {o.exchangeOf.orderNumber}</span>}</td>
         <td className="py-2.5">{o.customerName || <span className="text-slate-400">—</span>}{o.customerPhone && <span className="block text-xs text-slate-400">{o.customerPhone}</span>}</td>
         <td className="py-2.5 text-xs text-slate-600 max-w-[280px]">{o.items.map(i => `${i.qty < 0 ? `kembali ${-i.qty}` : i.qty}× ${shortName(i.name)}${i.variant ? ` ${i.variant}` : ''}`).join(', ')}</td>
-        <td className="py-2.5 text-xs">{o.payments.map(p => METHOD[p.method] || p.method).join(' + ') || '—'}</td>
+        <td className="py-2.5 text-xs">{o.payments.map(p => `${METHOD[p.method] || p.method}${p.reference ? ` (${p.reference})` : ''}`).join(' + ') || '—'}</td>
         <td className="py-2.5 text-right font-semibold whitespace-nowrap">{rp(o.total)}</td>
         <td className="py-2.5 pl-4 text-xs">{status}{o.needsReview && <span className="block text-amber-600">perlu dicek</span>}</td>
         <td className="pr-3 py-2.5 text-slate-400">{open ? <ChevronUp size={14} /> : <ChevronDown size={14} />}</td>

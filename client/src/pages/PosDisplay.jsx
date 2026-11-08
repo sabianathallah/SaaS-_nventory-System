@@ -17,7 +17,7 @@ const rp = (n) => 'Rp ' + Number(n || 0).toLocaleString('id-ID')
 const shortName = (n) => String(n || '').replace(/[\u200b-\u200d\u2060\ufeff]/g, '').replace(/\s+PREFACE\s+-\s+/i, ' · ').replace(/\s+PREFACE$/i, '').trim()
 const lineName = (n) => shortName(n).split('·').pop().trim()
 const firstName = (n) => String(n || '').trim().split(/\s+/)[0] || ''
-const METHOD = { CASH: 'Cash', QRIS: 'QRIS', TRANSFER: 'Transfer', EDC: 'Card', OTHER: 'Other' }
+const METHOD = { CASH: 'Cash', QRIS: 'QRIS', TRANSFER: 'Transfer', EDC: 'Card', OTHER: 'Other', VOUCHER: 'Coupon' }
 const HEAD = { fontFamily: 'Impact, Haettenschweiler, "Arial Narrow Bold", sans-serif', letterSpacing: '.02em' }
 const DONE_MIN_MS = 8000   // ucapan terima kasih tampil minimal selama ini walau kasir sudah lanjut
 const DONE_MAX_MS = 20000  // lalu kembali ke tampilan sambutan

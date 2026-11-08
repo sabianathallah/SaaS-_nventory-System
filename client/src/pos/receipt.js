@@ -7,7 +7,7 @@ import logo from '../assets/logo-preface-receipt.png?inline'
 const num = (n) => Number(n || 0).toLocaleString('id-ID')
 const rp = (n) => 'Rp' + num(n)
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
-const METHOD = { CASH: 'Tunai', QRIS: 'QRIS', TRANSFER: 'Transfer', EDC: 'Kartu (EDC)', OTHER: 'Lainnya' }
+const METHOD = { CASH: 'Tunai', QRIS: 'QRIS', TRANSFER: 'Transfer', EDC: 'Kartu (EDC)', OTHER: 'Lainnya', VOUCHER: 'Kupon Event' }
 const HANDLE = '@prefacewearhouse'
 const STAR = '&#9733;'
 
@@ -61,7 +61,7 @@ function ctx(order, event, settings) {
     name: String(order.customerName || '').trim(),
     // baris "Terima kasih" sudah dicetak tetap, jangan dobel dari catatan event
     foot: String(event?.receiptFooter || '').split('\n').filter(l => !/^\s*terima kasih!?\s*$/i.test(l)).join('\n').trim(),
-    pays: order.payments.map(p => `<div class="row"><span>${METHOD[p.method] || esc(p.method)}</span><span>${num(p.amount)}</span></div>`).join(''),
+    pays: order.payments.map(p => `<div class="row"><span>${METHOD[p.method] || esc(p.method)}${p.reference ? ` ${esc(p.reference)}` : ''}</span><span>${num(p.amount)}</span></div>`).join(''),
   }
 }
 const pageCss = (w, f, font) => `
