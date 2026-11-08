@@ -45,8 +45,8 @@ export default function TransferDetail() {
   const warehouses = warehousesRes?.data ?? []
 
   const { data: productsRes } = useQuery({
-    queryKey: ['products', { limit: 300 }],
-    queryFn:  () => productsApi.list({ limit: 300 }),
+    queryKey: ['products', { limit: 500 }],
+    queryFn:  () => productsApi.list({ limit: 500 }),
   })
   const products = productsRes?.data ?? []
 
