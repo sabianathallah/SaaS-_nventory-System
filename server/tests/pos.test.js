@@ -129,6 +129,34 @@ describe('Event & shift', () => {
     expect(res.status).toBe(201);
     expect(res.body.articleIds).toEqual([koleksi.id]);
   });
+
+  test('harga promo per artikel: % atau harga jadi, tidak pernah di atas harga normal', async () => {
+    const put = (priceRules) => request(app).put(`/pos/events/${eventId}`).set(auth()).send({ priceRules });
+    const items = async () => Object.fromEntries((await request(app).get(`/pos/events/${eventId}/catalog`).set(auth())).body.items.map(i => [i.code, i]));
+
+    expect((await put([{ productId: product.id, type: 'PERCENT', value: 0 }])).status).toBe(400);
+    expect((await put([{ productId: product.id, type: 'PERCENT', value: 101 }])).status).toBe(400);
+    expect((await put([{ productId: product.id, type: 'PRICE', value: -1 }])).status).toBe(400);
+    expect((await put([{ productId: product.id, type: 'X', value: 10 }])).status).toBe(400);
+
+    expect((await put([{ productId: product.id, type: 'PERCENT', value: 20 }])).status).toBe(200);
+    let it = await items();
+    expect(it['POS-A']).toMatchObject({ price: 240000, normalPrice: 300000 });
+    expect(it['POS-B']).toMatchObject({ price: 200000, normalPrice: 250000 });
+    expect(it['POS-OTHER'].normalPrice).toBeUndefined();
+
+    // harga jadi berlaku semua size; yang lebih mahal dari harga normal diabaikan
+    expect((await put([{ productId: product.id, type: 'PRICE', value: 260000 }])).status).toBe(200);
+    it = await items();
+    expect(it['POS-A']).toMatchObject({ price: 260000, normalPrice: 300000 });
+    expect(it['POS-B'].price).toBe(250000);
+    expect(it['POS-B'].normalPrice).toBeUndefined();
+
+    expect((await put([])).body.priceRules).toBeNull();
+    it = await items();
+    expect(it['POS-A'].price).toBe(300000);
+    expect(it['POS-A'].normalPrice).toBeUndefined();
+  });
 });
 
 describe('Transaksi', () => {

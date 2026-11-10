@@ -195,6 +195,9 @@ export default function PosCashier() {
     for (const p of map.values()) {
       p.skus.sort((a, b) => SIZE_ORDER.indexOf(a.variant) - SIZE_ORDER.indexOf(b.variant))
       p.price = Math.min(...p.skus.map(s => s.price))
+      // harga normal (dicoret) kalau artikel ini sedang promo di event
+      const normals = p.skus.filter(s => s.normalPrice).map(s => s.normalPrice)
+      p.normalPrice = normals.length ? Math.min(...normals) : null
     }
     return [...map.values()]
   }, [catalog])
@@ -232,7 +235,7 @@ export default function PosCashier() {
     setCart(c => {
       const ex = c.find(l => l.skuId === it.skuId)
       if (ex) return c.map(l => l.skuId === it.skuId ? { ...l, qty: l.qty + 1 } : l)
-      return [...c, { skuId: it.skuId, productId: it.productId, code: it.code, name: it.name, variant: it.variant, listPrice: it.price, unitPrice: it.price, qty: 1, discountText: '' }]
+      return [...c, { skuId: it.skuId, productId: it.productId, code: it.code, name: it.name, variant: it.variant, listPrice: it.normalPrice ?? it.price, unitPrice: it.price, qty: 1, discountText: '' }]
     })
   }
   const pickProduct = (p) => {
@@ -311,7 +314,7 @@ export default function PosCashier() {
     if (!cart.length) { publishDisplay(eventId, { phase: 'idle' }); return }
     publishDisplay(eventId, {
       phase: modal === 'pay' ? 'pay' : 'cart',
-      lines: totals.lines.map(l => ({ skuId: l.skuId, productId: l.productId, name: l.name, variant: l.variant, qty: l.qty, unitPrice: l.unitPrice, discount: l.discount, lineTotal: l.lineTotal })),
+      lines: totals.lines.map(l => ({ skuId: l.skuId, productId: l.productId, name: l.name, variant: l.variant, qty: l.qty, listPrice: l.listPrice, unitPrice: l.unitPrice, discount: l.discount, lineTotal: l.lineTotal })),
       subtotal: totals.subtotal, discount: totals.itemDiscount + totals.orderDiscount, total: totals.total, pcs: totals.pcs,
       lastSku: lastAdd?.skuId, lastAt: lastAdd?.at,
       pay: modal === 'pay' ? payPreview || { methods: ['CASH'], fulfillment: 'NOW' } : null,
@@ -348,7 +351,7 @@ export default function PosCashier() {
       pickupCode: fulfillment === 'LATER' ? `${device.slice(-2)}-${String(seq).padStart(3, '0')}` : null,
       eventId: Number(eventId), shiftId: shift?.id ?? null,
       soldAt: new Date().toISOString(),
-      items: totals.lines.map(l => ({ ProductSKUId: l.skuId, productId: l.productId, qty: l.qty, unitPrice: l.unitPrice, discount: l.discount, name: l.name, variant: l.variant })),
+      items: totals.lines.map(l => ({ ProductSKUId: l.skuId, productId: l.productId, qty: l.qty, listPrice: l.listPrice, unitPrice: l.unitPrice, discount: l.discount, name: l.name, variant: l.variant })),
       subtotal: totals.subtotal, itemDiscount: totals.itemDiscount, orderDiscount: totals.orderDiscount, total: totals.total,
       discountNote: discountNote || null,
       customerName: customerName || null, customerPhone: customerPhone || null, fulfillment,
@@ -483,7 +486,10 @@ export default function PosCashier() {
                       <div className="p-3">
                         <p className="text-[13px] font-semibold text-slate-800 leading-snug line-clamp-2 min-h-[2.4em]">{shortName(p.name)}</p>
                         <div className="flex items-baseline justify-between mt-1.5">
-                          <span className="text-[14px] font-bold text-slate-900 whitespace-nowrap">{rp(p.price)}</span>
+                          <span className="whitespace-nowrap">
+                            <span className={`text-[14px] font-bold ${p.normalPrice ? 'text-rose-600' : 'text-slate-900'}`}>{rp(p.price)}</span>
+                            {p.normalPrice && <span className="ml-1 text-[11px] text-slate-400 line-through">{rp(p.normalPrice)}</span>}
+                          </span>
                           {elsewhere
                             ? <span className="text-[11px] font-semibold text-amber-700 whitespace-nowrap" title="Stok di gudang cadangan">cadangan {elsewhere}</span>
                             : <span className="text-[11px] text-slate-400">stok {stock}</span>}
@@ -544,7 +550,7 @@ export default function PosCashier() {
                       <p className="text-[13px] font-semibold text-slate-800 truncate">{shortName(l.name)}</p>
                       <p className="text-xs text-slate-500">
                         {l.variant && <span className="inline-block px-1.5 rounded border border-slate-300 font-bold text-slate-700 mr-1.5">{l.variant}</span>}
-                        {rp(l.unitPrice)}{l.unitPrice !== l.listPrice && <span className="text-amber-600"> (normal {rp(l.listPrice)})</span>}
+                        {rp(l.unitPrice)}{l.unitPrice !== l.listPrice && <span className="text-amber-600"> (normal <s>{rp(l.listPrice)}</s>)</span>}
                         {l.discount > 0 && <span className="text-emerald-600"> · diskon {rp(l.discount)}</span>}
                       </p>
                     </button>
@@ -554,10 +560,23 @@ export default function PosCashier() {
                         <span className="w-8 text-center font-bold text-sm">{l.qty}</span>
                         <button className="w-8 h-8 flex items-center justify-center text-slate-500 hover:bg-slate-50" onClick={() => !blockedByLimit(l) && updateLine(l.skuId, { qty: l.qty + 1 })}><Plus size={14} /></button>
                       </div>
-                      <span className="font-bold text-slate-900">{rp(l.lineTotal)}</span>
+                      <div className="flex items-center gap-2">
+                        <button onClick={() => setEditLine(editLine === l.skuId ? null : l.skuId)}
+                          className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-semibold border transition-colors ${
+                            editLine === l.skuId || l.discount > 0 ? 'border-emerald-300 bg-emerald-50 text-emerald-700' : 'border-slate-200 text-slate-500 hover:border-slate-400'}`}>
+                          <Tag size={11} />{l.discount > 0 ? `-${rp(l.discount)}` : 'Diskon'}
+                        </button>
+                        <span className="font-bold text-slate-900">{rp(l.lineTotal)}</span>
+                      </div>
                     </div>
                     {editLine === l.skuId && (
                       <div className="grid grid-cols-2 gap-2 mt-3 p-2.5 rounded-lg bg-slate-50">
+                        <div className="col-span-2 flex gap-1.5">
+                          {['10%', '20%', '30%', '50%'].map(v => (
+                            <button key={v} onClick={() => updateLine(l.skuId, { discountText: l.discountText === v ? '' : v })}
+                              className={`flex-1 py-1 rounded-md text-xs font-semibold border ${l.discountText === v ? 'bg-slate-900 text-white border-slate-900' : 'bg-white border-slate-200 text-slate-600'}`}>{v}</button>
+                          ))}
+                        </div>
                         <label className="text-[11px] text-slate-500">Harga satuan
                           <input className="input mt-1 py-1.5 text-right" value={l.unitPrice.toLocaleString('id-ID')} onChange={e => updateLine(l.skuId, { unitPrice: num(e.target.value) })} /></label>
                         <label className="text-[11px] text-slate-500">Diskon (Rp / %)
@@ -837,7 +856,7 @@ function StockPeek({ products, imgs, stockOf, skuById, places, initial, onAdd, o
                 {imgs[p.productId] ? <img src={imgs[p.productId]} alt="" className="w-full h-full object-cover" /> : initials(p.name)}
               </div>
               <div className="flex-1 min-w-0">
-                <p className="font-semibold text-slate-900 truncate">{shortName(p.name)} <span className="text-sm font-normal text-slate-400">{rp(p.price)}</span></p>
+                <p className="font-semibold text-slate-900 truncate">{shortName(p.name)} <span className="text-sm font-normal text-slate-400">{rp(p.price)}{p.normalPrice && <s className="ml-1">{rp(p.normalPrice)}</s>}</span></p>
                 <div className="overflow-x-auto mt-1.5">
                   <table className="text-sm tabular-nums">
                     <thead>
@@ -884,7 +903,7 @@ function SizePicker({ product, img, stockOf, backupOf, onPick, onClose }) {
           </div>
           <div className="min-w-0">
             <p className="font-bold text-slate-900 leading-snug">{shortName(product.name)}</p>
-            <p className="text-sm text-slate-500 mt-1">{rp(product.price)}</p>
+            <p className="text-sm text-slate-500 mt-1">{rp(product.price)}{product.normalPrice && <s className="ml-1.5 text-slate-400">{rp(product.normalPrice)}</s>}{product.normalPrice && <span className="ml-1.5 text-[11px] font-bold text-rose-600">PROMO</span>}</p>
             <p className="text-xs text-slate-400 mt-2">Pilih size</p>
           </div>
           <button className="ml-auto self-start text-slate-400" onClick={onClose}><X size={18} /></button>

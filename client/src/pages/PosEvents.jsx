@@ -14,7 +14,7 @@ const STATUS = {
   OPEN:   { label: 'Berjalan',  cls: 'badge-green' },
   CLOSED: { label: 'Selesai',   cls: 'badge-muted' },
 }
-const EMPTY = { name: '', location: '', startDate: '', endDate: '', WarehouseId: '', ChannelId: '', receiptHeader: '', receiptFooter: 'Terima kasih!', purchaseLimit: null, backupWarehouseIds: [], articleIds: [], displayHiddenProductIds: [] }
+const EMPTY = { name: '', location: '', startDate: '', endDate: '', WarehouseId: '', ChannelId: '', receiptHeader: '', receiptFooter: 'Terima kasih!', purchaseLimit: null, backupWarehouseIds: [], articleIds: [], displayHiddenProductIds: [], priceRules: [] }
 
 export default function PosEvents() {
   const qc = useQueryClient()
@@ -44,7 +44,7 @@ export default function PosEvents() {
   })
 
   const openForm = (ev) => {
-    setForm(ev ? { ...EMPTY, ...Object.fromEntries(Object.keys(EMPTY).map(k => [k, ev[k] ?? ''])), purchaseLimit: ev.purchaseLimit || null, backupWarehouseIds: ev.backupWarehouseIds || [], articleIds: ev.articleIds || [], displayHiddenProductIds: ev.displayHiddenProductIds || [] } : EMPTY)
+    setForm(ev ? { ...EMPTY, ...Object.fromEntries(Object.keys(EMPTY).map(k => [k, ev[k] ?? ''])), purchaseLimit: ev.purchaseLimit || null, backupWarehouseIds: ev.backupWarehouseIds || [], articleIds: ev.articleIds || [], displayHiddenProductIds: ev.displayHiddenProductIds || [], priceRules: ev.priceRules || [] } : EMPTY)
     setModal({ data: ev || null })
   }
   const submit = (e) => {
@@ -141,6 +141,7 @@ export default function PosEvents() {
               {(chs?.data ?? []).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
+          <PriceRuleField articleIds={form.articleIds} value={form.priceRules} onChange={(v) => setForm(f => ({ ...f, priceRules: v }))} />
           <LimitField value={form.purchaseLimit} onChange={(v) => setForm(f => ({ ...f, purchaseLimit: v }))} />
           <div><label className="label">Baris tambahan di struk (opsional)</label><input className="input" value={form.receiptHeader} onChange={set('receiptHeader')} placeholder="mis. IG @preface · preface.id" /></div>
           <div><label className="label">Catatan bawah struk</label><textarea className="input" rows={2} value={form.receiptFooter} onChange={set('receiptFooter')} /></div>
@@ -219,6 +220,72 @@ function DisplayHiddenField({ articleIds, value, onChange }) {
           ))}
           {!products.length && <p className="text-xs text-slate-400">Memuat produk…</p>}
         </div>
+      )}
+    </div>
+  )
+}
+
+// Harga promo per artikel untuk event ini: [{ productId, type: 'PERCENT' | 'PRICE', value }].
+// Harga master tidak berubah; kasir tetap boleh mengubah harga / menambah diskon di atasnya.
+function PriceRuleField({ articleIds, value, onChange }) {
+  const rules = value ?? []
+  const [open, setOpen] = useState(rules.length > 0)
+  const [search, setSearch] = useState('')
+  const { data } = useQuery({ queryKey: ['products', { limit: 500 }], queryFn: () => productsApi.list({ limit: 500 }), enabled: open })
+  const arts = articleIds ?? []
+  const products = (data?.data ?? []).filter(p => !arts.length || arts.includes(p.ArticleId))
+  const nameOf = (id) => (data?.data ?? []).find(p => p.id === id)?.name || `Produk #${id}`
+  const ids = rules.map(r => r.productId)
+  const matches = search.trim() ? products.filter(p => !ids.includes(p.id) && p.name.toLowerCase().includes(search.trim().toLowerCase())).slice(0, 8) : []
+  const patch = (id, p) => onChange(rules.map(r => r.productId === id ? { ...r, ...p } : r))
+  const rpFmt = (n) => Number(n || 0).toLocaleString('id-ID')
+  return (
+    <div className="rounded-xl border border-slate-200 p-3 space-y-2">
+      <button type="button" className="w-full text-left" onClick={() => setOpen(o => !o)}>
+        <p className="text-sm font-semibold text-slate-700">Harga promo per artikel <span className="font-normal text-slate-400">({rules.length ? `${rules.length} artikel` : 'opsional'})</span></p>
+        <p className="text-xs text-slate-500">Diskon % atau harga jadi, berlaku untuk semua size artikel itu, hanya di event ini. Harga master tidak berubah. Kasir tetap bisa mengubah harga atau menambah diskon.</p>
+      </button>
+      {open && (
+        <>
+          {!!rules.length && (
+            <div className="space-y-1.5">
+              {rules.map(r => (
+                <div key={r.productId} className="flex items-center gap-2">
+                  <span className="flex-1 min-w-0 truncate text-sm text-slate-700">{nameOf(r.productId)}</span>
+                  <select className="input w-auto py-1.5 text-xs" value={r.type}
+                    onChange={e => patch(r.productId, { type: e.target.value, value: e.target.value === 'PERCENT' ? 10 : 0 })}>
+                    <option value="PERCENT">Diskon %</option>
+                    <option value="PRICE">Harga jadi</option>
+                  </select>
+                  {r.type === 'PERCENT' ? (
+                    <div className="relative w-24">
+                      <input type="number" min={1} max={100} className="input py-1.5 pr-7 text-right" value={r.value}
+                        onChange={e => patch(r.productId, { value: Math.min(100, Math.max(0, Number(e.target.value) || 0)) })} />
+                      <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-slate-400">%</span>
+                    </div>
+                  ) : (
+                    <div className="relative w-32">
+                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-slate-400">Rp</span>
+                      <input className="input py-1.5 pl-8 text-right" value={rpFmt(r.value)}
+                        onChange={e => patch(r.productId, { value: Number(e.target.value.replace(/\D/g, '')) || 0 })} />
+                    </div>
+                  )}
+                  <button type="button" className="p-1 text-slate-400 hover:text-danger" onClick={() => onChange(rules.filter(x => x.productId !== r.productId))}><X size={14} /></button>
+                </div>
+              ))}
+            </div>
+          )}
+          <input className="input" value={search} onChange={e => setSearch(e.target.value)} placeholder="Cari artikel untuk diberi harga promo…" />
+          {!!matches.length && (
+            <div className="border border-slate-200 rounded-lg divide-y divide-slate-100 max-h-48 overflow-auto">
+              {matches.map(p => (
+                <button type="button" key={p.id} className="block w-full text-left px-3 py-1.5 text-sm hover:bg-slate-50"
+                  onClick={() => { onChange([...rules, { productId: p.id, type: 'PERCENT', value: 10 }]); setSearch('') }}>{p.name}</button>
+              ))}
+            </div>
+          )}
+          <p className="text-xs text-slate-400">Harga jadi yang lebih mahal dari harga normal diabaikan. Setelah disimpan, klik <b>Perbarui katalog</b> di laptop kasir.</p>
+        </>
       )}
     </div>
   )

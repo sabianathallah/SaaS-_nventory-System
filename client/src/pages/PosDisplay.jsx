@@ -325,6 +325,7 @@ function Cart({ s, imgs, qris }) {
                 <div className="mt-1.5 flex items-center gap-2 text-sm">
                   {l.variant && <span className="px-2 py-0.5 rounded-md border border-white/40 font-bold">SIZE {l.variant}</span>}
                   <span className="text-white/60">{l.qty} × {rp(l.unitPrice)}</span>
+                  {l.listPrice > l.unitPrice && <span className="text-white/35 line-through">{rp(l.listPrice)}</span>}
                   {l.discount > 0 && <span className="text-emerald-400 font-semibold">save {rp(l.discount)}</span>}
                 </div>
               </div>

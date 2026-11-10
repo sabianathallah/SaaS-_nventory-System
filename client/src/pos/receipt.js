@@ -82,7 +82,7 @@ function minimal(order, { event, settings, cashierName }) {
   const items = sold.map(i => `
     <div class="item">
       <div class="row top"><span class="nm">${esc(shortName(i.name))}</span><span class="amt">${num(i.qty * i.unitPrice)}</span></div>
-      <div class="sub">${i.variant ? `<span class="size">${esc(i.variant)}</span>` : ''}${i.qty} &times; ${num(i.unitPrice)}</div>
+      <div class="sub">${i.variant ? `<span class="size">${esc(i.variant)}</span>` : ''}${i.qty} &times; ${num(i.unitPrice)}${i.listPrice > i.unitPrice ? ` <s>${num(i.listPrice)}</s>` : ''}</div>
       ${i.discount ? `<div class="row sub"><span>&mdash; diskon</span><span>-${num(i.discount)}</span></div>` : ''}
     </div>`).join('')
   const meta = [['No. Struk', order.orderNumber], ['Tanggal', date], name && ['Atas nama', name], ['Jam', time],
@@ -167,7 +167,7 @@ function street(order, { event, settings, cashierName }) {
       <div class="no">${String(idx + 1).padStart(2, '0')}</div>
       <div class="body">
         <div class="nm">${esc(shortName(i.name))}</div>
-        <div class="row tags"><span>${i.variant ? `<b class="chip">SIZE ${esc(i.variant)}</b>` : ''}<b class="chip">QTY ${String(i.qty).padStart(2, '0')}</b> @${num(i.unitPrice)}</span><span class="amt">${num(i.qty * i.unitPrice)}</span></div>
+        <div class="row tags"><span>${i.variant ? `<b class="chip">SIZE ${esc(i.variant)}</b>` : ''}<b class="chip">QTY ${String(i.qty).padStart(2, '0')}</b> @${num(i.unitPrice)}${i.listPrice > i.unitPrice ? ` <s>${num(i.listPrice)}</s>` : ''}</span><span class="amt">${num(i.qty * i.unitPrice)}</span></div>
         ${i.discount ? `<div class="row tags"><span>DISKON</span><span>-${num(i.discount)}</span></div>` : ''}
       </div>
     </div>`).join('')

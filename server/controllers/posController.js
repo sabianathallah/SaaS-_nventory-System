@@ -63,6 +63,27 @@ function normLimit(v) {
     // per: 'SKU' = dihitung per size (SKU), 'PRODUCT' = per artikel (semua size digabung)
     return { qty, productIds, perPhone: !!v.perPhone, per: v.per === 'SKU' ? 'SKU' : 'PRODUCT' };
 }
+// Harga promo per artikel: [{ productId, type: 'PERCENT' (1..100) | 'PRICE' (Rp ≥ 0), value }].
+// Satu aturan per produk (yang terakhir menang). undefined = tidak valid, null = tidak ada promo.
+function normPriceRules(v) {
+    if (v === null || v === undefined || v === '') return null;
+    if (!Array.isArray(v)) return undefined;
+    const byProduct = new Map();
+    for (const r of v) {
+        const productId = Number(r?.productId), value = Number(r?.value);
+        const type = r?.type === 'PRICE' ? 'PRICE' : r?.type === 'PERCENT' ? 'PERCENT' : null;
+        if (!isInt(productId, 1) || !type) return undefined;
+        if (type === 'PERCENT' ? !(Number.isFinite(value) && value > 0 && value <= 100) : !isInt(value)) return undefined;
+        byProduct.set(productId, { productId, type, value });
+    }
+    return byProduct.size ? [...byProduct.values()] : null;
+}
+// Harga jual event untuk satu SKU (tidak pernah di atas harga normal).
+function eventPrice(normal, rule) {
+    if (!rule) return normal;
+    const p = rule.type === 'PERCENT' ? Math.round(normal * (100 - rule.value) / 100) : rule.value;
+    return Math.max(0, Math.min(p, normal));
+}
 // Gudang cadangan event: unik, milik company yang sama, bukan gudang event itu sendiri.
 // Mengembalikan null kalau ada gudang yang tidak valid.
 async function normBackups(ids, mainWarehouseId, cid) {
@@ -165,8 +186,10 @@ class PosController {
             if (!backupWarehouseIds) return bad(res, 'Gudang cadangan tidak ditemukan');
             const articleIds = await normArticles(req.body.articleIds, cid);
             if (!articleIds) return bad(res, 'Koleksi tidak ditemukan');
+            const priceRules = normPriceRules(req.body.priceRules);
+            if (priceRules === undefined) return bad(res, 'Harga promo tidak valid (persen 1–100, harga angka bulat ≥ 0)');
             const ev = await PosEvent.create({
-                name, location, startDate, endDate, WarehouseId, ChannelId, receiptHeader, receiptFooter, purchaseLimit, backupWarehouseIds, articleIds,
+                name, location, startDate, endDate, WarehouseId, ChannelId, receiptHeader, receiptFooter, purchaseLimit, backupWarehouseIds, articleIds, priceRules,
                 status: 'PREP', createdBy: req.user.id, companyId: cid,
             });
             res.status(201).json(ev);
@@ -230,6 +253,11 @@ class PosController {
                 const ids = [...new Set((raw || []).map(Number).filter(n => Number.isInteger(n) && n > 0))];
                 updates.displayHiddenProductIds = ids.length ? ids : null;
             }
+            if (req.body.priceRules !== undefined) {
+                const priceRules = normPriceRules(req.body.priceRules);
+                if (priceRules === undefined) return bad(res, 'Harga promo tidak valid (persen 1–100, harga angka bulat ≥ 0)');
+                updates.priceRules = priceRules;
+            }
             await ev.update(updates);
             res.json(ev);
         } catch (err) { next(err); }
@@ -253,6 +281,7 @@ class PosController {
                 ],
                 order: [['ProductId', 'ASC'], ['position', 'ASC']],
             });
+            const rules = Object.fromEntries((ev.priceRules || []).map(r => [r.productId, r]));
             const stockRows = await SkuWarehouseStock.findAll({ where: { WarehouseId: ev.WarehouseId }, attributes: ['ProductSKUId', 'qty'] });
             const stock = Object.fromEntries(stockRows.map(s => [s.ProductSKUId, s.qty]));
             // stok gudang cadangan per SKU: { [skuId]: { [warehouseId]: qty } }, hanya yang > 0
@@ -273,6 +302,7 @@ class PosController {
                     backupWarehouses: backupIds.map(id => backupWarehouses.find(w => w.id === id)).filter(Boolean).map(w => ({ id: w.id, name: w.name })),
                     articleIds,
                     displayHiddenProductIds: ev.displayHiddenProductIds || [],
+                    priceRules: ev.priceRules || [],
                 },
                 generatedAt: new Date().toISOString(),
                 items: skus.filter(s => s.Product).map(s => ({
@@ -283,7 +313,12 @@ class PosController {
                     imageUrl: s.Product.imageUrl || null,
                     category: s.Product.Category?.name || null,
                     variant: (s.ProductVariantOptions || []).map(o => o.value).join(' / ') || null,
-                    price: Math.round(Number(s.price) || 0),
+                    // price = harga jual event (sudah promo), normalPrice = harga master kalau sedang promo
+                    ...(() => {
+                        const normal = Math.round(Number(s.price) || 0);
+                        const price = eventPrice(normal, rules[s.ProductId]);
+                        return price < normal ? { price, normalPrice: normal } : { price: normal };
+                    })(),
                     stock: stock[s.id] ?? 0,
                     ...(backupStock[s.id] ? { backupStock: backupStock[s.id] } : {}),
                 })),
@@ -795,6 +830,8 @@ class PosController {
                     soldQty: soldPcs,
                     subtotal: sum(paid, o => o.subtotal),
                     discount: sum(paid, o => o.itemDiscount + o.orderDiscount),
+                    // potongan dari harga promo event (harga normal − harga jual), di luar kolom diskon
+                    promo: sum(paid, o => sum(o.items, i => i.qty > 0 && i.listPrice > i.unitPrice ? i.qty * (i.listPrice - i.unitPrice) : 0)),
                     returns: sum(paid, o => o.returnTotal),
                     refunds: sum(paid.filter(o => o.total < 0), o => -o.total),
                     exchanges: paid.filter(o => o.exchangeOfOrderId).length,

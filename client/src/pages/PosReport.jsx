@@ -71,7 +71,7 @@ function Summary({ r, go }) {
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <Kpi label="Omzet bersih" value={rp(t.total)} hint={`kotor ${rp(t.subtotal)} · diskon ${rp(t.discount)}`} big />
+        <Kpi label="Omzet bersih" value={rp(t.total)} hint={`kotor ${rp(t.subtotal)} · diskon ${rp(t.discount)}${t.promo ? ` · potongan harga promo ${rp(t.promo)}` : ''}`} big />
         <Kpi label="Transaksi" value={t.orders} hint={`${t.later} ambil nanti`} />
         <Kpi label="Rata-rata belanja" value={rp(t.aov)} hint={`${t.upt.toLocaleString('id-ID')} pcs per transaksi`} />
         <Kpi label="Barang terjual" value={`${t.soldQty} pcs`} hint={brought ? `sell-through ${pct(sold, brought)}% dari ${brought} pcs dibawa` : 'stok bawaan belum tercatat'} />
@@ -437,7 +437,7 @@ async function exportReport(r) {
   }
   const sheets = {
     Ringkasan: [['Metrik', 'Nilai'],
-      ['Omzet bersih', t.total], ['Omzet kotor', t.subtotal], ['Diskon', t.discount], ['Transaksi', t.orders], ['Rata-rata belanja', t.aov],
+      ['Omzet bersih', t.total], ['Omzet kotor', t.subtotal], ['Diskon', t.discount], ['Potongan harga promo', t.promo || 0], ['Transaksi', t.orders], ['Rata-rata belanja', t.aov],
       ['Pcs per transaksi', t.upt], ['Pcs terjual', t.soldQty], ['Pcs dibawa', t.brought], ['Dibatalkan', t.voided], ['Pembeli ber-HP', t.customers], ['Pembeli berulang', t.repeatCustomers]],
     'Per artikel': [['Artikel', 'Dibawa', 'Terjual', 'Sisa', 'Sell-through %', 'Kotor', 'Diskon', 'Bersih'],
       ...r.byArticle.map(a => [a.name, a.hasStock ? a.brought : '', a.sold - a.returned, a.hasStock ? a.left : '', a.hasStock ? pct(a.sold - a.returned, a.brought) : '', a.gross, a.discount, a.net])],

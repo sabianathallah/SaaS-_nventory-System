@@ -30,6 +30,8 @@ module.exports = (sequelize, DataTypes) => {
     articleIds:    { type: DataTypes.JSONB, allowNull: true },
     // produk yang fotonya disembunyikan dari slideshow layar pelanggan [productId, ...]
     displayHiddenProductIds: { type: DataTypes.JSONB, allowNull: true },
+    // harga promo per artikel: [{ productId, type: 'PERCENT' | 'PRICE', value }] — harga master SKU tidak berubah
+    priceRules:    { type: DataTypes.JSONB, allowNull: true },
     createdBy:     { type: DataTypes.INTEGER, allowNull: true },
   }, { sequelize, modelName: 'PosEvent' });
   return PosEvent;
