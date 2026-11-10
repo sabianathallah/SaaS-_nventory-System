@@ -38,7 +38,8 @@ const tlv = (id, value) => `${id}${String(value.length).padStart(2, '0')}${value
 // Info QRIS kalau teks valid (format + CRC cocok), selain itu null.
 export function qrisInfo(payload) {
   const s = String(payload || '').trim()
-  if (!s.startsWith('000201') || s.length < 30) return null
+  // QRIS hanya berisi karakter ASCII cetak; selain itu (mis. hasil baca rusak) ditolak -> fallback gambar statis
+  if (!s.startsWith('000201') || s.length < 30 || s.length > 512 || !/^[\x20-\x7e]+$/.test(s)) return null
   const body = s.slice(0, -4)
   if (!body.endsWith('6304') || crc16(body) !== s.slice(-4).toUpperCase()) return null
   const items = parseTlv(s)
@@ -76,11 +77,13 @@ export async function decodeQrImage(src) {
   if (direct) return direct
   try {
     const img = await new Promise((ok, fail) => { const i = new Image(); i.onload = () => ok(i); i.onerror = fail; i.src = src })
-    for (const max of [1000, 600]) {
-      const k = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight))
+    // gambar besar dikecilkan, gambar kecil diperbesar (tanpa smoothing supaya modul QR tetap tajam)
+    for (const max of [1000, 600, 1600]) {
+      const k = max / Math.max(img.naturalWidth, img.naturalHeight)
       const c = document.createElement('canvas')
       c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k)
-      const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.drawImage(img, 0, 0, c.width, c.height)
+      const g = c.getContext('2d'); g.imageSmoothingEnabled = k < 1
+      g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.drawImage(img, 0, 0, c.width, c.height)
       const t = await tryUrl(c.toDataURL('image/png'))
       if (t) return t
     }
