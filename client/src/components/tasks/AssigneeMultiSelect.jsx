@@ -12,9 +12,12 @@ export default function AssigneeMultiSelect({ value, onChange, options = [], pla
 
   const ids = (value ?? []).map(String)
   const selectedUsers = options.filter(u => ids.includes(String(u.id)))
+  // Inactive users can't be newly picked, but stay visible (and removable)
+  // if they were already assigned before being deactivated.
+  const pickable = options.filter(u => u.isActive !== false || ids.includes(String(u.id)))
   const filtered = search
-    ? options.filter(u => u.name.toLowerCase().includes(search.toLowerCase()))
-    : options
+    ? pickable.filter(u => u.name.toLowerCase().includes(search.toLowerCase()))
+    : pickable
 
   useEffect(() => {
     if (!open) return
@@ -47,7 +50,7 @@ export default function AssigneeMultiSelect({ value, onChange, options = [], pla
                 key={u.id}
                 className={`inline-flex items-center gap-1 text-[11px] font-semibold text-white px-1.5 py-0.5 rounded-full ${avatarColor(u.id)}`}
               >
-                {u.name}
+                {u.name}{u.isActive === false && ' (nonaktif)'}
                 <span
                   role="button"
                   tabIndex={-1}

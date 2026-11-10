@@ -91,7 +91,9 @@ export default function ProjectFormModal({ open, onClose, project, userOptions =
             <label className="label">PIC</label>
             <select className="select" value={form.ownerId} onChange={e => setForm(f => ({ ...f, ownerId: e.target.value }))}>
               <option value="">Tanpa PIC</option>
-              {userOptions.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+              {userOptions
+                .filter(u => u.isActive !== false || String(u.id) === String(form.ownerId))
+                .map(u => <option key={u.id} value={u.id}>{u.name}{u.isActive === false ? ' (nonaktif)' : ''}</option>)}
             </select>
           </div>
         </div>

@@ -50,10 +50,12 @@ api.interceptors.response.use(
       _redirectingToLogin = true
       const msg = err.response?.data?.message ?? ''
       const isExpired = msg.toLowerCase().includes('expired')
+      const isInactive = err.response?.data?.code === 'USER_INACTIVE'
       localStorage.removeItem('token')
       localStorage.removeItem('user')
-      toast.error(isExpired ? 'Sesi berakhir, silakan login kembali.' : 'Tidak terautentikasi.')
-      setTimeout(() => { _redirectingToLogin = false; window.location.href = '/login' }, 1500)
+      toast.error(isInactive ? msg : isExpired ? 'Sesi berakhir, silakan login kembali.' : 'Tidak terautentikasi.',
+        isInactive ? { duration: 6000 } : undefined)
+      setTimeout(() => { _redirectingToLogin = false; window.location.href = '/login' }, isInactive ? 3000 : 1500)
     }
     return Promise.reject(err)
   }

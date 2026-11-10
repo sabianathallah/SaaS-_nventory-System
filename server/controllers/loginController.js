@@ -22,6 +22,13 @@ class LoginController {
 
             if (!compare(password, user.password)) throw { name: "LoginError" }
 
+            if (!user.isActive) {
+                return res.status(403).json({
+                    success: false,
+                    message: 'Akun Anda sudah dinonaktifkan. Hubungi admin jika ini keliru.'
+                })
+            }
+
             // Check if user is not super admin and has no company
             if (user.role !== 'SUPER_ADMIN' && !user.companyId) {
                 return res.status(403).json({

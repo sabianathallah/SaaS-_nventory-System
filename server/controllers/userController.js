@@ -2,6 +2,7 @@
 const { User, Company, Role } = require('../models');
 const { Op } = require('sequelize');
 const { paginate, buildFilter, paginatedResponse } = require('../helpers/queryHelper');
+const { destroyByUrl } = require('../helpers/cloudinary');
 
 const userCompanyFilter = (req) =>
     req.user?.role === 'SUPER_ADMIN' ? {} : { companyId: req.user?.companyId };
@@ -38,11 +39,14 @@ class UserController {
                 name:      'like',
                 companyId: 'exact',
             });
+            if (req.query.isActive === 'true' || req.query.isActive === 'false') {
+                filter.isActive = req.query.isActive === 'true';
+            }
             const { rows, count } = await User.findAndCountAll({
                 where: { ...userCompanyFilter(req), ...filter },
                 attributes: { exclude: ['password'] },
                 include: USER_INCLUDE,
-                order: [['name', 'ASC']],
+                order: [['isActive', 'DESC'], ['name', 'ASC']],
                 limit, offset
             });
             const enriched = await attachRoleDisplayNames(rows);
@@ -85,7 +89,18 @@ class UserController {
             if (name      !== undefined) allowed.name   = name;
             if (email     !== undefined) allowed.email  = email;
             if (role      !== undefined) allowed.role   = role;
-            if (avatar    !== undefined) allowed.avatar = avatar;
+            // Admin can only clear a photo here (upload is done by the user in Profil).
+            if (avatar === null || avatar === '') {
+                if (user.avatar) await destroyByUrl(user.avatar).catch(() => {});
+                allowed.avatar = null;
+            }
+            if (req.body.isActive !== undefined) {
+                const isActive = req.body.isActive === true || req.body.isActive === 'true';
+                if (!isActive && user.id === req.user.id) {
+                    throw { name: 'BadRequest', message: 'Tidak bisa menonaktifkan akun sendiri' };
+                }
+                allowed.isActive = isActive;
+            }
             if (newPassword) allowed.password = newPassword;
             if (req.body.divisis !== undefined) {
                 const divisis = normalizeDivisis(req.body.divisis);

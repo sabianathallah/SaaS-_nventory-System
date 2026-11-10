@@ -33,8 +33,10 @@ const authentication = async (req, res, next) => {
         }
 
         if (!user.isActive) {
-            return res.status(403).json({ 
-                message: 'Forbidden: User account is inactive' 
+            // 401 so the client drops the session and returns to login.
+            return res.status(401).json({
+                code: 'USER_INACTIVE',
+                message: 'Akun Anda sudah dinonaktifkan. Hubungi admin jika ini keliru.'
             });
         }
 
