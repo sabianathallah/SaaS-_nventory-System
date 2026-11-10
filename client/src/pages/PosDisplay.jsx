@@ -6,6 +6,7 @@ import { cacheImages, loadCachedImages } from '../pos/images'
 import { subscribeDisplay } from '../pos/display'
 import { watchRemote } from '../pos/displayRemote'
 import { posHttp } from '../pos/sync'
+import { QRCode } from 'react-qr-code'
 import logo from '../assets/logo-preface-receipt.png?inline'
 
 // Layar pelanggan (jendela kedua di laptop kasir -> monitor / iPad). Hanya menampilkan, tidak ada input.
@@ -341,7 +342,15 @@ function Cart({ s, imgs, qris }) {
           {showQris ? (
             <div className="text-center pd-pop">
               <p className="text-sm font-bold tracking-[.3em] text-black/50">SCAN TO PAY</p>
-              {qris
+              {pay.qrisPayload ? (
+                <>
+                  <div className="mx-auto mt-4 w-full max-w-[340px] aspect-square bg-white p-3">
+                    <QRCode value={pay.qrisPayload} size={512} style={{ width: '100%', height: '100%' }} />
+                  </div>
+                  <p className="mt-3 text-4xl font-black tabular-nums">{rp(pay.qrisAmount)}</p>
+                  <p className="mt-1 text-sm text-black/50">QRIS · amount is filled in automatically</p>
+                </>
+              ) : qris
                 ? <img src={qris} alt="QRIS" className="mx-auto mt-4 w-full max-w-[340px] aspect-square object-contain" />
                 : <div className="mx-auto mt-4 w-full max-w-[300px] aspect-square rounded-2xl border-4 border-dashed border-black/20 flex items-center justify-center text-black/40 text-sm p-6">QRIS code not available yet</div>}
             </div>

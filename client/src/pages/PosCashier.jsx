@@ -15,6 +15,8 @@ import { DEFAULT_RECEIPT, RECEIPT_STYLES, combinePrint, orderPrintHtml, printRec
 import { cacheImages, loadCachedImages } from '../pos/images'
 import { onScreensChange, openDisplayWindow, publishDisplay } from '../pos/display'
 import { pairRemote, resendQris, resumeRemote, stopRemote } from '../pos/displayRemote'
+import { QRIS_CHANGED, decodeQrImage, loadQrisPayload, qrisInfo, toDynamic } from '../pos/qris'
+import { QRCode } from 'react-qr-code'
 import { isLimited, limitKey, limitedNet } from '../pos/limit'
 
 const rp = (n) => 'Rp ' + Number(n || 0).toLocaleString('id-ID')
@@ -85,6 +87,13 @@ export default function PosCashier() {
   const [orders, setOrders] = useState({ queue: [], sent: [] })
   const [lastAdd, setLastAdd] = useState(null)      // { skuId, at } untuk sorotan di layar pelanggan
   const [payPreview, setPayPreview] = useState(null) // pilihan di layar bayar, dikirim ke layar pelanggan
+  const [qrisPayload, setQrisPayload] = useState(null) // teks QRIS statis laptop ini (untuk QR bernominal)
+  useEffect(() => {
+    const load = () => loadQrisPayload({ onlyEnabled: true }).then(setQrisPayload).catch(() => setQrisPayload(null))
+    load()
+    window.addEventListener(QRIS_CHANGED, load)
+    return () => window.removeEventListener(QRIS_CHANGED, load)
+  }, [])
   const [held, setHeld] = useState([])              // keranjang yang ditahan (maks MAX_HELD)
   const scanRef = useRef(null)
   const [scannerOn, setScannerOn] = useState(false) // scanner USB (HID) terhubung: kolom scan selalu fokus
@@ -302,6 +311,11 @@ export default function PosCashier() {
   const dropHeld = (h) => saveHeld(held.filter(x => x.id !== h.id))
 
   // ── Layar pelanggan: kirim keadaan terbaru ke jendela kedua ──────────────
+  // QR QRIS dengan nominal bagian QRIS (bayar campur: hanya porsi QRIS-nya)
+  const withQris = (p) => {
+    const q = p?.qrisAmount > 0 && qrisPayload ? toDynamic(qrisPayload, p.qrisAmount) : null
+    return q ? { ...p, qrisPayload: q } : p
+  }
   useEffect(() => {
     if (!catalog) return
     if (modal === 'done' && lastOrder) {
@@ -317,9 +331,9 @@ export default function PosCashier() {
       lines: totals.lines.map(l => ({ skuId: l.skuId, productId: l.productId, name: l.name, variant: l.variant, qty: l.qty, listPrice: l.listPrice, unitPrice: l.unitPrice, discount: l.discount, lineTotal: l.lineTotal })),
       subtotal: totals.subtotal, discount: totals.itemDiscount + totals.orderDiscount, total: totals.total, pcs: totals.pcs,
       lastSku: lastAdd?.skuId, lastAt: lastAdd?.at,
-      pay: modal === 'pay' ? payPreview || { methods: ['CASH'], fulfillment: 'NOW' } : null,
+      pay: modal === 'pay' ? withQris(payPreview || { methods: ['CASH'], fulfillment: 'NOW' }) : null,
     })
-  }, [catalog, eventId, cart.length, totals, modal, lastOrder, lastAdd, payPreview])
+  }, [catalog, eventId, cart.length, totals, modal, lastOrder, lastAdd, payPreview, qrisPayload]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const openDisplay = async () => {
     if (!(await openDisplayWindow(eventId))) toast.error('Jendela diblokir browser — izinkan pop-up untuk situs ini')
@@ -624,7 +638,7 @@ export default function PosCashier() {
           </div>
         </Modal>
       )}
-      {modal === 'pay' && <PayScreen totals={totals} methods={activeMethods(settings)} defaultMethod={settings.defaultMethod} notInBooth={totals.lines.filter(l => stockOf(l.skuId) < 0)} checkLimit={checkLimit} onClose={() => { setModal(null); setPayPreview(null) }} onPay={finishOrder} onPreview={setPayPreview} />}
+      {modal === 'pay' && <PayScreen qrisPayload={qrisPayload} totals={totals} methods={activeMethods(settings)} defaultMethod={settings.defaultMethod} notInBooth={totals.lines.filter(l => stockOf(l.skuId) < 0)} checkLimit={checkLimit} onClose={() => { setModal(null); setPayPreview(null) }} onPay={finishOrder} onPreview={setPayPreview} />}
       {modal === 'done' && lastOrder && <DoneScreen order={lastOrder} onPrint={(c) => printOrder(lastOrder, c)} onNew={() => setModal(null)} />}
       {modal === 'stock' && <StockPeek products={products} imgs={imgs} stockOf={stockOf} skuById={skuById} places={peekPlaces} initial={peekAt}
         onClose={() => setModal(null)} onAdd={(sku) => { addSku(sku); setModal(null); focusScan() }} />}
@@ -933,7 +947,7 @@ function SizePicker({ product, img, stockOf, backupOf, onPick, onClose }) {
   )
 }
 
-function PayScreen({ totals, methods, defaultMethod, notInBooth = [], checkLimit, onClose, onPay, onPreview }) {
+function PayScreen({ qrisPayload, totals, methods, defaultMethod, notInBooth = [], checkLimit, onClose, onPay, onPreview }) {
   const total = totals.total
   // total 0 (diskon 100%): tidak ada pembayaran
   const noPay = total <= 0
@@ -949,6 +963,8 @@ function PayScreen({ totals, methods, defaultMethod, notInBooth = [], checkLimit
   const rows = noPay ? [{ method: 'CASH', amount: total }] : split || [{ method, amount: total, reference: method === 'VOUCHER' ? voucherRef : '' }]
   const paid = rows.reduce((s, r) => s + (Number(r.amount) || 0), 0)
   const cashPart = noPay ? 0 : rows.filter(r => r.method === 'CASH').reduce((s, r) => s + (Number(r.amount) || 0), 0)
+  const qrisPart = noPay ? 0 : rows.filter(r => r.method === 'QRIS').reduce((s, r) => s + (Number(r.amount) || 0), 0)
+  const qrisCode = qrisPart > 0 && qrisPayload ? toDynamic(qrisPayload, qrisPart) : null
   const recv = received === '' ? cashPart : num(received)
   const change = recv - cashPart
   const limitErr = checkLimit?.(customer.phone)
@@ -963,7 +979,7 @@ function PayScreen({ totals, methods, defaultMethod, notInBooth = [], checkLimit
     })
   }
   useEffect(() => {
-    onPreview?.({ methods: noPay ? [] : [...new Set(rows.filter(r => Number(r.amount) > 0).map(r => r.method))], fulfillment, cashReceived: cashPart ? recv : 0, change: cashPart ? change : 0 })
+    onPreview?.({ methods: noPay ? [] : [...new Set(rows.filter(r => Number(r.amount) > 0).map(r => r.method))], fulfillment, cashReceived: cashPart ? recv : 0, change: cashPart ? change : 0, qrisAmount: qrisPart })
   }, [method, split, received, fulfillment, total]) // eslint-disable-line react-hooks/exhaustive-deps
   // 2 baris: ubah nominal satu baris -> baris lain otomatis sisa total (mis. kupon 100rb -> EDC sisanya)
   const setRow = (i, patch) => setSplit(rs => {
@@ -1049,6 +1065,21 @@ function PayScreen({ totals, methods, defaultMethod, notInBooth = [], checkLimit
               </div>
               {paid !== total && <p className={`text-sm font-semibold ${paid > total ? 'text-danger' : 'text-amber-600'}`}>{paid > total ? `Lebih ${rp(paid - total)}` : `Kurang ${rp(total - paid)}`}</p>}
             </div>
+          )}
+
+          {qrisPart > 0 && (
+            qrisCode ? (
+              <div className="flex items-center gap-4 rounded-2xl border border-slate-200 p-3">
+                <div className="bg-white p-1.5 rounded-lg border border-slate-100 shrink-0"><QRCode value={qrisCode} size={112} /></div>
+                <div className="text-sm text-slate-600 space-y-1">
+                  <p className="font-bold text-slate-800">QRIS {rp(qrisPart)} — nominal sudah terisi</p>
+                  <p className="text-xs">Tampil juga di layar pelanggan. Pembeli scan, nominal tidak bisa diubah.</p>
+                  <p className="text-xs font-semibold text-amber-700">Selesaikan transaksi hanya setelah notifikasi dana masuk di aplikasi merchant.</p>
+                </div>
+              </div>
+            ) : (
+              <p className="text-xs rounded-lg px-3 py-2 bg-amber-50 text-amber-800">QRIS statis: pembeli mengetik nominal {rp(qrisPart)} sendiri. Supaya nominal terisi otomatis, unggah gambar QRIS yang jelas di Pengaturan → QRIS.</p>
+            )
           )}
 
           <div>
@@ -1476,31 +1507,65 @@ function LimitSetting({ event, onSaved }) {
 // Gambar QRIS statis toko, tampil besar di layar pelanggan saat metode QRIS dipilih. Disimpan di laptop ini.
 function QrisSetting() {
   const [img, setImg] = useState(null)
-  useEffect(() => { getItem('kv', 'displaySettings').then(d => setImg(d?.qrisImage || null)) }, [])
+  const [info, setInfo] = useState(null)   // hasil baca QR: { merchantName, city } | false (tidak terbaca)
+  const [busy, setBusy] = useState(false)
+  const [dynamic, setDynamic] = useState(false)
+  useEffect(() => {
+    getItem('kv', 'displaySettings').then(d => { setImg(d?.qrisImage || null); setDynamic(!!d?.qrisDynamic) })
+    loadQrisPayload().then(p => setInfo(p ? qrisInfo(p) : false)).catch(() => setInfo(false))
+  }, [])
   const save = async (qrisImage) => {
+    setBusy(true)
+    const text = qrisImage ? await decodeQrImage(qrisImage) : null
+    const qrisPayload = qrisInfo(text) ? text.trim() : null
     const cur = (await getItem('kv', 'displaySettings')) || {}
-    await setItem('kv', 'displaySettings', { ...cur, qrisImage })
-    setImg(qrisImage)
+    await setItem('kv', 'displaySettings', { ...cur, qrisImage, qrisPayload, qrisPayloadChecked: true })
+    setImg(qrisImage); setInfo(qrisPayload ? qrisInfo(qrisPayload) : false); setBusy(false)
     resendQris()
+    window.dispatchEvent(new Event(QRIS_CHANGED))
+    return qrisPayload
+  }
+  const toggleDynamic = async (on) => {
+    const cur = (await getItem('kv', 'displaySettings')) || {}
+    await setItem('kv', 'displaySettings', { ...cur, qrisDynamic: on })
+    setDynamic(on)
+    window.dispatchEvent(new Event(QRIS_CHANGED))
   }
   const pick = (e) => {
     const f = e.target.files?.[0]
     if (!f) return
     const r = new FileReader()
-    r.onload = () => save(r.result).then(() => toast.success('QRIS tersimpan untuk layar pelanggan'))
+    r.onload = () => save(r.result).then(p => p
+      ? toast.success('QRIS terbaca — nominal akan terisi otomatis saat pembeli scan')
+      : toast('QRIS tersimpan sebagai gambar, tapi kodenya tidak terbaca. Pembeli tetap mengetik nominal. Coba unggah gambar yang lebih jelas/terpotong rapi.', { icon: '⚠️', duration: 7000 }))
     r.readAsDataURL(f)
+    e.target.value = ''
   }
   return (
     <div className="border-t border-slate-100 pt-4">
       <label className="label">QRIS di layar pelanggan</label>
       <div className="flex items-center gap-3">
         {img ? <img src={img} alt="QRIS" className="w-16 h-16 object-contain rounded border border-slate-200" /> : <div className="w-16 h-16 rounded border border-dashed border-slate-300 flex items-center justify-center text-slate-300"><QrCode size={22} /></div>}
-        <div className="flex-1 text-xs text-slate-500">Unggah gambar QRIS statis toko. Muncul besar di layar pelanggan saat bayar QRIS.</div>
+        <div className="flex-1 text-xs text-slate-500">
+          Unggah gambar QRIS statis toko. Saat bayar QRIS, layar pelanggan menampilkan QR dengan nominal yang sudah terisi.
+          {img && busy && <p className="mt-1 text-slate-400">Membaca kode QR…</p>}
+          {img && !busy && info && <p className="mt-1 font-semibold text-emerald-700">✓ Terbaca: {info.merchantName}{info.city ? `, ${info.city}` : ''}</p>}
+          {img && !busy && info === false && <p className="mt-1 font-semibold text-amber-700">Kode tidak terbaca — tampil sebagai gambar statis (pembeli ketik nominal)</p>}
+        </div>
       </div>
       <div className="flex gap-2 mt-2">
         <label className="btn-secondary text-xs cursor-pointer">{img ? 'Ganti gambar' : 'Unggah gambar'}<input type="file" accept="image/*" className="hidden" onChange={pick} /></label>
         {img && <button type="button" className="btn-secondary text-xs text-danger" onClick={() => save(null)}>Hapus</button>}
       </div>
+      {img && info && (
+        <label className="flex items-start gap-2 mt-3 text-sm text-slate-700">
+          <input type="checkbox" className="mt-0.5" checked={dynamic} onChange={e => toggleDynamic(e.target.checked)} />
+          <span>
+            <b>Isi nominal otomatis</b> (QRIS dinamis dari QRIS statis)
+            <span className="block text-xs text-slate-500">QR di layar memuat total belanja, jadi pembeli tidak perlu mengetik nominal. Dana tetap ke merchant yang sama. Konfirmasi bayar tetap lewat notifikasi aplikasi merchant. Tes dulu dengan beberapa aplikasi (GoPay, OVO, m-banking) sebelum dipakai di event.</span>
+          </span>
+        </label>
+      )}
     </div>
   )
 }
