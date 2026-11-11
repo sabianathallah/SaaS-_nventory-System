@@ -12,13 +12,17 @@ const PURPOSE_SQL = `(SELECT soh.purpose FROM "Stock_Out_Headers" soh WHERE soh.
 
 // Item yang dihapus / qty dikurangi di Stock IN dicatat sebagai OUT ber-source STOCK_IN (lihat stockInHeaderController).
 const isStockInCorrection = (m) => m.type === 'OUT' && m.source === 'STOCK_IN';
+// Nilai khusus filter "Tujuan" untuk menampilkan hanya koreksi Stock IN.
+const KOREKSI_STOCK_IN = 'KOREKSI_STOCK_IN';
 
 function extraFilters(query) {
     const { ArticleId, CategoryId, purpose } = query;
     const productWhere = {};
     if (ArticleId)  productWhere.ArticleId  = ArticleId;
     if (CategoryId) productWhere.CategoryId = CategoryId;
-    const purposeWhere = (purpose && ALLOWED_PURPOSES.includes(purpose))
+    const purposeWhere = purpose === KOREKSI_STOCK_IN
+        ? [{ type: 'OUT', source: 'STOCK_IN' }]
+        : (purpose && ALLOWED_PURPOSES.includes(purpose))
         ? [literal(`${PURPOSE_SQL} = '${purpose.replace(/'/g, "''")}'`)]
         : [];
     return { productWhere, purposeWhere };

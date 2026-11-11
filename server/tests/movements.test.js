@@ -295,6 +295,16 @@ describe('Koreksi Stock IN (item dihapus / qty dikurangi)', () => {
     expect(res.body.totalOut).toBe(4);
   });
 
+  test('filter tujuan Koreksi Stock IN hanya menampilkan koreksi', async () => {
+    const res = await request(app).get(`/stock-movements?ProductId=${kProduct.id}&purpose=KOREKSI_STOCK_IN`).set(auth());
+    expect(res.status).toBe(200);
+    expect(res.body.data).toHaveLength(1);
+    expect(res.body.data[0]).toMatchObject({ type: 'OUT', source: 'STOCK_IN', quantity: 10 });
+
+    const sum = await request(app).get(`/stock-movements/summary?ProductId=${kProduct.id}&purpose=KOREKSI_STOCK_IN`).set(auth());
+    expect(sum.body).toMatchObject({ totalKoreksi: 10, totalIn: -10, totalOut: 0 });
+  });
+
   test('chart mengurangi koreksi dari IN', async () => {
     const res = await request(app).get(`/stock-movements/chart?ProductId=${kProduct.id}`).set(auth());
     const tot = res.body.reduce((a, r) => ({ IN: a.IN + r.IN, OUT: a.OUT + r.OUT }), { IN: 0, OUT: 0 });

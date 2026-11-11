@@ -536,7 +536,11 @@ export default function Movements() {
           <SearchableSelect
             value={purposeFilter}
             onChange={v => { setPurp(v); setPage(1) }}
-            options={[{ value: '', label: 'All tujuan' }, ...PURPOSES.map(p => ({ value: p, label: p }))]}
+            options={[
+              { value: '', label: 'All tujuan' },
+              { value: 'KOREKSI_STOCK_IN', label: 'Koreksi Stock IN' },
+              ...PURPOSES.map(p => ({ value: p, label: p })),
+            ]}
             placeholder="All tujuan"
             className="w-44 text-sm"
           />
