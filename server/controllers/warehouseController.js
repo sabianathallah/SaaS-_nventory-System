@@ -12,8 +12,11 @@ class WarehouseController {
                 where: { ...companyFilter(req), ...filter },
                 attributes: {
                     include: [
-                        [sequelize.literal(`(SELECT COUNT(DISTINCT "ProductId") FROM "Stocks" WHERE "WarehouseId" = "Warehouse"."id" AND quantity > 0)`), 'productCount'],
-                        [sequelize.literal(`(SELECT COALESCE(SUM(quantity), 0) FROM "Stocks" WHERE "WarehouseId" = "Warehouse"."id")`), 'totalStock'],
+                        // From SkuWarehouseStocks (source of truth), same as the warehouse product page.
+                        // The legacy "Stocks" table clamps at 0, so after a warehouse goes minus and is
+                        // corrected it keeps phantom stock.
+                        [sequelize.literal(`(SELECT COUNT(DISTINCT ps."ProductId") FROM "SkuWarehouseStocks" sws INNER JOIN "ProductSKUs" ps ON ps."id" = sws."ProductSKUId" WHERE sws."WarehouseId" = "Warehouse"."id" AND sws."qty" > 0)`), 'productCount'],
+                        [sequelize.literal(`(SELECT COALESCE(SUM(sws."qty"), 0) FROM "SkuWarehouseStocks" sws WHERE sws."WarehouseId" = "Warehouse"."id")`), 'totalStock'],
                     ]
                 },
                 order: [['name', 'ASC']],
