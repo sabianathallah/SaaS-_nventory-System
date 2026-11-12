@@ -102,10 +102,10 @@ class StockOpnameSessionController {
                     if (diff === 0) continue;
                     // Apply diff as a delta so multiple SKUs of the same product
                     // accumulate correctly (absolute override would overwrite siblings).
-                    const stock = await Stock.findOne({ where: { ProductId: item.ProductId, WarehouseId: session.warehouseId }, transaction: t });
-                    if (stock) await stock.increment('quantity', { by: diff, transaction: t });
-
-                    if (item.ProductSKUId) {
+                    if (!item.ProductSKUId) {
+                        const stock = await Stock.findOne({ where: { ProductId: item.ProductId, WarehouseId: session.warehouseId }, transaction: t });
+                        if (stock) await stock.increment('quantity', { by: diff, transaction: t });
+                    } else {
                         const sku = await ProductSKU.findByPk(item.ProductSKUId, { transaction: t });
                         if (sku) await sku.increment('qty', { by: diff, transaction: t });
                         await upsertSkuWarehouseStock(t, SkuWarehouseStock, { ProductSKUId: item.ProductSKUId, WarehouseId: session.warehouseId, delta: diff, companyId: session.companyId });

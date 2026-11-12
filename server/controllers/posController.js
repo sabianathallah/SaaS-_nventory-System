@@ -524,10 +524,6 @@ class PosController {
                     if (available < l.qty) review.push(`Stok sistem ${l.sku.sku_code} kurang (tersedia ${available}, terjual ${l.qty})`);
                     await l.sku.decrement('qty', { by: l.qty, transaction: t });
                     await upsertSkuWarehouseStock(t, SkuWarehouseStock, { ProductSKUId, WarehouseId, delta: -l.qty, companyId: ev.companyId });
-                    const [stock] = await Stock.findOrCreate({
-                        where: { ProductId, WarehouseId }, defaults: { quantity: 0, companyId: ev.companyId }, transaction: t,
-                    });
-                    await stock.update({ quantity: Math.max(0, Number(stock.quantity) - l.qty) }, { transaction: t });
                     await Stock_Movement.create({
                         ProductId, ProductSKUId, WarehouseId, type: 'OUT', quantity: l.qty,
                         ReferenceId: header.id, source: 'STOCK_OUT', date: soldAt, companyId: ev.companyId,
@@ -553,10 +549,6 @@ class PosController {
                     const ProductSKUId = l.sku.id, ProductId = l.sku.ProductId, WarehouseId = ev.WarehouseId, qty = -l.qty;
                     await l.sku.increment('qty', { by: qty, transaction: t });
                     await upsertSkuWarehouseStock(t, SkuWarehouseStock, { ProductSKUId, WarehouseId, delta: qty, companyId: ev.companyId });
-                    const [stock] = await Stock.findOrCreate({
-                        where: { ProductId, WarehouseId }, defaults: { quantity: 0, companyId: ev.companyId }, transaction: t,
-                    });
-                    await stock.increment('quantity', { by: qty, transaction: t });
                     await Stock_Movement.create({
                         ProductId, ProductSKUId, WarehouseId, type: 'IN', quantity: qty, ReferenceId: order.id, source: 'POS_RETURN',
                         note: `Tukar POS ${b.orderNumber} (dari ${orig.orderNumber})`, date: soldAt, companyId: ev.companyId,
@@ -691,9 +683,10 @@ class PosController {
             // barang yang dikembalikan lewat tukar keluar lagi dari gudang
             const returns = await Stock_Movement.findAll({ where: { ReferenceId: order.id, source: 'POS_RETURN', type: 'IN' }, transaction: t });
             for (const mv of returns) {
-                const stock = await Stock.findOne({ where: { ProductId: mv.ProductId, WarehouseId: mv.WarehouseId }, transaction: t });
-                if (stock) await stock.update({ quantity: Math.max(0, Number(stock.quantity) - mv.quantity) }, { transaction: t });
-                if (mv.ProductSKUId) {
+                if (!mv.ProductSKUId) {
+                    const stock = await Stock.findOne({ where: { ProductId: mv.ProductId, WarehouseId: mv.WarehouseId }, transaction: t });
+                    if (stock) await stock.decrement('quantity', { by: mv.quantity, transaction: t });
+                } else {
                     await ProductSKU.decrement('qty', { by: mv.quantity, where: { id: mv.ProductSKUId }, transaction: t });
                     await upsertSkuWarehouseStock(t, SkuWarehouseStock, { ProductSKUId: mv.ProductSKUId, WarehouseId: mv.WarehouseId, delta: -mv.quantity, companyId: mv.companyId });
                 }
@@ -705,9 +698,10 @@ class PosController {
                     where: { ReferenceId: order.StockOutHeaderId, source: 'STOCK_OUT', type: 'OUT' }, transaction: t,
                 });
                 for (const mv of movements) {
-                    const stock = await Stock.findOne({ where: { ProductId: mv.ProductId, WarehouseId: mv.WarehouseId }, transaction: t });
-                    if (stock) await stock.increment('quantity', { by: mv.quantity, transaction: t });
-                    if (mv.ProductSKUId) {
+                    if (!mv.ProductSKUId) {
+                        const stock = await Stock.findOne({ where: { ProductId: mv.ProductId, WarehouseId: mv.WarehouseId }, transaction: t });
+                        if (stock) await stock.increment('quantity', { by: mv.quantity, transaction: t });
+                    } else {
                         await ProductSKU.increment('qty', { by: mv.quantity, where: { id: mv.ProductSKUId }, transaction: t });
                         await upsertSkuWarehouseStock(t, SkuWarehouseStock, { ProductSKUId: mv.ProductSKUId, WarehouseId: mv.WarehouseId, delta: mv.quantity, companyId: mv.companyId });
                     }

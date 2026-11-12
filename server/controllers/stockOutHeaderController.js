@@ -201,12 +201,6 @@ class StockOutHeaderController {
                     await stock.decrement('quantity', { by: quantity, transaction: t });
                 }
 
-                // Keep Stocks table in sync (secondary, non-blocking)
-                const stock = await Stock.findOne({ where: { ProductId, WarehouseId }, transaction: t });
-                if (stock && ProductSKUId) {
-                    const newQty = Math.max(0, Number(stock.quantity) - quantity);
-                    await stock.update({ quantity: newQty }, { transaction: t });
-                }
 
                 movements.push(await Stock_Movement.create({
                     ProductId, ProductSKUId, WarehouseId, type: 'OUT', quantity,
@@ -299,8 +293,6 @@ class StockOutHeaderController {
                 const sku = await ProductSKU.findByPk(ProductSKUId, { transaction: t });
                 if (sku) await sku.decrement('qty', { by: quantity, transaction: t });
                 await upsertSkuWarehouseStock(t, SkuWarehouseStock, { ProductSKUId, WarehouseId, delta: -quantity, companyId: cid });
-                const stock = await Stock.findOne({ where: { ProductId, WarehouseId }, transaction: t });
-                if (stock) await stock.update({ quantity: Math.max(0, Number(stock.quantity) - quantity) }, { transaction: t });
             } else {
                 const stock = await Stock.findOne({ where: { ProductId, WarehouseId }, transaction: t, lock: t.LOCK.UPDATE });
                 const available = stock ? Number(stock.quantity) : 0;
@@ -357,8 +349,6 @@ class StockOutHeaderController {
                     const sku = await ProductSKU.findByPk(mv.ProductSKUId, { transaction: t });
                     if (sku) await sku.increment('qty', { by: -delta, transaction: t });
                     await upsertSkuWarehouseStock(t, SkuWarehouseStock, { ProductSKUId: mv.ProductSKUId, WarehouseId: mv.WarehouseId, delta: -delta, companyId: mv.companyId });
-                    const stock = await Stock.findOne({ where: { ProductId: mv.ProductId, WarehouseId: mv.WarehouseId }, transaction: t });
-                    if (stock) await stock.update({ quantity: Math.max(0, Number(stock.quantity) - delta) }, { transaction: t });
                 } else {
                     const stock = await Stock.findOne({ where: { ProductId: mv.ProductId, WarehouseId: mv.WarehouseId }, transaction: t, lock: t.LOCK.UPDATE });
                     const available = stock ? Number(stock.quantity) : 0;
@@ -394,9 +384,10 @@ class StockOutHeaderController {
             if (!mv) { await t.rollback(); throw { name: 'NotFound', message: 'Item not found' }; }
 
             // Kembalikan stok lalu hapus movement (kebalikan dari addItem)
-            const stock = await Stock.findOne({ where: { ProductId: mv.ProductId, WarehouseId: mv.WarehouseId }, transaction: t });
-            if (stock) await stock.increment('quantity', { by: mv.quantity, transaction: t });
-            if (mv.ProductSKUId) {
+            if (!mv.ProductSKUId) {
+                const stock = await Stock.findOne({ where: { ProductId: mv.ProductId, WarehouseId: mv.WarehouseId }, transaction: t });
+                if (stock) await stock.increment('quantity', { by: mv.quantity, transaction: t });
+            } else {
                 const sku = await ProductSKU.findByPk(mv.ProductSKUId, { transaction: t });
                 if (sku) await sku.increment('qty', { by: mv.quantity, transaction: t });
                 await upsertSkuWarehouseStock(t, SkuWarehouseStock, { ProductSKUId: mv.ProductSKUId, WarehouseId: mv.WarehouseId, delta: mv.quantity, companyId: mv.companyId });
@@ -423,12 +414,10 @@ class StockOutHeaderController {
                 transaction: t,
             });
             for (const mv of movements) {
-                const stock = await Stock.findOne({
-                    where: { ProductId: mv.ProductId, WarehouseId: mv.WarehouseId },
-                    transaction: t,
-                });
-                if (stock) await stock.increment('quantity', { by: mv.quantity, transaction: t });
-                if (mv.ProductSKUId) {
+                if (!mv.ProductSKUId) {
+                    const stock = await Stock.findOne({ where: { ProductId: mv.ProductId, WarehouseId: mv.WarehouseId }, transaction: t });
+                    if (stock) await stock.increment('quantity', { by: mv.quantity, transaction: t });
+                } else {
                     const sku = await ProductSKU.findByPk(mv.ProductSKUId, { transaction: t });
                     if (sku) await sku.increment('qty', { by: mv.quantity, transaction: t });
                     await upsertSkuWarehouseStock(t, SkuWarehouseStock, { ProductSKUId: mv.ProductSKUId, WarehouseId: mv.WarehouseId, delta: mv.quantity, companyId: mv.companyId });

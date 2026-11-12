@@ -49,19 +49,6 @@ async function applyItem(t, { cid, fromWarehouseId, toWarehouseId, productSkuId,
   }
   await moveSkuWarehouseStock(t, SkuWarehouseStock, { ProductSKUId: productSkuId, fromWarehouseId, toWarehouseId, qty, companyId: cid });
 
-  // Keep legacy Stock (product-level aggregate) table in sync — secondary, non-blocking
-  const srcStock = await Stock.findOne({ where: { ProductId: sku.ProductId, WarehouseId: fromWarehouseId }, transaction: t, lock: t.LOCK.UPDATE });
-  if (srcStock) {
-    const newQty = Math.max(0, Number(srcStock.quantity) - qty);
-    await srcStock.update({ quantity: newQty }, { transaction: t });
-  }
-  const [dstStock] = await Stock.findOrCreate({
-    where: { ProductId: sku.ProductId, WarehouseId: toWarehouseId },
-    defaults: { quantity: 0, companyId: cid },
-    transaction: t,
-  });
-  await dstStock.increment('quantity', { by: qty, transaction: t });
-
   // Create paired movements
   const movBase = { ProductId: sku.ProductId, ProductSKUId: productSkuId, ReferenceId: transferId, source: 'TRANSFER', date, companyId: cid, note };
   await Stock_Movement.create({ ...movBase, WarehouseId: fromWarehouseId, type: 'OUT', quantity: qty }, { transaction: t });
@@ -73,22 +60,6 @@ async function applyItem(t, { cid, fromWarehouseId, toWarehouseId, productSkuId,
 async function reverseItem(t, { cid, fromWarehouseId, toWarehouseId, productSkuId, qty }) {
   const sku = await ProductSKU.findByPk(productSkuId, { transaction: t });
   if (!sku) return;
-
-  // Restore source stock — verify the row exists so we don't silently lose the reversal
-  const srcStock = await Stock.findOne({ where: { ProductId: sku.ProductId, WarehouseId: fromWarehouseId }, transaction: t });
-  if (srcStock) {
-    await srcStock.increment('quantity', { by: qty, transaction: t });
-  } else {
-    // Row was deleted after transfer — recreate it so stock isn't permanently lost
-    await Stock.create({ ProductId: sku.ProductId, WarehouseId: fromWarehouseId, quantity: qty, companyId: cid }, { transaction: t });
-  }
-
-  // Decrement destination — clamp to 0 to avoid negative stock (units may have been consumed)
-  const dstStock = await Stock.findOne({ where: { ProductId: sku.ProductId, WarehouseId: toWarehouseId }, transaction: t });
-  if (dstStock) {
-    const deductable = Math.min(qty, Number(dstStock.quantity));
-    if (deductable > 0) await dstStock.decrement('quantity', { by: deductable, transaction: t });
-  }
 
   // Reverse SkuWarehouseStocks: move back from toWarehouse to fromWarehouse — clamp to what's
   // actually still there so a SKU consumed since the transfer (sold, transferred again, etc.)

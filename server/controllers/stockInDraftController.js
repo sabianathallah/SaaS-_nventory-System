@@ -231,12 +231,6 @@ class StockInDraftController {
 
                 const sku = await ProductSKU.findByPk(ProductSKUId, { transaction: t });
                 if (sku) {
-                    const [stock] = await Stock.findOrCreate({
-                        where: { ProductId: sku.ProductId, WarehouseId },
-                        defaults: { quantity: 0, companyId: cid },
-                        transaction: t,
-                    });
-                    await stock.increment('quantity', { by: Number(quantity), transaction: t });
                     await sku.increment('qty', { by: Number(quantity), transaction: t });
                     await upsertSkuWarehouseStock(t, SkuWarehouseStock, { ProductSKUId: Number(ProductSKUId), WarehouseId, delta: Number(quantity), companyId: cid });
                     await Stock_Movement.create({

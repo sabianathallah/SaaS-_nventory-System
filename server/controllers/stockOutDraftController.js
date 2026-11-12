@@ -305,12 +305,6 @@ class StockOutDraftController {
                     await lockedStock.decrement('quantity', { by: Number(quantity), transaction: t });
                 }
 
-                // Keep Stocks table in sync (secondary)
-                const stock = await Stock.findOne({ where: { ProductId, WarehouseId }, transaction: t });
-                if (stock && ProductSKUId) {
-                    const newQty = Math.max(0, Number(stock.quantity) - Number(quantity));
-                    await stock.update({ quantity: newQty }, { transaction: t });
-                }
 
                 movements.push(await Stock_Movement.create({
                     ProductId,

@@ -143,12 +143,6 @@ class StockInHeaderController {
         // Upsert stock (warehouse-level — single source of truth)
         const sku = await ProductSKU.findByPk(ProductSKUId, { transaction: t });
         if (sku) {
-          const [stock] = await Stock.findOrCreate({
-            where: { ProductId: sku.ProductId, WarehouseId },
-            defaults: { quantity: 0, companyId: cid },
-            transaction: t,
-          });
-          await stock.increment('quantity', { by: Number(quantity), transaction: t });
           await sku.increment('qty', { by: Number(quantity), transaction: t });
           await upsertSkuWarehouseStock(t, SkuWarehouseStock, { ProductSKUId: Number(ProductSKUId), WarehouseId, delta: Number(quantity), companyId: cid });
 
@@ -220,11 +214,6 @@ class StockInHeaderController {
       for (const item of (header.Stock_In_Items || [])) {
         const sku = await ProductSKU.findByPk(item.ProductSKUId, { transaction: t });
         if (sku) {
-          const stock = await Stock.findOne({
-            where: { ProductId: sku.ProductId, WarehouseId: header.WarehouseId },
-            transaction: t,
-          });
-          if (stock) await stock.decrement('quantity', { by: item.quantity, transaction: t });
           await sku.decrement('qty', { by: item.quantity, transaction: t });
           await upsertSkuWarehouseStock(t, SkuWarehouseStock, { ProductSKUId: item.ProductSKUId, WarehouseId: header.WarehouseId, delta: -item.quantity, companyId: sku.companyId });
         }
@@ -265,12 +254,6 @@ class StockInHeaderController {
 
       const sku = await ProductSKU.findByPk(ProductSKUId, { transaction: t });
       if (sku) {
-        const [stock] = await Stock.findOrCreate({
-          where: { ProductId: sku.ProductId, WarehouseId: header.WarehouseId },
-          defaults: { quantity: 0, companyId: cid },
-          transaction: t,
-        });
-        await stock.increment('quantity', { by: Number(quantity), transaction: t });
         await sku.increment('qty', { by: Number(quantity), transaction: t });
         await upsertSkuWarehouseStock(t, SkuWarehouseStock, { ProductSKUId: Number(ProductSKUId), WarehouseId: header.WarehouseId, delta: Number(quantity), companyId: cid });
         await Stock_Movement.create({
@@ -314,12 +297,6 @@ class StockInHeaderController {
       if (delta !== 0 && header) {
         const sku = await ProductSKU.findByPk(item.ProductSKUId, { transaction: t });
         if (sku) {
-          const [stock] = await Stock.findOrCreate({
-            where: { ProductId: sku.ProductId, WarehouseId: header.WarehouseId },
-            defaults: { quantity: 0, companyId: companyId(req) },
-            transaction: t,
-          });
-          await stock.increment('quantity', { by: delta, transaction: t });
           await sku.increment('qty', { by: delta, transaction: t });
           await upsertSkuWarehouseStock(t, SkuWarehouseStock, { ProductSKUId: item.ProductSKUId, WarehouseId: header.WarehouseId, delta, companyId: companyId(req) });
           await Stock_Movement.create({
@@ -356,13 +333,6 @@ class StockInHeaderController {
       if (header) {
         const sku = await ProductSKU.findByPk(item.ProductSKUId, { transaction: t });
         if (sku) {
-          const stock = await Stock.findOne({
-            where: { ProductId: sku.ProductId, WarehouseId: header.WarehouseId },
-            transaction: t,
-          });
-          if (stock) {
-            await stock.decrement('quantity', { by: item.quantity, transaction: t });
-          }
           await sku.decrement('qty', { by: item.quantity, transaction: t });
           await upsertSkuWarehouseStock(t, SkuWarehouseStock, { ProductSKUId: item.ProductSKUId, WarehouseId: header.WarehouseId, delta: -item.quantity, companyId: sku.companyId });
           await Stock_Movement.create({
