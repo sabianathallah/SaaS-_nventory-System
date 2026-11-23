@@ -110,6 +110,16 @@ class UserController {
                 allowed.divisi = req.body.divisi?.trim() || null;
             }
             if (req.body.nik    !== undefined) allowed.nik    = req.body.nik?.trim() || null;
+            // Only SUPER_ADMIN may move a user to another company (tenancy guard for everyone else).
+            if (req.user?.role === 'SUPER_ADMIN' && req.body.companyId !== undefined) {
+                const cid = req.body.companyId === '' || req.body.companyId === null ? null : Number(req.body.companyId);
+                if (cid !== null) {
+                    if (!Number.isInteger(cid) || !(await Company.findByPk(cid))) {
+                        throw { name: 'BadRequest', message: 'Company tidak ditemukan' };
+                    }
+                }
+                allowed.companyId = cid;
+            }
             await user.update(allowed);
             const { password, ...userWithoutPassword } = user.toJSON();
             res.status(200).json(userWithoutPassword);

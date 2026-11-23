@@ -99,7 +99,11 @@ export default function Users() {
     mutationFn: d => {
       const payload = { ...d }
       if (!payload.password) delete payload.password
-      if (!payload.companyId) delete payload.companyId
+      if (!payload.companyId) {
+        // Super admin clearing the company on edit → send null so it is actually removed
+        if (modal?.data && isSuperAdmin) payload.companyId = null
+        else delete payload.companyId
+      }
       return modal?.data ? usersApi.update(modal.data.id, payload) : usersApi.create(payload)
     },
     onSuccess: () => {
