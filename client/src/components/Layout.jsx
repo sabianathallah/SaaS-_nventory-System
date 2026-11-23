@@ -359,9 +359,19 @@ export default function Layout({ children }) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
   // Desktop collapse — persisted
-  const [collapsed, setCollapsed] = useState(() =>
+  const [collapsedPref, setCollapsed] = useState(() =>
     localStorage.getItem('sidebar-collapsed') === 'true'
   )
+  // Mode icon-only cuma berlaku di desktop — di HP drawer selalu tampil penuh,
+  // kalau tidak drawer 240px isinya cuma ikon (kelihatan rusak).
+  const [isDesktop, setIsDesktop] = useState(() => window.matchMedia('(min-width: 768px)').matches)
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 768px)')
+    const onChange = (e) => setIsDesktop(e.matches)
+    mq.addEventListener ? mq.addEventListener('change', onChange) : mq.addListener(onChange)
+    return () => { mq.removeEventListener ? mq.removeEventListener('change', onChange) : mq.removeListener(onChange) }
+  }, [])
+  const collapsed = collapsedPref && isDesktop
 
   const [profileOpen, setProfileOpen] = useState(false)
 
@@ -415,7 +425,7 @@ export default function Layout({ children }) {
   const pageTitle = PAGE_TITLES[location.pathname] ?? 'Preface Inventory System'
 
   return (
-    <div className="flex h-screen overflow-hidden bg-canvas">
+    <div className="flex h-screen h-[100dvh] overflow-hidden bg-canvas">
       {profileOpen && <ProfileModal onClose={() => setProfileOpen(false)} />}
 
       {/* ── Mobile backdrop ──────────────────────────────── */}
@@ -432,10 +442,10 @@ export default function Layout({ children }) {
           'fixed md:relative inset-y-0 left-0 z-30',
           'flex-shrink-0 flex flex-col',
           'transition-[width,transform] duration-300 ease-in-out',
-          collapsed ? 'md:w-[60px]' : 'w-60',
-          sidebarOpen ? 'translate-x-0 w-60' : '-translate-x-full md:translate-x-0',
+          collapsed ? 'w-[60px]' : 'w-60',
+          sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0',
         ].join(' ')}
-        style={{ background: '#F5F3EF', borderRight: '1px solid #E0DDD7', boxShadow: '2px 0 8px rgba(0,0,0,0.04)' }}
+        style={{ background: '#F5F3EF', paddingBottom: 'env(safe-area-inset-bottom)', borderRight: '1px solid #E0DDD7', boxShadow: '2px 0 8px rgba(0,0,0,0.04)' }}
       >
         {/* ── Logo — klik buat balik ke Personal Dashboard (/home) ── */}
         <button
@@ -665,7 +675,7 @@ export default function Layout({ children }) {
               </div>
               <button
                 onClick={e => { e.stopPropagation(); handleSignOut() }}
-                className="opacity-0 group-hover:opacity-100 transition-opacity text-slate-400 hover:text-red-600 p-0.5"
+                className="md:opacity-0 md:group-hover:opacity-100 transition-opacity text-slate-400 hover:text-red-600 p-1.5 md:p-0.5"
                 title="Sign out"
               >
                 <LogOut size={13} />

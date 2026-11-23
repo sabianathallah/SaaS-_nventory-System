@@ -21,6 +21,11 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
+  /* iOS Safari auto-zoom kalau font input < 16px → halaman ke-zoom & navbar
+     kepotong/geser. Paksa 16px di layar kecil. */
+  @media (max-width: 767px) {
+    input, select, textarea { font-size: 16px !important; }
+  }
   ::-webkit-scrollbar { width: 5px; height: 5px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: #DDD9D3; border-radius: 10px; }
