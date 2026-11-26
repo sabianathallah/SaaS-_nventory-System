@@ -16,6 +16,14 @@ import logoPreface from '../assets/logo-preface.jpeg'
 // Video yang diupload langsung disimpan sebagai `bucket://…` dan diputar inline
 // lewat `videoUrl` dari API. Link lama (GDrive dll) tetap ditampilkan sebagai link.
 const isUploadedVideo = (link) => typeof link === 'string' && link.startsWith('bucket://')
+// Link lama kadang ditempel tanpa https:// — tetap bisa dibuka.
+const toHref = (url) => (/^https?:\/\//i.test(url || '') ? url : `https://${url}`)
+const VIDEO_EXT_TYPES = { mp4: 'video/mp4', m4v: 'video/x-m4v', mov: 'video/quicktime', webm: 'video/webm', mkv: 'video/x-matroska', '3gp': 'video/3gpp', avi: 'video/x-msvideo' }
+function videoContentType(file) {
+  if (file.type?.startsWith('video/')) return file.type
+  const ext = (file.name || '').split('.').pop()?.toLowerCase()
+  return VIDEO_EXT_TYPES[ext] || null
+}
 
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'
 const fmtDateTime = (d) => d ? new Date(d).toLocaleString('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'
@@ -369,8 +377,11 @@ export default function IncomingGoodsDetail() {
     enabled:  !isNew && !!id,
   })
 
+  // Setelah auto-save video, cache di-patch tanpa mereset isian form yang belum disimpan.
+  const skipFormSync = useRef(false)
   useEffect(() => {
     if (!existing?.data) return
+    if (skipFormSync.current) { skipFormSync.current = false; return }
     const d = existing.data
     setVendorId(String(d.vendorId))
     setDate(d.date)
@@ -391,8 +402,8 @@ export default function IncomingGoodsDetail() {
     const file = e.target.files?.[0]
     if (videoInputRef.current) videoInputRef.current.value = ''
     if (!file) return
-    const contentType = file.type || 'video/mp4'
-    if (!contentType.startsWith('video/')) return toast.error('File harus berupa video')
+    const contentType = videoContentType(file)
+    if (!contentType) return toast.error('File harus berupa video (mp4, mov, webm, …)')
     if (file.size > 1024 * 1024 * 1024) return toast.error('Ukuran video maksimal 1 GB')
     setVideoProgress(0)
     try {
@@ -412,8 +423,8 @@ export default function IncomingGoodsDetail() {
       setShowVideoLinkInput(false)
       // Dokumen sudah ada → langsung simpan supaya video tidak hilang kalau lupa klik Simpan.
       if (!isNew && id && id !== 'undefined') {
-        await vendorDeliveriesApi.update(id, { videoLink: data.ref })
-        qc.invalidateQueries({ queryKey: ['vendor-delivery', id] })
+        const saved = await vendorDeliveriesApi.update(id, { videoLink: data.ref })
+        patchVideoCache(saved?.data)
         toast.success('Video terupload & tersimpan')
       } else {
         toast.success('Video terupload — klik Simpan untuk menyimpan dokumen')
@@ -426,13 +437,21 @@ export default function IncomingGoodsDetail() {
     }
   }
 
+  function patchVideoCache(saved) {
+    skipFormSync.current = true
+    qc.setQueryData(['vendor-delivery', id], old => old
+      ? { ...old, data: { ...old.data, videoLink: saved?.videoLink ?? null, videoUrl: saved?.videoUrl ?? null } }
+      : old)
+    qc.invalidateQueries({ queryKey: ['vendor-deliveries'] })
+  }
+
   async function handleVideoRemove() {
     if (!window.confirm('Hapus video ini?')) return
     setVideoLink('')
     if (!isNew && id && id !== 'undefined') {
       try {
-        await vendorDeliveriesApi.update(id, { videoLink: '' })
-        qc.invalidateQueries({ queryKey: ['vendor-delivery', id] })
+        const saved = await vendorDeliveriesApi.update(id, { videoLink: '' })
+        patchVideoCache(saved?.data)
         toast.success('Video dihapus')
       } catch (err) { toast.error(err.response?.data?.message || 'Gagal menghapus video') }
     }
@@ -796,7 +815,7 @@ export default function IncomingGoodsDetail() {
                 {isUploadedVideo(videoLink) ? (
                   <span className="text-slate-700 font-medium truncate flex-1">Video terupload ✓</span>
                 ) : (
-                  <a href={videoLink} target="_blank" rel="noopener noreferrer" className="text-brand hover:underline truncate flex-1">{videoLink}</a>
+                  <a href={toHref(videoLink)} target="_blank" rel="noopener noreferrer" className="text-brand hover:underline truncate flex-1">{videoLink}</a>
                 )}
                 {canManage && (
                   <>
@@ -980,10 +999,13 @@ export default function IncomingGoodsDetail() {
         isUploadedVideo(delivery.videoLink) ? (
           <div className="card p-3 space-y-2">
             <p className="text-sm font-semibold text-slate-700 flex items-center gap-2"><Video size={15} /> Video Pengecekan</p>
-            <video src={delivery.videoUrl} controls playsInline preload="metadata" className="w-full max-h-[480px] rounded-lg bg-black" />
+            <video key={delivery.videoUrl} src={delivery.videoUrl} controls playsInline preload="metadata" className="w-full max-h-[480px] rounded-lg bg-black" />
+            <a href={delivery.videoUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-slate-500 hover:text-brand hover:underline">
+              Video nggak bisa diputar? Buka / download di tab baru
+            </a>
           </div>
         ) : (
-          <a href={delivery.videoUrl} target="_blank" rel="noopener noreferrer"
+          <a href={toHref(delivery.videoUrl)} target="_blank" rel="noopener noreferrer"
             className="inline-flex items-center gap-2 text-sm text-brand hover:underline font-medium">
             <Video size={15} /> Buka Video Pengecekan
           </a>

@@ -79,12 +79,16 @@ async function destroy(videoLink) {
   await client.send(new DeleteObjectCommand({ Bucket: BUCKET, Key: keyOf(videoLink) }));
 }
 
-// Hanya terima ref bucket milik folder company ini, atau link http(s) biasa.
-function sanitizeVideoLink(value, companyFolder) {
+// Normalisasi nilai videoLink dari request.
+// - Nilai sama dengan yang tersimpan → dipertahankan apa adanya (link lama aman).
+// - Link biasa (GDrive dll) → disimpan apa adanya (cuma di-trim), sama seperti sebelumnya.
+// - Ref bucket → hanya diterima kalau milik folder company ini (anti pakai video company lain).
+function sanitizeVideoLink(value, companyFolder, current = null) {
   const v = typeof value === 'string' ? value.trim() : '';
   if (!v) return null;
-  if (isStoredRef(v)) return keyOf(v).startsWith(`${companyFolder}/`) ? v : null;
-  return /^https?:\/\//i.test(v) ? v : null;
+  if (current && v === current) return current;
+  if (isStoredRef(v)) return keyOf(v).startsWith(`${companyFolder}/`) ? v : current;
+  return v;
 }
 
 module.exports = { isConfigured, presignVideoUpload, playableUrl, withVideoUrl, destroy, isStoredRef, sanitizeVideoLink };

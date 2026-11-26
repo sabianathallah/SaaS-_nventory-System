@@ -561,7 +561,7 @@ export default function IncomingGoods() {
     {
       key: 'video', label: 'Video', width: 70,
       render: r => r.videoUrl
-        ? <a href={r.videoUrl} target="_blank" rel="noopener noreferrer" className="text-brand hover:underline flex items-center gap-1 text-xs"><Video size={12} /> {r.videoLink?.startsWith('bucket://') ? 'Video' : 'Link'}</a>
+        ? <a href={/^https?:\/\//i.test(r.videoUrl) ? r.videoUrl : `https://${r.videoUrl}`} target="_blank" rel="noopener noreferrer" className="text-brand hover:underline flex items-center gap-1 text-xs"><Video size={12} /> {r.videoLink?.startsWith('bucket://') ? 'Video' : 'Link'}</a>
         : <span className="text-xs text-slate-300">—</span>,
     },
     {

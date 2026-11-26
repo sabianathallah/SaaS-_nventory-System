@@ -158,7 +158,7 @@ exports.update = async (req, res, next) => {
     const removed   = current.filter(url => !kept.includes(url));
     for (const url of removed) await destroyByUrl(url).catch(() => {});
     const sjPhotos  = [...kept, ...newPhotos];
-    const nextVideo = videoLink !== undefined ? videoStorage.sanitizeVideoLink(videoLink, videoFolder(req)) : row.videoLink;
+    const nextVideo = videoLink !== undefined ? videoStorage.sanitizeVideoLink(videoLink, videoFolder(req), row.videoLink) : row.videoLink;
     if (row.videoLink && row.videoLink !== nextVideo) await videoStorage.destroy(row.videoLink).catch(() => {});
     await row.update({
       // When closed: only SJ fields can change
