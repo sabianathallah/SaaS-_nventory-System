@@ -13,9 +13,9 @@ import {
 } from 'lucide-react'
 import logoPreface from '../assets/logo-preface.jpeg'
 
-// Video yang diupload langsung (R2) → file video asli, bisa diputar inline.
-// Link lama (GDrive dll) tetap ditampilkan sebagai link.
-const isUploadedVideo = (url) => /\.(mp4|mov|webm|mkv|3gp|avi|m4v)(\?|$)/i.test(url || '')
+// Video yang diupload langsung disimpan sebagai `bucket://…` dan diputar inline
+// lewat `videoUrl` dari API. Link lama (GDrive dll) tetap ditampilkan sebagai link.
+const isUploadedVideo = (link) => typeof link === 'string' && link.startsWith('bucket://')
 
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'
 const fmtDateTime = (d) => d ? new Date(d).toLocaleString('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'
@@ -408,11 +408,11 @@ export default function IncomingGoodsDetail() {
         xhr.onabort = () => reject(new Error('Upload dibatalkan'))
         xhr.send(file)
       })
-      setVideoLink(data.publicUrl)
+      setVideoLink(data.ref)
       setShowVideoLinkInput(false)
       // Dokumen sudah ada → langsung simpan supaya video tidak hilang kalau lupa klik Simpan.
       if (!isNew && id && id !== 'undefined') {
-        await vendorDeliveriesApi.update(id, { videoLink: data.publicUrl })
+        await vendorDeliveriesApi.update(id, { videoLink: data.ref })
         qc.invalidateQueries({ queryKey: ['vendor-delivery', id] })
         toast.success('Video terupload & tersimpan')
       } else {
@@ -793,9 +793,11 @@ export default function IncomingGoodsDetail() {
             ) : videoLink && !showVideoLinkInput ? (
               <div className="flex items-center gap-2 h-9 px-3 rounded-lg border border-slate-200 bg-slate-50 text-xs">
                 <Video size={14} className="text-brand shrink-0" />
-                <a href={videoLink} target="_blank" rel="noopener noreferrer" className="text-brand hover:underline truncate flex-1">
-                  {isUploadedVideo(videoLink) ? 'Video terupload' : videoLink}
-                </a>
+                {isUploadedVideo(videoLink) ? (
+                  <span className="text-slate-700 font-medium truncate flex-1">Video terupload ✓</span>
+                ) : (
+                  <a href={videoLink} target="_blank" rel="noopener noreferrer" className="text-brand hover:underline truncate flex-1">{videoLink}</a>
+                )}
                 {canManage && (
                   <>
                     <button type="button" className="text-slate-500 hover:text-brand font-medium" onClick={() => videoInputRef.current?.click()}>Ganti</button>
@@ -974,14 +976,14 @@ export default function IncomingGoodsDetail() {
         </div>
       )}
 
-      {!isNew && delivery?.videoLink && (
+      {!isNew && delivery?.videoUrl && (
         isUploadedVideo(delivery.videoLink) ? (
           <div className="card p-3 space-y-2">
             <p className="text-sm font-semibold text-slate-700 flex items-center gap-2"><Video size={15} /> Video Pengecekan</p>
-            <video src={delivery.videoLink} controls playsInline preload="metadata" className="w-full max-h-[480px] rounded-lg bg-black" />
+            <video src={delivery.videoUrl} controls playsInline preload="metadata" className="w-full max-h-[480px] rounded-lg bg-black" />
           </div>
         ) : (
-          <a href={delivery.videoLink} target="_blank" rel="noopener noreferrer"
+          <a href={delivery.videoUrl} target="_blank" rel="noopener noreferrer"
             className="inline-flex items-center gap-2 text-sm text-brand hover:underline font-medium">
             <Video size={15} /> Buka Video Pengecekan
           </a>

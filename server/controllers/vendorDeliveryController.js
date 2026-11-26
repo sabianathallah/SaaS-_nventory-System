@@ -2,7 +2,8 @@
 const { VendorDelivery, VendorDeliveryItem, VendorDeliveryLog, Vendor, User, Product, ProductSKU, ProductVariantOption, ProductVariantType, sequelize } = require('../models');
 const { Op, fn, col, literal } = require('sequelize');
 const { destroyByUrl } = require('../helpers/cloudinary');
-const r2 = require('../helpers/r2');
+const videoStorage = require('../helpers/videoStorage');
+const videoFolder = (req) => `barang-masuk/${getCompanyId(req) ?? 'x'}`;
 const { companyFilter, companyId: getCompanyId } = require('../helpers/tenancy');
 const { paginate, paginatedResponse } = require('../helpers/queryHelper');
 
@@ -87,6 +88,7 @@ exports.list = async (req, res, next) => {
       const selisihCount = items.filter(i => (i.qtySJ ?? 0) !== (i.qtyActual ?? 0)).length;
       return { ...r.toJSON(), itemCount: items.length, selisihCount, items: undefined };
     });
+    const dataWithVideo = await Promise.all(data.map(videoStorage.withVideoUrl));
 
     // Counter global untuk badge warning — seluruh data perusahaan, bukan cuma halaman ini
     const [sjMissingCount, selisihUnclearCount] = await Promise.all([
@@ -95,7 +97,7 @@ exports.list = async (req, res, next) => {
     ]);
 
     res.json({
-      data,
+      data: dataWithVideo,
       counts: { sjMissing: sjMissingCount, selisihUnclear: selisihUnclearCount },
       pagination: { total: count, page: Number(page), limit: Number(limit), totalPages: Math.ceil(count / Number(limit)) },
     });
@@ -117,7 +119,7 @@ exports.get = async (req, res, next) => {
       ...row.toJSON(),
       items: row.items.map(i => ({ ...i.toJSON(), selisih: (i.qtySJ ?? 0) - (i.qtyActual ?? 0) })),
     };
-    res.json({ data });
+    res.json({ data: await videoStorage.withVideoUrl(data) });
   } catch (err) { next(err); }
 };
 
@@ -132,7 +134,7 @@ exports.create = async (req, res, next) => {
       date,
       sjNumber:  sjNumber?.trim()  || null,
       sjPhotos:  newPhotos.length > 0 ? newPhotos : null,
-      videoLink: videoLink?.trim() || null,
+      videoLink: videoStorage.sanitizeVideoLink(videoLink, videoFolder(req)),
       notes:     notes?.trim()     || null,
       status:    'draft',
       createdBy: req.user.id,
@@ -140,7 +142,7 @@ exports.create = async (req, res, next) => {
     });
     await logActivity(row.id, req.user.id, 'CREATE', 'Membuat dokumen barang masuk');
     const result = await VendorDelivery.findByPk(row.id, { include: HEADER_INCLUDE });
-    res.status(201).json({ data: result });
+    res.status(201).json({ data: await videoStorage.withVideoUrl(result.toJSON()) });
   } catch (err) { next(err); }
 };
 
@@ -156,8 +158,8 @@ exports.update = async (req, res, next) => {
     const removed   = current.filter(url => !kept.includes(url));
     for (const url of removed) await destroyByUrl(url).catch(() => {});
     const sjPhotos  = [...kept, ...newPhotos];
-    const nextVideo = videoLink !== undefined ? (videoLink?.trim() || null) : row.videoLink;
-    if (row.videoLink && row.videoLink !== nextVideo) await r2.destroyByUrl(row.videoLink).catch(() => {});
+    const nextVideo = videoLink !== undefined ? videoStorage.sanitizeVideoLink(videoLink, videoFolder(req)) : row.videoLink;
+    if (row.videoLink && row.videoLink !== nextVideo) await videoStorage.destroy(row.videoLink).catch(() => {});
     await row.update({
       // When closed: only SJ fields can change
       vendorId:  isClosed ? row.vendorId : (vendorId ?? row.vendorId),
@@ -171,18 +173,18 @@ exports.update = async (req, res, next) => {
     });
     await logActivity(row.id, req.user.id, 'UPDATE_HEADER', 'Mengubah data barang masuk');
     const result = await VendorDelivery.findByPk(row.id, { include: HEADER_INCLUDE });
-    res.json({ data: result });
+    res.json({ data: await videoStorage.withVideoUrl(result.toJSON()) });
   } catch (err) { next(err); }
 };
 
-// Presigned URL untuk upload video unboxing langsung dari browser ke R2.
+// Presigned URL untuk upload video unboxing langsung dari browser ke bucket.
 const MAX_VIDEO_BYTES = 1024 * 1024 * 1024; // 1 GB
 exports.videoUploadUrl = async (req, res, next) => {
   try {
     const { contentType, filename, size } = req.body ?? {};
     if (!/^video\//.test(contentType || '')) return res.status(400).json({ message: 'File harus berupa video' });
     if (Number(size) > MAX_VIDEO_BYTES) return res.status(400).json({ message: 'Ukuran video maksimal 1 GB' });
-    const result = await r2.presignVideoUpload({ folder: `barang-masuk/${getCompanyId(req) ?? 'x'}`, contentType, filename });
+    const result = await videoStorage.presignVideoUpload({ folder: videoFolder(req), contentType, filename });
     res.json({ data: result });
   } catch (err) {
     if (err.status) return res.status(err.status).json({ message: err.message });
@@ -195,7 +197,7 @@ exports.destroy = async (req, res, next) => {
     const row = await VendorDelivery.findOne({ where: { id: req.params.id, ...companyFilter(req) } });
     if (!row) return res.status(404).json({ message: 'Barang masuk tidak ditemukan' });
     for (const url of row.sjPhotos ?? []) await destroyByUrl(url).catch(() => {});
-    if (row.videoLink) await r2.destroyByUrl(row.videoLink).catch(() => {});
+    if (row.videoLink) await videoStorage.destroy(row.videoLink).catch(() => {});
     await row.destroy();
     res.json({ message: 'Barang masuk dihapus' });
   } catch (err) { next(err); }
