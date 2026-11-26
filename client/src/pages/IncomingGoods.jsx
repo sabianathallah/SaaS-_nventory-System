@@ -18,10 +18,17 @@ const fmtShortDate = (d) => {
   return `${day}/${m}`
 }
 
+// Tanggal lokal (WIB), bukan UTC — toISOString() bikin "hari ini" mundur
+// sehari kalau dibuka jam 00:00–07:00, jadi barang masuk hari ini tidak ikut.
+function localDate(d = new Date()) {
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+}
+
 function defaultFrom() {
   const d = new Date()
   d.setDate(d.getDate() - 29)
-  return d.toISOString().slice(0, 10)
+  return localDate(d)
 }
 
 const hasSJ = (r) => !!r.sjNumber || (Array.isArray(r.sjPhotos) ? r.sjPhotos.length > 0 : !!r.sjPhotos)
@@ -31,7 +38,7 @@ function AnalyticsPanel() {
   const [searchParams, setSearchParams] = useSearchParams()
 
   const dateFrom     = searchParams.get('from')    || defaultFrom()
-  const dateTo       = searchParams.get('to')      || new Date().toISOString().slice(0, 10)
+  const dateTo       = searchParams.get('to')      || localDate()
   const articleId    = searchParams.get('article') || ''
   const productId    = searchParams.get('prod')    || ''
   const productSkuId = searchParams.get('sku')     || ''
@@ -74,13 +81,11 @@ function AnalyticsPanel() {
   const topProducts = data?.topProducts ?? []
   const summary     = data?.summary     ?? { totalQty: 0, totalDeliveries: 0 }
 
-  const maxQty = Math.max(...chart.map(r => r.qty), 1)
-
   function resetFilters() {
     setSearchParams(prev => {
       ['article', 'prod', 'sku'].forEach(k => prev.delete(k))
       prev.set('from', defaultFrom())
-      prev.set('to', new Date().toISOString().slice(0, 10))
+      prev.set('to', localDate())
       return prev
     }, { replace: true })
   }
@@ -233,7 +238,7 @@ function AnalyticsPanel() {
                   <div className="w-full bg-slate-100 rounded-full h-1.5">
                     <div
                       className="bg-indigo-400 h-1.5 rounded-full transition-all"
-                      style={{ width: `${Math.round((p.qty / topProducts[0].qty) * 100)}%` }}
+                      style={{ width: `${topProducts[0].qty > 0 ? Math.round((p.qty / topProducts[0].qty) * 100) : 0}%` }}
                     />
                   </div>
                 </div>
@@ -248,6 +253,7 @@ function AnalyticsPanel() {
         <ProductTransactionsPanel
           productId={productId}
           productSkuId={productSkuId}
+          articleId={articleId}
           dateFrom={dateFrom}
           dateTo={dateTo}
         />
@@ -259,14 +265,14 @@ function AnalyticsPanel() {
 }
 
 // ── Drill-down: riwayat transaksi (tanggal, vendor, qty) untuk 1 produk ──────
-function ProductTransactionsPanel({ productId, productSkuId, dateFrom, dateTo }) {
+function ProductTransactionsPanel({ productId, productSkuId, articleId, dateFrom, dateTo }) {
   const navigate = useNavigate()
   const [page, setPage]   = useState(1)
   const [limit, setLimit] = useState(10)
 
   // Reset ke halaman 1 saat filter berubah — disesuaikan saat render, bukan di
   // efek terpisah, supaya tidak ada render tambahan yang tidak perlu.
-  const filterKey = `${productId}|${productSkuId}|${dateFrom}|${dateTo}`
+  const filterKey = `${productId}|${productSkuId}|${articleId}|${dateFrom}|${dateTo}`
   const [prevFilterKey, setPrevFilterKey] = useState(filterKey)
   if (filterKey !== prevFilterKey) {
     setPrevFilterKey(filterKey)
@@ -274,8 +280,8 @@ function ProductTransactionsPanel({ productId, productSkuId, dateFrom, dateTo })
   }
 
   const { data, isLoading } = useQuery({
-    queryKey: ['vendor-delivery-product-transactions', productId, productSkuId, dateFrom, dateTo, page, limit],
-    queryFn:  () => vendorDeliveriesApi.productTransactions({ productId, productSkuId, dateFrom, dateTo, page, limit }),
+    queryKey: ['vendor-delivery-product-transactions', productId, productSkuId, articleId, dateFrom, dateTo, page, limit],
+    queryFn:  () => vendorDeliveriesApi.productTransactions({ productId, productSkuId: productSkuId || undefined, articleId: articleId || undefined, dateFrom, dateTo, page, limit }),
   })
 
   const rows       = data?.data ?? []
@@ -362,8 +368,8 @@ function VendorBreakdownPanel() {
     enabled:  !!vendorId,
   })
 
-  const received  = data?.received  ?? []
-  const breakdown = data?.breakdown ?? []
+  const received  = useMemo(() => data?.received  ?? [], [data])
+  const breakdown = useMemo(() => data?.breakdown ?? [], [data])
 
   // Susun tabel: baris per produk, kolom per gudang
   const warehouseNames = useMemo(() => {

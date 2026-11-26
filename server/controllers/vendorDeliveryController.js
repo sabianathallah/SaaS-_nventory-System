@@ -230,9 +230,11 @@ exports.addItem = async (req, res, next) => {
 
 exports.updateItem = async (req, res, next) => {
   try {
-    const item = await VendorDeliveryItem.findOne({ where: { id: req.params.itemId, deliveryId: req.params.id } });
+    // Cek delivery milik company user dulu — item tidak punya companyId sendiri.
+    const delivery = await VendorDelivery.findOne({ where: { id: req.params.id, ...companyFilter(req) }, attributes: ['id', 'status'] });
+    if (!delivery) return res.status(404).json({ message: 'Barang masuk tidak ditemukan' });
+    const item = await VendorDeliveryItem.findOne({ where: { id: req.params.itemId, deliveryId: delivery.id } });
     if (!item) return res.status(404).json({ message: 'Item tidak ditemukan' });
-    const delivery = await VendorDelivery.findByPk(item.deliveryId, { attributes: ['id', 'status'] });
     if (delivery?.status === 'closed') return res.status(403).json({ message: 'Barang masuk sudah ditutup. Buka kembali untuk mengedit item.' });
     const { productId, productSkuId, qtySJ, qtyActual, notes } = req.body;
     await item.update({
@@ -252,9 +254,11 @@ exports.updateItem = async (req, res, next) => {
 
 exports.removeItem = async (req, res, next) => {
   try {
-    const item = await VendorDeliveryItem.findOne({ where: { id: req.params.itemId, deliveryId: req.params.id } });
+    // Cek delivery milik company user dulu — item tidak punya companyId sendiri.
+    const delivery = await VendorDelivery.findOne({ where: { id: req.params.id, ...companyFilter(req) }, attributes: ['id', 'status'] });
+    if (!delivery) return res.status(404).json({ message: 'Barang masuk tidak ditemukan' });
+    const item = await VendorDeliveryItem.findOne({ where: { id: req.params.itemId, deliveryId: delivery.id } });
     if (!item) return res.status(404).json({ message: 'Item tidak ditemukan' });
-    const delivery = await VendorDelivery.findByPk(item.deliveryId, { attributes: ['id', 'status'] });
     if (delivery?.status === 'closed') return res.status(403).json({ message: 'Barang masuk sudah ditutup. Buka kembali untuk menghapus item.' });
     const deliveryId = item.deliveryId;
     await item.destroy();
