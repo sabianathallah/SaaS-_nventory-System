@@ -13,6 +13,7 @@ router.get('/',                canView,             ctrl.list);
 router.get('/analytics',              canView,      ctrl.analytics);
 router.get('/analytics/transactions', canView,      ctrl.productTransactions);
 router.get('/stock-breakdown',        canView,      ctrl.stockBreakdown);
+router.post('/video-upload-url',      canManage,     ctrl.videoUploadUrl);
 router.post('/',          canManage, uploadSJ, ctrl.create);
 router.get('/:id',        canView,             ctrl.get);
 router.put('/:id', canManage, uploadSJ, ctrl.update);

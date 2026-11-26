@@ -2,6 +2,7 @@
 const { VendorDelivery, VendorDeliveryItem, VendorDeliveryLog, Vendor, User, Product, ProductSKU, ProductVariantOption, ProductVariantType, sequelize } = require('../models');
 const { Op, fn, col, literal } = require('sequelize');
 const { destroyByUrl } = require('../helpers/cloudinary');
+const r2 = require('../helpers/r2');
 const { companyFilter, companyId: getCompanyId } = require('../helpers/tenancy');
 const { paginate, paginatedResponse } = require('../helpers/queryHelper');
 
@@ -155,6 +156,8 @@ exports.update = async (req, res, next) => {
     const removed   = current.filter(url => !kept.includes(url));
     for (const url of removed) await destroyByUrl(url).catch(() => {});
     const sjPhotos  = [...kept, ...newPhotos];
+    const nextVideo = videoLink !== undefined ? (videoLink?.trim() || null) : row.videoLink;
+    if (row.videoLink && row.videoLink !== nextVideo) await r2.destroyByUrl(row.videoLink).catch(() => {});
     await row.update({
       // When closed: only SJ fields can change
       vendorId:  isClosed ? row.vendorId : (vendorId ?? row.vendorId),
@@ -163,7 +166,7 @@ exports.update = async (req, res, next) => {
       // SJ fields always editable
       sjNumber:  sjNumber  !== undefined ? (sjNumber?.trim()  || null) : row.sjNumber,
       sjPhotos:  sjPhotos.length > 0 ? sjPhotos : null,
-      videoLink: videoLink !== undefined ? (videoLink?.trim() || null) : row.videoLink,
+      videoLink: nextVideo,
       updatedBy: req.user.id,
     });
     await logActivity(row.id, req.user.id, 'UPDATE_HEADER', 'Mengubah data barang masuk');
@@ -172,11 +175,27 @@ exports.update = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+// Presigned URL untuk upload video unboxing langsung dari browser ke R2.
+const MAX_VIDEO_BYTES = 1024 * 1024 * 1024; // 1 GB
+exports.videoUploadUrl = async (req, res, next) => {
+  try {
+    const { contentType, filename, size } = req.body ?? {};
+    if (!/^video\//.test(contentType || '')) return res.status(400).json({ message: 'File harus berupa video' });
+    if (Number(size) > MAX_VIDEO_BYTES) return res.status(400).json({ message: 'Ukuran video maksimal 1 GB' });
+    const result = await r2.presignVideoUpload({ folder: `barang-masuk/${getCompanyId(req) ?? 'x'}`, contentType, filename });
+    res.json({ data: result });
+  } catch (err) {
+    if (err.status) return res.status(err.status).json({ message: err.message });
+    next(err);
+  }
+};
+
 exports.destroy = async (req, res, next) => {
   try {
     const row = await VendorDelivery.findOne({ where: { id: req.params.id, ...companyFilter(req) } });
     if (!row) return res.status(404).json({ message: 'Barang masuk tidak ditemukan' });
     for (const url of row.sjPhotos ?? []) await destroyByUrl(url).catch(() => {});
+    if (row.videoLink) await r2.destroyByUrl(row.videoLink).catch(() => {});
     await row.destroy();
     res.json({ message: 'Barang masuk dihapus' });
   } catch (err) { next(err); }

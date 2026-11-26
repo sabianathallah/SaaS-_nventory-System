@@ -212,6 +212,7 @@ export const vendorDeliveriesApi = {
   analytics:         (params)           => api.get('/vendor-deliveries/analytics', { params }).then(r => r.data),
   productTransactions: (params)         => api.get('/vendor-deliveries/analytics/transactions', { params }).then(r => r.data),
   stockBreakdown:    (params)           => api.get('/vendor-deliveries/stock-breakdown', { params }).then(r => r.data),
+  videoUploadUrl:    (data)             => api.post('/vendor-deliveries/video-upload-url', data).then(r => r.data),
 }
 
 export const rolesApi = {

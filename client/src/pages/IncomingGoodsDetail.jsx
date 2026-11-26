@@ -9,9 +9,13 @@ import toast from 'react-hot-toast'
 import {
   ArrowLeft, Save, Plus, Trash2, Video,
   AlertTriangle, AlertCircle, Check, Upload, X, Printer, ChevronDown, TriangleAlert, History,
-  PackagePlus, Undo2,
+  PackagePlus, Undo2, Link2, Loader2,
 } from 'lucide-react'
 import logoPreface from '../assets/logo-preface.jpeg'
+
+// Video yang diupload langsung (R2) → file video asli, bisa diputar inline.
+// Link lama (GDrive dll) tetap ditampilkan sebagai link.
+const isUploadedVideo = (url) => /\.(mp4|mov|webm|mkv|3gp|avi|m4v)(\?|$)/i.test(url || '')
 
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'
 const fmtDateTime = (d) => d ? new Date(d).toLocaleString('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'
@@ -378,6 +382,61 @@ export default function IncomingGoodsDetail() {
   }, [existing])
 
   const MAX_PHOTOS = 8
+  const videoInputRef = useRef(null)
+  const videoXhrRef   = useRef(null)
+  const [videoProgress, setVideoProgress] = useState(null) // null = idle, 0-100 = uploading
+  const [showVideoLinkInput, setShowVideoLinkInput] = useState(false)
+
+  async function handleVideoPick(e) {
+    const file = e.target.files?.[0]
+    if (videoInputRef.current) videoInputRef.current.value = ''
+    if (!file) return
+    const contentType = file.type || 'video/mp4'
+    if (!contentType.startsWith('video/')) return toast.error('File harus berupa video')
+    if (file.size > 1024 * 1024 * 1024) return toast.error('Ukuran video maksimal 1 GB')
+    setVideoProgress(0)
+    try {
+      const { data } = await vendorDeliveriesApi.videoUploadUrl({ contentType, filename: file.name, size: file.size })
+      await new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest()
+        videoXhrRef.current = xhr
+        xhr.open('PUT', data.uploadUrl)
+        xhr.setRequestHeader('Content-Type', contentType)
+        xhr.upload.onprogress = ev => { if (ev.lengthComputable) setVideoProgress(Math.round(ev.loaded / ev.total * 100)) }
+        xhr.onload  = () => (xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new Error(`Upload gagal (${xhr.status})`)))
+        xhr.onerror = () => reject(new Error('Upload gagal — cek koneksi'))
+        xhr.onabort = () => reject(new Error('Upload dibatalkan'))
+        xhr.send(file)
+      })
+      setVideoLink(data.publicUrl)
+      setShowVideoLinkInput(false)
+      // Dokumen sudah ada → langsung simpan supaya video tidak hilang kalau lupa klik Simpan.
+      if (!isNew && id && id !== 'undefined') {
+        await vendorDeliveriesApi.update(id, { videoLink: data.publicUrl })
+        qc.invalidateQueries({ queryKey: ['vendor-delivery', id] })
+        toast.success('Video terupload & tersimpan')
+      } else {
+        toast.success('Video terupload — klik Simpan untuk menyimpan dokumen')
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || err.message || 'Upload video gagal')
+    } finally {
+      videoXhrRef.current = null
+      setVideoProgress(null)
+    }
+  }
+
+  async function handleVideoRemove() {
+    if (!window.confirm('Hapus video ini?')) return
+    setVideoLink('')
+    if (!isNew && id && id !== 'undefined') {
+      try {
+        await vendorDeliveriesApi.update(id, { videoLink: '' })
+        qc.invalidateQueries({ queryKey: ['vendor-delivery', id] })
+        toast.success('Video dihapus')
+      } catch (err) { toast.error(err.response?.data?.message || 'Gagal menghapus video') }
+    }
+  }
   const [lightboxPhoto, setLightboxPhoto] = useState(null)
   const [showDelete, setShowDelete] = useState(false)
 
@@ -717,10 +776,50 @@ export default function IncomingGoodsDetail() {
           </div>
           <div>
             <label className="label">
-              Link Video GDrive <span className="text-slate-400 font-normal text-xs">(opsional)</span>
+              Video Unboxing <span className="text-slate-400 font-normal text-xs">(opsional)</span>
               {isClosed && <span className="ml-2 text-[10px] text-emerald-600 font-medium">· bisa diedit</span>}
             </label>
-            <input className="input" type="url" placeholder="https://drive.google.com/…" value={videoLink} onChange={e => setVideoLink(e.target.value)} disabled={!canManage} />
+            <input ref={videoInputRef} type="file" accept="video/*" className="hidden" onChange={handleVideoPick} />
+            {videoProgress !== null ? (
+              <div className="flex items-center gap-2">
+                <div className="flex-1 h-9 rounded-lg border border-slate-200 bg-slate-50 relative overflow-hidden">
+                  <div className="absolute inset-y-0 left-0 bg-brand/20 transition-all" style={{ width: `${videoProgress}%` }} />
+                  <span className="relative z-10 h-full flex items-center px-3 text-xs font-medium text-slate-600 gap-2">
+                    <Loader2 size={13} className="animate-spin" /> Mengupload video… {videoProgress}%
+                  </span>
+                </div>
+                <button type="button" className="btn-secondary text-xs" onClick={() => videoXhrRef.current?.abort()}>Batal</button>
+              </div>
+            ) : videoLink && !showVideoLinkInput ? (
+              <div className="flex items-center gap-2 h-9 px-3 rounded-lg border border-slate-200 bg-slate-50 text-xs">
+                <Video size={14} className="text-brand shrink-0" />
+                <a href={videoLink} target="_blank" rel="noopener noreferrer" className="text-brand hover:underline truncate flex-1">
+                  {isUploadedVideo(videoLink) ? 'Video terupload' : videoLink}
+                </a>
+                {canManage && (
+                  <>
+                    <button type="button" className="text-slate-500 hover:text-brand font-medium" onClick={() => videoInputRef.current?.click()}>Ganti</button>
+                    <button type="button" className="text-slate-400 hover:text-danger" onClick={handleVideoRemove} title="Hapus video"><X size={14} /></button>
+                  </>
+                )}
+              </div>
+            ) : showVideoLinkInput ? (
+              <div className="flex items-center gap-2">
+                <input className="input" type="url" placeholder="https://drive.google.com/…" value={videoLink} onChange={e => setVideoLink(e.target.value)} disabled={!canManage} autoFocus />
+                <button type="button" className="text-slate-400 hover:text-slate-600" onClick={() => setShowVideoLinkInput(false)} title="Tutup"><X size={14} /></button>
+              </div>
+            ) : canManage ? (
+              <div className="flex items-center gap-2">
+                <button type="button" className="btn-secondary flex-1 justify-center" onClick={() => videoInputRef.current?.click()}>
+                  <Upload size={14} /> Upload Video
+                </button>
+                <button type="button" className="text-xs text-slate-500 hover:text-brand flex items-center gap-1 whitespace-nowrap" onClick={() => setShowVideoLinkInput(true)}>
+                  <Link2 size={12} /> atau link
+                </button>
+              </div>
+            ) : (
+              <p className="text-xs text-slate-400 h-9 flex items-center">Belum ada video</p>
+            )}
           </div>
         </div>
 
@@ -876,10 +975,17 @@ export default function IncomingGoodsDetail() {
       )}
 
       {!isNew && delivery?.videoLink && (
-        <a href={delivery.videoLink} target="_blank" rel="noopener noreferrer"
-          className="inline-flex items-center gap-2 text-sm text-brand hover:underline font-medium">
-          <Video size={15} /> Buka Video Pengecekan
-        </a>
+        isUploadedVideo(delivery.videoLink) ? (
+          <div className="card p-3 space-y-2">
+            <p className="text-sm font-semibold text-slate-700 flex items-center gap-2"><Video size={15} /> Video Pengecekan</p>
+            <video src={delivery.videoLink} controls playsInline preload="metadata" className="w-full max-h-[480px] rounded-lg bg-black" />
+          </div>
+        ) : (
+          <a href={delivery.videoLink} target="_blank" rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 text-sm text-brand hover:underline font-medium">
+            <Video size={15} /> Buka Video Pengecekan
+          </a>
+        )
       )}
 
       {/* ── Riwayat Aktivitas ────────────────────────────────── */}
